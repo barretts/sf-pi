@@ -11,9 +11,10 @@ import os from "node:os";
 import path from "node:path";
 import { loadSkills } from "@earendil-works/pi-coding-agent";
 import {
+  AUDITED_MAX_PI_VERSION_EXCLUSIVE,
+  classifyPiVersion,
   getInstalledPiVersion,
-  isPiVersionSupported,
-  MAX_PI_VERSION_EXCLUSIVE,
+  HARD_MAX_PI_VERSION_EXCLUSIVE,
   MIN_PI_VERSION,
   RECOMMENDED_PI_VERSION,
 } from "../pi-compat.ts";
@@ -80,16 +81,32 @@ export function runDoctorDiagnostics(
   const welcomeDisabled = isWelcomeDisabled(effectiveSettings);
 
   const issues: DoctorIssue[] = [];
-  if (piVersion && !isPiVersionSupported(piVersion)) {
-    const isOlder = compareVersions(piVersion, MIN_PI_VERSION) < 0;
-    issues.push({
-      id: isOlder ? "pi-version-old" : "pi-version-new",
-      severity: "error",
-      title: isOlder
+  const piCompatibility = piVersion ? classifyPiVersion(piVersion) : undefined;
+  if (
+    piCompatibility === "too-old" ||
+    piCompatibility === "prerelease" ||
+    piCompatibility === "major-version"
+  ) {
+    const title =
+      piCompatibility === "too-old"
         ? `Pi runtime is older than ${MIN_PI_VERSION}`
-        : "Pi runtime is outside the audited window",
-      detail: `Detected pi ${piVersion}. sf-pi supports >=${MIN_PI_VERSION} <${MAX_PI_VERSION_EXCLUSIVE}.`,
+        : piCompatibility === "prerelease"
+          ? "Pi prerelease requires an explicit compatibility audit"
+          : "Pi major version requires an explicit compatibility audit";
+    issues.push({
+      id: piCompatibility === "too-old" ? "pi-version-old" : "pi-version-blocked",
+      severity: "error",
+      title,
+      detail: `Detected pi ${piVersion}. sf-pi loads stable Pi >=${MIN_PI_VERSION} <${HARD_MAX_PI_VERSION_EXCLUSIVE}.`,
       fix: `Use Pi ${RECOMMENDED_PI_VERSION}, then run \`/sf-pi doctor runtime\` for install-specific guidance.`,
+    });
+  } else if (piCompatibility === "forward-compatible") {
+    issues.push({
+      id: "pi-version-forward-compatible",
+      severity: "warn",
+      title: "Pi runtime is newer than the audited range",
+      detail: `Detected pi ${piVersion}. sf-pi is loading in forward-compatibility mode; required CI currently audits versions below ${AUDITED_MAX_PI_VERSION_EXCLUSIVE}.`,
+      fix: "No downgrade is recommended unless a concrete failure occurs.",
     });
   }
 
@@ -781,7 +798,19 @@ export function buildRuntimeUpdateAdvice(input: {
   npmMinReleaseAge?: string;
   npmMinimumReleaseAge?: string;
 }): string[] {
-  if (input.piVersion && !isPiVersionSupported(input.piVersion)) {
+  if (!input.piVersion) {
+    return [
+      "Pi runtime version is unknown; no automatic update is recommended.",
+      "Run `pi --version`, then use `/sf-pi doctor runtime` to inspect PATH and installation details.",
+    ];
+  }
+
+  const compatibility = classifyPiVersion(input.piVersion);
+  if (
+    compatibility === "too-old" ||
+    compatibility === "prerelease" ||
+    compatibility === "major-version"
+  ) {
     const hasReleaseAgePolicy = !!(
       input.npmBefore ||
       input.npmMinReleaseAge ||
@@ -798,7 +827,7 @@ export function buildRuntimeUpdateAdvice(input: {
       input.npmMinimumReleaseAge ? `minimum-release-age=${input.npmMinimumReleaseAge}` : undefined,
     ].filter(Boolean);
     const lines = [
-      `Detected pi ${input.piVersion}; sf-pi supports >=${MIN_PI_VERSION} <${MAX_PI_VERSION_EXCLUSIVE}.`,
+      `Detected pi ${input.piVersion}; sf-pi loads stable Pi >=${MIN_PI_VERSION} <${HARD_MAX_PI_VERSION_EXCLUSIVE}.`,
       ...(hasReleaseAgePolicy
         ? [
             `npm release-age policy detected (${policyParts.join(", ")}); the exact-version fallback includes bounded visibility overrides.`,
@@ -819,17 +848,16 @@ export function buildRuntimeUpdateAdvice(input: {
     return lines;
   }
 
-  if (!input.piVersion) {
-    return [
-      "Pi runtime version is unknown; no automatic update is recommended.",
-      "Run `pi --version`, then use `/sf-pi doctor runtime` to inspect PATH and installation details.",
-    ];
-  }
-
-  const lines = [
-    `Detected pi ${input.piVersion} inside the audited >=${MIN_PI_VERSION} <${MAX_PI_VERSION_EXCLUSIVE} window.`,
-    `No unbounded Pi update is recommended; keep ${RECOMMENDED_PI_VERSION} inside this window.`,
-  ];
+  const lines =
+    compatibility === "forward-compatible"
+      ? [
+          `Detected pi ${input.piVersion}, newer than the audited <${AUDITED_MAX_PI_VERSION_EXCLUSIVE} range but inside the stable pre-1.0 loadable range.`,
+          "SF Pi is loading in forward-compatibility mode. No downgrade is recommended unless a concrete failure occurs.",
+        ]
+      : [
+          `Detected pi ${input.piVersion} inside the audited >=${MIN_PI_VERSION} <${AUDITED_MAX_PI_VERSION_EXCLUSIVE} window.`,
+          "Pi-native updates are allowed; newer stable pre-1.0 releases load in forward-compatibility mode.",
+        ];
   if (input.allPiPaths.length > 1) {
     lines.unshift(
       "which -a pi  # multiple pi executables found; ensure PATH uses the supported one",

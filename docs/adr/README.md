@@ -81,7 +81,7 @@ or accidentally contradicted in extension READMEs.
 - [0076: Pi 0.80.6 Runtime Delegation](./0076-pi-0806-runtime-delegation.md)
 - [0077: GPT-5.6 Sol as Gateway Default](./0077-gpt-56-sol-gateway-default.md)
 - [0078: Pi-Native Credential Ownership](./0078-pi-native-credential-ownership.md)
-- [0079: Audited Pi Runtime Support Window](./0079-audited-pi-runtime-support-window.md)
+- [0079: Pi Runtime Forward-Compatibility Policy](./0079-audited-pi-runtime-support-window.md)
 - [0080: Active-Branch Latest Context Projection](./0080-active-branch-latest-context-projection.md)
 - [0081: Complete Native Gateway Provider](./0081-complete-native-gateway-provider.md)
 - [0082: SF Skills Requires Native Parity Before Delegation](./0082-sf-skills-native-parity-before-delegation.md)

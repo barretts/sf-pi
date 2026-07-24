@@ -45,7 +45,8 @@ export async function runNativeAutoUpdate(
     {
       target: "pi-runtime",
       result: "skipped",
-      message: "Retained the audited Pi 0.81 runtime; no bounded native self-update was attempted.",
+      message:
+        "Pi runtime updates remain user-managed; newer stable 0.x releases load in forward-compatibility mode.",
     },
   ];
   let interrupted = false;
@@ -242,8 +243,8 @@ export async function runNativeAutoUpdate(
       : failedCount > 0
         ? `Auto Update completed with ${failedCount} failed target(s).`
         : successCount > 0
-          ? "Eligible update targets completed; Pi runtime stayed on the audited 0.81 line."
-          : "Auto Update skipped all network targets. Pi runtime was unchanged.";
+          ? "Eligible update targets completed; Pi runtime updates remain user-managed."
+          : "Auto Update skipped all network targets. Pi runtime updates remain user-managed.";
 
     return markAutoUpdateResult({
       result,

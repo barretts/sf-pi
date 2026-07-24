@@ -94,7 +94,7 @@ describe("Agent-Settled Update Coordinator", () => {
       AUTO_UPDATE_ENTRY_TYPE,
       expect.objectContaining({
         title: "Auto Update planned",
-        body: expect.stringContaining("1 compatible package update"),
+        body: expect.stringMatching(/Pi runtime: user-managed[\s\S]*1 compatible package update/),
       }),
     );
     expect(pi.appendEntry).toHaveBeenCalledWith(

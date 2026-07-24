@@ -128,12 +128,13 @@ details and why each one is worth it.
 
 macOS, Linux, and WSL are the primary targets. Native Windows works on
 x64 and ARM64 once the `sf` CLI is installed, but WSL is recommended for
-parity with Linux/macOS shell tooling. The audited Pi window tracks the
+parity with Linux/macOS shell tooling. The loadable Pi range tracks the
 `peerDependencies` range in [`package.json`](./package.json) (currently
-`>=0.81.1 <0.83.0`). Pi 0.82.0 is the recommended version. Runtimes outside
-that window are not supported; [`lib/common/pi-compat.ts`](./lib/common/pi-compat.ts)
-skips extensions with an actionable `/sf-pi doctor runtime` message instead of
-letting them crash on removed runtime APIs. SF Docs, Slack, and the Gateway use
+`>=0.81.1 <1.0.0`). Required compatibility CI audits `>=0.81.1 <0.83.0`, with
+Pi 0.82.0 recommended. Newer stable Pi 0.x releases load in
+forward-compatibility mode with one warning; older, prerelease, and Pi 1.x
+runtimes remain blocked by [`lib/common/pi-compat.ts`](./lib/common/pi-compat.ts).
+SF Docs, Slack, and the Gateway use
 one shared SF Pi fixed-mask provider component for interactive TUI login while
 Pi alone owns credential persistence and logout.
 
@@ -473,8 +474,8 @@ invocation and is picked up by all sf-pi commands without any sf-pi change.
 export PI_CODING_AGENT_SESSION_DIR="$HOME/.pi-sessions"
 ```
 
-sf-pi supports pi `>=0.81.1 <0.83.0`, so supported installations honor the env
-var. Pi 0.82.0 is the recommended version.
+sf-pi loads stable pi `>=0.81.1 <1.0.0`, so compatible installations honor the
+env var. Pi 0.82.0 is the recommended and latest required-CI runtime.
 
 ## Adding a New Extension
 
@@ -589,7 +590,7 @@ Jump to an extension's Troubleshooting section to see the full fix. This index i
 **[SF Pi Manager](./extensions/sf-pi-manager/#troubleshooting)**
 
 - `/sf-pi` says "package not found in settings"
-- `pi --version` is outside SF Pi's audited runtime window
+- `pi --version` is newer than SF Pi's audited runtime range
 - Disabling an extension through the manager doesn't take effect
 - `/sf-pi enable-all` still leaves some extensions disabled
 - Auto Update is on but Herdr was not updated

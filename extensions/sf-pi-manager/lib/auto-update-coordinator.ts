@@ -75,7 +75,7 @@ export function createAgentSettledUpdateCoordinator(
               append({
                 title: "Auto Update planned",
                 body: [
-                  "Pi runtime: retain the audited 0.81 line",
+                  "Pi runtime: user-managed; stable pre-1.0 releases remain loadable",
                   plan.offline
                     ? "Pi packages: skip because PI_OFFLINE is active"
                     : eligible > 0

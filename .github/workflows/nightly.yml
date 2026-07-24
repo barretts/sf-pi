@@ -59,11 +59,18 @@ jobs:
   pi-window-compat:
     name: Pi ${{ matrix.pi-version }} compatibility
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
 
     strategy:
       fail-fast: false
       matrix:
-        pi-version: ["0.81.1", "0.82.0"]
+        include:
+          - pi-version: "0.81.1"
+            experimental: false
+          - pi-version: "0.82.0"
+            experimental: false
+          - pi-version: "latest"
+            experimental: true
 
     steps:
       - name: Check out repository

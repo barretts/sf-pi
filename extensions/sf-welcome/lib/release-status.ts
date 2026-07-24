@@ -24,9 +24,10 @@ import {
 } from "../../../lib/common/catalog-state/announcements-manifest.ts";
 import { compareVersions } from "../../../lib/common/catalog-state/whats-new.ts";
 import {
+  classifyPiVersion,
   getInstalledPiVersion,
-  isPiVersionSupported,
   RECOMMENDED_PI_VERSION,
+  type PiVersionCompatibility,
 } from "../../../lib/common/pi-compat.ts";
 import {
   pickPolicyVisibleVersion,
@@ -39,6 +40,8 @@ const PI_LATEST_VERSION_URL = "https://pi.dev/api/latest-version";
 const PI_LATEST_TIMEOUT_MS = 5_000;
 const NPM_POLICY_TIMEOUT_MS = 3_000;
 const PI_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
+const PI_UPDATE_COMMAND = "pi update --self";
+const PI_REPAIR_COMMAND = "/sf-pi doctor runtime";
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 interface PiReleaseStatusCacheFile {
@@ -69,12 +72,24 @@ function parseCachedStatus(value: unknown, installedVersion?: string): ReleaseSt
   const cachedLatest = typeof record.latestVersion === "string" ? record.latestVersion : undefined;
   const cachedAbsolute =
     typeof record.absoluteLatestVersion === "string" ? record.absoluteLatestVersion : undefined;
-  const latestWasOutsideWindow = cachedLatest ? !isPiVersionSupported(cachedLatest) : false;
-  const latestVersion = latestWasOutsideWindow ? RECOMMENDED_PI_VERSION : cachedLatest;
-  const absoluteLatestVersion = latestWasOutsideWindow
-    ? (cachedAbsolute ?? cachedLatest)
-    : cachedAbsolute;
+  const upstreamLatest = cachedAbsolute ?? cachedLatest;
+  const upstreamCompatibility = upstreamLatest ? classifyPiVersion(upstreamLatest) : undefined;
+  const updateBlocked = upstreamCompatibility
+    ? isBlockedCompatibility(upstreamCompatibility)
+    : false;
+  const cooldownActive = record.cooldownActive === true;
+  const latestVersion = updateBlocked
+    ? RECOMMENDED_PI_VERSION
+    : cooldownActive && cachedLatest
+      ? cachedLatest
+      : upstreamLatest;
+  const absoluteLatestVersion = updateBlocked || cooldownActive ? upstreamLatest : undefined;
   const resolvedInstalled = installedVersion ?? record.installedVersion;
+  const installedForward =
+    typeof resolvedInstalled === "string" &&
+    classifyPiVersion(resolvedInstalled) === "forward-compatible";
+  const latestForward =
+    typeof latestVersion === "string" && classifyPiVersion(latestVersion) === "forward-compatible";
   const freshness =
     latestVersion && resolvedInstalled
       ? freshnessFor(resolvedInstalled, latestVersion)
@@ -88,14 +103,12 @@ function parseCachedStatus(value: unknown, installedVersion?: string): ReleaseSt
       typeof record.policyVisibleLatestVersion === "string"
         ? record.policyVisibleLatestVersion
         : undefined,
-    cooldownActive: record.cooldownActive === true,
-    supportWindowLimited:
-      latestWasOutsideWindow ||
-      record.supportWindowLimited === true ||
-      (cachedAbsolute ? !isPiVersionSupported(cachedAbsolute) : false),
+    cooldownActive,
+    supportWindowLimited: updateBlocked,
+    forwardCompatibility: installedForward || latestForward,
     freshness,
     loading: false,
-    updateCommand: "/sf-pi doctor runtime",
+    updateCommand: updateBlocked ? PI_REPAIR_COMMAND : PI_UPDATE_COMMAND,
     checkSkipped: record.checkSkipped === true,
     skipReason:
       record.skipReason === "offline" || record.skipReason === "version-check-disabled"
@@ -134,7 +147,7 @@ export function collectInitialPiReleaseStatus(): ReleaseStatusInfo {
     installedVersion,
     freshness: "checking",
     loading: true,
-    updateCommand: "/sf-pi doctor runtime",
+    updateCommand: PI_UPDATE_COMMAND,
   };
 }
 
@@ -181,7 +194,7 @@ export async function detectPiReleaseStatus(
   options: PiReleaseStatusOptions = {},
 ): Promise<ReleaseStatusInfo> {
   const installedVersion = options.installedVersion ?? getInstalledPiVersion();
-  const updateCommand = "/sf-pi doctor runtime";
+  const updateCommand = PI_UPDATE_COMMAND;
 
   if (env.PI_OFFLINE) {
     return {
@@ -215,7 +228,8 @@ export async function detectPiReleaseStatus(
     };
   }
 
-  if (!isPiVersionSupported(absoluteLatestVersion)) {
+  const latestCompatibility = classifyPiVersion(absoluteLatestVersion);
+  if (isBlockedCompatibility(latestCompatibility)) {
     return {
       installedVersion,
       latestVersion: RECOMMENDED_PI_VERSION,
@@ -223,7 +237,7 @@ export async function detectPiReleaseStatus(
       supportWindowLimited: true,
       freshness: freshnessFor(installedVersion, RECOMMENDED_PI_VERSION),
       loading: false,
-      updateCommand,
+      updateCommand: PI_REPAIR_COMMAND,
     };
   }
 
@@ -238,6 +252,7 @@ export async function detectPiReleaseStatus(
         return {
           installedVersion,
           absoluteLatestVersion,
+          forwardCompatibility: classifyPiVersion(installedVersion) === "forward-compatible",
           freshness: "unknown",
           loading: false,
           updateCommand,
@@ -258,6 +273,10 @@ export async function detectPiReleaseStatus(
     absoluteLatestVersion: cooldownActive ? absoluteLatestVersion : undefined,
     policyVisibleLatestVersion,
     cooldownActive,
+    supportWindowLimited: false,
+    forwardCompatibility:
+      classifyPiVersion(installedVersion) === "forward-compatible" ||
+      classifyPiVersion(latestVersion) === "forward-compatible",
     freshness: freshnessFor(installedVersion, latestVersion),
     loading: false,
     updateCommand,
@@ -383,6 +402,14 @@ function readFreshCachedRemoteLatestVersion(
   } catch {
     return undefined;
   }
+}
+
+function isBlockedCompatibility(compatibility: PiVersionCompatibility): boolean {
+  return (
+    compatibility === "too-old" ||
+    compatibility === "prerelease" ||
+    compatibility === "major-version"
+  );
 }
 
 function latestKnownVersion(versions: Array<string | undefined>): string | undefined {

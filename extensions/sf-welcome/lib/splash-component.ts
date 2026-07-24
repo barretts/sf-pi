@@ -721,15 +721,18 @@ function formatReleaseStatusValue(
 
   if (status.freshness === "update-available") {
     const latest = status.latestVersion ? `v${status.latestVersion}` : "latest";
-    return `${SF_ORANGE("↑")} ${SF_ORANGE("update available")} ${MUTED(`· ${installed} → ${latest}`)}${suffix}`;
+    const label = status.forwardCompatibility ? "update available [forward]" : "update available";
+    return `${SF_ORANGE("↑")} ${SF_ORANGE(label)} ${MUTED(`· ${installed} → ${latest}`)}${suffix}`;
   }
 
   if (status.freshness === "latest") {
     const label = status.supportWindowLimited
-      ? "latest supported [newer Pi blocked]"
-      : status.cooldownActive
-        ? "latest allowed [cooldown active]"
-        : "latest";
+      ? "latest supported [update blocked]"
+      : status.forwardCompatibility
+        ? "latest [forward]"
+        : status.cooldownActive
+          ? "latest allowed [cooldown active]"
+          : "latest";
     return `${SF_GREEN("✓")} ${SF_GREEN(label)} ${MUTED(`· ${installed}`)}${suffix}`;
   }
 

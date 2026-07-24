@@ -13,10 +13,12 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { SF_PI_REGISTRY } from "../../../catalog/registry.ts";
 import {
+  AUDITED_MAX_PI_VERSION_EXCLUSIVE,
+  classifyPiVersion,
   compareVersions,
   getInstalledPiVersion,
-  isPiVersionSupported,
-  MAX_PI_VERSION_EXCLUSIVE,
+  HARD_MAX_PI_VERSION_EXCLUSIVE,
+  isPiVersionLoadable,
   MIN_PI_VERSION,
   requirePiVersion,
 } from "../pi-compat.ts";
@@ -95,14 +97,14 @@ describe("pi version floor", () => {
     }
   });
 
-  it("tracks the temporary package support window and exact development SDK", () => {
+  it("tracks the forward-compatible peer range and exact audited development SDK", () => {
     const pkg = JSON.parse(readFileSync(path.resolve("package.json"), "utf8")) as {
       peerDependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
 
     expect(MIN_PI_VERSION).toBe("0.81.1");
-    expect(pkg.peerDependencies?.["@earendil-works/pi-coding-agent"]).toBe(">=0.81.1 <0.83.0");
+    expect(pkg.peerDependencies?.["@earendil-works/pi-coding-agent"]).toBe(">=0.81.1 <1.0.0");
     expect(pkg.peerDependencies?.["@earendil-works/pi-ai"]).toBe("*");
     expect(pkg.peerDependencies?.["@earendil-works/pi-tui"]).toBe("*");
     expect(pkg.devDependencies?.["@earendil-works/pi-coding-agent"]).toBe("0.82.0");
@@ -111,20 +113,24 @@ describe("pi version floor", () => {
   });
 });
 
-describe("temporary pi support window", () => {
-  it("accepts audited 0.81-0.82 releases but rejects prereleases and either edge", () => {
+describe("Pi compatibility policy", () => {
+  it("distinguishes audited, forward-compatible, and blocked releases", () => {
     expect(MIN_PI_VERSION).toBe("0.81.1");
-    expect(MAX_PI_VERSION_EXCLUSIVE).toBe("0.83.0");
-    expect(isPiVersionSupported("0.81.0")).toBe(false);
-    expect(isPiVersionSupported("0.81.1")).toBe(true);
-    expect(isPiVersionSupported("0.81.9")).toBe(true);
-    expect(isPiVersionSupported("0.82.0-rc.1")).toBe(false);
-    expect(isPiVersionSupported("0.82.0-rc.1+build-1")).toBe(false);
-    expect(isPiVersionSupported("0.82.0")).toBe(true);
-    expect(isPiVersionSupported("0.82.0+build-1")).toBe(true);
-    expect(isPiVersionSupported("0.82.9")).toBe(true);
-    expect(isPiVersionSupported("0.83.0-rc.1")).toBe(false);
-    expect(isPiVersionSupported("0.83.0")).toBe(false);
+    expect(AUDITED_MAX_PI_VERSION_EXCLUSIVE).toBe("0.83.0");
+    expect(HARD_MAX_PI_VERSION_EXCLUSIVE).toBe("1.0.0");
+
+    expect(classifyPiVersion("0.81.0")).toBe("too-old");
+    expect(classifyPiVersion("0.81.1")).toBe("audited");
+    expect(classifyPiVersion("0.82.0+build-1")).toBe("audited");
+    expect(classifyPiVersion("0.82.9")).toBe("audited");
+    expect(classifyPiVersion("0.83.0")).toBe("forward-compatible");
+    expect(classifyPiVersion("0.99.0")).toBe("forward-compatible");
+    expect(classifyPiVersion("0.83.0-rc.1")).toBe("prerelease");
+    expect(classifyPiVersion("1.0.0")).toBe("major-version");
+
+    expect(isPiVersionLoadable("0.83.0")).toBe(true);
+    expect(isPiVersionLoadable("0.83.0-rc.1")).toBe(false);
+    expect(isPiVersionLoadable("1.0.0")).toBe(false);
   });
 });
 
@@ -133,15 +139,21 @@ describe("requirePiVersion", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns true when the installed pi meets the floor", () => {
-    // The live pi-coding-agent in node_modules is >= MIN_PI_VERSION whenever
-    // the repo is in a valid developer state, which is enforced by
-    // peerDependencies + npm install. If that invariant is broken, every
-    // other sf-pi test will fail first, so this assertion is a tripwire for
-    // the gate itself, not for the environment.
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    expect(requirePiVersion(null, "sf-pi-compat-test", MIN_PI_VERSION)).toBe(true);
-    expect(warn).not.toHaveBeenCalled();
+  it("accepts the installed audited or forward-compatible runtime", () => {
+    const installed = getInstalledPiVersion();
+    expect(installed).toBeDefined();
+    const compatibility = classifyPiVersion(installed!);
+    expect(["audited", "forward-compatible"]).toContain(compatibility);
+
+    // Preserve the process-wide forward-warning latch for the explicit
+    // once-only test below when the nightly `latest` overlay is ahead.
+    if (compatibility === "audited") {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      expect(requirePiVersion(null, "sf-pi-compat-test", MIN_PI_VERSION)).toBe(true);
+      expect(warn).not.toHaveBeenCalled();
+    } else {
+      expect(isPiVersionLoadable(installed!)).toBe(true);
+    }
   });
 
   it("returns false and logs once when below the floor", () => {
@@ -170,17 +182,29 @@ describe("requirePiVersion", () => {
     expect(warn.mock.calls[0][0]).toContain("Use Pi 0.82.0");
   });
 
-  it("newer Pi degrades with the full supported window instead of loading", () => {
+  it("loads a newer stable Pi in forward-compatibility mode and warns once", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const installed = getInstalledPiVersion();
     expect(installed).toBeDefined();
 
-    const ok = requirePiVersion(null, "sf-new-pi-skip", "0.0.0", installed!);
+    expect(requirePiVersion(null, "sf-forward-a", "0.0.0", installed!, "1.0.0")).toBe(true);
+    expect(requirePiVersion(null, "sf-forward-b", "0.0.0", installed!, "1.0.0")).toBe(true);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain("forward-compatibility mode");
+    expect(warn.mock.calls[0][0]).not.toContain("Skipping");
+  });
+
+  it("still blocks a Pi major version pending review", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const installed = getInstalledPiVersion();
+    expect(installed).toBeDefined();
+
+    const ok = requirePiVersion(null, "sf-major-pi-skip", "0.0.0", "0.0.0", installed!);
 
     expect(ok).toBe(false);
-    expect(warn.mock.calls[0][0]).toContain('Skipping "sf-new-pi-skip"');
-    expect(warn.mock.calls[0][0]).toContain(`>= 0.0.0 and < ${installed}`);
-    expect(warn.mock.calls[0][0]).toContain(`found ${installed}`);
+    expect(warn.mock.calls[0][0]).toContain('Skipping "sf-major-pi-skip"');
+    expect(warn.mock.calls[0][0]).toContain(`stable pi-coding-agent >= 0.0.0 and < ${installed}`);
     expect(warn.mock.calls[0][0]).toContain("/sf-pi doctor runtime");
   });
 });

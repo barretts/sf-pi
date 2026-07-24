@@ -89,7 +89,7 @@ describe("Native Auto Update command", () => {
     expect(calls.join("\n")).not.toContain("--all");
     expect(calls.join("\n")).not.toContain("--self");
     expect(status).toMatchObject({ lastResult: "success", restartRecommended: true });
-    expect(status.message).toContain("audited 0.81 line");
+    expect(status.message).toContain("Pi runtime updates remain user-managed");
   });
 
   it("keeps package updates working when pi-updater suppresses the self-version check", async () => {
@@ -119,6 +119,14 @@ describe("Native Auto Update command", () => {
       "sf update stable",
     ]);
     expect(status.lastResult).toBe("success");
+    expect(status.targets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          target: "pi-runtime",
+          message: expect.stringContaining("forward-compatibility mode"),
+        }),
+      ]),
+    );
   });
 
   it("respects PI_OFFLINE without starting network update commands", async () => {

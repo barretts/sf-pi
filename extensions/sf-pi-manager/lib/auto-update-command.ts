@@ -66,7 +66,7 @@ export async function handleAutoUpdate(
         "",
         "Native Auto Update is opt-in. Due work waits for Pi's next agent_settled boundary.",
         "First-party targets:",
-        "  1. Pi runtime stays inside the audited 0.81 support window",
+        "  1. Pi runtime updates remain user-managed; stable pre-1.0 releases are loadable",
         "  2. compatibility preflight + pi update --extension <source> --no-approve",
         "  3. sf update stable",
         "Outdated, compatible, unpinned global npm packages such as Herdr are eligible.",
@@ -98,7 +98,7 @@ export function renderAutoUpdateStatus(
     ),
     "",
     "Native targets:",
-    "  Pi runtime: retained inside the audited 0.81 window",
+    "  Pi runtime: user-managed; newer stable 0.x releases use forward compatibility",
     "  Pi packages: compatibility preflight, then pi update --extension <source> --no-approve",
     "  Salesforce CLI: sf update stable",
   ].filter((line): line is string => !!line);

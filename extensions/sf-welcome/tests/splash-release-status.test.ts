@@ -154,13 +154,52 @@ describe("release freshness splash rows", () => {
     expect(rendered).not.toContain("→ /sf-pi doctor runtime");
   });
 
-  it("shows when a newer upstream Pi is blocked by the audited window", async () => {
+  it("shows an available future stable Pi as forward-compatible", async () => {
+    const rendered = await render(
+      baseData({
+        piRelease: {
+          installedVersion: "0.82.0",
+          latestVersion: "0.83.0",
+          forwardCompatibility: true,
+          freshness: "update-available",
+          loading: false,
+          updateCommand: "pi update --self",
+        },
+      }),
+    );
+
+    const pi = findStatusLine(rendered, "Pi");
+    expect(pi).toContain("update available [forward]");
+    expect(pi).toContain("v0.82.0 → v0.83.0");
+    expect(rendered).toContain("→ pi update --self");
+  });
+
+  it("shows when the installed Pi is running in forward-compatibility mode", async () => {
+    const rendered = await render(
+      baseData({
+        piRelease: {
+          installedVersion: "0.83.0",
+          latestVersion: "0.83.0",
+          forwardCompatibility: true,
+          freshness: "latest",
+          loading: false,
+          updateCommand: "pi update --self",
+        },
+      }),
+    );
+
+    const pi = findStatusLine(rendered, "Pi");
+    expect(pi).toContain("latest [forward]");
+    expect(pi).toContain("v0.83.0");
+  });
+
+  it("shows when a Pi major release remains blocked", async () => {
     const rendered = await render(
       baseData({
         piRelease: {
           installedVersion: "0.82.0",
           latestVersion: "0.82.0",
-          absoluteLatestVersion: "0.83.0",
+          absoluteLatestVersion: "1.0.0",
           supportWindowLimited: true,
           freshness: "latest",
           loading: false,
@@ -170,7 +209,7 @@ describe("release freshness splash rows", () => {
     );
 
     const pi = findStatusLine(rendered, "Pi");
-    expect(pi).toContain("latest supported [newer Pi blocked]");
+    expect(pi).toContain("latest supported [update blocked]");
     expect(pi).toContain("v0.82.0");
     expect(rendered).not.toContain("→ /sf-pi doctor runtime");
   });
