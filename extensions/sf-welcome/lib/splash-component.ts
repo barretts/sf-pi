@@ -260,7 +260,8 @@ function fitToWidth(str: string, width: number): string {
   return str + " ".repeat(width - visLen);
 }
 
-const ANSI_ESCAPE_RE = /\x1b\[[0-9;]*m/g;
+const ANSI_ESCAPE = String.fromCharCode(27);
+const ANSI_ESCAPE_RE = new RegExp(`${ANSI_ESCAPE}\\[[0-9;]*m`, "g");
 
 function isBlankLine(line: string): boolean {
   return line.replace(ANSI_ESCAPE_RE, "").trim().length === 0;
