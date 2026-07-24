@@ -12,6 +12,7 @@ import path from "node:path";
 import { loadSkills } from "@earendil-works/pi-coding-agent";
 import {
   getInstalledPiVersion,
+  isPiVersionSupported,
   MAX_PI_VERSION_EXCLUSIVE,
   MIN_PI_VERSION,
   RECOMMENDED_PI_VERSION,
@@ -79,19 +80,14 @@ export function runDoctorDiagnostics(
   const welcomeDisabled = isWelcomeDisabled(effectiveSettings);
 
   const issues: DoctorIssue[] = [];
-  if (piVersion && compareVersions(piVersion, MIN_PI_VERSION) < 0) {
+  if (piVersion && !isPiVersionSupported(piVersion)) {
+    const isOlder = compareVersions(piVersion, MIN_PI_VERSION) < 0;
     issues.push({
-      id: "pi-version-old",
+      id: isOlder ? "pi-version-old" : "pi-version-new",
       severity: "error",
-      title: `Pi runtime is older than ${MIN_PI_VERSION}`,
-      detail: `Detected pi ${piVersion}. sf-pi supports >=${MIN_PI_VERSION} <${MAX_PI_VERSION_EXCLUSIVE}.`,
-      fix: `Use Pi ${RECOMMENDED_PI_VERSION}, then run \`/sf-pi doctor runtime\` for install-specific guidance.`,
-    });
-  } else if (piVersion && compareVersions(piVersion, MAX_PI_VERSION_EXCLUSIVE) >= 0) {
-    issues.push({
-      id: "pi-version-new",
-      severity: "error",
-      title: `Pi runtime is outside the audited window`,
+      title: isOlder
+        ? `Pi runtime is older than ${MIN_PI_VERSION}`
+        : "Pi runtime is outside the audited window",
       detail: `Detected pi ${piVersion}. sf-pi supports >=${MIN_PI_VERSION} <${MAX_PI_VERSION_EXCLUSIVE}.`,
       fix: `Use Pi ${RECOMMENDED_PI_VERSION}, then run \`/sf-pi doctor runtime\` for install-specific guidance.`,
     });
@@ -785,11 +781,7 @@ export function buildRuntimeUpdateAdvice(input: {
   npmMinReleaseAge?: string;
   npmMinimumReleaseAge?: string;
 }): string[] {
-  if (
-    input.piVersion &&
-    (compareVersions(input.piVersion, MIN_PI_VERSION) < 0 ||
-      compareVersions(input.piVersion, MAX_PI_VERSION_EXCLUSIVE) >= 0)
-  ) {
+  if (input.piVersion && !isPiVersionSupported(input.piVersion)) {
     const hasReleaseAgePolicy = !!(
       input.npmBefore ||
       input.npmMinReleaseAge ||

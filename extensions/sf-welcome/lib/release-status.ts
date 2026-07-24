@@ -25,7 +25,7 @@ import {
 import { compareVersions } from "../../../lib/common/catalog-state/whats-new.ts";
 import {
   getInstalledPiVersion,
-  MAX_PI_VERSION_EXCLUSIVE,
+  isPiVersionSupported,
   RECOMMENDED_PI_VERSION,
 } from "../../../lib/common/pi-compat.ts";
 import {
@@ -69,7 +69,7 @@ function parseCachedStatus(value: unknown, installedVersion?: string): ReleaseSt
   const cachedLatest = typeof record.latestVersion === "string" ? record.latestVersion : undefined;
   const cachedAbsolute =
     typeof record.absoluteLatestVersion === "string" ? record.absoluteLatestVersion : undefined;
-  const latestWasOutsideWindow = cachedLatest ? isAtOrAbovePiCeiling(cachedLatest) : false;
+  const latestWasOutsideWindow = cachedLatest ? !isPiVersionSupported(cachedLatest) : false;
   const latestVersion = latestWasOutsideWindow ? RECOMMENDED_PI_VERSION : cachedLatest;
   const absoluteLatestVersion = latestWasOutsideWindow
     ? (cachedAbsolute ?? cachedLatest)
@@ -92,7 +92,7 @@ function parseCachedStatus(value: unknown, installedVersion?: string): ReleaseSt
     supportWindowLimited:
       latestWasOutsideWindow ||
       record.supportWindowLimited === true ||
-      (cachedAbsolute ? isAtOrAbovePiCeiling(cachedAbsolute) : false),
+      (cachedAbsolute ? !isPiVersionSupported(cachedAbsolute) : false),
     freshness,
     loading: false,
     updateCommand: "/sf-pi doctor runtime",
@@ -215,7 +215,7 @@ export async function detectPiReleaseStatus(
     };
   }
 
-  if (isAtOrAbovePiCeiling(absoluteLatestVersion)) {
+  if (!isPiVersionSupported(absoluteLatestVersion)) {
     return {
       installedVersion,
       latestVersion: RECOMMENDED_PI_VERSION,
@@ -383,11 +383,6 @@ function readFreshCachedRemoteLatestVersion(
   } catch {
     return undefined;
   }
-}
-
-function isAtOrAbovePiCeiling(version: string): boolean {
-  const core = version.split("-", 1)[0] ?? version;
-  return compareVersions(core, MAX_PI_VERSION_EXCLUSIVE) >= 0;
 }
 
 function latestKnownVersion(versions: Array<string | undefined>): string | undefined {

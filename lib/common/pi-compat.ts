@@ -29,9 +29,9 @@ import * as PiRuntime from "@earendil-works/pi-coding-agent";
  */
 export const MIN_PI_VERSION = "0.81.1";
 
-/** Exclusive ceiling for the audited Pi 0.81 runtime line. */
-export const MAX_PI_VERSION_EXCLUSIVE = "0.82.0";
-export const RECOMMENDED_PI_VERSION = "0.81.1";
+/** Exclusive ceiling for the audited Pi 0.81-0.82 runtime window. */
+export const MAX_PI_VERSION_EXCLUSIVE = "0.83.0";
+export const RECOMMENDED_PI_VERSION = "0.82.0";
 
 /**
  * Cached pi-coding-agent version exported by the host Pi Runtime. Cached
@@ -61,7 +61,8 @@ export function getInstalledPiVersion(): string | undefined {
  */
 export function compareVersions(a: string, b: string): number {
   const parse = (v: string): { nums: number[]; pre: string } => {
-    const [core, pre = ""] = v.split("-");
+    const [withoutBuild = v] = v.split("+", 1);
+    const [core, pre = ""] = withoutBuild.split("-", 2);
     const nums = core.split(".").map((part) => {
       const n = Number.parseInt(part, 10);
       return Number.isFinite(n) ? n : 0;
@@ -86,12 +87,13 @@ export function isPiVersionSupported(
   minVersion: string = MIN_PI_VERSION,
   maxVersionExclusive: string = MAX_PI_VERSION_EXCLUSIVE,
 ): boolean {
+  // npm peer ranges exclude prereleases unless they opt in explicitly. Keep the
+  // runtime gate no looser than package metadata anywhere inside the window.
+  // Ignore hyphens in SemVer build metadata (`+build-1`), which npm accepts.
+  const versionWithoutBuild = version.split("+", 1)[0] ?? version;
+  if (versionWithoutBuild.includes("-")) return false;
   if (compareVersions(version, minVersion) < 0) return false;
-  // Reject prereleases of the exclusive ceiling too. npm peer ranges exclude
-  // them by default, and accepting one here would make the runtime contract
-  // looser than package metadata.
-  const versionCore = version.split("-", 1)[0] ?? version;
-  return compareVersions(versionCore, maxVersionExclusive) < 0;
+  return compareVersions(version, maxVersionExclusive) < 0;
 }
 
 const warnedExtensions = new Set<string>();
@@ -129,7 +131,7 @@ export function requirePiVersion(
     console.warn(
       [
         `[sf-pi] Skipping "${extensionName}": supports pi-coding-agent >= ${minVersion} and < ${maxVersionExclusive}, found ${installed}.`,
-        "Use Pi 0.81.1, then run `/sf-pi doctor runtime` for install-specific guidance.",
+        `Use Pi ${RECOMMENDED_PI_VERSION}, then run \`/sf-pi doctor runtime\` for install-specific guidance.`,
       ].join(" "),
     );
   }

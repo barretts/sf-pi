@@ -6,12 +6,12 @@ import { buildRuntimeUpdateAdvice } from "../doctor/diagnostics.ts";
 describe("buildRuntimeUpdateAdvice", () => {
   it("does not recommend crossing the ceiling from a supported runtime", () => {
     const advice = buildRuntimeUpdateAdvice({
-      piVersion: "0.81.1",
-      installedPiPackageVersion: "0.81.1",
+      piVersion: "0.82.0",
+      installedPiPackageVersion: "0.82.0",
       allPiPaths: ["/tmp/bin/pi"],
     });
 
-    expect(advice.join("\n")).toContain("inside the audited >=0.81.1 <0.82.0 window");
+    expect(advice.join("\n")).toContain("inside the audited >=0.81.1 <0.83.0 window");
     expect(advice.join("\n")).toContain("No unbounded Pi update is recommended");
     expect(advice).not.toContain("pi update --self --force");
     expect(advice.join("\n")).not.toContain("@latest");
@@ -19,17 +19,30 @@ describe("buildRuntimeUpdateAdvice", () => {
 
   it("directs too-new Pi runtimes to the audited supported patch", () => {
     const advice = buildRuntimeUpdateAdvice({
-      piVersion: "0.82.0",
-      installedPiPackageVersion: "0.82.0",
+      piVersion: "0.83.0",
+      installedPiPackageVersion: "0.83.0",
       allPiPaths: ["/tmp/bin/pi"],
     });
 
-    expect(advice[0]).toContain("supports >=0.81.1 <0.82.0");
+    expect(advice[0]).toContain("supports >=0.81.1 <0.83.0");
     expect(advice).toContain(
-      "npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1 --force",
+      "npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0 --force",
     );
     expect(advice).not.toContain("pi update --self --force");
     expect(advice.join("\n")).not.toContain("@latest");
+  });
+
+  it("directs an in-window prerelease to the audited stable patch", () => {
+    const advice = buildRuntimeUpdateAdvice({
+      piVersion: "0.82.1-rc.1",
+      installedPiPackageVersion: "0.82.1-rc.1",
+      allPiPaths: ["/tmp/bin/pi"],
+    });
+
+    expect(advice[0]).toContain("supports >=0.81.1 <0.83.0");
+    expect(advice).toContain(
+      "npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0 --force",
+    );
   });
 
   it("directs too-old Pi runtimes to the audited supported patch", () => {
@@ -39,9 +52,9 @@ describe("buildRuntimeUpdateAdvice", () => {
       allPiPaths: ["/tmp/bin/pi"],
     });
 
-    expect(advice[0]).toContain("supports >=0.81.1 <0.82.0");
+    expect(advice[0]).toContain("supports >=0.81.1 <0.83.0");
     expect(advice).toContain(
-      "npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1 --force",
+      "npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0 --force",
     );
     expect(advice).not.toContain("pi update --self --force");
     expect(advice.join("\n")).not.toContain("@latest");
@@ -60,7 +73,7 @@ describe("buildRuntimeUpdateAdvice", () => {
     expect(advice[0]).toContain("Detected pi 0.81.0");
     expect(advice).not.toContain("pi update --self --force");
     expect(advice).toContain(
-      "npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1 --force --min-release-age=0",
+      "npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0 --force --min-release-age=0",
     );
   });
 
@@ -75,7 +88,7 @@ describe("buildRuntimeUpdateAdvice", () => {
     expect(advice.join("\n")).toContain("before=2026-05-18T00:00:00.000Z");
     expect(advice).not.toContain("pi update --self --force");
     expect(advice).toContain(
-      "npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1 --force --before=null --min-release-age=0",
+      "npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0 --force --before=null --min-release-age=0",
     );
   });
 });

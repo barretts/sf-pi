@@ -42,6 +42,10 @@ describe("compareVersions", () => {
     expect(compareVersions("0.72.0", "0.72.0-rc.1")).toBeGreaterThan(0);
   });
 
+  it("ignores SemVer build metadata, including hyphens", () => {
+    expect(compareVersions("0.82.0+build-1", "0.82.0")).toBe(0);
+  });
+
   it("pads short inputs with zeroes so '0.72' == '0.72.0'", () => {
     expect(compareVersions("0.72", "0.72.0")).toBe(0);
   });
@@ -98,24 +102,29 @@ describe("pi version floor", () => {
     };
 
     expect(MIN_PI_VERSION).toBe("0.81.1");
-    expect(pkg.peerDependencies?.["@earendil-works/pi-coding-agent"]).toBe(">=0.81.1 <0.82.0");
+    expect(pkg.peerDependencies?.["@earendil-works/pi-coding-agent"]).toBe(">=0.81.1 <0.83.0");
     expect(pkg.peerDependencies?.["@earendil-works/pi-ai"]).toBe("*");
     expect(pkg.peerDependencies?.["@earendil-works/pi-tui"]).toBe("*");
-    expect(pkg.devDependencies?.["@earendil-works/pi-coding-agent"]).toBe("0.81.1");
-    expect(pkg.devDependencies?.["@earendil-works/pi-ai"]).toBe("0.81.1");
-    expect(pkg.devDependencies?.["@earendil-works/pi-tui"]).toBe("0.81.1");
+    expect(pkg.devDependencies?.["@earendil-works/pi-coding-agent"]).toBe("0.82.0");
+    expect(pkg.devDependencies?.["@earendil-works/pi-ai"]).toBe("0.82.0");
+    expect(pkg.devDependencies?.["@earendil-works/pi-tui"]).toBe("0.82.0");
   });
 });
 
 describe("temporary pi support window", () => {
-  it("accepts audited 0.81 patches but rejects either side", () => {
+  it("accepts audited 0.81-0.82 releases but rejects prereleases and either edge", () => {
     expect(MIN_PI_VERSION).toBe("0.81.1");
-    expect(MAX_PI_VERSION_EXCLUSIVE).toBe("0.82.0");
+    expect(MAX_PI_VERSION_EXCLUSIVE).toBe("0.83.0");
     expect(isPiVersionSupported("0.81.0")).toBe(false);
     expect(isPiVersionSupported("0.81.1")).toBe(true);
     expect(isPiVersionSupported("0.81.9")).toBe(true);
     expect(isPiVersionSupported("0.82.0-rc.1")).toBe(false);
-    expect(isPiVersionSupported("0.82.0")).toBe(false);
+    expect(isPiVersionSupported("0.82.0-rc.1+build-1")).toBe(false);
+    expect(isPiVersionSupported("0.82.0")).toBe(true);
+    expect(isPiVersionSupported("0.82.0+build-1")).toBe(true);
+    expect(isPiVersionSupported("0.82.9")).toBe(true);
+    expect(isPiVersionSupported("0.83.0-rc.1")).toBe(false);
+    expect(isPiVersionSupported("0.83.0")).toBe(false);
   });
 });
 
@@ -147,7 +156,7 @@ describe("requirePiVersion", () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0][0]).toMatch(/sf-pi-compat-once/);
     expect(warn.mock.calls[0][0]).toMatch(/9999\.0\.0/);
-    expect(warn.mock.calls[0][0]).toMatch(/Pi 0\.81\.1/);
+    expect(warn.mock.calls[0][0]).toMatch(/Pi 0\.82\.0/);
     expect(warn.mock.calls[0][0]).toMatch(/\/sf-pi doctor runtime/);
   });
 
@@ -158,7 +167,7 @@ describe("requirePiVersion", () => {
 
     expect(ok).toBe(false);
     expect(warn.mock.calls[0][0]).toContain('Skipping "sf-old-pi-skip"');
-    expect(warn.mock.calls[0][0]).toContain("Use Pi 0.81.1");
+    expect(warn.mock.calls[0][0]).toContain("Use Pi 0.82.0");
   });
 
   it("newer Pi degrades with the full supported window instead of loading", () => {

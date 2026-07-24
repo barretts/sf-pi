@@ -3,7 +3,7 @@
  * Session-bound masked credential entry for SF Pi provider authentication.
  *
  * Pi still owns `/login` orchestration and credential persistence. Providers
- * use this bridge instead of Pi 0.81.1's visible stock secret prompt.
+ * use this bridge instead of the visible stock secret prompt in Pi 0.81.1-0.82.0.
  */
 import type { ApiKeyCredential, AuthInteraction } from "@earendil-works/pi-ai";
 import type {

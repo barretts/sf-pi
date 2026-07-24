@@ -27,23 +27,23 @@ describe("detectPiReleaseStatus", () => {
     expect(status.loading).toBe(false);
   });
 
-  it("normalizes cached guidance beyond the audited 0.81 window", () => {
+  it("normalizes cached guidance beyond the audited 0.82 window", () => {
     const agentDir = mkdtempSync(path.join(tmpdir(), "sf-welcome-pi-cache-"));
     vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
     try {
       writeCachedPiReleaseStatus({
-        installedVersion: "0.81.1",
-        latestVersion: "0.82.0",
+        installedVersion: "0.82.0",
+        latestVersion: "0.83.0",
         freshness: "update-available",
         loading: false,
         updateCommand: "pi update --self --force",
       });
 
-      const status = readCachedPiReleaseStatus("0.81.1", Number.POSITIVE_INFINITY);
+      const status = readCachedPiReleaseStatus("0.82.0", Number.POSITIVE_INFINITY);
 
       expect(status?.freshness).toBe("latest");
-      expect(status?.latestVersion).toBe("0.81.1");
-      expect(status?.absoluteLatestVersion).toBe("0.82.0");
+      expect(status?.latestVersion).toBe("0.82.0");
+      expect(status?.absoluteLatestVersion).toBe("0.83.0");
       expect(status?.supportWindowLimited).toBe(true);
       expect(status?.updateCommand).toBe("/sf-pi doctor runtime");
     } finally {
@@ -53,26 +53,38 @@ describe("detectPiReleaseStatus", () => {
   });
 
   it("does not recommend an upstream Pi release beyond the audited ceiling", async () => {
+    const status = await detectPiReleaseStatus(async () => "0.83.0", {} as NodeJS.ProcessEnv, {
+      runNpm: noPolicyRunner,
+      installedVersion: "0.82.0",
+    });
+
+    expect(status.freshness).toBe("latest");
+    expect(status.latestVersion).toBe("0.82.0");
+    expect(status.absoluteLatestVersion).toBe("0.83.0");
+    expect(status.supportWindowLimited).toBe(true);
+    expect(status.updateCommand).toBe("/sf-pi doctor runtime");
+  });
+
+  it("does not recommend an in-window Pi prerelease", async () => {
+    const status = await detectPiReleaseStatus(async () => "0.82.1-rc.1", {} as NodeJS.ProcessEnv, {
+      runNpm: noPolicyRunner,
+      installedVersion: "0.82.0",
+    });
+
+    expect(status.freshness).toBe("latest");
+    expect(status.latestVersion).toBe("0.82.0");
+    expect(status.absoluteLatestVersion).toBe("0.82.1-rc.1");
+    expect(status.supportWindowLimited).toBe(true);
+  });
+
+  it("reports update availability for the audited Pi 0.82 release", async () => {
     const status = await detectPiReleaseStatus(async () => "0.82.0", {} as NodeJS.ProcessEnv, {
       runNpm: noPolicyRunner,
       installedVersion: "0.81.1",
     });
 
-    expect(status.freshness).toBe("latest");
-    expect(status.latestVersion).toBe("0.81.1");
-    expect(status.absoluteLatestVersion).toBe("0.82.0");
-    expect(status.supportWindowLimited).toBe(true);
-    expect(status.updateCommand).toBe("/sf-pi doctor runtime");
-  });
-
-  it("reports update availability for an audited in-window patch", async () => {
-    const status = await detectPiReleaseStatus(async () => "0.81.2", {} as NodeJS.ProcessEnv, {
-      runNpm: noPolicyRunner,
-      installedVersion: "0.81.1",
-    });
-
     expect(status.freshness).toBe("update-available");
-    expect(status.latestVersion).toBe("0.81.2");
+    expect(status.latestVersion).toBe("0.82.0");
     expect(status.updateCommand).toBe("/sf-pi doctor runtime");
   });
 

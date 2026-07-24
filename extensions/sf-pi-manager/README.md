@@ -98,9 +98,9 @@ work as pending but performs no update. The next `agent_settled` boundary
 rechecks opt-in and idle state, writes a sanitized Human-Only plan row, and runs
 eligible targets independently under an atomic machine lock.
 
-The Pi runtime remains on the audited `>=0.81.1 <0.82.0` line because Pi does
-not expose a bounded self-update target. Global npm Pi packages receive a
-read-only compatibility preflight; only an outdated, unpinned package whose
+The Pi runtime remains inside the audited `>=0.81.1 <0.83.0` window. The
+coordinator does not mutate the Pi runtime because it has no bounded self-update
+target. Global npm Pi packages receive a read-only compatibility preflight; only an outdated, unpinned package whose
 latest release declares support for the active Pi and Node runtimes is updated
 through Pi's native command:
 
@@ -263,11 +263,11 @@ via name-based (`sf-pi` / `jag-pi-extensions`) or path-based detection
 — a symlink from `pi install .` resolves to the repo root.
 
 **`pi --version` is outside SF Pi's audited runtime window:**
-Run `/sf-pi doctor runtime`. SF Pi supports `>=0.81.1 <0.82.0` and recommends
-exact Pi 0.81.1. The report shows active
+Run `/sf-pi doctor runtime`. SF Pi supports `>=0.81.1 <0.83.0` and recommends
+exact Pi 0.82.0. The report shows active
 `pi`, `node`, and `npm` executables, package/version mismatches, release-age
-policy, and a bounded exact-version fallback. Do not run a latest-version Pi
-update until the secure native credential-prompt milestone lands.
+policy, and a bounded exact-version fallback. Do not update beyond the audited
+runtime ceiling until a later Pi release has passed compatibility review.
 
 **Disabling an extension through the manager doesn't take effect:**
 Pi reads the package filter at startup. After a disable, the manager

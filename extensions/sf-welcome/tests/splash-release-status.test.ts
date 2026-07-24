@@ -158,9 +158,9 @@ describe("release freshness splash rows", () => {
     const rendered = await render(
       baseData({
         piRelease: {
-          installedVersion: "0.81.1",
-          latestVersion: "0.81.1",
-          absoluteLatestVersion: "0.82.0",
+          installedVersion: "0.82.0",
+          latestVersion: "0.82.0",
+          absoluteLatestVersion: "0.83.0",
           supportWindowLimited: true,
           freshness: "latest",
           loading: false,
@@ -171,7 +171,7 @@ describe("release freshness splash rows", () => {
 
     const pi = findStatusLine(rendered, "Pi");
     expect(pi).toContain("latest supported [newer Pi blocked]");
-    expect(pi).toContain("v0.81.1");
+    expect(pi).toContain("v0.82.0");
     expect(rendered).not.toContain("→ /sf-pi doctor runtime");
   });
 

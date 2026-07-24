@@ -130,7 +130,7 @@ macOS, Linux, and WSL are the primary targets. Native Windows works on
 x64 and ARM64 once the `sf` CLI is installed, but WSL is recommended for
 parity with Linux/macOS shell tooling. The audited Pi window tracks the
 `peerDependencies` range in [`package.json`](./package.json) (currently
-`>=0.81.1 <0.82.0`). Pi 0.81.1 is the recommended version. Runtimes outside
+`>=0.81.1 <0.83.0`). Pi 0.82.0 is the recommended version. Runtimes outside
 that window are not supported; [`lib/common/pi-compat.ts`](./lib/common/pi-compat.ts)
 skips extensions with an actionable `/sf-pi doctor runtime` message instead of
 letting them crash on removed runtime APIs. SF Docs, Slack, and the Gateway use
@@ -473,8 +473,8 @@ invocation and is picked up by all sf-pi commands without any sf-pi change.
 export PI_CODING_AGENT_SESSION_DIR="$HOME/.pi-sessions"
 ```
 
-sf-pi supports pi `>=0.81.1 <0.82.0`, so supported installations honor the env
-var. Pi 0.81.1 is the recommended version.
+sf-pi supports pi `>=0.81.1 <0.83.0`, so supported installations honor the env
+var. Pi 0.82.0 is the recommended version.
 
 ## Adding a New Extension
 

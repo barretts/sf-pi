@@ -2,7 +2,7 @@
 
 Status: accepted; shared SF Pi provider UI implemented for Gateway, Docs, and Slack
 
-SF Pi will not pass secrets through Pi 0.81.1's stock `AuthInteraction.prompt({type:"secret"})` because that TUI renders submitted values. Instead, providers that require interactive token entry use one shared, behavior-proven `ctx.ui.custom()` component from `lib/common/secure-credential-prompt.ts`. The component uses a constant-length mask, filters terminal controls, supports Kitty input and bracketed paste, clears its buffer before settlement, and cancels on abort, reload, shutdown, or session replacement.
+SF Pi will not pass secrets through Pi 0.81.1-0.82.0's stock `AuthInteraction.prompt({type:"secret"})` because that TUI renders submitted values. Instead, providers that require interactive token entry use one shared, behavior-proven `ctx.ui.custom()` component from `lib/common/secure-credential-prompt.ts`. The component uses a constant-length mask, filters terminal controls, supports Kitty input and bracketed paste, clears its buffer before settlement, and cancels on abort, reload, shutdown, or session replacement.
 
 The shared component is an input boundary only. It returns a canonical API-key or OAuth-compatible credential to Pi's provider login orchestration. Pi alone persists the credential and owns `/logout`; SF Pi does not patch or fork Pi, import private auth storage, write `auth.json`, create another secret store, or place secret values in settings, session entries, model context, status, logs, or terminal output.
 

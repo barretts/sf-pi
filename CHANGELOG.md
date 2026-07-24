@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Changed
 
+- **Expanded the audited Pi runtime window through Pi 0.82.x.** SF Pi now supports `>=0.81.1 <0.83.0`, recommends exact Pi 0.82.0, pins its development Pi packages to 0.82.0, and tests both 0.81.1 and 0.82.0 in compatibility CI. The public Provider, authentication, lifecycle, and custom-TUI surfaces used by SF Pi remain compatible; the shared fixed-mask credential component stays in place because Pi 0.82.0 still renders stock secret-prompt submissions.
 - **Added shared fixed-mask provider login for SF Docs and SF Slack.** Gateway, Docs, and Slack now use one session-bound SF Pi `ctx.ui.custom()` component while Pi alone persists credentials and owns `/logout`. Existing API-key and OAuth-compatible credentials plus environment automation remain supported; Docs/Slack containment-only login failures and the Gateway-local prompt copy were deleted.
 - **Closed the Browser progressive-activation proposal without implementation.** Pi's eager tool activation and authoritative exclusions remain unchanged; dynamic tool loading requires separate future authorization.
 - **Patched the development dependency graph for `brace-expansion`.** The lockfile now resolves the ESLint path to a patched release, removing the open high-severity development-only denial-of-service alert while leaving production dependencies unchanged.
