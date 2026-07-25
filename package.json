@@ -152,6 +152,7 @@
     "vitest": "Vitest resolves Vite as a transitive test runner dependency. Force the patched Vite 7 line for tests until Vitest naturally resolves to a patched Vite release without overrides.",
     "esbuild": "Force >= 0.28.1 to clear GHSA-gv7w-rqvm-qjhr. Vite uses esbuild as build/test tooling; remove once all Vite ranges in the tree naturally require a patched esbuild.",
     "vite": "Direct dev dependency used to satisfy Vite peer imports for VitePress/Vitest while pinning a patched Vite line. Keep aligned with the transitive Vite overrides and remove only if docs/test tooling no longer requires a root peer install.",
+    "minimatch": "Force minimatch 10.2.5+ across the dependency tree so the two production paths resolve brace-expansion 5.0.8+ and clear GHSA-mh99-v99m-4gvg. Remove once @salesforce/source-deploy-retrieve and vscode-languageclient naturally require patched minimatch releases.",
     "@sf-agentscript/language": "Canary override: force every AgentScript package onto language-service 2.9.0 so SF Pi uses the latest @sf-agentscript/language behavior even while some upstream packages still declare 2.5.4. Remove once @sf-agentscript/agentforce and @sf-agentscript/lsp naturally declare a 2.9.x-compatible language dependency.",
     "@sf-agentscript/types": "Pair with the @sf-agentscript/language canary so the AgentScript toolchain resolves one foundational types package (0.2.3) instead of mixing 0.2.2 and 0.2.3. Remove with the language override once upstream declarations catch up."
   },
@@ -169,6 +170,7 @@
       "vite": "7.3.5"
     },
     "esbuild": "^0.28.1",
+    "minimatch": "^10.2.5",
     "@sf-agentscript/language": "2.18.0",
     "@sf-agentscript/types": "0.2.3"
   }
