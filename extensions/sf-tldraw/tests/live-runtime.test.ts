@@ -12,9 +12,14 @@ describe("sf-tldraw live runtime", () => {
     { fixture: "data-model", family: "data_model", page: "SF tldraw Data Model Smoke" },
     { fixture: "architecture", family: "architecture", page: "SF tldraw Architecture Smoke" },
     { fixture: "sequence", family: "sequence", page: "SF tldraw Sequence Smoke" },
+    {
+      fixture: "oauth-sequence",
+      family: "sequence",
+      page: "SF tldraw OAuth Sequence Smoke",
+    },
   ] as const) {
     liveIt(
-      `renders the grounded ${testCase.family} fixture with visual evidence`,
+      `renders the grounded ${testCase.fixture} fixture with visual evidence`,
       async () => {
         const spec = JSON.parse(
           readFileSync(
@@ -44,6 +49,11 @@ describe("sf-tldraw live runtime", () => {
             (check) => check.fromDelta <= 1 && check.toDelta <= 1,
           ),
         ).toBe(true);
+        if (testCase.family === "sequence") {
+          expect(
+            outcome.result.readiness.sequenceGeometryChecks.every((check) => check.delta <= 1),
+          ).toBe(true);
+        }
         expect(outcome.artifact.screenshotPath).toBeTruthy();
         expect(outcome.artifact.thumbnailPath).toBeTruthy();
       },
@@ -55,19 +65,33 @@ describe("sf-tldraw live runtime", () => {
     "keeps sequence lifelines and anchors attached to a moved participant",
     async () => {
       const client = new TldrawRuntimeClient();
+      const spec = JSON.parse(
+        readFileSync(path.join(import.meta.dirname, "fixtures", "sequence.json"), "utf8"),
+      );
+      const baseline = await renderSalesforceDiagram(
+        {
+          family: "sequence",
+          spec,
+          pageName: "SF tldraw Sequence Smoke",
+          mode: "replace",
+          outputMode: "file_only",
+        },
+        { cwd: process.cwd(), client },
+      );
+      if (baseline.ok === false) throw new Error(baseline.message);
       const document = await client.resolveDocument(undefined);
-      await client.execute(
+      const moved = await client.execute<{ x: number; y: number }>(
         document.id,
         `
 const page=editor.getPages().find(page=>page.name==='SF tldraw Sequence Smoke')
 editor.setCurrentPage(page.id)
-const group=editor.getCurrentPageShapes().find(shape=>shape.meta?.sfTldraw?.role==='group'&&shape.meta?.sfTldraw?.semanticId==='user')
+const shapes=editor.getCurrentPageShapes()
+const group=shapes.find(shape=>shape.meta?.sfTldraw?.role==='group'&&shape.meta?.sfTldraw?.semanticId==='user')
+const card=shapes.find(shape=>shape.meta?.sfTldraw?.role==='card'&&shape.meta?.sfTldraw?.semanticId==='user')
 helpers.translateShapes([group.id],83,0)
-return true
+const bounds=editor.getShapePageBounds(card.id)
+return{x:bounds.x,y:bounds.y}
 `,
-      );
-      const spec = JSON.parse(
-        readFileSync(path.join(import.meta.dirname, "fixtures", "sequence.json"), "utf8"),
       );
       const outcome = await renderSalesforceDiagram(
         {
@@ -84,6 +108,17 @@ return true
       expect(
         outcome.result.readiness.sequenceGeometryChecks.every((check) => check.delta <= 1),
       ).toBe(true);
+      const preserved = await client.execute<{ x: number; y: number }>(
+        document.id,
+        `
+const page=editor.getPages().find(page=>page.name==='SF tldraw Sequence Smoke')
+editor.setCurrentPage(page.id)
+const card=editor.getCurrentPageShapes().find(shape=>shape.meta?.sfTldraw?.role==='card'&&shape.meta?.sfTldraw?.semanticId==='user')
+const bounds=editor.getShapePageBounds(card.id)
+return{x:bounds.x,y:bounds.y}
+`,
+      );
+      expect(preserved).toEqual(moved);
     },
     60_000,
   );

@@ -43,7 +43,7 @@ const NODE_KINDS = new Set(["salesforce", "external", "user", "data_store", "int
 const LIMITS: Record<DiagramFamily, { nodes: number; edges: number }> = {
   data_model: { nodes: 18, edges: 28 },
   architecture: { nodes: 16, edges: 24 },
-  sequence: { nodes: 12, edges: 24 },
+  sequence: { nodes: 8, edges: 18 },
 };
 
 export function validateDiagramSpec(
@@ -374,6 +374,7 @@ function validateSequence(
 ): void {
   const participants = arrayField(value, "participants", errors);
   const interactions = arrayField(value, "interactions", errors);
+  const activations = optionalArrayField(value, "activations", errors);
   enforceBudget("sequence", participants.length, interactions.length, errors);
   const ids = new Set<string>();
   for (let i = 0; i < participants.length; i++) {
@@ -422,7 +423,14 @@ function validateSequence(
     validateUniqueId(item.id, path, edgeIds, errors);
     validateEndpoint(item.from, ids, `${path}.from`, errors);
     validateEndpoint(item.to, ids, `${path}.to`, errors);
-    requiredString(item, "label", errors, 1, 120, `${path}.label`);
+    if (typeof item.from === "string" && item.from === item.to)
+      errors.push({
+        code: "unsupported_self_interaction",
+        message:
+          "Self-interactions require loop routing and are not supported by the sequence renderer.",
+        path,
+      });
+    requiredString(item, "label", errors, 1, 100, `${path}.label`);
     if (!Number.isInteger(item.step) || Number(item.step) < 1)
       errors.push({
         code: "invalid_step",
@@ -451,10 +459,92 @@ function validateSequence(
       message: "Sequence steps must be contiguous starting at 1.",
       path: "interactions",
     });
+  const activationIds = new Set<string>();
+  const activationRanges: Array<{
+    participant: string;
+    start: number;
+    end: number;
+    path: string;
+  }> = [];
+  for (let i = 0; i < activations.length; i++) {
+    const item = activations[i];
+    const path = `activations[${i}]`;
+    if (!isRecord(item)) {
+      errors.push({
+        code: "invalid_activation",
+        message: "Each activation must be an object.",
+        path,
+      });
+      continue;
+    }
+    validateUniqueId(item.id, path, activationIds, errors);
+    validateEndpoint(item.participant, ids, `${path}.participant`, errors);
+    const start = item.start_step;
+    const end = item.end_step;
+    if (!Number.isInteger(start) || Number(start) < 1 || !steps.has(Number(start)))
+      errors.push({
+        code: "invalid_activation_start",
+        message: "start_step must reference a declared sequence step.",
+        path: `${path}.start_step`,
+      });
+    if (!Number.isInteger(end) || Number(end) < 1 || !steps.has(Number(end)))
+      errors.push({
+        code: "invalid_activation_end",
+        message: "end_step must reference a declared sequence step.",
+        path: `${path}.end_step`,
+      });
+    if (Number.isInteger(start) && Number.isInteger(end) && Number(start) > Number(end))
+      errors.push({
+        code: "reversed_activation",
+        message: "start_step must be less than or equal to end_step.",
+        path,
+      });
+    if (
+      typeof item.participant === "string" &&
+      ids.has(item.participant) &&
+      Number.isInteger(start) &&
+      Number.isInteger(end) &&
+      steps.has(Number(start)) &&
+      steps.has(Number(end)) &&
+      Number(start) <= Number(end)
+    ) {
+      activationRanges.push({
+        participant: item.participant,
+        start: Number(start),
+        end: Number(end),
+        path,
+      });
+    }
+    validateEvidence(item.evidence, sourceIds, `${path}.evidence`, errors);
+  }
+  activationRanges.sort(
+    (left, right) =>
+      left.participant.localeCompare(right.participant) ||
+      left.start - right.start ||
+      left.end - right.end,
+  );
+  for (let i = 1; i < activationRanges.length; i++) {
+    const previous = activationRanges[i - 1]!;
+    const current = activationRanges[i]!;
+    if (current.participant === previous.participant && current.start <= previous.end)
+      errors.push({
+        code: "overlapping_activation",
+        message:
+          "Activation intervals for one participant must not overlap until nested-bar routing is supported.",
+        path: current.path,
+      });
+  }
+  if (participants.length > 6)
+    warnings.push({
+      code: "wide_sequence",
+      message:
+        "Sequences with more than six participants are easier to review when split by responsibility.",
+    });
   if (interactions.length > 12)
     warnings.push({
       code: "long_sequence",
-      message: "Long sequence diagrams are easier to review when split into multiple pages.",
+      message:
+        "Sequences with more than twelve interactions are easier to review when split into phases.",
     });
 }
 
@@ -643,6 +733,23 @@ function enforceBudget(
       code: "single_page_density_exceeded",
       message: `${family} single-page limit is ${limit.nodes} nodes and ${limit.edges} connections; split the scope into multiple render calls.`,
     });
+}
+
+function optionalArrayField(
+  value: Record<string, unknown>,
+  key: string,
+  errors: ValidationFinding[],
+): unknown[] {
+  if (value[key] === undefined) return [];
+  if (!Array.isArray(value[key])) {
+    errors.push({
+      code: `invalid_${key}`,
+      message: `${key} must be an array when provided.`,
+      path: key,
+    });
+    return [];
+  }
+  return value[key] as unknown[];
 }
 
 function arrayField(

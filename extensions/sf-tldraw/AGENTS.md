@@ -24,6 +24,7 @@ Read [`README.md`](./README.md) and [`docs/cheatsheet.md`](./docs/cheatsheet.md)
 - Never guess Salesforce facts. Every semantic element cites a declared source id.
 - Never expose the tldraw bearer token, raw auth headers, or private org execution identifiers.
 - Use `helpers.createArrowBetweenShapes` for meaningful connectors.
+- Sequence activation intervals must be explicit, evidenced spec elements; never infer processing duration from adjacent messages.
 - Cardinality placement must use clipped `getArrowInfo()` terminals and verify the local marker anchor through `getShapePageTransform(marker).applyToPoint(...)`.
 - A successful render requires zero actionable tldraw lints and marker distance at most one canvas unit.
 - Preserve user positioning and annotations by default. Only shapes carrying `meta.sfTldraw.managed === true` belong to this extension.

@@ -158,4 +158,67 @@ describe("Salesforce Diagram Spec validation", () => {
     const result = validateDiagramSpec(spec, "data_model");
     expect(result.errors.map((error) => error.code)).toContain("single_page_density_exceeded");
   });
+
+  it("validates explicit sequence activations without inferring processing duration", () => {
+    const spec = sequenceFixture();
+    spec.activations = [];
+    expect(validateDiagramSpec(spec, "sequence").ok).toBe(true);
+    spec.activations = [
+      {
+        id: "service-work",
+        participant: "service",
+        start_step: 1,
+        end_step: 3,
+        evidence: ["service-overview"],
+      },
+    ];
+    expect(validateDiagramSpec(spec, "sequence").ok).toBe(true);
+
+    spec.activations[0]!.start_step = 3;
+    spec.activations[0]!.end_step = 1;
+    const rejected = validateDiagramSpec(spec, "sequence");
+    expect(rejected.errors.map((error) => error.code)).toContain("reversed_activation");
+
+    const overlap = sequenceFixture();
+    overlap.activations = [
+      {
+        id: "first",
+        participant: "service",
+        start_step: 1,
+        end_step: 2,
+        evidence: ["service-overview"],
+      },
+      {
+        id: "second",
+        participant: "service",
+        start_step: 2,
+        end_step: 3,
+        evidence: ["service-overview"],
+      },
+    ];
+    expect(validateDiagramSpec(overlap, "sequence").errors.map((error) => error.code)).toContain(
+      "overlapping_activation",
+    );
+  });
+
+  it("rejects unsupported sequence loops and over-wide participant sets", () => {
+    const selfInteraction = sequenceFixture();
+    selfInteraction.interactions[0]!.to = selfInteraction.interactions[0]!.from;
+    expect(
+      validateDiagramSpec(selfInteraction, "sequence").errors.map((error) => error.code),
+    ).toContain("unsupported_self_interaction");
+
+    const wide = sequenceFixture();
+    const template = wide.participants[0]!;
+    wide.participants.push(
+      ...Array.from({ length: 6 }, (_, index) => ({
+        ...template,
+        id: `extra-${index}`,
+        label: `Extra participant ${index}`,
+      })),
+    );
+    expect(validateDiagramSpec(wide, "sequence").errors.map((error) => error.code)).toContain(
+      "single_page_density_exceeded",
+    );
+  });
 });

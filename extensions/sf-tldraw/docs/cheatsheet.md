@@ -263,12 +263,21 @@ Connection meanings: `directional`, `async_or_batch`, `dependency`. Labels are r
         "kind": "response",
         "evidence": ["service-model"]
       }
+    ],
+    "activations": [
+      {
+        "id": "case-work",
+        "participant": "service",
+        "start_step": 1,
+        "end_step": 2,
+        "evidence": ["service-model"]
+      }
     ]
   }
 }
 ```
 
-Interaction kinds: `request`, `response`, `async`, `event`. Steps are unique and contiguous from 1. Static is the default; there is no autoplay.
+Interaction kinds are `request`, `response`, `async`, and `event`. Steps are unique and contiguous from 1. Activation intervals are optional, explicit, and evidenced; the renderer never infers processing duration. Activation intervals for one participant can't overlap until nested-bar routing is supported. Self-interactions are rejected until loop routing is supported. The single-page budget is eight participants and 18 interactions, with readability warnings above six participants or 12 interactions. Static is the default; there is no autoplay.
 
 ## Update modes
 

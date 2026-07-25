@@ -5,6 +5,7 @@ import type {
   CanvasEdgePayload,
   CanvasNodePayload,
   CanvasProgramPayload,
+  CanvasSequenceActivationPayload,
   CanvasSequenceInteractionPayload,
   DataModelSpec,
   RenderMode,
@@ -106,39 +107,101 @@ function compileArchitecture(
   ]);
 }
 
+const SEQUENCE_FIRST_MESSAGE_Y = 520;
+const SEQUENCE_ROW_GAP = 118;
+const SEQUENCE_PHASE_GAP = 52;
+const SEQUENCE_ACTIVATION_PAD = 28;
+
 function compileSequence(spec: SequenceSpec, options: CompileOptions): CanvasProgramPayload {
   const visuals = resolveVisualAssets(spec, options.preferences.cardinalityDetail);
   const layout = new Map(layoutSequence(spec).map((node) => [node.id, node]));
   const nodes: CanvasNodePayload[] = spec.participants.map((participant) => {
-    const visual = requiredMapValue(visuals.nodeAssets, participant.id, "visual asset");
+    const hasExplicitVisual = Boolean(participant.icon || participant.product_mark);
+    const visual = hasExplicitVisual
+      ? requiredMapValue(visuals.nodeAssets, participant.id, "visual asset")
+      : undefined;
     return {
       ...requiredMapValue(layout, participant.id, "layout"),
       label: participant.label,
       kind: participant.kind,
-      iconAssetId: visual.iconAssetId,
-      iconTileAssetId: visual.tileAssetId,
+      ...(visual ? { iconAssetId: visual.iconAssetId, iconTileAssetId: visual.tileAssetId } : {}),
     };
   });
-  const interactions: CanvasSequenceInteractionPayload[] = [...spec.interactions]
-    .sort((left, right) => left.step - right.step)
-    .map((interaction, index) => ({
+  let y = SEQUENCE_FIRST_MESSAGE_Y;
+  const ordered = [...spec.interactions].sort((left, right) => left.step - right.step);
+  const interactions: CanvasSequenceInteractionPayload[] = ordered.map((interaction, index) => {
+    if (index > 0) {
+      y += SEQUENCE_ROW_GAP;
+      if (startsNewSequencePhase(ordered[index - 1]!, interaction)) y += SEQUENCE_PHASE_GAP;
+    }
+    return {
       id: interaction.id,
       from: interaction.from,
       to: interaction.to,
-      label: `${interaction.step}. ${interaction.label}`,
+      label: interaction.label,
       meaning: interaction.kind,
       step: interaction.step,
-      y: 560 + index * 130,
-    }));
+      y,
+    };
+  });
+  const activations = deriveSequenceActivations(spec, interactions);
+  const usedAssets = new Set(
+    nodes.flatMap((node) => [node.iconAssetId, node.iconTileAssetId]).filter(Boolean),
+  );
+  const assets = visuals.assets.filter((asset) => usedAssets.has(asset.id));
   const warnings = [...(options.warnings ?? []), ...visuals.warnings];
   if (options.preferences.interactionMode === "step_through") {
     warnings.push(
       "Manual step-through requires a document script and is not installed over an existing script; this render remains static.",
     );
   }
-  const payload = basePayload(spec, options, visuals.assets, nodes, interactions, warnings);
+  const payload = basePayload(spec, options, assets, nodes, interactions, warnings);
   payload.sequenceInteractions = interactions;
+  payload.sequenceActivations = activations;
   return payload;
+}
+
+function startsNewSequencePhase(
+  previous: SequenceSpec["interactions"][number],
+  current: SequenceSpec["interactions"][number],
+): boolean {
+  const previousCompletes = previous.kind === "response" || previous.kind === "async";
+  const currentStarts = current.kind === "request" || current.kind === "event";
+  if (!previousCompletes || !currentStarts) return false;
+  return participantPair(previous) !== participantPair(current);
+}
+
+function participantPair(interaction: { from: string; to: string }): string {
+  return [interaction.from, interaction.to].sort().join("|");
+}
+
+function deriveSequenceActivations(
+  spec: SequenceSpec,
+  interactions: CanvasSequenceInteractionPayload[],
+): CanvasSequenceActivationPayload[] {
+  const rows = new Map(interactions.map((interaction) => [interaction.step, interaction.y]));
+  const participantOrder = new Map(
+    spec.participants.map((participant, index) => [participant.id, index]),
+  );
+  return [...(spec.activations ?? [])]
+    .sort(
+      (left, right) =>
+        requiredMapValue(participantOrder, left.participant, "participant order") -
+          requiredMapValue(participantOrder, right.participant, "participant order") ||
+        left.start_step - right.start_step ||
+        left.end_step - right.end_step ||
+        left.id.localeCompare(right.id),
+    )
+    .map((activation) => {
+      const startY = requiredMapValue(rows, activation.start_step, "activation start row");
+      const endY = requiredMapValue(rows, activation.end_step, "activation end row");
+      return {
+        id: activation.id,
+        participantId: activation.participant,
+        y: startY - SEQUENCE_ACTIVATION_PAD,
+        h: Math.max(52, endY - startY + SEQUENCE_ACTIVATION_PAD * 2),
+      };
+    });
 }
 
 interface CompileOptions {
@@ -198,8 +261,8 @@ function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
-function requiredMapValue<T>(map: Map<string, T>, id: string, kind: string): T {
+function requiredMapValue<K, T>(map: Map<K, T>, id: K, kind: string): T {
   const value = map.get(id);
-  if (!value) throw new Error(`Missing ${kind} for '${id}'.`);
+  if (value === undefined) throw new Error(`Missing ${kind} for '${String(id)}'.`);
   return value;
 }

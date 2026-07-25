@@ -14,22 +14,25 @@ function fixture(name: string): SalesforceDiagramSpec {
 }
 
 describe("deterministic Salesforce profiles", () => {
-  it.each(["data-model", "architecture", "sequence"])("compiles %s deterministically", (name) => {
-    const spec = fixture(name);
-    const first = compileProfile(spec, {
-      renderMode: "preserve",
-      preferences: DEFAULT_TLDRAW_PREFERENCES,
-    });
-    const second = compileProfile(spec, {
-      renderMode: "preserve",
-      preferences: DEFAULT_TLDRAW_PREFERENCES,
-    });
-    expect(second).toEqual(first);
-    expect(first.nodes.every((node) => Number.isInteger(node.x) && Number.isInteger(node.y))).toBe(
-      true,
-    );
-    expect(first.assets.every((asset) => asset.src.startsWith("data:image/"))).toBe(true);
-  });
+  it.each(["data-model", "architecture", "sequence", "oauth-sequence"])(
+    "compiles %s deterministically",
+    (name) => {
+      const spec = fixture(name);
+      const first = compileProfile(spec, {
+        renderMode: "preserve",
+        preferences: DEFAULT_TLDRAW_PREFERENCES,
+      });
+      const second = compileProfile(spec, {
+        renderMode: "preserve",
+        preferences: DEFAULT_TLDRAW_PREFERENCES,
+      });
+      expect(second).toEqual(first);
+      expect(
+        first.nodes.every((node) => Number.isInteger(node.x) && Number.isInteger(node.y)),
+      ).toBe(true);
+      expect(first.assets.every((asset) => asset.src.startsWith("data:image/"))).toBe(true);
+    },
+  );
 
   it("uses unchanged icon assets on separate vivid tiles", () => {
     const payload = compileProfile(fixture("data-model"), {
@@ -96,20 +99,20 @@ describe("deterministic Salesforce profiles", () => {
     expect(payload.nodes[0]?.observations).not.toContain(expect.stringMatching(/^RT /));
   });
 
-  it("uses fixed lanes and ordered message rows for sequences", () => {
+  it("uses content-sized lanes and ordered message rows for sequences", () => {
     const payload = compileProfile(fixture("sequence"), {
       renderMode: "preserve",
       preferences: DEFAULT_TLDRAW_PREFERENCES,
     });
     expect(payload.nodes.map((node) => node.id)).toEqual(["user", "service", "integration"]);
-    expect(payload.nodes.map((node) => node.y)).toEqual([330, 330, 330]);
+    expect(payload.nodes.map((node) => node.y)).toEqual([290, 290, 290]);
     expect(payload.sequenceInteractions?.map((interaction) => interaction.y)).toEqual([
-      560, 690, 820,
+      520, 638, 756,
     ]);
     expect(payload.sequenceInteractions?.map((interaction) => interaction.label)).toEqual([
-      "1. Create support request",
-      "2. Publish update",
-      "3. Return reference number",
+      "Create support request",
+      "Publish update",
+      "Return reference number",
     ]);
   });
 });

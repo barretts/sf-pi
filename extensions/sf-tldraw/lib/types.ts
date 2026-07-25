@@ -140,10 +140,19 @@ export interface SequenceInteraction {
   evidence: string[];
 }
 
+export interface SequenceActivation {
+  id: string;
+  participant: string;
+  start_step: number;
+  end_step: number;
+  evidence: string[];
+}
+
 export interface SequenceSpec extends BaseDiagramSpec {
   family: "sequence";
   participants: SequenceParticipant[];
   interactions: SequenceInteraction[];
+  activations?: SequenceActivation[];
 }
 
 export type SalesforceDiagramSpec = DataModelSpec | ArchitectureSpec | SequenceSpec;
@@ -302,6 +311,13 @@ export interface CanvasSequenceInteractionPayload extends CanvasEdgePayload {
   y: number;
 }
 
+export interface CanvasSequenceActivationPayload {
+  id: string;
+  participantId: string;
+  y: number;
+  h: number;
+}
+
 export interface CanvasProgramPayload {
   schemaVersion: 1;
   family: DiagramFamily;
@@ -315,6 +331,7 @@ export interface CanvasProgramPayload {
   nodes: CanvasNodePayload[];
   edges: CanvasEdgePayload[];
   sequenceInteractions?: CanvasSequenceInteractionPayload[];
+  sequenceActivations?: CanvasSequenceActivationPayload[];
   warnings: string[];
 }
 

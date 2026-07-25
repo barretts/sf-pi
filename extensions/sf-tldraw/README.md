@@ -90,6 +90,20 @@ Every spec declares `grounding.mode` as `reference` or `org`. Reference sources 
 
 Marker placement solves the local marker anchor through tldraw's origin-based shape transform. Readiness then resolves the anchor back into page space with `getShapePageTransform()` and requires a terminal distance of at most one canvas unit. This covers horizontal, reversed, diagonal, and vertical connectors.
 
+### Sequence grammar
+
+Sequence diagrams use a dedicated integration-flow profile instead of the graph-card grammar:
+
+- 96-unit pastel participant headers with content-sized widths from 260–360 units
+- participant gaps of 140, 100, or 70 units for 1–4, 5–6, or 7–8 lanes
+- no generated fallback icons; an explicitly declared icon or product mark is rendered at 44 units
+- neutral lifelines and arrows with unboxed, numbered message labels
+- solid request/event arrows, dashed responses, and dotted asynchronous messages
+- message rows begin at 520 units, use a 118-unit baseline gap, and add 52 units of visual breathing room when a completed exchange changes participant pairs
+- optional activation bars only from explicit, evidenced `activations`; processing duration is never inferred
+
+A single page accepts at most eight participants and 18 interactions, with readability warnings above six participants or 12 interactions. Self-interactions are rejected until loop routing can be verified, and activation intervals for one participant cannot overlap until nested-bar routing is supported. Readiness checks participant-label containment, lane separation, activation alignment, message-label bounds and row separation, semantic bindings, lints, and screenshot evidence.
+
 ### Updates
 
 `render_mode="preserve"` is the default. It updates managed content and recomputes connector decorations without moving existing grouped cards or user annotations. `relayout` moves managed groups to the deterministic layout. `replace` rebuilds only shapes marked with `meta.sfTldraw.managed`; user-created annotations are never owned or removed.
@@ -136,6 +150,7 @@ extensions/sf-tldraw/
     redaction.test.ts       ← unit / smoke test
     renderer.test.ts        ← unit / smoke test
     runtime-client.test.ts  ← unit / smoke test
+    sequence-profile.test.ts← unit / smoke test
     settings.test.ts        ← unit / smoke test
     smoke.test.ts           ← unit / smoke test
     spec-validation.test.ts ← unit / smoke test

@@ -5,6 +5,11 @@ import type { ArchitectureSpec, DataModelSpec, PositionedNode, SequenceSpec } fr
 
 const GRAPH_TOP = 330;
 const GRAPH_LEFT = 100;
+const SEQUENCE_TOP = 290;
+const SEQUENCE_CARD_HEIGHT = 96;
+const SEQUENCE_MIN_CARD_WIDTH = 260;
+const SEQUENCE_MAX_CARD_WIDTH = 360;
+const SEQUENCE_LANE_GAPS = { compact: 70, medium: 100, roomy: 140 } as const;
 
 export function layoutDataModel(spec: DataModelSpec): PositionedNode[] {
   return layoutGraph(
@@ -31,14 +36,29 @@ export function layoutArchitecture(spec: ArchitectureSpec): PositionedNode[] {
 }
 
 export function layoutSequence(spec: SequenceSpec): PositionedNode[] {
-  const laneGap = 390;
-  return spec.participants.map((participant, index) => ({
-    id: participant.id,
-    x: GRAPH_LEFT + index * laneGap,
-    y: GRAPH_TOP,
-    w: 270,
-    h: 120,
-  }));
+  const laneGap =
+    spec.participants.length <= 4
+      ? SEQUENCE_LANE_GAPS.roomy
+      : spec.participants.length <= 6
+        ? SEQUENCE_LANE_GAPS.medium
+        : SEQUENCE_LANE_GAPS.compact;
+  let x = GRAPH_LEFT;
+  return spec.participants.map((participant) => {
+    const visualAllowance = participant.icon || participant.product_mark ? 90 : 0;
+    const width = Math.max(
+      SEQUENCE_MIN_CARD_WIDTH,
+      Math.min(SEQUENCE_MAX_CARD_WIDTH, 88 + participant.label.length * 8 + visualAllowance),
+    );
+    const node = {
+      id: participant.id,
+      x,
+      y: SEQUENCE_TOP,
+      w: width,
+      h: SEQUENCE_CARD_HEIGHT,
+    };
+    x += width + laneGap;
+    return node;
+  });
 }
 
 function layoutGraph(

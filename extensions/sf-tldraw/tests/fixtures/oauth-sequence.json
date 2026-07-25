@@ -1,0 +1,194 @@
+{
+  "spec_version": "1.0",
+  "family": "sequence",
+  "title": "OAuth authorization code with PKCE",
+  "scope": "Browser authorization, code exchange, API access, and token refresh through a Salesforce external client app.",
+  "grounding": {
+    "mode": "reference",
+    "as_of": "2026-07-25",
+    "sources": [
+      {
+        "id": "eca-pkce",
+        "label": "Set Up and Manage Authentication with External Client Apps",
+        "url": "https://developer.salesforce.com/docs/analytics/sdk/guide/sdk-setup-tn-auth.html",
+        "kind": "official_doc"
+      },
+      {
+        "id": "oauth-refresh",
+        "label": "OAuth 2.0 Refresh Token Flow",
+        "url": "https://developer.salesforce.com/docs/platform/mobile-sdk/guide/oauth-refresh-token-flow.html",
+        "kind": "official_doc"
+      },
+      {
+        "id": "connect-rest",
+        "label": "OAuth and Connect REST API",
+        "url": "https://developer.salesforce.com/docs/platform/connect-rest-api/guide/intro_using_oauth.html",
+        "kind": "official_doc"
+      }
+    ]
+  },
+  "participants": [
+    {
+      "id": "browser",
+      "label": "User Browser",
+      "kind": "external",
+      "evidence": ["eca-pkce"]
+    },
+    {
+      "id": "client",
+      "label": "Web App / Backend-for-Frontend",
+      "kind": "integration",
+      "evidence": ["eca-pkce"]
+    },
+    {
+      "id": "salesforce-oauth",
+      "label": "Salesforce Authorization Server",
+      "kind": "salesforce",
+      "evidence": ["eca-pkce", "oauth-refresh"]
+    },
+    {
+      "id": "salesforce-api",
+      "label": "Salesforce REST APIs",
+      "kind": "salesforce",
+      "evidence": ["connect-rest"]
+    }
+  ],
+  "interactions": [
+    {
+      "id": "start-login",
+      "step": 1,
+      "from": "browser",
+      "to": "client",
+      "label": "Request a protected route",
+      "kind": "request",
+      "evidence": ["eca-pkce"]
+    },
+    {
+      "id": "authorize-redirect",
+      "step": 2,
+      "from": "client",
+      "to": "browser",
+      "label": "Redirect with state and PKCE challenge",
+      "kind": "response",
+      "evidence": ["eca-pkce"]
+    },
+    {
+      "id": "authorize-request",
+      "step": 3,
+      "from": "browser",
+      "to": "salesforce-oauth",
+      "label": "Request authorization and user consent",
+      "kind": "request",
+      "evidence": ["eca-pkce"]
+    },
+    {
+      "id": "authorization-code",
+      "step": 4,
+      "from": "salesforce-oauth",
+      "to": "browser",
+      "label": "Redirect to the approved callback with a code",
+      "kind": "response",
+      "evidence": ["eca-pkce"]
+    },
+    {
+      "id": "deliver-code",
+      "step": 5,
+      "from": "browser",
+      "to": "client",
+      "label": "Deliver the authorization callback",
+      "kind": "request",
+      "evidence": ["eca-pkce"]
+    },
+    {
+      "id": "exchange-code",
+      "step": 6,
+      "from": "client",
+      "to": "salesforce-oauth",
+      "label": "Exchange the code and PKCE verifier",
+      "kind": "request",
+      "evidence": ["eca-pkce"]
+    },
+    {
+      "id": "return-tokens",
+      "step": 7,
+      "from": "salesforce-oauth",
+      "to": "client",
+      "label": "Return access and refresh tokens",
+      "kind": "response",
+      "evidence": ["connect-rest"]
+    },
+    {
+      "id": "call-api",
+      "step": 8,
+      "from": "client",
+      "to": "salesforce-api",
+      "label": "Call the API with the access token",
+      "kind": "request",
+      "evidence": ["connect-rest"]
+    },
+    {
+      "id": "api-response",
+      "step": 9,
+      "from": "salesforce-api",
+      "to": "client",
+      "label": "Return the authorized resource",
+      "kind": "response",
+      "evidence": ["connect-rest"]
+    },
+    {
+      "id": "refresh-request",
+      "step": 10,
+      "from": "client",
+      "to": "salesforce-oauth",
+      "label": "Exchange the refresh token after access expires",
+      "kind": "request",
+      "evidence": ["oauth-refresh"]
+    },
+    {
+      "id": "refresh-response",
+      "step": 11,
+      "from": "salesforce-oauth",
+      "to": "client",
+      "label": "Return a new access token",
+      "kind": "response",
+      "evidence": ["oauth-refresh"]
+    }
+  ],
+  "activations": [
+    {
+      "id": "client-login",
+      "participant": "client",
+      "start_step": 1,
+      "end_step": 2,
+      "evidence": ["eca-pkce"]
+    },
+    {
+      "id": "authorization",
+      "participant": "salesforce-oauth",
+      "start_step": 3,
+      "end_step": 4,
+      "evidence": ["eca-pkce"]
+    },
+    {
+      "id": "token-exchange",
+      "participant": "salesforce-oauth",
+      "start_step": 6,
+      "end_step": 7,
+      "evidence": ["eca-pkce"]
+    },
+    {
+      "id": "api-work",
+      "participant": "salesforce-api",
+      "start_step": 8,
+      "end_step": 9,
+      "evidence": ["connect-rest"]
+    },
+    {
+      "id": "token-refresh",
+      "participant": "salesforce-oauth",
+      "start_step": 10,
+      "end_step": 11,
+      "evidence": ["oauth-refresh"]
+    }
+  ]
+}
