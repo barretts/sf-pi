@@ -4,10 +4,10 @@
 
 `sf-tldraw` reads unchanged icon assets at runtime from the pinned npm package:
 
-- Package: [`@salesforce-ux/icons`](https://www.npmjs.com/package/@salesforce-ux/icons)
-- Version: `10.17.0`
-- License: [CC BY-ND 4.0](https://creativecommons.org/licenses/by-nd/4.0/)
-- Upstream license file: `node_modules/@salesforce-ux/icons/License-for-icons.txt`
+- Package: [`@salesforce-ux/design-system`](https://www.npmjs.com/package/@salesforce-ux/design-system)
+- Version: `2.264.0`
+- License: `BSD-3-Clause` (declared by the published package metadata)
+- Runtime asset root: `node_modules/@salesforce-ux/design-system/assets/icons/`
 
 Only icons actually used by a diagram are embedded in that tldraw document. Each embedded icon asset carries source, package, version, and license metadata for portability. The glyphs are not recolored or modified; colored tiles are separate background assets.
 

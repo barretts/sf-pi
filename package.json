@@ -135,7 +135,7 @@
     "@dagrejs/dagre": "3.0.0",
     "@lwc/compiler": "^9.3.5",
     "@lwc/template-compiler": "^9.3.4",
-    "@salesforce-ux/icons": "10.17.0",
+    "@salesforce-ux/design-system": "2.264.0",
     "@salesforce/apex-node": "^8.4.37",
     "@salesforce/core": "^8.31.2",
     "@salesforce/kit": "^3.2.6",

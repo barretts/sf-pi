@@ -15,9 +15,9 @@ import type {
 
 const require = createRequire(import.meta.url);
 const ICON_PACKAGE_ROOT = path.join(
-  path.dirname(require.resolve("@salesforce-ux/icons/package.json")),
-  "dist",
-  "salesforce-lightning-design-system-icons",
+  path.dirname(require.resolve("@salesforce-ux/design-system/package.json")),
+  "assets",
+  "icons",
 );
 
 export const PRODUCT_MARK_REGISTRY: Record<
@@ -136,7 +136,7 @@ export function resolveVisualAssets(
     }
     if (!resolved)
       throw new Error(
-        `Required fallback icon ${icon.category}/${icon.name} is missing from @salesforce-ux/icons.`,
+        `Required fallback icon ${icon.category}/${icon.name} is missing from @salesforce-ux/design-system.`,
       );
     const iconId = stableAssetId(`icon-${icon.category}-${icon.name}`);
     const tileColor = icon.color ?? FAMILY_COLORS[family];
@@ -149,10 +149,10 @@ export function resolveVisualAssets(
       width: 120,
       height: 120,
       attribution: {
-        source: "https://www.npmjs.com/package/@salesforce-ux/icons",
-        license: "CC-BY-ND-4.0",
-        package: "@salesforce-ux/icons",
-        version: "10.17.0",
+        source: "https://www.npmjs.com/package/@salesforce-ux/design-system",
+        license: "BSD-3-Clause",
+        package: "@salesforce-ux/design-system",
+        version: "2.264.0",
       },
     });
     if (!assets.has(tileId)) {

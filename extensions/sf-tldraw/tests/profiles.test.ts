@@ -45,7 +45,7 @@ describe("deterministic Salesforce profiles", () => {
     expect(
       payload.assets
         .filter((asset) => asset.name.endsWith(".png"))
-        .every((asset) => asset.attribution?.license === "CC-BY-ND-4.0"),
+        .every((asset) => asset.attribution?.license === "BSD-3-Clause"),
     ).toBe(true);
     expect(payload.nodes.map((node) => node.apiName)).toEqual([
       "Account",
