@@ -1,0 +1,70 @@
+{
+  "spec_version": "1.0",
+  "family": "sequence",
+  "title": "Generic support interaction",
+  "scope": "A static ordered request and response sequence.",
+  "grounding": {
+    "mode": "reference",
+    "as_of": "2026-07-25",
+    "sources": [
+      {
+        "id": "service-overview",
+        "label": "Salesforce Service Overview Data Model",
+        "url": "https://developer.salesforce.com/docs/platform/data-models/guide/service-cloud-overview.html",
+        "kind": "official_doc"
+      }
+    ]
+  },
+  "participants": [
+    {
+      "id": "user",
+      "label": "Support user",
+      "kind": "user",
+      "icon": { "category": "utility", "name": "user" },
+      "evidence": ["service-overview"]
+    },
+    {
+      "id": "service",
+      "label": "Service solution",
+      "kind": "salesforce",
+      "icon": { "category": "standard", "name": "case" },
+      "evidence": ["service-overview"]
+    },
+    {
+      "id": "integration",
+      "label": "Integration service",
+      "kind": "integration",
+      "icon": { "category": "utility", "name": "connected_apps" },
+      "evidence": ["service-overview"]
+    }
+  ],
+  "interactions": [
+    {
+      "id": "create",
+      "step": 1,
+      "from": "user",
+      "to": "service",
+      "label": "Create support request",
+      "kind": "request",
+      "evidence": ["service-overview"]
+    },
+    {
+      "id": "publish",
+      "step": 2,
+      "from": "service",
+      "to": "integration",
+      "label": "Publish update",
+      "kind": "async",
+      "evidence": ["service-overview"]
+    },
+    {
+      "id": "confirm",
+      "step": 3,
+      "from": "service",
+      "to": "user",
+      "label": "Return reference number",
+      "kind": "response",
+      "evidence": ["service-overview"]
+    }
+  ]
+}

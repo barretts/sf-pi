@@ -500,6 +500,78 @@ _Avoid_: resolved alias, target pane alias
 A suffixed Herdr pane alias for a **Fresh Ephemeral Lane**, chosen from a **Base Lane Alias** plus a short unique suffix that has not already been used in the session. For example, `apex_tests_k7f3` is a fresh alias derived from `apex_tests`.
 _Avoid_: stable ephemeral alias, reused alias, recycled numeric suffix, persisted counter
 
+**Salesforce Diagram Routing**:
+The renderer choice for Salesforce diagram requests. A ready SF tldraw profile is the default, explicit format requests such as Mermaid or text take precedence, and an unavailable canvas is reported before offering a fallback.
+_Avoid_: generic diagram hijack, silent format change, always ask renderer
+
+**Salesforce Diagram Family**:
+One of the supported semantic views—Data Model, System/Solution Architecture, or Interaction/Sequence—each answering a different question with its own node, layout, and connector grammar.
+_Avoid_: template, rendering mode, universal Salesforce diagram
+
+**Diagram Grounding**:
+The explicit evidence mode of a Salesforce diagram. Reference grounding uses official Salesforce documentation for a generic model; Org grounding uses a named live org and records its identity and observation time.
+_Avoid_: inferred mode, hidden org lookup, generic diagram presented as org truth
+
+**Salesforce Diagram Spec**:
+A normalized, evidence-bearing description of one Salesforce diagram: its **Salesforce Diagram Family**, **Diagram Grounding**, purpose, nodes, relationships or interactions, and optional observations. It carries meaning and provenance without canvas coordinates or renderer-specific styling.
+_Avoid_: tldraw shape JSON, Mermaid source, layout instructions, raw org describe response
+
+**Salesforce Diagram Profile**:
+The visual and semantic vocabulary that renders a **Salesforce Diagram Spec** consistently across diagram families. It governs icons, typography, cards, connectors, badges, and annotations without becoming the source of Salesforce facts.
+_Avoid_: Salesforce theme, diagram template, Mermaid style, generic whiteboard style
+
+**Salesforce Object Card**:
+A Data Model node with a pale object-family fill, a prominent high-contrast **Salesforce Diagram Icon** tile, a logical label, and the physical API name in brackets directly below the label. LDV observations float over the top-right edge and OWD observations float over the bottom-center edge; record types are hidden by default. Field lists appear only when the diagram’s declared scope requires them.
+_Avoid_: `API` prefix, inline observation row, default record-type pill, muted icon, field dump, color-only object type
+
+**Salesforce System Card**:
+A System/Solution Architecture node with a neutral card, an approved **Salesforce Product Mark** or semantic icon, a clear name, one concise responsibility, and small ownership or boundary badges.
+_Avoid_: product-colored tile, capability list, marketing card, unlabeled logo
+
+**Salesforce Relationship Connector**:
+A Data Model edge whose integrated vector endpoints express cardinality and optionality and whose center pill names the relationship type. A bar means one, a crow’s foot means many, and full **Cardinality Presentation** can add optionality circles. Endpoint markers sit exactly on the card boundary, mask the underlying line, and share its axis; direct aligned objects use straight connectors while elbow routing is reserved for necessary obstacle avoidance. The field API name appears only when needed to disambiguate otherwise similar relationships.
+_Avoid_: detached marker, line through marker, 1/N text, unnecessary elbow, inferred cardinality, unlabeled relationship
+
+**Architecture Connector**:
+A labeled System/Solution Architecture edge using one of three meanings: solid directional flow, dashed asynchronous or batch flow, or thin undirected dependency. Separate directional interactions remain separate edges.
+_Avoid_: unlabeled arrow, bidirectional shorthand, decorative line, connector catalog
+
+**Step-Through Presentation**:
+An optional Interaction/Sequence presentation with Previous, Next, and Reset controls that animates only the selected transition. Static presentation remains the default and autoplay is excluded.
+_Avoid_: autoplay, continuous animation, mandatory controls, stateful diagram family
+
+**Profile-Managed Diagram Element**:
+A diagram element derived from a **Salesforce Diagram Spec** with stable semantic identity. Profile updates may refresh its content while preserving human placement, and never claim ownership of user-created annotations.
+_Avoid_: disposable shape, whole-page ownership, coordinate identity, user annotation
+
+**Cardinality Presentation**:
+The Data Model rendering choice between a simplified one/many view and a full physical optionality view. The choice changes visual detail only; it never changes or discards the relationship evidence in the **Salesforce Diagram Spec**.
+_Avoid_: schema mode, cardinality inference, logical relationship type
+
+**Diagram Observation**:
+A sourced, time-bound fact attached to a diagram element, such as record count, OWD, skew, or query risk. It renders as a compact solid-filled pill above the card layer: LDV at the top-right edge, OWD at the bottom-center edge, and other observations only at profile-defined anchors.
+_Avoid_: arbitrary pill position, outline-only pill, buried card text, timeless fact, unsourced warning
+
+**Diagram Evidence Gap**:
+A materially relevant Salesforce fact that the current evidence cannot establish. The renderer identifies or omits it according to its significance and never replaces it with a guessed default.
+_Avoid_: common default, inferred fact, silent omission, render failure for optional evidence
+
+**Salesforce Diagram Readiness**:
+The render is complete only when its spec is valid, it has no structural or layout lints, relationship decorations are anchored to their actual connector terminals within tolerance, and card typography satisfies the profile rhythm. Asset fallbacks and optional evidence gaps remain visible warnings rather than blockers.
+_Avoid_: best-effort complete, screenshot-only approval, warning-free claim, assumed edge alignment
+
+**LDV Signal**:
+A **Diagram Observation** raised when an observed record count exceeds the diagram’s declared policy threshold, which defaults to two million records. It triggers architectural attention but does not assert that the object or every query is inherently slow.
+_Avoid_: Salesforce LDV fact, performance failure, universal platform cutoff
+
+**Salesforce Diagram Icon**:
+A redundant visual cue tied to a node’s Salesforce identity and always paired with a visible label. An org-selected object identity takes precedence over a generic category fallback.
+_Avoid_: emoji, inferred custom-object icon, icon-only node, decorative product mark
+
+**Salesforce Product Mark**:
+An official, unmodified Salesforce product logo used only to identify the actual product represented by a diagram node, with visible text and source provenance. It is never the diagram’s dominant branding and falls back cleanly when no approved asset is available.
+_Avoid_: scraped logo, recolored mark, community logo, SF Pi branding
+
 ## Example dialogue
 
 Dev: "Inspect this Lightning Web Component before I change it."
@@ -513,3 +585,9 @@ Agent: "That created a **Data 360 Run**. I will return a **Data 360 Run Digest**
 
 Dev: "Run the tests in Herdr, but don't reuse an old pane."
 Agent: "I will plan a **Fresh Ephemeral Lane** for this command-scoped job. If it succeeds, I will clean up the lane; if it fails or times out, I will leave it available for inspection."
+
+Dev: "Draw the Sales Cloud data model."
+Agent: "Should the **Diagram Grounding** be Reference, using official Salesforce documentation, or Org, using a named authenticated org? I will build a **Salesforce Diagram Spec** from that evidence and render it with the Data Model **Salesforce Diagram Profile**."
+
+Dev: "Use the org, keep cardinality simple, and flag large objects."
+Agent: "I will preserve full relationship evidence in the spec, render simplified **Cardinality Presentation**, and add an **LDV Signal** only when the sourced count crosses the declared threshold. The result is complete only at **Salesforce Diagram Readiness**."

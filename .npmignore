@@ -1,0 +1,17 @@
+# Local agent, Salesforce CLI, and runtime state must never enter package artifacts.
+.pi/
+.pi-subagents/
+.sfdx/
+coverage/
+node_modules/
+
+# Local verification and scratch outputs.
+context.md
+progress.md
+research.md
+generated-cat.jpg
+*.log
+
+# Local documentation build caches.
+docs/.vitepress/cache/
+docs/.vitepress/dist/

@@ -91,6 +91,7 @@ import {
   subscribeMonthlyUsageState,
 } from "../../lib/common/monthly-usage/store.ts";
 import { subscribeSlackStatus } from "../../lib/common/slack-status/store.ts";
+import { subscribeTldrawStatus } from "../../lib/common/tldraw-status/store.ts";
 import { isSfPiExtensionEnabled } from "../../lib/common/sf-pi-extension-state.ts";
 import { FONT_FAMILY_NAME, isFontFamilyInstalled } from "./lib/font-status.ts";
 import { readWelcomeState, writeWelcomeState } from "./lib/state-store.ts";
@@ -139,6 +140,7 @@ export default function sfWelcome(pi: ExtensionAPI) {
    * reloads. */
   let unsubscribeUsageStore: (() => void) | null = null;
   let unsubscribeSlackStore: (() => void) | null = null;
+  let unsubscribeTldrawStore: (() => void) | null = null;
   let startupRunId = 0;
   let activeSessionGeneration = 0;
   let activeSessionKey: string | null = null;
@@ -310,6 +312,8 @@ export default function sfWelcome(pi: ExtensionAPI) {
     unsubscribeUsageStore = null;
     unsubscribeSlackStore?.();
     unsubscribeSlackStore = null;
+    unsubscribeTldrawStore?.();
+    unsubscribeTldrawStore = null;
   }
 
   // --- Session start: show splash screen ---
@@ -706,6 +710,14 @@ export default function sfWelcome(pi: ExtensionAPI) {
       scheduleSplashRepaint(ctx, generation);
     });
 
+    unsubscribeTldrawStore?.();
+    unsubscribeTldrawStore = subscribeTldrawStatus((status) => {
+      if (runId !== startupRunId || !isActiveSession(ctx, generation)) return;
+      data.tldrawVisible = isSfPiExtensionEnabled(ctx.cwd, "sf-tldraw") && status.kind !== "hidden";
+      data.tldrawStatus = status;
+      scheduleSplashRepaint(ctx, generation);
+    });
+
     // Refresh announcements from the remote feed (when configured) in the
     // background. Updates the data payload in place and repaints the splash
     // once the fetch settles. The sync payload has already populated
@@ -798,6 +810,8 @@ export default function sfWelcome(pi: ExtensionAPI) {
     unsubscribeUsageStore = null;
     unsubscribeSlackStore?.();
     unsubscribeSlackStore = null;
+    unsubscribeTldrawStore?.();
+    unsubscribeTldrawStore = null;
     endActiveSession(ctx);
   });
 
@@ -994,6 +1008,7 @@ export default function sfWelcome(pi: ExtensionAPI) {
       ? (data.gatewayStatus?.kind ?? "not checked")
       : "hidden";
     const slackStatus = data.slackVisible ? (data.slackStatus?.kind ?? "not checked") : "hidden";
+    const tldrawStatus = data.tldrawVisible ? (data.tldrawStatus?.kind ?? "not checked") : "hidden";
     const nodeCertStatus = data.nodeCert?.kind ?? "not checked";
     const nodeRuntimeStatus = data.nodeRuntime
       ? `${data.nodeRuntime.version} (${data.nodeRuntime.kind}, requires >=${data.nodeRuntime.requiredVersion})`
@@ -1028,6 +1043,7 @@ export default function sfWelcome(pi: ExtensionAPI) {
       ...monthlyUsageLines,
       `Gateway: ${gatewayStatus}`,
       `Slack: ${slackStatus}`,
+      `tldraw: ${tldrawStatus}`,
       `Node.js: ${nodeRuntimeStatus}`,
       `Herdr (Multiplexer): ${herdrRuntimeStatus}`,
       `Fonts: ${fontRuntimeStatus}`,

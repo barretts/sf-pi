@@ -462,6 +462,32 @@
       "Explicit confirmation before any Slack message is posted."
     ]
   },
+  "sf-tldraw": {
+    "shortName": "tldraw",
+    "intentGroup": "Build apps",
+    "promise": "Turn explicitly grounded Salesforce models and interactions into editable, deterministic tldraw diagrams with visual evidence.",
+    "bestFor": "Editable Salesforce diagrams",
+    "benefits": [
+      "Renders Data Model, System/Solution Architecture, and Interaction/Sequence profiles through one local Canvas API tool.",
+      "Uses unchanged SLDS icons and verifies cardinality markers against actual connector terminals.",
+      "Preserves human positioning and annotations by default while blocking completion on layout or lint failures."
+    ],
+    "tryFirst": {
+      "label": "Check tldraw readiness",
+      "code": "/sf-tldraw"
+    },
+    "useCases": [
+      "Render a reference-grounded Salesforce data model from official documentation.",
+      "Visualize an org-described schema without fabricating relationships or sharing facts.",
+      "Create an editable solution architecture with labeled directional connections.",
+      "Lay out a static, ordered interaction sequence with screenshot evidence."
+    ],
+    "whatYouGet": [
+      "One `tldraw_canvas` family tool for runtime operations and three Salesforce render profiles.",
+      "Deterministic Dagre or fixed-lane placement with transform-correct connector decorations.",
+      "Full and thumbnail evidence artifacts only after readiness passes."
+    ]
+  },
   "sf-welcome": {
     "shortName": "Welcome",
     "intentGroup": "Personalize pi",

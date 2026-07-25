@@ -324,6 +324,23 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
     events: ["session_start","session_shutdown"],
   },
   {
+    id: "sf-tldraw",
+    name: "SF tldraw",
+    description: "Deterministic, editable Salesforce diagrams rendered through the local tldraw offline Canvas API.",
+    file: "extensions/sf-tldraw/index.ts",
+    category: "agent-tool",
+    maturity: "experimental",
+    defaultEnabled: true,
+    commands: ["/sf-tldraw"],
+    tools: ["tldraw_canvas"],
+    events: ["session_start","session_shutdown"],
+    configurable: true,
+    getConfigPanel: async () => {
+      const mod = await import("../extensions/sf-tldraw/lib/config-panel.ts");
+      return mod.createConfigPanel;
+    },
+  },
+  {
     id: "sf-welcome",
     name: "SF Welcome",
     description: "Salesforce-branded splash screen with environment status, release freshness, and community info",

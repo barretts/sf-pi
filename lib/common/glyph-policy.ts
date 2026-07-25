@@ -168,6 +168,7 @@ export const GLYPH_TABLE = {
   homebrew: { emoji: "🍺", ascii: "bw" },
   autoUpdate: { emoji: "🔄", ascii: "up" },
   browser: { emoji: "🌐", ascii: "br" },
+  tldraw: { emoji: "🖼", ascii: "tl" },
   cloud: { emoji: "☁", ascii: "*" }, // Salesforce Environment / Salesforce AI
   loaded: { emoji: "📦", ascii: "[]" },
   recent: { emoji: "🕐", ascii: "o" },

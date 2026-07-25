@@ -116,6 +116,14 @@ _API-native SOQL lifecycle workflows for pi: schema search/describe, relationshi
 - Commands: `/sf-soql`
 - Tools: `sf_soql`
 
+### [SF tldraw](./extensions/sf-tldraw)
+
+_Deterministic, editable Salesforce diagrams rendered through the local tldraw offline Canvas API._
+
+- Default: **on**
+- Commands: `/sf-tldraw`
+- Tools: `tldraw_canvas`
+
 ## Safety
 
 ### [SF Guardrail](./extensions/sf-guardrail)

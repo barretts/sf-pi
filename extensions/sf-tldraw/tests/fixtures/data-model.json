@@ -1,0 +1,98 @@
+{
+  "spec_version": "1.0",
+  "family": "data_model",
+  "title": "Reference support data model",
+  "scope": "Core support records with declared lookup relationships.",
+  "grounding": {
+    "mode": "reference",
+    "as_of": "2026-07-25",
+    "sources": [
+      {
+        "id": "service-overview",
+        "label": "Salesforce Service Overview Data Model",
+        "url": "https://developer.salesforce.com/docs/platform/data-models/guide/service-cloud-overview.html",
+        "kind": "official_doc"
+      }
+    ]
+  },
+  "objects": [
+    {
+      "id": "account",
+      "label": "Account",
+      "api_name": "Account",
+      "family": "standard",
+      "icon": { "category": "standard", "name": "account", "color": "#5867E8" },
+      "evidence": ["service-overview"]
+    },
+    {
+      "id": "contact",
+      "label": "Contact",
+      "api_name": "Contact",
+      "family": "standard",
+      "icon": { "category": "standard", "name": "contact", "color": "#9602C7" },
+      "evidence": ["service-overview"]
+    },
+    {
+      "id": "case",
+      "label": "Case",
+      "api_name": "Case",
+      "family": "standard",
+      "icon": { "category": "standard", "name": "case", "color": "#FF538A" },
+      "evidence": ["service-overview"]
+    },
+    {
+      "id": "case-comment",
+      "label": "Case Comment",
+      "api_name": "CaseComment",
+      "family": "standard",
+      "icon": { "category": "standard", "name": "case_comment", "color": "#FF5D2D" },
+      "evidence": ["service-overview"]
+    },
+    {
+      "id": "email-message",
+      "label": "Email Message",
+      "api_name": "EmailMessage",
+      "family": "standard",
+      "icon": { "category": "standard", "name": "email", "color": "#939393" },
+      "evidence": ["service-overview"]
+    }
+  ],
+  "relationships": [
+    {
+      "id": "account-contacts",
+      "from": "account",
+      "to": "contact",
+      "type": "lookup",
+      "from_cardinality": "one",
+      "to_cardinality": "many",
+      "evidence": ["service-overview"]
+    },
+    {
+      "id": "contact-cases",
+      "from": "contact",
+      "to": "case",
+      "type": "lookup",
+      "from_cardinality": "one",
+      "to_cardinality": "zero_or_many",
+      "evidence": ["service-overview"]
+    },
+    {
+      "id": "case-comments",
+      "from": "case",
+      "to": "case-comment",
+      "type": "lookup",
+      "from_cardinality": "one",
+      "to_cardinality": "many",
+      "evidence": ["service-overview"]
+    },
+    {
+      "id": "case-emails",
+      "from": "case",
+      "to": "email-message",
+      "type": "lookup",
+      "from_cardinality": "one",
+      "to_cardinality": "many",
+      "evidence": ["service-overview"]
+    }
+  ]
+}

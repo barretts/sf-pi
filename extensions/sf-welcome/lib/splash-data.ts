@@ -20,6 +20,7 @@ import { discoverExtensionHealth } from "./extension-health.ts";
 import { estimateMonthlyCost, getRecentSessions } from "./session-data.ts";
 import { getMonthlyUsageState } from "../../../lib/common/monthly-usage/store.ts";
 import { getSlackStatus } from "../../../lib/common/slack-status/store.ts";
+import { getTldrawStatus } from "../../../lib/common/tldraw-status/store.ts";
 import { isSfPiExtensionEnabled } from "../../../lib/common/sf-pi-extension-state.ts";
 import {
   buildAnnouncementsSync,
@@ -284,6 +285,10 @@ function shouldShowSlackStatus(cwd: string): boolean {
   return status.kind !== "hidden" && status.kind !== "not-configured";
 }
 
+function shouldShowTldrawStatus(cwd: string): boolean {
+  return isSfPiExtensionEnabled(cwd, "sf-tldraw") && getTldrawStatus().kind !== "hidden";
+}
+
 function shouldShowGatewayStatus(cwd: string, modelName: string, providerName: string): boolean {
   if (!isSfPiExtensionEnabled(cwd, "sf-llm-gateway-internal")) return false;
   const activeGateway =
@@ -358,6 +363,7 @@ export function collectInitialSplashData(
   const gatewayUsage = gatewayState.monthlyUsage;
   const gatewayBudget = gatewayUsage?.maxBudget;
   const slackStatus = getSlackStatus();
+  const tldrawStatus = getTldrawStatus();
 
   return {
     modelName,
@@ -368,6 +374,8 @@ export function collectInitialSplashData(
     slackConnected: false,
     slackVisible: false,
     slackStatus,
+    tldrawVisible: false,
+    tldrawStatus,
     monthlyCost: gatewayUsage?.spend ?? 0,
     monthlyBudget: gatewayUsage
       ? typeof gatewayBudget === "number" && gatewayBudget > 0
@@ -432,6 +440,8 @@ export function collectSplashData(
   const gatewayState = getMonthlyUsageState();
   const slackStatus = getSlackStatus();
   const slackVisible = shouldShowSlackStatus(cwd);
+  const tldrawStatus = getTldrawStatus();
+  const tldrawVisible = shouldShowTldrawStatus(cwd);
   const gatewayVisible = shouldShowGatewayStatus(cwd, modelName, providerName);
 
   // Announcements are resolved synchronously from bundled + cached remote
@@ -476,6 +486,8 @@ export function collectSplashData(
     slackConnected: checkSlackConnection(cwd),
     slackVisible,
     slackStatus,
+    tldrawVisible,
+    tldrawStatus,
     monthlyCost: usage.monthlyCost,
     monthlyBudget: usage.monthlyBudget,
     monthlyUsageSource: usage.monthlyUsageSource,

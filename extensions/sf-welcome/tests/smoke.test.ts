@@ -15,8 +15,10 @@ import { visibleWidth } from "@earendil-works/pi-tui";
  * text without worrying about the color-code payload and without matching
  * across column boundaries (which wrap escape sequences mid-segment).
  */
+const ANSI_ESCAPE_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
 function stripAnsi(s: string): string {
-  return s.replace(/\x1b\[[0-9;]*m/g, "");
+  return s.replace(ANSI_ESCAPE_RE, "");
 }
 
 describe("sf-welcome", () => {
@@ -245,6 +247,47 @@ describe("sf-welcome", () => {
     expect(partialGrant).toContain("Slack");
     expect(partialGrant).toContain("Connected");
     expect(partialGrant).not.toContain("Limited");
+  });
+
+  it("renders passive tldraw status only after the producer publishes it", async () => {
+    const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
+    const baseData = {
+      modelName: "Claude Sonnet 4",
+      providerName: "anthropic",
+      loadedCounts: { extensions: 3, skills: 1, promptTemplates: 0 },
+      recentSessions: [],
+      extensionHealth: [],
+      slackConnected: false,
+      monthlyCost: 0,
+      monthlyBudget: 3000,
+    };
+
+    const hidden = stripAnsi(new SfWelcomeOverlay(baseData).render(100).join("\n"));
+    expect(hidden).not.toContain("tldraw");
+
+    const verifying = stripAnsi(
+      new SfWelcomeOverlay({
+        ...baseData,
+        tldrawVisible: true,
+        tldrawStatus: { kind: "detected" },
+      })
+        .render(100)
+        .join("\n"),
+    );
+    expect(verifying).toContain("Verifying…");
+    expect(verifying).not.toContain("not verified");
+
+    const ready = stripAnsi(
+      new SfWelcomeOverlay({
+        ...baseData,
+        tldrawVisible: true,
+        tldrawStatus: { kind: "ready", openDocuments: 2 },
+      })
+        .render(100)
+        .join("\n"),
+    );
+    expect(ready).toContain("tldraw");
+    expect(ready).toContain("Canvas ready · 2 boards");
   });
 
   it("renders gateway status from probe state instead of provider name", async () => {

@@ -8,6 +8,7 @@
  */
 import type { GatewayConnectionStatus } from "../../../lib/common/monthly-usage/store.ts";
 import type { SlackStatusSnapshot } from "../../../lib/common/slack-status/store.ts";
+import type { TldrawStatusSnapshot } from "../../../lib/common/tldraw-status/store.ts";
 import type { CodeAnalyzerReadinessState } from "../../../lib/common/code-analyzer-status/store.ts";
 import type { AutoUpdateStatus } from "../../../lib/common/auto-update/store.ts";
 import type { BrowserRuntimeStatusInfo } from "../../../lib/common/browser-runtime-status/store.ts";
@@ -263,6 +264,9 @@ export interface SplashData {
   slackConnected: boolean;
   slackVisible?: boolean;
   slackStatus?: SlackStatusSnapshot | null;
+  /** Passive local tldraw runtime status published by sf-tldraw. */
+  tldrawVisible?: boolean;
+  tldrawStatus?: TldrawStatusSnapshot | null;
   /** Current monthly spend in USD. Prefers the gateway's live value, falls back
    * to a best-effort estimate from local session files when the gateway is
    * unreachable or not the active provider. */

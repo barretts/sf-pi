@@ -234,6 +234,7 @@ Every slash command exposed by a bundled extension. See each extension README fo
 | `/sf-lwc`           | [SF LWC](./extensions/sf-lwc/)                          | agent-tool |
 | `/sf-slack`         | [SF Slack](./extensions/sf-slack/)                      | agent-tool |
 | `/sf-soql`          | [SF SOQL](./extensions/sf-soql/)                        | agent-tool |
+| `/sf-tldraw`        | [SF tldraw](./extensions/sf-tldraw/)                    | agent-tool |
 | `/sf-guardrail`     | [SF Guardrail](./extensions/sf-guardrail/)              | safety     |
 | `/sf-feedback`      | [SF Feedback](./extensions/sf-feedback/)                | assistive  |
 | `/sf-lsp`           | [SF LSP](./extensions/sf-lsp/)                          | assistive  |
@@ -396,6 +397,7 @@ For the canonical machine-readable bundle list, see [`catalog/index.json`](./cat
 | [SF LWC](./extensions/sf-lwc/)                          | agent-tool | on        | Local-native Lightning Web Component lifecycle workflows for pi: project scan, component inspection, focused diagnostics, targeted Jest tests, and artifacts.                                                                                                                                                                          |
 | [SF Slack](./extensions/sf-slack/)                      | agent-tool | on        | Slack integration — search messages, read threads, browse channel history                                                                                                                                                                                                                                                              |
 | [SF SOQL](./extensions/sf-soql/)                        | agent-tool | on        | API-native SOQL lifecycle workflows for pi: schema search/describe, relationship discovery, query drafting, validation, query plans, bounded query/SOSL execution, exports, file diagnostics, and artifacts.                                                                                                                           |
+| [SF tldraw](./extensions/sf-tldraw/)                    | agent-tool | on        | Deterministic, editable Salesforce diagrams rendered through the local tldraw offline Canvas API.                                                                                                                                                                                                                                      |
 | [SF Guardrail](./extensions/sf-guardrail/)              | safety     | on        | Salesforce-aware safety hooks — file protection policies, dangerous-command gating, org-aware confirmation, and native high-value mutation mediation                                                                                                                                                                                   |
 | [SF Brain](./extensions/sf-brain/)                      | assistive  | on        | High-density Salesforce operator kernel injected once per session — describe-before-query rules, API picker, anonymous Apex verification loop, and CLI power moves                                                                                                                                                                     |
 | [SF Feedback](./extensions/sf-feedback/)                | assistive  | on        | Guided feedback and bug-report flow that collects sanitized SF Pi diagnostics and opens a GitHub issue                                                                                                                                                                                                                                 |
@@ -672,6 +674,13 @@ Jump to an extension's Troubleshooting section to see the full fix. This index i
 - Search returns nothing from DMs or multi-party IMs
 - `slack_send` refuses to run in `pi -p` / CI mode
 - I need to see what `slack_send` posted (or attempted to post)
+
+**[SF tldraw](./extensions/sf-tldraw/#troubleshooting)**
+
+- The tool says no tldraw document is open
+- Status reports a stale server configuration
+- A render is blocked by readiness checks
+- A requested product mark uses a semantic icon
 
 **[SF Guardrail](./extensions/sf-guardrail/#troubleshooting)**
 

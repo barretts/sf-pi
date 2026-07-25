@@ -356,6 +356,30 @@ function formatSlackStatusValue(data: SplashData, mode: GlyphMode): string {
   }
 }
 
+function formatTldrawStatusValue(data: SplashData): string {
+  const status = data.tldrawStatus;
+  if (!status) return MUTED("Not checked");
+  switch (status.kind) {
+    case "ready":
+      return `${SF_GREEN("✓")} ${SF_GREEN(`Canvas ready${status.openDocuments ? ` · ${status.openDocuments} board${status.openDocuments === 1 ? "" : "s"}` : ""}`)}`;
+    case "detected":
+      return `${SF_CYAN("○")} ${SF_CYAN("Verifying…")}`;
+    case "no-open-document":
+      return `${SF_ORANGE("!")} ${SF_ORANGE("Open a board")}`;
+    case "not-running":
+      return `${SF_ORANGE("○")} ${SF_ORANGE("Not running")}`;
+    case "auth-error":
+      return `${SF_RED("✗")} ${SF_RED("Auth error")}`;
+    case "stale-config":
+      return `${SF_ORANGE("!")} ${SF_ORANGE("Restart needed")}`;
+    case "incompatible":
+      return `${SF_RED("✗")} ${SF_RED("Incompatible runtime")}`;
+    case "hidden":
+    default:
+      return MUTED("Not checked");
+  }
+}
+
 function formatGatewayStatusValue(data: SplashData, mode: GlyphMode): string {
   const status = data.gatewayStatus;
   if (data.gatewayLoading || !status || status.kind === "checking") {
@@ -914,6 +938,9 @@ function buildLeftColumn(
   // or has published a live status. This keeps public/external installs quiet.
   if (data.slackVisible) {
     lines.push(formatGlyphInfoRow("slack", mode, "Slack", formatSlackStatusValue(data, mode)));
+  }
+  if (data.tldrawVisible) {
+    lines.push(formatGlyphInfoRow("tldraw", mode, "tldraw", formatTldrawStatusValue(data)));
   }
 
   // LLM Gateway status is optional and only appears when the bundled gateway

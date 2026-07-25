@@ -1,0 +1,63 @@
+{
+  "spec_version": "1.0",
+  "family": "architecture",
+  "title": "Generic support integration",
+  "scope": "A source-agnostic example of labeled solution boundaries.",
+  "grounding": {
+    "mode": "reference",
+    "as_of": "2026-07-25",
+    "sources": [
+      {
+        "id": "well-architected",
+        "label": "Salesforce Well-Architected",
+        "url": "https://architect.salesforce.com/well-architected/overview",
+        "kind": "official_doc"
+      }
+    ]
+  },
+  "systems": [
+    {
+      "id": "channel",
+      "label": "Customer channel",
+      "kind": "external",
+      "responsibility": "Collects support requests.",
+      "icon": { "category": "utility", "name": "world" },
+      "evidence": ["well-architected"]
+    },
+    {
+      "id": "service",
+      "label": "Salesforce service solution",
+      "kind": "salesforce",
+      "responsibility": "Manages declared support work.",
+      "icon": { "category": "standard", "name": "case" },
+      "boundary": "Trust boundary",
+      "evidence": ["well-architected"]
+    },
+    {
+      "id": "integration",
+      "label": "Integration service",
+      "kind": "integration",
+      "responsibility": "Coordinates an asynchronous downstream handoff.",
+      "icon": { "category": "utility", "name": "connected_apps" },
+      "evidence": ["well-architected"]
+    }
+  ],
+  "connections": [
+    {
+      "id": "submit",
+      "from": "channel",
+      "to": "service",
+      "label": "Submit request",
+      "meaning": "directional",
+      "evidence": ["well-architected"]
+    },
+    {
+      "id": "publish",
+      "from": "service",
+      "to": "integration",
+      "label": "Publish update",
+      "meaning": "async_or_batch",
+      "evidence": ["well-architected"]
+    }
+  ]
+}

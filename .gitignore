@@ -33,6 +33,7 @@ dist/
 .cursor/
 
 # Agent / local verification scratch files
+.pi-subagents/
 context.md
 !CONTEXT.md
 !**/CONTEXT.md

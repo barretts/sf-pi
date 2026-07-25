@@ -1085,6 +1085,66 @@
     "srcLoc": 3193
   },
   {
+    "id": "sf-tldraw",
+    "name": "SF tldraw",
+    "description": "Deterministic, editable Salesforce diagrams rendered through the local tldraw offline Canvas API.",
+    "category": "agent-tool",
+    "maturity": "experimental",
+    "defaultEnabled": true,
+    "alwaysActive": false,
+    "configurable": true,
+    "commands": [
+      "/sf-tldraw"
+    ],
+    "providers": [],
+    "tools": [
+      "tldraw_canvas"
+    ],
+    "events": [
+      "session_start",
+      "session_shutdown"
+    ],
+    "docs": {
+      "summary": "Provides one `tldraw_canvas` family tool for local runtime status, document discovery, bounded search, explicit raw execution, screenshots, document scripts, and deterministic Salesforce Data Model, System/Solution Architecture, and Interaction/Sequence profiles. Salesforce render actions require explicit reference or org grounding, use pinned SLDS icons, preserve human annotations and positioning by default, block completion on canvas/readiness failures, and return screenshot evidence.",
+      "primaryFiles": [
+        "index.ts",
+        "AGENTS.md",
+        "docs/cheatsheet.md",
+        "lib/tldraw_canvas-tool.ts",
+        "lib/runtime-client.ts",
+        "lib/redaction.ts",
+        "lib/spec-validation.ts",
+        "lib/assets.ts",
+        "lib/profiles.ts",
+        "lib/canvas-program.ts",
+        "lib/artifacts.ts",
+        "lib/settings.ts",
+        "lib/config-panel.ts"
+      ],
+      "stateFiles": [
+        "~/Library/Application Support/tldraw/server.json (read-only runtime discovery on macOS)",
+        "<globalAgentDir>/sf-pi/tldraw-artifacts/runs/<run-id>/report.json",
+        "<global|project Pi settings>.sfPi.tldraw"
+      ],
+      "env": [
+        "TLDRAW_SERVER_CONFIG"
+      ],
+      "safety": [
+        "Never infers or fabricates Salesforce schema, relationship, count, sharing, record-type, icon, or product facts; normalized specs carry explicit evidence ids.",
+        "Uses the loopback Canvas API only. Missing native document creation never falls back to OS automation, browser automation, or direct `.tldraw` archive generation.",
+        "Default updates preserve human positioning and annotations; relayout and replacement must be explicit and only profile-managed shapes can be removed.",
+        "A Salesforce render is not reported complete until spec validation, zero canvas lints, connector-terminal checks, typography checks, and screenshot capture pass.",
+        "Reads the per-launch bearer token for each request, never prints or persists it, and redacts runtime error details.",
+        "Raw editor execution and document-workspace creation require an interactive user confirmation; model-supplied acknowledgement alone is insufficient.",
+        "Screenshot sources must be regular JPEG/PNG files inside tldraw's dedicated temporary capture directory before private 0600 artifact copies are exposed."
+      ]
+    },
+    "entry": "extensions/sf-tldraw/index.ts",
+    "hasReadme": true,
+    "hasTests": true,
+    "srcLoc": 3459
+  },
+  {
     "id": "sf-welcome",
     "name": "SF Welcome",
     "description": "Salesforce-branded splash screen with environment status, release freshness, and community info",
@@ -1138,6 +1198,6 @@
     "entry": "extensions/sf-welcome/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 6427
+    "srcLoc": 6483
   }
 ]
