@@ -54,7 +54,7 @@ describe("deterministic sequence visual grammar", () => {
     for (let index = 1; index < payload.nodes.length; index++) {
       const previous = payload.nodes[index - 1]!;
       const current = payload.nodes[index]!;
-      expect(current.x - (previous.x + previous.w)).toBe(70);
+      expect(current.x - (previous.x + previous.w)).toBe(110);
     }
     expect(payload.nodes.every((node) => node.w >= 260)).toBe(true);
   });
@@ -114,6 +114,10 @@ describe("deterministic sequence visual grammar", () => {
     expect(program).toContain("String(edge.step).padStart(2,'0')");
     expect(program).toContain("sequenceMessageWidth");
     expect(program).toContain("sequence-activation");
+    expect(program).toContain("message-label-background");
+    expect(program).toContain("message-backing:");
+    expect(program).toContain("message-lifeline:");
+    expect(program).toContain("message-activation:");
     expect(program).toContain("current.type!==shape.type");
   });
 });

@@ -59,6 +59,23 @@ describe("sf-tldraw artifacts", () => {
     expect(statSync(artifact.directory).mode & 0o777).toBe(0o700);
   });
 
+  it("uses validated image magic instead of a misleading source suffix", async () => {
+    writeFileSync(source, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    vi.resetModules();
+    const { persistStandaloneScreenshot } = await import("../lib/artifacts.ts");
+    const artifact = persistStandaloneScreenshot({
+      documentId: "doc-1",
+      screenshot: {
+        filePath: source,
+        width: 100,
+        height: 80,
+        pageName: "Page",
+        captureMode: "canvas",
+      },
+    });
+    expect(path.extname(artifact.screenshotPath)).toBe(".png");
+  });
+
   it("fails closed when a stale report target prevents a verified write", async () => {
     vi.resetModules();
     const { persistRenderArtifact } = await import("../lib/artifacts.ts");

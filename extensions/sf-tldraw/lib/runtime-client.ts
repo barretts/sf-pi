@@ -418,6 +418,7 @@ export function validateRuntimeScreenshot(value: unknown): RuntimeScreenshot {
     );
   }
   let source: string;
+  let format: "png" | "jpeg";
   try {
     const metadata = lstatSync(screenshot.filePath);
     if (metadata.isSymbolicLink() || !metadata.isFile()) throw new Error("not a regular file");
@@ -438,13 +439,14 @@ export function validateRuntimeScreenshot(value: unknown): RuntimeScreenshot {
     const jpeg = header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff;
     const png = header.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
     if (!jpeg && !png) throw new Error("unsupported image type");
+    format = png ? "png" : "jpeg";
   } catch {
     throw new TldrawRuntimeError(
       "invalid_response",
       "tldraw screenshot evidence failed local file validation.",
     );
   }
-  return { ...(screenshot as RuntimeScreenshot), filePath: source };
+  return { ...(screenshot as RuntimeScreenshot), filePath: source, format };
 }
 
 function safeLabel(value: string): string {

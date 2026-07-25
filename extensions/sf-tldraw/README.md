@@ -95,9 +95,9 @@ Marker placement solves the local marker anchor through tldraw's origin-based sh
 Sequence diagrams use a dedicated integration-flow profile instead of the graph-card grammar:
 
 - 96-unit pastel participant headers with content-sized widths from 260–360 units
-- participant gaps of 140, 100, or 70 units for 1–4, 5–6, or 7–8 lanes
+- participant gaps of 140, 120, or 110 units for 1–4, 5–6, or 7–8 lanes
 - no generated fallback icons; an explicitly declared icon or product mark is rendered at 44 units
-- neutral lifelines and arrows with unboxed, numbered message labels
+- neutral lifelines and arrows with unboxed, numbered message labels on measured borderless white backings
 - solid request/event arrows, dashed responses, and dotted asynchronous messages
 - message rows begin at 520 units, use a 118-unit baseline gap, and add 52 units of visual breathing room when a completed exchange changes participant pairs
 - optional activation bars only from explicit, evidenced `activations`; processing duration is never inferred
@@ -150,6 +150,7 @@ extensions/sf-tldraw/
     redaction.test.ts       ← unit / smoke test
     renderer.test.ts        ← unit / smoke test
     runtime-client.test.ts  ← unit / smoke test
+    sequence-matrix.live.test.ts← unit / smoke test
     sequence-profile.test.ts← unit / smoke test
     settings.test.ts        ← unit / smoke test
     smoke.test.ts           ← unit / smoke test
@@ -181,6 +182,14 @@ Run targeted tests with:
 ```bash
 npx vitest run extensions/sf-tldraw/tests
 ```
+
+With a local board open, run the 30-case OAuth, SSO, and integration visual-hardening matrix with:
+
+```bash
+SF_TLDRAW_SEQUENCE_MATRIX=1 npx vitest run extensions/sf-tldraw/tests/sequence-matrix.live.test.ts
+```
+
+The matrix runs serially, validates every managed shape, captures full and thumbnail evidence, and writes private `index.json`, `report.html`, and `report.md` artifacts under `tldraw-artifacts/sequence-matrix/`. A case is ready only when label backings mask every intersecting lifeline or activation bar in the verified z-order.
 
 ## Troubleshooting
 

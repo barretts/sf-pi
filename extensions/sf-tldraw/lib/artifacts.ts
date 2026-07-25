@@ -124,7 +124,7 @@ function copyValidatedScreenshot(
   basename: string,
 ): string {
   const validated = validateRuntimeScreenshot(screenshot);
-  const extension = path.extname(validated.filePath).toLowerCase() === ".png" ? ".png" : ".jpg";
+  const extension = validated.format === "png" ? ".png" : ".jpg";
   const destination = path.join(directory, `${basename}${extension}`);
   copyFileSync(validated.filePath, destination);
   chmodSync(destination, 0o600);

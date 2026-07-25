@@ -524,8 +524,9 @@ function validateSequence(
       left.end - right.end,
   );
   for (let i = 1; i < activationRanges.length; i++) {
-    const previous = activationRanges[i - 1]!;
-    const current = activationRanges[i]!;
+    const previous = activationRanges[i - 1];
+    const current = activationRanges[i];
+    if (!previous || !current) continue;
     if (current.participant === previous.participant && current.start <= previous.end)
       errors.push({
         code: "overlapping_activation",

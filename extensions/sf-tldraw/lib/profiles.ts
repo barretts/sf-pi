@@ -132,7 +132,8 @@ function compileSequence(spec: SequenceSpec, options: CompileOptions): CanvasPro
   const interactions: CanvasSequenceInteractionPayload[] = ordered.map((interaction, index) => {
     if (index > 0) {
       y += SEQUENCE_ROW_GAP;
-      if (startsNewSequencePhase(ordered[index - 1]!, interaction)) y += SEQUENCE_PHASE_GAP;
+      const previous = ordered[index - 1];
+      if (previous && startsNewSequencePhase(previous, interaction)) y += SEQUENCE_PHASE_GAP;
     }
     return {
       id: interaction.id,

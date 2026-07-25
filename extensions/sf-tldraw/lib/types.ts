@@ -242,6 +242,7 @@ export interface RuntimeScreenshot {
   viewport?: Record<string, number>;
   bounds?: { x: number; y: number; w: number; h: number };
   captureMode: "canvas" | "window";
+  format?: "png" | "jpeg";
 }
 
 export interface ValidationFinding {

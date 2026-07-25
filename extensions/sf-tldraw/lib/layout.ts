@@ -9,7 +9,7 @@ const SEQUENCE_TOP = 290;
 const SEQUENCE_CARD_HEIGHT = 96;
 const SEQUENCE_MIN_CARD_WIDTH = 260;
 const SEQUENCE_MAX_CARD_WIDTH = 360;
-const SEQUENCE_LANE_GAPS = { compact: 70, medium: 100, roomy: 140 } as const;
+const SEQUENCE_LANE_GAPS = { compact: 110, medium: 120, roomy: 140 } as const;
 
 export function layoutDataModel(spec: DataModelSpec): PositionedNode[] {
   return layoutGraph(
