@@ -27,6 +27,12 @@ const OPUS_47_THINKING_LEVEL_MAP: ProviderModelConfig["thinkingLevelMap"] = {
   max: "max",
 };
 
+/** Opus 5 exposes native, distinct xhigh and max effort levels. */
+export const OPUS_5_THINKING_LEVEL_MAP: ProviderModelConfig["thinkingLevelMap"] = {
+  xhigh: "xhigh",
+  max: "max",
+};
+
 /** Live-proven on 2026-07-12 for Opus 4.6 and Sonnet 4.6/5. */
 const CLAUDE_MAX_THINKING_LEVEL_MAP: ProviderModelConfig["thinkingLevelMap"] = {
   xhigh: "max",
@@ -109,6 +115,19 @@ export const MODEL_PRESETS: Record<string, Omit<GatewayModelDefinition, "id">> =
     input: ["text", "image"],
     contextWindow: 272_000,
     maxTokens: 128_000,
+  },
+  // --- Opus 5 ---
+  //
+  // Opus 5 uses adaptive thinking, keeps xhigh distinct from max, and ships
+  // with a native 1M context window / 128K output ceiling.
+  "claude-opus-5": {
+    family: "anthropic",
+    name: "[SF LLM Gateway] Claude Opus 5 [1M] Global",
+    reasoning: true,
+    input: ["text", "image"],
+    contextWindow: 1_000_000,
+    maxTokens: 128_000,
+    thinkingLevelMap: OPUS_5_THINKING_LEVEL_MAP,
   },
   // --- Opus 4.8 (former default) ---
   //

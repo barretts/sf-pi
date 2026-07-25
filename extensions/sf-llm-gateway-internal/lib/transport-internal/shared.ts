@@ -199,33 +199,73 @@ export function resolveOpenAiReasoningEffort(modelId: string): string | undefine
   return DEFAULT_OPENAI_REASONING_EFFORT;
 }
 
+/** Parsed major/minor version from an Opus model ID. */
+export interface OpusVersion {
+  major: number;
+  minor: number | null;
+}
+
 /**
- * Extract the Opus minor version from a model ID, or null if not an Opus model.
- * Matches both dash (`opus-4-7`) and dot (`opus-4.7`) conventions, and
- * handles Bedrock-prefixed ids like `us.anthropic.claude-opus-4-8-v1`.
+ * Parse Opus version IDs across fixed-major (`opus-5`) and 4.x
+ * dash/dot (`opus-4-7`, `opus-4.7`) conventions.
+ *
+ * Minor versions are deliberately limited to one or two digits so dated IDs
+ * such as `claude-opus-4-20250514` are not mistaken for a post-4.7 model.
+ */
+export function extractOpusVersion(modelId: string): OpusVersion | null {
+  const match = modelId.toLowerCase().match(/opus-(\d+)(?:[.-](\d{1,2})(?=$|[-.]))?/);
+  const major = match?.[1];
+  if (!major) return null;
+  return {
+    major: Number.parseInt(major, 10),
+    minor: match[2] ? Number.parseInt(match[2], 10) : null,
+  };
+}
+
+/**
+ * Extract the Opus 4.x minor version, or null for other major versions and
+ * non-Opus IDs. Kept for backwards-compatible callers.
  */
 export function extractOpusMinorVersion(modelId: string): number | null {
-  const match = modelId.toLowerCase().match(/opus-4[.-](\d+)/);
-  return match ? parseInt(match[1], 10) : null;
+  const version = extractOpusVersion(modelId);
+  return version?.major === 4 ? version.minor : null;
+}
+
+function isOpus4MinorOrNewer(modelId: string, minimumMinor: number): boolean {
+  const version = extractOpusVersion(modelId);
+  if (!version) return false;
+  if (version.major > 4) return true;
+  return version.major === 4 && version.minor !== null && version.minor >= minimumMinor;
 }
 
 /** True for Claude Opus 4.6+ (supports adaptive thinking). */
 export function isOpus46OrNewerModelId(modelId: string): boolean {
-  const v = extractOpusMinorVersion(modelId);
-  return v !== null && v >= 6;
+  return isOpus4MinorOrNewer(modelId, 6);
 }
 
 /** True for Claude Opus 4.7+ (1M context with native gateway support). */
 export function isOpus47OrNewerModelId(modelId: string): boolean {
-  const v = extractOpusMinorVersion(modelId);
-  return v !== null && v >= 7;
+  return isOpus4MinorOrNewer(modelId, 7);
+}
+
+/** True for fixed-major Opus 5 and later model IDs. */
+export function isOpus5OrNewerModelId(modelId: string): boolean {
+  const version = extractOpusVersion(modelId);
+  return version !== null && version.major >= 5;
 }
 
 /**
- * @deprecated Use `isOpus47OrNewerModelId` instead. Kept for backwards compat.
+ * @deprecated Use `isOpus47OrNewerModelId` instead. Kept for backwards
+ * compatibility with callers that already rely on its 4.7-or-newer meaning.
  */
 export function isOpus47ModelId(modelId: string): boolean {
   return isOpus47OrNewerModelId(modelId);
+}
+
+/** True only for Opus 4.7 IDs; used by the legacy direct-Bedrock probe. */
+export function isExactOpus47ModelId(modelId: string): boolean {
+  const version = extractOpusVersion(modelId);
+  return version?.major === 4 && version.minor === 7;
 }
 
 // -------------------------------------------------------------------------------------------------

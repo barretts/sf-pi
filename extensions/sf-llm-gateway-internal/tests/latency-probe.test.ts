@@ -6,6 +6,7 @@ import {
   buildOpenAiResponsesBody,
   formatGatewayLatencyProbe,
   parseLatencyProbeArgs,
+  shouldRunLegacyOpus47BedrockProbe,
 } from "../lib/latency-probe.ts";
 
 describe("parseLatencyProbeArgs", () => {
@@ -23,6 +24,15 @@ describe("parseLatencyProbeArgs", () => {
       includeLarge: true,
       includeBedrock: true,
     });
+  });
+});
+
+describe("legacy direct-Bedrock probe routing", () => {
+  it("stays scoped to Opus 4.7 instead of probing the wrong model for Opus 5", () => {
+    expect(shouldRunLegacyOpus47BedrockProbe("claude-opus-4-7")).toBe(true);
+    expect(shouldRunLegacyOpus47BedrockProbe("claude-opus-4-7-v1")).toBe(true);
+    expect(shouldRunLegacyOpus47BedrockProbe("claude-opus-4-8")).toBe(false);
+    expect(shouldRunLegacyOpus47BedrockProbe("claude-opus-5")).toBe(false);
   });
 });
 

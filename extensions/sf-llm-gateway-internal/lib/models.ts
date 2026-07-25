@@ -34,6 +34,7 @@ import {
   isGpt55ModelId,
   isOpus46OrNewerModelId,
   isOpus47OrNewerModelId,
+  isOpus5OrNewerModelId,
 } from "./transport.ts";
 
 // -------------------------------------------------------------------------------------------------
@@ -48,8 +49,12 @@ import {
 // (buildBootstrapModelList, getModelMetadata, getActiveModelDefinition,
 // getShortModelLabel) keep referring to the same symbols, and re-exported
 // below so external consumers see them at this module's surface.
-import { ALWAYS_INCLUDE_MODEL_IDS, MODEL_PRESETS } from "./models-internal/presets.ts";
-export { ALWAYS_INCLUDE_MODEL_IDS, MODEL_PRESETS };
+import {
+  ALWAYS_INCLUDE_MODEL_IDS,
+  MODEL_PRESETS,
+  OPUS_5_THINKING_LEVEL_MAP,
+} from "./models-internal/presets.ts";
+export { ALWAYS_INCLUDE_MODEL_IDS, MODEL_PRESETS, OPUS_5_THINKING_LEVEL_MAP };
 
 export function getStaticGatewayModelIds(): string[] {
   return sortModelIds([...new Set([...ALWAYS_INCLUDE_MODEL_IDS, ...Object.keys(MODEL_PRESETS)])]);
@@ -301,10 +306,10 @@ export function buildBootstrapModelList(): TaggedGatewayModel[] {
  *
  * The optional `modelInfoMap` supplies per-model metadata pulled from
  * `/v1/model/info`. When a model has no preset and the inference defaults are
- * missing or wrong, we fall back to the gateway's numbers. Presets always win
- * because we have verified cases where the gateway's own metadata is stale
- * (e.g. LiteLLM reports Claude `max_input_tokens=200000` while the upstream
- * Bedrock deployment actually serves 1M).
+ * missing or wrong, we fall back to the gateway's numbers. Presets and trusted
+ * capability floors always win because we have verified cases where the
+ * gateway's own metadata is stale (e.g. LiteLLM reports Claude
+ * `max_input_tokens=200000` while the upstream Bedrock deployment serves 1M).
  */
 export function buildDiscoveredModelList(
   discoveredIds: string[],
@@ -319,12 +324,14 @@ export function buildDiscoveredModelList(
 export function toProviderModelConfig(id: string, info?: GatewayModelInfo): TaggedGatewayModel {
   const preset = MODEL_PRESETS[id];
   const hasPreset = Boolean(preset);
+  const hasTrustedCapabilities = hasPreset || isOpus5OrNewerModelId(id);
   const def = preset ? { id, ...preset } : inferModelDefinition(id);
 
-  // Apply /v1/model/info enrichment ONLY when we do not have a preset. Our
-  // presets are hand-tuned and already know, for example, that Opus 4.7 runs
-  // at 1M context even though LiteLLM's metadata says 200K.
-  if (!hasPreset && info) {
+  // Apply /v1/model/info enrichment only when local capability knowledge is
+  // not stronger. Presets are hand-tuned, and discovered Opus 5 aliases share
+  // the canonical 1M/128K adaptive-thinking floor even when LiteLLM metadata
+  // is stale or incomplete.
+  if (!hasTrustedCapabilities && info) {
     if (typeof info.maxInputTokens === "number" && info.maxInputTokens > 0) {
       def.contextWindow = info.maxInputTokens;
     }
@@ -349,6 +356,10 @@ export function toProviderModelConfig(id: string, info?: GatewayModelInfo): Tagg
     // them for small prompts, max thinking, and tool calls.
     const compat: NonNullable<ProviderModelConfig["compat"]> = {
       ...(shouldForceAdaptiveThinking(def.id) ? { forceAdaptiveThinking: true } : {}),
+      // Opus 4.7+ rejects non-default temperature values. Pi already omits
+      // temperature while thinking is active; this also protects thinking-off
+      // requests and direct callers from sending an unsupported value.
+      ...(isOpus47OrNewerModelId(def.id) ? { supportsTemperature: false } : {}),
       // Haiku 4.5 rejects per-tool `eager_input_streaming`. Setting this
       // AnthropicMessagesCompat flag to false makes pi-ai (1) drop the
       // per-tool field entirely and (2) auto-attach the legacy
@@ -575,6 +586,7 @@ export function inferModelDefinition(id: string): GatewayModelDefinition {
     const isOpus = lower.includes("opus");
     const isHaiku = lower.includes("haiku");
     const is47OrNewer = isOpus47OrNewerModelId(id);
+    const is5OrNewer = isOpus5OrNewerModelId(id);
     const is46OrNewer =
       isOpus46OrNewerModelId(id) || lower.includes("4-6") || lower.includes("4.6");
     const has1m = is46OrNewer && isOpus;
@@ -605,6 +617,7 @@ export function inferModelDefinition(id: string): GatewayModelDefinition {
       input: ["text", "image"],
       contextWindow: has1m ? 1_000_000 : 200_000,
       maxTokens,
+      ...(is5OrNewer ? { thinkingLevelMap: OPUS_5_THINKING_LEVEL_MAP } : {}),
     };
   }
 
@@ -652,6 +665,9 @@ export {
 export function getShortModelLabel(modelId: string): string {
   if (modelId === DEFAULT_MODEL_ID) {
     return "GPT-5.6 Sol [1M]";
+  }
+  if (modelId === "claude-opus-5") {
+    return "Opus 5 [1M]";
   }
   if (modelId === PREVIOUS_DEFAULT_MODEL_ID) {
     return "Opus 4.8 [1M]";

@@ -29,6 +29,7 @@ import {
   OPUS_47_DEFAULT_MAX_TOKENS,
   OPUS_47_MODEL_MAX_TOKENS,
   allowReasoningEffortParam,
+  extractOpusVersion,
   applyOpus47MaxThinking,
   formatAnthropicStreamError,
   injectCodexGatewayParams,
@@ -38,7 +39,11 @@ import {
   isGpt55ModelId,
   isOpenAiModelId,
   isOpenAiReasoningModelId,
+  isExactOpus47ModelId,
+  isOpus46OrNewerModelId,
   isOpus47ModelId,
+  isOpus47OrNewerModelId,
+  isOpus5OrNewerModelId,
   normalizeCodexReasoningEffort,
   resolveGatewayProviderMaxRetries,
   resolveOpenAiReasoningEffort,
@@ -443,6 +448,41 @@ describe("isCodexModelId subset of isOpenAiModelId", () => {
   });
 });
 
+describe("modern Opus version detection", () => {
+  it("parses 4.x minor versions and fixed major-version model IDs", () => {
+    expect(extractOpusVersion("claude-opus-4-7")).toEqual({ major: 4, minor: 7 });
+    expect(extractOpusVersion("claude-opus-4.8-preview")).toEqual({ major: 4, minor: 8 });
+    expect(extractOpusVersion("claude-opus-5")).toEqual({ major: 5, minor: null });
+    expect(extractOpusVersion("claude-opus-5-vertex")).toEqual({ major: 5, minor: null });
+    expect(extractOpusVersion("gpt-5.6")).toBeNull();
+  });
+
+  it("does not mistake dated Opus 4 IDs for modern minor versions", () => {
+    expect(extractOpusVersion("claude-opus-4-20250514")).toEqual({ major: 4, minor: null });
+    expect(isOpus46OrNewerModelId("claude-opus-4-20250514")).toBe(false);
+  });
+
+  it("treats Opus 5 and its aliases as newer than the adaptive-thinking floors", () => {
+    for (const id of ["claude-opus-5", "claude-opus-5-vertex", "anthropic.claude-opus-5"]) {
+      expect(isOpus46OrNewerModelId(id)).toBe(true);
+      expect(isOpus47OrNewerModelId(id)).toBe(true);
+      expect(isOpus5OrNewerModelId(id)).toBe(true);
+    }
+  });
+
+  it("does not classify earlier or non-Opus models as Opus 5", () => {
+    for (const id of ["claude-opus-4-8", "claude-sonnet-5", "gpt-5"]) {
+      expect(isOpus5OrNewerModelId(id)).toBe(false);
+    }
+  });
+
+  it("keeps exact Opus 4.7 matching separate from newer capability predicates", () => {
+    expect(isExactOpus47ModelId("claude-opus-4-7-v1")).toBe(true);
+    expect(isExactOpus47ModelId("claude-opus-4-8")).toBe(false);
+    expect(isExactOpus47ModelId("claude-opus-5")).toBe(false);
+  });
+});
+
 describe("isOpus47ModelId", () => {
   it("matches canonical Opus 4.7 ids", () => {
     expect(isOpus47ModelId("claude-opus-4-7")).toBe(true);
@@ -452,7 +492,12 @@ describe("isOpus47ModelId", () => {
     expect(isOpus47ModelId("claude-opus-4.7-preview")).toBe(true);
   });
 
-  it("does not match other Claude models", () => {
+  it("keeps its backwards-compatible 4.7-or-newer meaning", () => {
+    expect(isOpus47ModelId("claude-opus-4-8")).toBe(true);
+    expect(isOpus47ModelId("claude-opus-5")).toBe(true);
+  });
+
+  it("does not match earlier or non-Opus Claude models", () => {
     expect(isOpus47ModelId("claude-opus-4-6-v1")).toBe(false);
     expect(isOpus47ModelId("claude-sonnet-4-6")).toBe(false);
     expect(isOpus47ModelId("claude-haiku-4-5-20241022")).toBe(false);

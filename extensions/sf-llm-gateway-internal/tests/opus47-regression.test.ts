@@ -1,15 +1,14 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /**
- * Live Opus 4.7 regression checks against a real SF LLM Gateway instance.
+ * Live modern-Opus regression checks against a real SF LLM Gateway instance.
  *
  * This suite is intentionally opt-in:
  * - it only runs when SF_LLM_GATEWAY_BASE_URL and SF_LLM_GATEWAY_API_KEY are set
  * - it talks to the real gateway over the network
  *
- * Goal: verify the actual sf-pi transport path for the critical-path Opus 4.7
- * model. Pi owns the generic adaptive-thinking payload via
- * `compat.forceAdaptiveThinking`; sf-pi keeps the gateway-specific
- * adaptive thinking and xhigh→max mapping.
+ * Goal: verify the actual sf-pi transport path for Opus 4.7 and Opus 5.
+ * Pi owns the generic adaptive-thinking payload via
+ * `compat.forceAdaptiveThinking`; sf-pi supplies the model-specific effort map.
  */
 import { describe, expect, it } from "vitest";
 import type {
@@ -24,25 +23,28 @@ import { toGatewayRootBaseUrl } from "../lib/gateway-url.ts";
 import { toProviderModelConfig } from "../lib/models.ts";
 import { streamSfGatewayAnthropic } from "../lib/transport.ts";
 
-const LIVE_OPUS_MODEL_ENV = "SF_LLM_GATEWAY_INTERNAL_OPUS47_TEST_MODEL";
+const LIVE_OPUS47_MODEL_ENV = "SF_LLM_GATEWAY_INTERNAL_OPUS47_TEST_MODEL";
+const LIVE_OPUS5_MODEL_ENV = "SF_LLM_GATEWAY_INTERNAL_OPUS5_TEST_MODEL";
 const LIVE_TIMEOUT_ENV = "SF_LLM_GATEWAY_INTERNAL_OPUS47_TEST_TIMEOUT_MS";
-const DEFAULT_OPUS_TEST_MODEL = "claude-opus-4-7";
+const DEFAULT_OPUS47_TEST_MODEL = "claude-opus-4-7";
+const DEFAULT_OPUS5_TEST_MODEL = "claude-opus-5";
 const DEFAULT_TIMEOUT_MS = 45_000;
 
 const baseUrl = normalizeBaseUrl(process.env[BASE_URL_ENV]);
 const apiKey = process.env[API_KEY_ENV]?.trim();
-const opusModel = process.env[LIVE_OPUS_MODEL_ENV]?.trim() || DEFAULT_OPUS_TEST_MODEL;
+const opus47Model = process.env[LIVE_OPUS47_MODEL_ENV]?.trim() || DEFAULT_OPUS47_TEST_MODEL;
+const opus5Model = process.env[LIVE_OPUS5_MODEL_ENV]?.trim() || DEFAULT_OPUS5_TEST_MODEL;
 const timeoutMs = Number(process.env[LIVE_TIMEOUT_ENV] || DEFAULT_TIMEOUT_MS);
 const hasLiveGatewayConfig = !!baseUrl && !!apiKey;
 const describeLive = hasLiveGatewayConfig ? describe : describe.skip;
 
-describeLive("sf-llm-gateway-internal Opus 4.7 live regression", () => {
+describeLive("sf-llm-gateway-internal modern Opus live regression", () => {
   it(
     "uses Pi-native adaptive thinking with xhigh mapped to max effort",
     async () => {
       const capturedPayloads: Record<string, unknown>[] = [];
       const events = await collectStream(
-        streamSfGatewayAnthropic(makeOpusModel(), makeTinyContext(), {
+        streamSfGatewayAnthropic(makeOpusModel(opus47Model), makeTinyContext(), {
           apiKey,
           reasoning: "xhigh",
           signal: AbortSignal.timeout(timeoutMs),
@@ -68,10 +70,40 @@ describeLive("sf-llm-gateway-internal Opus 4.7 live regression", () => {
     },
     timeoutMs + 5_000,
   );
+
+  it(
+    "uses Opus 5 adaptive thinking with max effort and the native 128K output ceiling",
+    async () => {
+      const capturedPayloads: Record<string, unknown>[] = [];
+      const events = await collectStream(
+        streamSfGatewayAnthropic(makeOpusModel(opus5Model), makeTinyContext(), {
+          apiKey,
+          reasoning: "max",
+          signal: AbortSignal.timeout(timeoutMs),
+          onPayload: (payload) => {
+            if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+              capturedPayloads.push(payload as Record<string, unknown>);
+            }
+            return payload;
+          },
+        }),
+      );
+
+      const payload = capturedPayloads[0];
+      expect(payload).toBeDefined();
+      expect(payload?.thinking).toEqual({ type: "adaptive", display: "summarized" });
+      expect(payload?.output_config).toEqual({ effort: "max" });
+      expect(payload?.temperature).toBeUndefined();
+      expect(payload?.max_tokens).toBe(128_000);
+      expect(events.some((event) => event.type === "error")).toBe(false);
+      expect(events.some((event) => event.type === "done")).toBe(true);
+    },
+    timeoutMs + 5_000,
+  );
 });
 
-function makeOpusModel(): Model<"anthropic-messages"> {
-  const cfg = toProviderModelConfig(opusModel);
+function makeOpusModel(modelId: string): Model<"anthropic-messages"> {
+  const cfg = toProviderModelConfig(modelId);
   return {
     ...cfg,
     api: "anthropic-messages",
@@ -106,7 +138,7 @@ async function collectStream(
   for await (const event of stream) {
     events.push(event);
     if (event.type === "error") {
-      throw new Error(event.error.errorMessage ?? "Opus 4.7 live stream failed");
+      throw new Error(event.error.errorMessage ?? "Modern Opus live stream failed");
     }
   }
   return events;

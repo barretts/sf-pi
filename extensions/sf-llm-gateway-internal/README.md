@@ -110,18 +110,19 @@ short-circuits subsequent sessions. Users see no prompt and no manual step.
    emitted, then normalizes raw error envelopes into a concise message that
    preserves the request id.
 
-3. **Opus 4.7+ adaptive thinking** (`streamSfGatewayAnthropic`). pi-ai owns
+3. **Modern Opus adaptive thinking** (`streamSfGatewayAnthropic`). pi-ai owns
    the generic adaptive-thinking payload through the model-level
    `compat.forceAdaptiveThinking` flag. The transport is now a single
    unified path for all Claude models:
-   - Opus 4.7+ presets set `compat.forceAdaptiveThinking: true`, so pi-ai sends
-     `thinking: { type: "adaptive" }` and `output_config.effort`.
-   - Opus 4.7+ presets expose pi's user-facing `xhigh` and `max` thinking
-     levels as Anthropic `effort=max`. Other gateway models expose `max` only
-     after model-specific evidence exists.
-   - `max_tokens` is set to 128K by the model preset. Live probes (May 2026)
-     confirmed `max_tokens: 128000 + effort: max` works reliably on both
-     Opus 4.7 and 4.8 without the earlier intermittent `api_error`.
+   - Opus 4.6+ and Opus 5 presets set `compat.forceAdaptiveThinking: true`, so
+     pi-ai sends `thinking: { type: "adaptive", display: "summarized" }` and
+     `output_config.effort`.
+   - Opus 5 keeps its native `xhigh` and `max` effort levels distinct. The
+     gateway's Opus 4.7/4.8 routes map pi's `xhigh` and `max` selectors to
+     Anthropic `effort=max` based on their separately verified behavior.
+   - `max_tokens` is set to 128K by the model presets. Live probes confirmed
+     `max_tokens: 128000 + effort: max` on Opus 5 and on the existing Opus
+     4.7/4.8 routes.
    - No transport-level payload shaping is needed — pi-ai handles adaptive
      thinking via model compat flags, and the gateway accepts the full
      effort range.
@@ -132,7 +133,11 @@ short-circuits subsequent sessions. Users see no prompt and no manual step.
 ### Gateway-specific model metadata
 
 Some model metadata intentionally differs from Pi's direct-provider defaults
-because the gateway route has separately verified limits. In particular,
+because the gateway route has separately verified limits. Opus 5 is advertised
+with its native 1M context window and 128K max output; discovered Opus 5 aliases
+inherit the same capability floor. Pre-Opus-5 provider-cache entries are
+repaired locally when models are exposed, so an offline startup cannot restore
+the old 200K/32K non-adaptive shape above the new preset. In addition,
 `gpt-5.5` and non-Bedrock `gpt-5.6` variants are advertised as 1M-context
 gateway models with 128K max output, while Codex-family and Bedrock GPT-5.6
 presets stay capped at 272K/128K. Keep larger-than-upstream metadata behind
@@ -570,6 +575,11 @@ across multiple choices. The fix is already in place — Claude models retain th
 to the Gateway-aware Anthropic adapter. If you still see
 truncation, confirm the selected model is a Claude id in
 `/sf-llm-gateway models`.
+
+Opus 5 rejects legacy `thinking: { type: "enabled", budget_tokens: ... }`
+payloads. Its preset forces adaptive thinking, preserves distinct `xhigh` and
+`max` effort levels, requests summarized thinking output, and advertises the
+native 1M/128K limits.
 
 **Opus 4.7/4.8 returns `api_error: Internal server error` on heavy turns:**
 Transient mid-stream failures use Pi's provider retry budget

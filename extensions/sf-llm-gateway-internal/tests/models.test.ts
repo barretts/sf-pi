@@ -111,6 +111,15 @@ describe("inferModelDefinition", () => {
     expect(def.reasoning).toBe(true);
   });
 
+  it("infers Opus 5 aliases with 1M context, 128K output, and native advanced effort", () => {
+    const def = inferModelDefinition("claude-opus-5-vertex");
+    expect(def.family).toBe("anthropic");
+    expect(def.contextWindow).toBe(1_000_000);
+    expect(def.maxTokens).toBe(128_000);
+    expect(def.reasoning).toBe(true);
+    expect(def.thinkingLevelMap).toEqual({ xhigh: "xhigh", max: "max" });
+  });
+
   it("infers Gemini defaults", () => {
     const def = inferModelDefinition("gemini-2.5-pro");
     expect(def.family).toBe("google");
@@ -163,6 +172,7 @@ describe("buildBootstrapModelList", () => {
     const models = buildBootstrapModelList();
     const ids = models.map((model) => model.id);
     expect(ids).toContain("gpt-5.6-sol");
+    expect(ids).toContain("claude-opus-5");
     expect(ids).toContain("claude-opus-4-8");
     expect(ids).toContain("claude-opus-4-7");
     expect(ids).toContain("claude-sonnet-5");
@@ -251,7 +261,47 @@ describe("toProviderModelConfig", () => {
     expect(config.cost.input).toBe(0);
   });
 
-  it("returns 1M context / 64K max for Opus 4.7 without Gateway-owned beta headers", () => {
+  it("registers Opus 5 with its native context, output, thinking, and temperature capabilities", () => {
+    const config = toProviderModelConfig("claude-opus-5");
+    expect(config.api).toBe("anthropic-messages");
+    expect(config.contextWindow).toBe(1_000_000);
+    expect(config.maxTokens).toBe(128_000);
+    expect(config.reasoning).toBe(true);
+    expect(config.thinkingLevelMap).toEqual({ xhigh: "xhigh", max: "max" });
+    expect(config.compat).toMatchObject({
+      forceAdaptiveThinking: true,
+      supportsTemperature: false,
+    });
+    expect(config.headers).toBeUndefined();
+  });
+
+  it("registers discovered Opus 5 aliases with the same native capabilities", () => {
+    const config = toProviderModelConfig("claude-opus-5-vertex");
+    expect(config.contextWindow).toBe(1_000_000);
+    expect(config.maxTokens).toBe(128_000);
+    expect(config.thinkingLevelMap).toEqual({ xhigh: "xhigh", max: "max" });
+    expect(config.compat).toMatchObject({
+      forceAdaptiveThinking: true,
+      supportsTemperature: false,
+    });
+  });
+
+  it("does not let stale discovery metadata downgrade an Opus 5 alias", () => {
+    const config = toProviderModelConfig("claude-opus-5-vertex", {
+      id: "claude-opus-5-vertex",
+      maxInputTokens: 200_000,
+      maxOutputTokens: 32_768,
+      supportsReasoning: false,
+      supportsVision: false,
+    });
+    expect(config.contextWindow).toBe(1_000_000);
+    expect(config.maxTokens).toBe(128_000);
+    expect(config.reasoning).toBe(true);
+    expect(config.input).toEqual(["text", "image"]);
+    expect(config.thinkingLevelMap).toEqual({ xhigh: "xhigh", max: "max" });
+  });
+
+  it("returns 1M context / 128K max for Opus 4.7 without Gateway-owned beta headers", () => {
     // Opus 4.7 now advertises 1M input natively through the gateway, and live
     // probes confirm >200K-token requests work without Gateway-owned beta headers. maxTokens is
     // 128K confirmed stable via live probes (May 2026).
@@ -271,7 +321,12 @@ describe("toProviderModelConfig", () => {
   });
 
   it("does not attach Gateway-owned Anthropic beta headers to model configs", () => {
-    for (const id of ["claude-opus-4-6-v1", "claude-opus-4-7", "claude-sonnet-5"]) {
+    for (const id of [
+      "claude-opus-5",
+      "claude-opus-4-6-v1",
+      "claude-opus-4-7",
+      "claude-sonnet-5",
+    ]) {
       expect(toProviderModelConfig(id).headers).toBeUndefined();
     }
   });
@@ -289,6 +344,8 @@ describe("toProviderModelConfig", () => {
     // use compat.forceAdaptiveThinking so pi-ai owns the generic adaptive
     // payload shape; Haiku 4.5 has a separate eager-streaming override below.
     for (const id of [
+      "claude-opus-5",
+      "claude-opus-5-vertex",
       "claude-opus-4-6-v1",
       "claude-opus-4-7-v1",
       "claude-sonnet-4-6",
@@ -353,6 +410,8 @@ describe("toProviderModelConfig", () => {
   describe("shouldForceAdaptiveThinking", () => {
     it("matches adaptive Claude gateway models", () => {
       for (const id of [
+        "claude-opus-5",
+        "claude-opus-5-vertex",
         "claude-opus-4-7",
         "claude-opus-4.7",
         "claude-opus-4-6-v1",
@@ -515,6 +574,7 @@ describe("toProviderModelConfig", () => {
 
   it("exposes max through Pi's real capability API only for proven model families", () => {
     for (const id of [
+      "claude-opus-5",
       "claude-opus-4-8",
       "claude-sonnet-5",
       "gpt-5.3-codex",
@@ -561,6 +621,13 @@ describe("toProviderModelConfig", () => {
         });
       }
     }
+  });
+
+  it("keeps Opus 5 xhigh and max as distinct native effort levels", () => {
+    const config = toProviderModelConfig("claude-opus-5");
+    expect(config.thinkingLevelMap?.xhigh).toBe("xhigh");
+    expect(config.thinkingLevelMap?.max).toBe("max");
+    expect(config.compat).toMatchObject({ forceAdaptiveThinking: true });
   });
 
   it("does not expose max on gateway models whose ceiling is high", () => {

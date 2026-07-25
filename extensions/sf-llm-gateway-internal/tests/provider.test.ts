@@ -251,6 +251,39 @@ describe("complete native Gateway Provider", () => {
     expect(network.modelIds).not.toHaveBeenCalled();
   });
 
+  it("repairs a stale cached Opus 5 overlay without requiring startup network", async () => {
+    const runtime = createGatewayProviderRuntime({ authController: authController() });
+    const { models, modelsStore } = await configuredModels(runtime);
+    await modelsStore.write(PROVIDER_NAME, {
+      models: [
+        {
+          id: "claude-opus-5",
+          name: "Cached Opus 5",
+          provider: PROVIDER_NAME,
+          api: "anthropic-messages",
+          baseUrl: "https://gateway.invalid",
+          reasoning: true,
+          input: ["text", "image"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 200_000,
+          maxTokens: 32_768,
+        },
+      ],
+      checkedAt: 1,
+    });
+
+    await models.refresh({ allowNetwork: false });
+
+    expect(models.getModel(PROVIDER_NAME, "claude-opus-5")).toMatchObject({
+      api: "anthropic-messages",
+      reasoning: true,
+      contextWindow: 1_000_000,
+      maxTokens: 128_000,
+      thinkingLevelMap: { xhigh: "xhigh", max: "max" },
+      compat: { forceAdaptiveThinking: true, supportsTemperature: false },
+    });
+  });
+
   it("keeps models.json overrides above the registered native Provider", async () => {
     const gateway = createGatewayProviderRuntime({ authController: authController() });
     const baseline = gateway.provider.getModels()[0];

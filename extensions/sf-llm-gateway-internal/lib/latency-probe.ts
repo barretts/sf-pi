@@ -11,7 +11,7 @@ import { gatewayProviderRuntime } from "./provider.ts";
 import { toGatewayOpenAiBaseUrl, toGatewayRootBaseUrl } from "./gateway-url.ts";
 import { fetchWithTimeout } from "./models.ts";
 import { isAnthropicModelId } from "./models.ts";
-import { isGpt5FamilyResponsesModelId, isOpus47OrNewerModelId } from "./transport.ts";
+import { isExactOpus47ModelId, isGpt5FamilyResponsesModelId } from "./transport.ts";
 
 const METADATA_TIMEOUT_MS = 15_000;
 const GENERATION_TIMEOUT_MS = 180_000;
@@ -118,7 +118,7 @@ export async function fetchGatewayLatencyProbe(
   }
 
   if (options.includeBedrock) {
-    if (isOpus47OrNewerModelId(options.modelId)) {
+    if (shouldRunLegacyOpus47BedrockProbe(options.modelId)) {
       probes.push(await bedrockOpus47Probe(rootUrl, authHeaders, options.includeLarge));
     } else {
       notes.push("--bedrock currently runs only for Opus 4.7 model IDs.");
@@ -132,6 +132,14 @@ export async function fetchGatewayLatencyProbe(
     notes,
     probes,
   };
+}
+
+/**
+ * The direct Bedrock route below is pinned to the Opus 4.7 model identifier.
+ * Keep its eligibility exact so newer Opus IDs never probe the wrong model.
+ */
+export function shouldRunLegacyOpus47BedrockProbe(modelId: string): boolean {
+  return isExactOpus47ModelId(modelId);
 }
 
 export function formatGatewayLatencyProbe(report: GatewayLatencyProbeReport): string {

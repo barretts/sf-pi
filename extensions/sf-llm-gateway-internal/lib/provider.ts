@@ -22,6 +22,7 @@ import {
   fetchGatewayModelGroupInfo,
   fetchGatewayModelIdDiscovery,
   fetchGatewayModelInfoMap,
+  toProviderModelConfig,
   type GatewayModelGroupInfoMap,
   type GatewayModelInfoMap,
   type ModelGroupDrift,
@@ -41,6 +42,7 @@ import {
   streamSfGatewayOpenAIFull,
   streamSfGatewayResponses,
   streamSfGatewayResponsesFull,
+  isOpus5OrNewerModelId,
 } from "./transport.ts";
 
 export type GatewayApi = "anthropic-messages" | "openai-completions" | "openai-responses";
@@ -124,6 +126,29 @@ function nativeModel(model: TaggedGatewayModel, root: string): Model<GatewayApi>
         ? toGatewayOpenAiBaseUrl(root)
         : toGatewayRootBaseUrl(root),
   } as Model<GatewayApi>;
+}
+
+/**
+ * Repair provider-scoped model-cache entries created before Opus 5 support.
+ * Pi intentionally restores that cache without network at startup, so an old
+ * 200K/32K non-adaptive entry must not override the new local capability floor.
+ * User models.json overrides are composed above this native Provider and still
+ * retain final authority.
+ */
+export function repairCachedGatewayModel(model: Model<GatewayApi>): Model<GatewayApi> {
+  if (!isOpus5OrNewerModelId(model.id)) return model;
+
+  const expected = toProviderModelConfig(model.id);
+  Object.assign(model, {
+    api: expected.api,
+    reasoning: expected.reasoning,
+    input: [...expected.input],
+    contextWindow: Math.max(model.contextWindow, expected.contextWindow),
+    maxTokens: Math.max(model.maxTokens, expected.maxTokens),
+    thinkingLevelMap: { ...model.thinkingLevelMap, ...expected.thinkingLevelMap },
+    compat: { ...model.compat, ...expected.compat },
+  });
+  return model;
 }
 
 function resolvedRoot(model: Model<GatewayApi>, options?: StreamOptions): string {
@@ -285,7 +310,7 @@ export function createGatewayProviderRuntime(
     }
   };
 
-  const provider = createProvider<GatewayApi>({
+  const nativeProvider = createProvider<GatewayApi>({
     id: PROVIDER_NAME,
     name: PROVIDER_DISPLAY_NAME,
     auth: { apiKey: authController.auth },
@@ -293,6 +318,12 @@ export function createGatewayProviderRuntime(
     fetchModels,
     api: createApiMap(streams),
   });
+  const provider: Provider<GatewayApi> = {
+    ...nativeProvider,
+    getModels() {
+      return nativeProvider.getModels().map(repairCachedGatewayModel);
+    },
+  };
 
   const resetSessionDiagnostics = () => {
     previousModelGroups = undefined;
