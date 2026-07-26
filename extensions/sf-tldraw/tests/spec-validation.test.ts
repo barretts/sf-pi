@@ -149,14 +149,43 @@ describe("Salesforce Diagram Spec validation", () => {
     const spec = dataModelFixture();
     const template = spec.objects[0];
     if (!template) throw new Error("Expected at least one data-model object.");
-    spec.objects = Array.from({ length: 19 }, (_, index) => ({
+    spec.objects = Array.from({ length: 35 }, (_, index) => ({
       ...template,
       id: `object-${index}`,
       api_name: `Object${index}`,
     }));
-    spec.relationships = [];
     const result = validateDiagramSpec(spec, "data_model");
     expect(result.errors.map((error) => error.code)).toContain("single_page_density_exceeded");
+  });
+
+  it("warns but still renders CTA-scale data models above the reading budget", () => {
+    const spec = dataModelFixture();
+    const template = spec.objects[0];
+    if (!template) throw new Error("Expected at least one data-model object.");
+    spec.objects = [
+      ...spec.objects,
+      ...Array.from({ length: 20 }, (_, index) => ({
+        ...template,
+        id: `object-${index}`,
+        api_name: `Object${index}`,
+      })),
+    ];
+    const result = validateDiagramSpec(spec, "data_model");
+    expect(result.ok).toBe(true);
+    expect(result.warnings.map((warning) => warning.code)).toContain("single_page_density_warning");
+  });
+
+  it("accepts a spec passed as exact JSON text", () => {
+    const spec = dataModelFixture();
+    const result = validateDiagramSpec(JSON.stringify(spec), "data_model");
+    expect(result.ok).toBe(true);
+    expect(result.spec?.title).toBe(spec.title);
+  });
+
+  it("rejects a string that is not a JSON spec with actionable guidance", () => {
+    const result = validateDiagramSpec("draw me an ERD", "data_model");
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]?.message).toMatch(/not valid JSON/);
   });
 
   it("validates explicit sequence activations without inferring processing duration", () => {

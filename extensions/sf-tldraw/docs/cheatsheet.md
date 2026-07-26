@@ -146,6 +146,15 @@ Every semantic element has an `evidence` array containing declared source ids.
 
 Cardinality values are `one`, `many`, `zero_or_one`, or `zero_or_many`. Do not invent optionality. Full optionality appears only with `cardinality_detail="full"`.
 
+`type` drives the connector itself, so there are no repeated `LK`/`MD` label boxes:
+
+- `lookup` renders a grey dotted orthogonal connector with grey terminals
+- `master_detail` renders a red solid orthogonal connector with red terminals
+
+`family` drives the card fill: `standard` blue, `custom` light orange, `special` light pink, `external` light green.
+
+The single-page hard cap for `data_model` is 34 objects and 56 relationships. Above 18 objects or 28 relationships the render still succeeds and returns a readability warning; prefer splitting a large model into several scoped pages, as reference sheets normally do.
+
 Optional sourced observations:
 
 ```json
@@ -279,6 +288,8 @@ Connection meanings: `directional`, `async_or_batch`, `dependency`. Labels are r
 
 Interaction kinds are `request`, `response`, `async`, and `event`. Steps are unique and contiguous from 1. Message labels use measured borderless backings so intermediate lifelines and activation bars can't cross the text. Activation intervals are optional, explicit, and evidenced; the renderer never infers processing duration. Activation intervals for one participant can't overlap until nested-bar routing is supported. Self-interactions are rejected until loop routing is supported. The single-page budget is eight participants and 18 interactions, with readability warnings above six participants or 12 interactions. Static is the default; there is no autoplay.
 
+Data-model renders also report `routeChecks`: connectors whose orthogonal route passes behind an unrelated card. These are warnings, not blockers — the binding is still correct — but they mean the picture is harder to read, so prefer a narrower scope or `render_mode="relayout"`.
+
 ## Update modes
 
 - `preserve` — update managed content without moving grouped cards; recompute connector decorations.
@@ -295,6 +306,8 @@ A successful result requires:
 - zero actionable tldraw lints
 - every semantic connector bound through tldraw helpers
 - marker anchor-to-terminal distance ≤ 1 canvas unit
+- markers oriented outward along the relationship, never into a card
 - logical-label/API-name gap of 8 ± 0.5 canvas units
+- every data-model card fully containing its label, API name, and key fields
 - no renderer `Error` fallback text
 - full and thumbnail screenshots written to the run artifact directory

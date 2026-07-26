@@ -61,11 +61,15 @@ export const PRODUCT_MARK_REGISTRY: Record<
   slack: { label: "Slack", sourceUrl: "https://slack.com/media-kit" },
 };
 
+/**
+ * Icon-tile colors are kept in the same family palette as the card fills so a
+ * card and its icon chip read as one object family.
+ */
 const FAMILY_COLORS: Record<ObjectFamily, string> = {
   standard: "#5867E8",
-  custom: "#06A59A",
-  external: "#7E8A97",
-  special: "#8E6CEF",
+  custom: "#E8792B",
+  external: "#2E844A",
+  special: "#D4508A",
 };
 
 const FALLBACK_ICONS: Record<ObjectFamily, DiagramIcon> = {
@@ -83,10 +87,25 @@ const SYSTEM_FALLBACKS: Record<string, DiagramIcon> = {
   integration: { category: "utility", name: "connected_apps", color: "#FE9339" },
 };
 
+/** Cardinality markers are drawn in the tone of the relationship they terminate. */
+export type MarkerTone = "neutral" | "master_detail";
+
+const MARKER_TONE_STROKES: Record<MarkerTone, string> = {
+  neutral: "#444444",
+  // Matches the tldraw 'red' arrow stroke so a master-detail line and its
+  // terminals read as one continuous mark.
+  master_detail: "#E03131",
+};
+
+export function markerAssetKey(kind: EndpointCardinality, tone: MarkerTone): string {
+  return `${kind}|${tone}`;
+}
+
 export interface ResolvedVisualAssets {
   assets: CanvasAssetPayload[];
   nodeAssets: Map<string, { iconAssetId: string; tileAssetId: string }>;
-  markerAssets: Map<EndpointCardinality, string>;
+  /** Keyed by markerAssetKey(cardinality, tone). */
+  markerAssets: Map<string, string>;
   warnings: string[];
 }
 
@@ -162,31 +181,34 @@ export function resolveVisualAssets(
     nodeAssets.set(node.id, { iconAssetId: iconId, tileAssetId: tileId });
   }
 
-  const markerAssets = new Map<EndpointCardinality, string>();
+  const markerAssets = new Map<string, string>();
   const markerKinds: EndpointCardinality[] =
     cardinalityDetail === "full" ? ["one", "many", "zero_or_one", "zero_or_many"] : ["one", "many"];
-  for (const kind of markerKinds) {
-    const marker = markerDefinition(kind);
-    const id = stableAssetId(`cardinality-${kind}`);
-    assets.set(
-      id,
-      svgAsset(
+  const tones: MarkerTone[] = ["neutral", "master_detail"];
+  for (const tone of tones) {
+    for (const kind of markerKinds) {
+      const marker = markerDefinition(kind, MARKER_TONE_STROKES[tone]);
+      const id = stableAssetId(`cardinality-${kind}-${tone}`);
+      assets.set(
         id,
-        `cardinality-${kind}.svg`,
-        marker.svg,
-        marker.width,
-        marker.height,
-        marker.anchor,
-      ),
-    );
-    markerAssets.set(kind, id);
-  }
-  if (cardinalityDetail === "simplified") {
-    const one = markerAssets.get("one");
-    const many = markerAssets.get("many");
-    if (!one || !many) throw new Error("Simplified cardinality assets were not created.");
-    markerAssets.set("zero_or_one", one);
-    markerAssets.set("zero_or_many", many);
+        svgAsset(
+          id,
+          `cardinality-${kind}-${tone}.svg`,
+          marker.svg,
+          marker.width,
+          marker.height,
+          marker.anchor,
+        ),
+      );
+      markerAssets.set(markerAssetKey(kind, tone), id);
+    }
+    if (cardinalityDetail === "simplified") {
+      const one = markerAssets.get(markerAssetKey("one", tone));
+      const many = markerAssets.get(markerAssetKey("many", tone));
+      if (!one || !many) throw new Error("Simplified cardinality assets were not created.");
+      markerAssets.set(markerAssetKey("zero_or_one", tone), one);
+      markerAssets.set(markerAssetKey("zero_or_many", tone), many);
+    }
   }
 
   return { assets: [...assets.values()], nodeAssets, markerAssets, warnings };
@@ -207,19 +229,22 @@ function readIcon(icon: DiagramIcon): { filePath: string; bytes: Buffer; mimeTyp
   return null;
 }
 
-function markerDefinition(kind: EndpointCardinality): {
+function markerDefinition(
+  kind: EndpointCardinality,
+  stroke: string,
+): {
   svg: string;
   width: number;
   height: number;
   anchor: { x: number; y: number };
 } {
-  const style = `fill="none" stroke="#444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"`;
+  const style = `fill="none" stroke="${stroke}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"`;
   if (kind === "one")
     return {
       width: 32,
       height: 32,
       anchor: { x: 30, y: 16 },
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M30 3V29" ${style}/></svg>`,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M30 2V30" ${style}/></svg>`,
     };
   if (kind === "many")
     return {
@@ -233,13 +258,13 @@ function markerDefinition(kind: EndpointCardinality): {
       width: 48,
       height: 32,
       anchor: { x: 46, y: 16 },
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="32" viewBox="0 0 48 32"><circle cx="14" cy="16" r="7" fill="#fff" stroke="#444" stroke-width="2.5"/><path d="M46 3V29" ${style}/></svg>`,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="32" viewBox="0 0 48 32"><circle cx="14" cy="16" r="7" fill="#fff" stroke="${stroke}" stroke-width="3.2"/><path d="M46 2V30" ${style}/></svg>`,
     };
   return {
     width: 48,
     height: 32,
     anchor: { x: 48, y: 16 },
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="32" viewBox="0 0 48 32"><circle cx="10" cy="16" r="7" fill="#fff" stroke="#444" stroke-width="2.5"/><path d="M24 16L48 4M24 16H48M24 16L48 28" ${style}/></svg>`,
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="32" viewBox="0 0 48 32"><circle cx="10" cy="16" r="7" fill="#fff" stroke="${stroke}" stroke-width="3.2"/><path d="M24 16L48 4M24 16H48M24 16L48 28" ${style}/></svg>`,
   };
 }
 

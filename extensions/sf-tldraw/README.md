@@ -81,14 +81,20 @@ Every spec declares `grounding.mode` as `reference` or `org`. Reference sources 
 
 ### Data model grammar
 
-- Pale object-family cards with separate vivid SLDS icon tiles
-- Logical label plus parenthesized API name with an 8-unit measured gap
+- Object-family fill: blue standard, light orange custom, light pink other, light green external
+- Separate vivid SLDS icon tiles in the same family palette
+- Logical label plus parenthesized API name with an 8-unit measured gap; API names never wrap
+- Content-fitted card size, then a measured height/width grow pass so text always stays inside its card
 - Optional, sourced LDV and OWD pills at fixed anchors
-- `LK` and `MD` midpoint labels
-- Vector cardinality markers attached to actual clipped arrow terminals
+- Relationship kind carried by the connector itself: grey dotted lookup, red solid master-detail. No repeated `LK`/`MD` label boxes
+- Orthogonal (elbow) connectors bound to precise facing card sides, with anchors spread along each side so parallel connectors and their terminals do not stack
+- Vector cardinality markers in the relationship's own tone, attached to actual clipped arrow terminals
+- Object cards re-fronted after connectors exist, because tldraw keeps a bound arrow above the shapes it binds to
 - No record-type display by default
 
-Marker placement solves the local marker anchor through tldraw's origin-based shape transform. Readiness then resolves the anchor back into page space with `getShapePageTransform()` and requires a terminal distance of at most one canvas unit. This covers horizontal, reversed, diagonal, and vertical connectors.
+Layout tries every candidate rank direction and ranker, then keeps the one whose bounding box is closest to a landscape page, so hub-and-spoke reference models do not degrade into a single tall ladder.
+
+Marker placement solves the local marker anchor through tldraw's origin-based shape transform. For elbow connectors the terminal direction comes from the resolved orthogonal route rather than the binding handles. Readiness then resolves the anchor back into page space with `getShapePageTransform()` and requires a terminal distance of at most one canvas unit. This covers horizontal, reversed, diagonal, and vertical connectors.
 
 ### Sequence grammar
 

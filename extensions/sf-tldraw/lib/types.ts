@@ -301,6 +301,8 @@ export interface CanvasEdgePayload {
   to: string;
   label: string;
   meaning?: ArchitectureConnection["meaning"] | SequenceInteraction["kind"];
+  /** Data-model only. Drives connector color and dash instead of an LK/MD label box. */
+  relationshipType?: DataModelRelationship["type"];
   fromCardinality?: EndpointCardinality;
   toCardinality?: EndpointCardinality;
   fromMarkerAssetId?: string;
@@ -351,6 +353,10 @@ export interface RenderReadiness {
   bindingChecks: Array<{ id: string; valid: boolean }>;
   sequenceGeometryChecks: Array<{ id: string; delta: number }>;
   typographyChecks: Array<{ id: string; apiGap: number; formatValid: boolean }>;
+  /** Data-model only: measured overflow of card text outside its card. */
+  cardContentChecks?: Array<{ id: string; overflow: number }>;
+  /** Data-model only: connectors whose orthogonal route passes behind an unrelated card. */
+  routeChecks?: Array<{ id: string; obstructedBy: string[] }>;
 }
 
 export interface CanvasExecutionResult {

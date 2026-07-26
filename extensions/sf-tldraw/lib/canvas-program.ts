@@ -15,13 +15,13 @@ function sid(key){const scoped=payload.pageName+'|'+key;return createShapeId('sf
 function managed(key,semanticId,role,extra={}){return{...extra,sfTldraw:{managed:true,schemaVersion:1,family:FAMILY,key,semanticId,role}}}
 function keyOf(shape){return shape?.meta?.sfTldraw?.key}
 function geo(id,x,y,w,h,color='grey',fill='none',dash='solid',label='',meta={},geoType='rectangle'){return{id,type:'geo',x,y,meta,props:{geo:geoType,w,h,color,fill,dash,size:'s',font:'sans',align:'middle',verticalAlign:'middle',richText:toRichText(label)}}}
-function text(id,x,y,w,label,size='s',align='start',meta={},color='black'){return{id,type:'text',x,y,meta,props:{color,size,font:'sans',textAlign:align,w,richText:toRichText(label),scale:1,autoSize:false}}}
+function text(id,x,y,w,label,size='s',align='start',meta={},color='black',autoSize=false){return{id,type:'text',x,y,meta,props:{color,size,font:'sans',textAlign:align,w,richText:toRichText(label),scale:1,autoSize}}}
 function image(id,x,y,w,h,assetId,altText,rotation=0,meta={}){return{id,type:'image',x,y,rotation,meta,props:{w,h,playing:false,url:'',assetId,crop:null,flipX:false,flipY:false,altText}}}
 function sequenceColorFor(node){if(node.kind==='salesforce'){const index=payload.nodes.filter(item=>item.kind==='salesforce').findIndex(item=>item.id===node.id);return['yellow','light-green','light-blue','orange'][Math.max(0,index)%4]}return node.kind==='data_store'?'light-green':node.kind==='integration'?'light-violet':node.kind==='user'?'light-blue':node.kind==='external'?'light-blue':'grey'}
-function colorFor(node){if(FAMILY==='sequence')return sequenceColorFor(node);if(FAMILY!=='data_model')return node.kind==='salesforce'?'blue':node.kind==='data_store'?'green':node.kind==='external'?'grey':'violet';return node.family==='custom'?'green':node.family==='external'?'grey':node.family==='special'?'violet':'blue'}
-function fillFor(node){if(FAMILY==='sequence')return'solid';return node.family==='external'?'pattern':'semi'}
+function colorFor(node){if(FAMILY==='sequence')return sequenceColorFor(node);if(FAMILY!=='data_model')return node.kind==='salesforce'?'blue':node.kind==='data_store'?'green':node.kind==='external'?'grey':'violet';return node.family==='custom'?'orange':node.family==='external'?'light-green':node.family==='special'?'light-red':'blue'}
+function fillFor(node){return'solid'}
 function sequenceLineStyleCount(){return new Set((payload.sequenceInteractions??[]).map(item=>item.meaning==='response'?'dashed':item.meaning==='async'?'dotted':'solid')).size}
-function wantedKeys(){const keys=new Set(['header:title','header:scope','header:grounding']);if(FAMILY!=='sequence'||sequenceLineStyleCount()>1)keys.add('header:legend');for(const node of payload.nodes){for(const role of ['group','card','label'])keys.add('node:'+node.id+':'+role);if(node.iconTileAssetId)keys.add('node:'+node.id+':tile');if(node.iconAssetId)keys.add('node:'+node.id+':icon');if(node.apiName)keys.add('node:'+node.id+':api');if(node.subtitle)keys.add('node:'+node.id+':subtitle');if(node.keyFields?.length)keys.add('node:'+node.id+':keys');if(node.boundary)keys.add('node:'+node.id+':boundary');if(FAMILY==='sequence')keys.add('node:'+node.id+':lifeline');for(let i=0;i<(node.observations?.length??0);i++)keys.add('node:'+node.id+':observation:'+i)}for(const edge of payload.edges){for(const role of ['arrow','label'])keys.add('edge:'+edge.id+':'+role);if(FAMILY==='sequence')keys.add('edge:'+edge.id+':label-bg');if(FAMILY==='data_model'){keys.add('edge:'+edge.id+':from-marker');keys.add('edge:'+edge.id+':to-marker')}}for(const interaction of payload.sequenceInteractions??[]){keys.add('edge:'+interaction.id+':from-anchor');keys.add('edge:'+interaction.id+':to-anchor')}for(const activation of payload.sequenceActivations??[])keys.add('node:'+activation.participantId+':activation:'+activation.id);return keys}
+function wantedKeys(){const keys=new Set(['header:title','header:scope','header:grounding']);if(FAMILY!=='sequence'||sequenceLineStyleCount()>1)keys.add('header:legend');for(const node of payload.nodes){for(const role of ['group','card','label'])keys.add('node:'+node.id+':'+role);if(node.iconTileAssetId)keys.add('node:'+node.id+':tile');if(node.iconAssetId)keys.add('node:'+node.id+':icon');if(node.apiName)keys.add('node:'+node.id+':api');if(node.subtitle)keys.add('node:'+node.id+':subtitle');if(node.keyFields?.length)keys.add('node:'+node.id+':keys');if(node.boundary)keys.add('node:'+node.id+':boundary');if(FAMILY==='sequence')keys.add('node:'+node.id+':lifeline');for(let i=0;i<(node.observations?.length??0);i++)keys.add('node:'+node.id+':observation:'+i)}for(const edge of payload.edges){keys.add('edge:'+edge.id+':arrow');if(FAMILY!=='data_model')keys.add('edge:'+edge.id+':label');if(FAMILY==='sequence')keys.add('edge:'+edge.id+':label-bg');if(FAMILY==='data_model'){keys.add('edge:'+edge.id+':from-marker');keys.add('edge:'+edge.id+':to-marker')}}for(const interaction of payload.sequenceInteractions??[]){keys.add('edge:'+interaction.id+':from-anchor');keys.add('edge:'+interaction.id+':to-anchor')}for(const activation of payload.sequenceActivations??[])keys.add('node:'+activation.participantId+':activation:'+activation.id);return keys}
 const existingPage=editor.getPages().find(page=>page.name===payload.pageName)
 const pageId=existingPage?.id??PageRecordType.createId('sf-tldraw-page-'+hash(payload.pageName))
 if(!existingPage)editor.createPage({id:pageId,name:payload.pageName})
@@ -37,19 +37,27 @@ if(assetRecords.length)editor.createAssets(assetRecords)
 function upsert(shape,{position='managed'}={}){const current=editor.getShape(shape.id);if(!current){editor.createShape(shape);counters.created++;return true}if(current.type!==shape.type){editor.deleteShapes([current.id]);editor.createShape(shape);counters.deleted++;counters.created++;return true}const update={id:shape.id,type:shape.type,props:shape.props,meta:shape.meta};if(position==='always'||(position==='managed'&&payload.renderMode!=='preserve')){update.x=shape.x;update.y=shape.y;if(shape.rotation!==undefined)update.rotation=shape.rotation}editor.updateShape(update);counters.updated++;return false}
 function moveShapeToPage(id,x,y){const bounds=editor.getShapePageBounds(id);const dx=x-bounds.x,dy=y-bounds.y;if(Math.abs(dx)>0.01||Math.abs(dy)>0.01)helpers.translateShapes([id],dx,dy)}
 const maxX=Math.max(1200,...payload.nodes.map(node=>node.x+node.w))+100
-const legend=FAMILY==='data_model'?'bar/crow foot = declared cardinality · LK = lookup · MD = master-detail':FAMILY==='architecture'?'solid = direction · dashed = async/batch · dotted = dependency':'step number precedes message · solid = request/event · dashed = response · dotted = async'
+let headerBottom=0
+const legend=FAMILY==='data_model'?'bar/crow foot = declared cardinality · grey dotted = lookup · red solid = master-detail · fill: blue standard · orange custom · pink other · green external':FAMILY==='architecture'?'solid = direction · dashed = async/batch · dotted = dependency':'step number precedes message · solid = request/event · dashed = response · dotted = async'
+// Header rows are stacked from measured bounds so a long scope or legend can never
+// collide with the row below it, whatever the diagram width turns out to be.
+function stackHeaderRow(key,y,width,label,size,color){const id=sid('header:'+key);upsert(text(id,80,y,width,label,size,'start',managed('header:'+key,'header',key),color),{position:'always'});return editor.getShapePageBounds(id)}
+const headerWidth=Math.max(560,maxX-160)
 if(FAMILY==='sequence'){
  upsert(text(sid('header:title'),80,20,maxX-160,payload.title.toUpperCase(),'xl','start',managed('header:title','header','title'),'grey'))
- upsert(text(sid('header:scope'),80,105,Math.max(500,maxX-160),'Scope · '+payload.scope,'m','start',managed('header:scope','header','scope')))
- upsert(text(sid('header:grounding'),80,153,Math.max(500,maxX-160),payload.groundingText,'s','start',managed('header:grounding','header','grounding'),'grey'))
- if(sequenceLineStyleCount()>1)upsert(text(sid('header:legend'),80,199,Math.max(500,maxX-160),legend,'s','start',managed('header:legend','header','legend'),'grey'))
+ let cursor=105
+ cursor=stackHeaderRow('scope',cursor,headerWidth,'Scope · '+payload.scope,'m','black').maxY+14
+ cursor=stackHeaderRow('grounding',cursor,headerWidth,payload.groundingText,'s','grey').maxY+12
+ if(sequenceLineStyleCount()>1)stackHeaderRow('legend',cursor,headerWidth,legend,'s','grey')
 }else{
  upsert(geo(sid('header:title'),40,20,maxX-80,78,'blue','none','solid',payload.title.toUpperCase(),managed('header:title','header','title')))
- upsert(text(sid('header:scope'),80,116,Math.max(500,maxX-650),'Scope · '+payload.scope,'m','start',managed('header:scope','header','scope')))
- upsert(text(sid('header:grounding'),80,164,Math.max(500,maxX-160),payload.groundingText,'s','start',managed('header:grounding','header','grounding')))
- upsert(text(sid('header:legend'),80,214,Math.max(500,maxX-160),legend,'s','start',managed('header:legend','header','legend')))
+ let cursor=116
+ cursor=stackHeaderRow('scope',cursor,headerWidth,'Scope · '+payload.scope,'m','black').maxY+14
+ cursor=stackHeaderRow('grounding',cursor,headerWidth,payload.groundingText,'s','black').maxY+12
+ const legendBottom=stackHeaderRow('legend',cursor,headerWidth,legend,'s','black').maxY
+ headerBottom=legendBottom
 }
-const cardBackgrounds=new Map(),nodeGroups=new Map(),foreground=[]
+const cardBackgrounds=new Map(),nodeGroups=new Map(),foreground=[],cardContentChecks=[],routeChecks=[]
 for(const node of payload.nodes){
  const prefix='node:'+node.id+':'
  const ids={group:sid(prefix+'group'),card:sid(prefix+'card'),tile:sid(prefix+'tile'),icon:sid(prefix+'icon'),label:sid(prefix+'label'),api:sid(prefix+'api'),subtitle:sid(prefix+'subtitle'),keys:sid(prefix+'keys'),boundary:sid(prefix+'boundary')}
@@ -68,7 +76,7 @@ for(const node of payload.nodes){
   if(node.iconAssetId){upsert(image(ids.icon,node.x+22,node.y+28,78,78,AssetRecordType.createId(node.iconAssetId),node.label+' SLDS icon',0,managed(prefix+'icon',node.id,'icon')),{position:groupExists?'never':'managed'});childIds.push(ids.icon);foreground.push(ids.icon)}
   upsert(text(ids.label,node.x+116,node.y+34,node.w-136,node.label,'m','start',managed(prefix+'label',node.id,'label')),{position:groupExists?'never':'managed'});childIds.push(ids.label);foreground.push(ids.label)
  }
- if(node.apiName){upsert(text(ids.api,node.x+116,node.y+88,node.w-136,'('+node.apiName+')','s','start',managed(prefix+'api',node.id,'api')),{position:groupExists?'never':'managed'});childIds.push(ids.api);foreground.push(ids.api)}
+ if(node.apiName){upsert(text(ids.api,node.x+116,node.y+88,node.w-136,'('+node.apiName+')','s','start',managed(prefix+'api',node.id,'api'),'black',FAMILY==='data_model'),{position:groupExists?'never':'managed'});childIds.push(ids.api);foreground.push(ids.api)}
  if(node.subtitle){upsert(text(ids.subtitle,node.x+116,node.y+94,node.w-136,node.subtitle,'s','start',managed(prefix+'subtitle',node.id,'subtitle')),{position:groupExists?'never':'managed'});childIds.push(ids.subtitle);foreground.push(ids.subtitle)}
  if(node.keyFields?.length){upsert(text(ids.keys,node.x+116,node.y+144,node.w-136,node.keyFields.join(' · '),'s','start',managed(prefix+'keys',node.id,'keys')),{position:groupExists?'never':'managed'});childIds.push(ids.keys);foreground.push(ids.keys)}
  if(node.boundary){upsert(geo(ids.boundary,node.x+node.w-132,node.y-17,120,34,'grey','solid','solid',node.boundary,managed(prefix+'boundary',node.id,'boundary',{lintIgnore:['overlapping-text','growY-on-shape']})),{position:groupExists?'never':'managed'});childIds.push(ids.boundary);foreground.push(ids.boundary)}
@@ -76,16 +84,43 @@ for(const node of payload.nodes){
  if(groupExists){const cardBounds=editor.getShapePageBounds(ids.card),ungrouped=childIds.filter(id=>editor.getShape(id)?.parentId!==ids.group);if(ungrouped.length){if(FAMILY!=='sequence')helpers.translateShapes(ungrouped,cardBounds.x-node.x,cardBounds.y-node.y);editor.reparentShapes(ungrouped,ids.group)}}
  if(node.apiName){const label=editor.getShape(ids.label),api=editor.getShape(ids.api),labelBounds=editor.getShapePageBounds(label.id),apiBounds=editor.getShapePageBounds(api.id);const dy=labelBounds.maxY+8-apiBounds.y;if(Math.abs(dy)>0.01)helpers.translateShapes([api.id],0,dy)}
  if(node.subtitle){const label=editor.getShape(ids.label),subtitle=editor.getShape(ids.subtitle),labelBounds=editor.getShapePageBounds(label.id),subtitleBounds=editor.getShapePageBounds(subtitle.id);const dy=labelBounds.maxY+10-subtitleBounds.y;if(Math.abs(dy)>0.01)helpers.translateShapes([subtitle.id],0,dy)}
+ if(FAMILY==='data_model'){const cardBounds=editor.getShapePageBounds(ids.card);let contentBottom=cardBounds.y+106,contentRight=cardBounds.x+180
+  for(const cid of [ids.label,ids.api,ids.keys]){if(!editor.getShape(cid))continue;const b=editor.getShapePageBounds(cid);contentBottom=Math.max(contentBottom,b.maxY);contentRight=Math.max(contentRight,b.maxX)}
+  const neededW=Math.round(contentRight+22-cardBounds.x);if(neededW>cardBounds.w+0.5)editor.updateShape({id:ids.card,type:'geo',props:{w:neededW}})
+  const needed=Math.round(contentBottom+26-cardBounds.y);if(needed>cardBounds.h+0.5)editor.updateShape({id:ids.card,type:'geo',props:{h:needed}})
+  const fitted=editor.getShapePageBounds(ids.card);let overflow=0
+  for(const cid of [ids.label,ids.api,ids.keys]){if(!editor.getShape(cid))continue;const b=editor.getShapePageBounds(cid);overflow+=Math.max(0,fitted.x+8-b.x)+Math.max(0,b.maxX-(fitted.maxX-8))+Math.max(0,fitted.y+8-b.y)+Math.max(0,b.maxY-(fitted.maxY-6))}
+  cardContentChecks.push({id:node.id,overflow:Math.round(overflow*100)/100})}
  if(!groupExists){const present=childIds.filter(id=>editor.getShape(id));if(present.length>1){editor.groupShapes(present,{groupId:ids.group,select:false});counters.created++;editor.updateShape({id:ids.group,type:'group',meta:managed(prefix+'group',node.id,'group')})}}
  else if(payload.renderMode==='relayout'){const bounds=editor.getShapePageBounds(ids.group);helpers.translateShapes([ids.group],node.x-bounds.x,node.y-bounds.y)}
  nodeGroups.set(node.id,ids.group)
 }
 const arrowIds=[],lifelineIds=[],activationForeground=[],labelBackgrounds=[],edgeForeground=[],markerChecks=[],bindingChecks=[],sequenceGeometryChecks=[]
 function bindingsMatch(arrow,fromId,toId){const bindings=editor.getBindingsFromShape(arrow.id,'arrow'),start=bindings.find(binding=>binding.props.terminal==='start'),end=bindings.find(binding=>binding.props.terminal==='end');return start?.toId===fromId&&end?.toId===toId}
-function arrowFor(edge,fromId,toId){const key='edge:'+edge.id+':arrow';let arrow=editor.getCurrentPageShapes().find(shape=>shape.type==='arrow'&&keyOf(shape)===key);if(arrow&&!bindingsMatch(arrow,fromId,toId)){editor.deleteShapes([arrow.id]);counters.deleted++;arrow=null}if(!arrow){const id=helpers.createArrowBetweenShapes(fromId,toId,{arrowheadStart:'none',arrowheadEnd:FAMILY==='data_model'?'none':'arrow',richText:toRichText('')});arrow=editor.getShape(id);counters.created++}const dash=FAMILY==='data_model'?'solid':edge.meaning==='response'||edge.meaning==='async_or_batch'?'dashed':edge.meaning==='async'||edge.meaning==='dependency'?'dotted':'solid';editor.updateShape({id:arrow.id,type:'arrow',meta:managed(key,edge.id,'arrow',{sfRelationId:edge.id,sfFrom:edge.from,sfTo:edge.to}),props:{kind:'arc',bend:0,color:'grey',dash,size:FAMILY==='sequence'?'m':'s',font:'sans',arrowheadStart:'none',arrowheadEnd:FAMILY==='data_model'?'none':'arrow',richText:toRichText('')}});counters.updated++;const updated=editor.getShape(arrow.id);bindingChecks.push({id:edge.id,valid:bindingsMatch(updated,fromId,toId)});return updated}
+function arrowFor(edge,fromId,toId){const key='edge:'+edge.id+':arrow';let arrow=editor.getCurrentPageShapes().find(shape=>shape.type==='arrow'&&keyOf(shape)===key);if(arrow&&!bindingsMatch(arrow,fromId,toId)){editor.deleteShapes([arrow.id]);counters.deleted++;arrow=null}if(!arrow){const id=helpers.createArrowBetweenShapes(fromId,toId,{arrowheadStart:'none',arrowheadEnd:FAMILY==='data_model'?'none':'arrow',richText:toRichText('')});arrow=editor.getShape(id);counters.created++}const isMasterDetail=FAMILY==='data_model'&&edge.relationshipType==='master_detail';const arrowKind=FAMILY==='data_model'?'elbow':'arc';const dash=FAMILY==='data_model'?(isMasterDetail?'solid':'dotted'):edge.meaning==='response'||edge.meaning==='async_or_batch'?'dashed':edge.meaning==='async'||edge.meaning==='dependency'?'dotted':'solid';const strokeColor=isMasterDetail?'red':'grey';editor.updateShape({id:arrow.id,type:'arrow',meta:managed(key,edge.id,'arrow',{sfRelationId:edge.id,sfFrom:edge.from,sfTo:edge.to,sfRelationshipType:edge.relationshipType??null}),props:{kind:arrowKind,bend:0,color:strokeColor,dash,size:FAMILY==='sequence'?'m':isMasterDetail?'m':'s',font:'sans',arrowheadStart:'none',arrowheadEnd:FAMILY==='data_model'?'none':'arrow',richText:toRichText('')}});counters.updated++;const updated=editor.getShape(arrow.id);bindingChecks.push({id:edge.id,valid:bindingsMatch(updated,fromId,toId)});return updated}
 function midpoint(arrow,info){const tx=editor.getShapePageTransform(arrow.id);if(info.middle)return tx.applyToPoint(info.middle);return{x:(tx.applyToPoint(info.start.point).x+tx.applyToPoint(info.end.point).x)/2,y:(tx.applyToPoint(info.start.point).y+tx.applyToPoint(info.end.point).y)/2}}
 function placeFromLocalAnchor(target,anchor,angle){const c=Math.cos(angle),s=Math.sin(angle);return{x:target.x-(anchor.x*c-anchor.y*s),y:target.y-(anchor.x*s+anchor.y*c)}}
 function ensureMarker(edge,role,assetId,target,angle){const asset=payload.assets.find(item=>item.id===assetId),anchor=asset.anchor,id=sid('edge:'+edge.id+':'+role),position=placeFromLocalAnchor(target,anchor,angle),shape=image(id,position.x,position.y,asset.width,asset.height,AssetRecordType.createId(asset.id),role,angle,managed('edge:'+edge.id+':'+role,edge.id,role));upsert(shape,{position:'always'});const transform=editor.getShapePageTransform(id),actual=transform.applyToPoint(anchor),body=transform.applyToPoint({x:0,y:anchor.y});edgeForeground.push(id);return{delta:Math.hypot(actual.x-target.x,actual.y-target.y),body:{x:body.x-actual.x,y:body.y-actual.y}}}
+function terminalGeometry(arrow,info){const points=info.type==='elbow'?(info.route?.points??[]):null
+ if(points&&points.length>=2){const p0=points[0],p1=points[1],pn=points[points.length-1],pp=points[points.length-2]
+  return{start:p0,end:pn,startInward:{x:p0.x-p1.x,y:p0.y-p1.y},endInward:{x:pn.x-pp.x,y:pn.y-pp.y}}}
+ return{start:info.start.point,end:info.end.point,startInward:{x:info.start.handle.x-info.start.point.x,y:info.start.handle.y-info.start.point.y},endInward:{x:info.end.handle.x-info.end.point.x,y:info.end.handle.y-info.end.point.y}}}
+// Only count a real crossing: the segment must run through the card interior, not graze
+// an edge it legitimately terminates against or passes alongside.
+function segmentHitsBounds(a,b,box){const inset=8,minRun=16
+ const overlap=(lo,hi,boxLo,boxHi)=>Math.min(hi,boxHi)-Math.max(lo,boxLo)
+ if(Math.abs(a.y-b.y)<0.5){if(a.y<=box.y+inset||a.y>=box.maxY-inset)return false
+  return overlap(Math.min(a.x,b.x),Math.max(a.x,b.x),box.x,box.maxX)>minRun}
+ if(Math.abs(a.x-b.x)<0.5){if(a.x<=box.x+inset||a.x>=box.maxX-inset)return false
+  return overlap(Math.min(a.y,b.y),Math.max(a.y,b.y),box.y,box.maxY)>minRun}
+ return overlap(Math.min(a.x,b.x),Math.max(a.x,b.x),box.x+inset,box.maxX-inset)>minRun&&overlap(Math.min(a.y,b.y),Math.max(a.y,b.y),box.y+inset,box.maxY-inset)>minRun}
+function routeObstructions(arrow,info,edge){const points=info.type==='elbow'?(info.route?.points??[]):[]
+ if(points.length<2)return[]
+ const tx=editor.getShapePageTransform(arrow.id),page=points.map(point=>tx.applyToPoint(point)),hits=new Set()
+ for(const [nodeId,cardId] of cardBackgrounds){if(nodeId===edge.from||nodeId===edge.to)continue
+  const box=editor.getShapePageBounds(cardId);if(!box)continue
+  for(let i=1;i<page.length;i++){if(segmentHitsBounds(page[i-1],page[i],box)){hits.add(nodeId);break}}}
+ return [...hits]}
 function labelWidth(label){return Math.min(260,Math.max(62,label.length*9+28))}
 function sequenceMessageWidth(label,span){const preferred=Math.max(190,label.length*7.5+72),available=Math.max(180,span-72);return Math.min(560,preferred,available)}
 if(FAMILY==='sequence'){
@@ -97,12 +132,65 @@ if(FAMILY==='sequence'){
  let previousMessageLabelBounds=null
  for(const edge of interactionRows){const edgeY=sequenceY(edge.y),fromCard=cardBackgrounds.get(edge.from),toCard=cardBackgrounds.get(edge.to),fromBounds=editor.getShapePageBounds(fromCard),toBounds=editor.getShapePageBounds(toCard),fromAnchor=sid('edge:'+edge.id+':from-anchor'),toAnchor=sid('edge:'+edge.id+':to-anchor'),fromX=sequenceAnchorX(edge.from,fromBounds.center.x,toBounds.center.x,edgeY),toX=sequenceAnchorX(edge.to,toBounds.center.x,fromBounds.center.x,edgeY);upsert(geo(fromAnchor,fromX-3,edgeY-3,6,6,'grey','none','none','',managed('edge:'+edge.id+':from-anchor',edge.id,'anchor',{lintIgnore:['tiny-shape']})),{position:'always'});upsert(geo(toAnchor,toX-3,edgeY-3,6,6,'grey','none','none','',managed('edge:'+edge.id+':to-anchor',edge.id,'anchor',{lintIgnore:['tiny-shape']})),{position:'always'});const a=editor.getShapePageBounds(fromAnchor).center,b=editor.getShapePageBounds(toAnchor).center;sequenceGeometryChecks.push({id:'anchors:'+edge.id,delta:Math.abs(a.x-fromX)+Math.abs(b.x-toX)+Math.abs(a.y-edgeY)+Math.abs(b.y-edgeY)});const arrow=arrowFor(edge,fromAnchor,toAnchor);arrowIds.push(arrow.id);const numbered=String(edge.step).padStart(2,'0')+'  '+edge.label,w=sequenceMessageWidth(numbered,Math.abs(b.x-a.x)),id=sid('edge:'+edge.id+':label');upsert(text(id,(a.x+b.x)/2-w/2,edgeY-74,w,numbered,'m','middle',managed('edge:'+edge.id+':label',edge.id,'label'),'black'),{position:'always'});const labelBounds=editor.getShapePageBounds(id),backgroundId=sid('edge:'+edge.id+':label-bg');upsert(geo(backgroundId,labelBounds.x-8,labelBounds.y-4,labelBounds.w+16,labelBounds.h+8,'white','solid','solid','',managed('edge:'+edge.id+':label-bg',edge.id,'message-label-background',{lintIgnore:['overlapping-text']})),{position:'always'});const backgroundBounds=editor.getShapePageBounds(backgroundId),minX=Math.min(a.x,b.x)+12,maxX=Math.max(a.x,b.x)-12,labelOverflow=Math.max(0,minX-labelBounds.x)+Math.max(0,labelBounds.maxX-maxX)+Math.max(0,labelBounds.maxY-(edgeY-8))+Math.max(0,labelBounds.h-64),rowOverlap=previousMessageLabelBounds?Math.max(0,previousMessageLabelBounds.maxY+16-labelBounds.y):0,backgroundOverflow=Math.max(0,backgroundBounds.x-labelBounds.x)+Math.max(0,labelBounds.maxX-backgroundBounds.maxX)+Math.max(0,backgroundBounds.y-labelBounds.y)+Math.max(0,labelBounds.maxY-backgroundBounds.maxY);sequenceGeometryChecks.push({id:'message-label:'+edge.id,delta:labelOverflow});sequenceGeometryChecks.push({id:'message-backing:'+edge.id,delta:backgroundOverflow});sequenceGeometryChecks.push({id:'message-row:'+edge.id,delta:rowOverlap});previousMessageLabelBounds=labelBounds;labelBackgrounds.push(backgroundId);edgeForeground.push(id)}
 }else{
- for(const edge of payload.edges){const fromId=cardBackgrounds.get(edge.from),toId=cardBackgrounds.get(edge.to);if(!fromId||!toId)continue;const arrow=arrowFor(edge,fromId,toId);arrowIds.push(arrow.id);const info=getArrowInfo(editor,arrow);if(!info)throw new Error('No connector geometry for '+edge.id);const tx=editor.getShapePageTransform(arrow.id),middle=midpoint(arrow,info),w=labelWidth(edge.label),labelId=sid('edge:'+edge.id+':label');upsert(geo(labelId,middle.x-w/2,middle.y-20,w,40,'blue','solid','solid',edge.label,managed('edge:'+edge.id+':label',edge.id,'label',{lintIgnore:['overlapping-text','growY-on-shape']})),{position:'always'});edgeForeground.push(labelId)
-  if(FAMILY==='data_model'){const start=tx.applyToPoint(info.start.point),end=tx.applyToPoint(info.end.point),sv={x:info.start.point.x-info.start.handle.x,y:info.start.point.y-info.start.handle.y},ev={x:info.end.handle.x-info.end.point.x,y:info.end.handle.y-info.end.point.y},sa=Math.atan2(sv.y,sv.x)+Math.PI,ea=Math.atan2(ev.y,ev.x),fromMarker=ensureMarker(edge,'from-marker',edge.fromMarkerAssetId,start,sa),toMarker=ensureMarker(edge,'to-marker',edge.toMarkerAssetId,end,ea),fromOrientation=fromMarker.body.x*sv.x+fromMarker.body.y*sv.y,toOrientation=toMarker.body.x*(-ev.x)+toMarker.body.y*(-ev.y);markerChecks.push({id:edge.id,fromDelta:fromMarker.delta,toDelta:toMarker.delta,fromOrientation,toOrientation})}
+ // Data-model connectors bind to precise card sides instead of card centres. Auto
+ // binding sends tldraw's elbow corridor down a card's centre line, which tunnels the
+ // route behind every card in that column and reads as a chain of relationships that
+ // does not exist. Choosing the facing sides puts the corridor in the layout gutter,
+ // and spreading anchors along each side keeps parallel connectors and their terminals
+ // from stacking on one point.
+ const sidePlans=new Map(),sideUse=new Map()
+ function planSide(nodeId,side,edgeId){const key=nodeId+'|'+side;if(!sideUse.has(key))sideUse.set(key,[]);sideUse.get(key).push(edgeId)}
+ function facingSides(from,to){const gap=20
+  if(to.x>=from.maxX+gap)return{from:'right',to:'left'}
+  if(from.x>=to.maxX+gap)return{from:'left',to:'right'}
+  if(to.y>=from.maxY+gap)return{from:'bottom',to:'top'}
+  if(from.y>=to.maxY+gap)return{from:'top',to:'bottom'}
+  return null}
+ function alternateSides(from,to){const gap=20
+  if(to.y>=from.maxY+gap)return{from:'bottom',to:'top'}
+  if(from.y>=to.maxY+gap)return{from:'top',to:'bottom'}
+  if(to.x>=from.maxX+gap)return{from:'right',to:'left'}
+  if(from.x>=to.maxX+gap)return{from:'left',to:'right'}
+  return null}
+ if(FAMILY==='data_model'){for(const edge of payload.edges){const from=editor.getShapePageBounds(cardBackgrounds.get(edge.from)),to=editor.getShapePageBounds(cardBackgrounds.get(edge.to));if(!from||!to)continue
+  const primary=facingSides(from,to);if(!primary)continue
+  sidePlans.set(edge.id,primary);planSide(edge.from,primary.from,edge.id);planSide(edge.to,primary.to,edge.id)}}
+ function anchorFraction(nodeId,side,edgeId){const list=sideUse.get(nodeId+'|'+side);if(!list||list.length<2)return 0.5
+  const ordered=[...list].sort();const index=ordered.indexOf(edgeId)
+  return Math.round((0.16+0.68*(index/(ordered.length-1)))*1000)/1000}
+ function anchorFor(side,fraction){return side==='right'?{x:1,y:fraction}:side==='left'?{x:0,y:fraction}:side==='top'?{x:fraction,y:0}:{x:fraction,y:1}}
+ function applySides(arrow,edge,sides){const bindings=editor.getBindingsFromShape(arrow.id,'arrow')
+  for(const binding of bindings){const isStart=binding.props.terminal==='start',side=isStart?sides.from:sides.to
+   const nodeId=isStart?edge.from:edge.to,fraction=anchorFraction(nodeId,side,edge.id)
+   editor.updateBinding({...binding,props:{...binding.props,isPrecise:true,normalizedAnchor:anchorFor(side,fraction)}})}}
+ function clearSides(arrow){const bindings=editor.getBindingsFromShape(arrow.id,'arrow')
+  for(const binding of bindings)editor.updateBinding({...binding,props:{...binding.props,isPrecise:false,normalizedAnchor:{x:0.5,y:0.5}}})}
+ for(const edge of payload.edges){const fromId=cardBackgrounds.get(edge.from),toId=cardBackgrounds.get(edge.to);if(!fromId||!toId)continue;const arrow=arrowFor(edge,fromId,toId);arrowIds.push(arrow.id);const info=getArrowInfo(editor,arrow);if(!info)throw new Error('No connector geometry for '+edge.id);if(FAMILY!=='data_model'){const tx=editor.getShapePageTransform(arrow.id),middle=midpoint(arrow,info),w=labelWidth(edge.label),labelId=sid('edge:'+edge.id+':label');upsert(geo(labelId,middle.x-w/2,middle.y-20,w,40,'blue','solid','solid',edge.label,managed('edge:'+edge.id+':label',edge.id,'label',{lintIgnore:['overlapping-text','growY-on-shape']})),{position:'always'});edgeForeground.push(labelId)}
+  if(FAMILY==='data_model'){
+   const from=editor.getShapePageBounds(fromId),to=editor.getShapePageBounds(toId)
+   const primary=sidePlans.get(edge.id),secondary=alternateSides(from,to)
+   const measure=()=>{const shape=editor.getShape(arrow.id),shapeInfo=getArrowInfo(editor,shape);return shapeInfo?routeObstructions(shape,shapeInfo,edge):[]}
+   let best={apply:null,hits:measure()}
+   const candidates=[]
+   if(primary)candidates.push(primary)
+   if(secondary&&(!primary||secondary.from!==primary.from||secondary.to!==primary.to))candidates.push(secondary)
+   for(const candidate of candidates){applySides(editor.getShape(arrow.id),edge,candidate);const hits=measure()
+    if(hits.length<best.hits.length||(best.apply===null&&hits.length===best.hits.length)){best={apply:candidate,hits}}
+    if(!hits.length)break}
+   if(best.apply)applySides(editor.getShape(arrow.id),edge,best.apply);else clearSides(editor.getShape(arrow.id))
+   const current=editor.getShape(arrow.id),finalInfo=getArrowInfo(editor,current)
+   if(!finalInfo)throw new Error('No connector geometry for '+edge.id)
+   const tx=editor.getShapePageTransform(current.id),g=terminalGeometry(current,finalInfo),start=tx.applyToPoint(g.start),end=tx.applyToPoint(g.end),sv={x:-g.startInward.x,y:-g.startInward.y},ev=g.endInward,sa=Math.atan2(g.startInward.y,g.startInward.x),ea=Math.atan2(ev.y,ev.x),fromMarker=ensureMarker(edge,'from-marker',edge.fromMarkerAssetId,start,sa),toMarker=ensureMarker(edge,'to-marker',edge.toMarkerAssetId,end,ea),fromOrientation=fromMarker.body.x*sv.x+fromMarker.body.y*sv.y,toOrientation=toMarker.body.x*(-ev.x)+toMarker.body.y*(-ev.y)
+   markerChecks.push({id:edge.id,fromDelta:fromMarker.delta,toDelta:toMarker.delta,fromOrientation,toOrientation})
+   const obstructedBy=routeObstructions(current,finalInfo,edge);if(obstructedBy.length)routeChecks.push({id:edge.id,obstructedBy})}
  }
 }
 if(arrowIds.length)editor.sendToBack(arrowIds)
 if(lifelineIds.length)editor.sendToBack(lifelineIds)
+// tldraw keeps a bound arrow above the shapes it binds to, so sendToBack alone still
+// leaves connectors painted across card interiors. Re-front the object cards after the
+// connectors exist, then re-front page-level decorations so terminals stay visible.
+if(FAMILY!=='sequence'){const groupIds=[...nodeGroups.values()].filter(id=>editor.getShape(id));if(groupIds.length)editor.bringToFront(groupIds)}
 if(foreground.length)editor.bringToFront(foreground)
 if(activationForeground.length)editor.bringToFront(activationForeground)
 if(labelBackgrounds.length)editor.bringToFront(labelBackgrounds)
@@ -124,10 +212,12 @@ if(bindingChecks.some(check=>!check.valid))blockers.push({code:'semantic_binding
 if(sequenceGeometryChecks.some(check=>check.delta>1))blockers.push({code:'sequence_geometry_mismatch',message:'One or more sequence lanes, activations, anchors, or labels violate the deterministic profile geometry.'})
 if(markerChecks.some(check=>check.fromDelta>1||check.toDelta>1))blockers.push({code:'marker_terminal_mismatch',message:'One or more cardinality markers are not attached to actual connector terminals.'})
 if(markerChecks.some(check=>check.fromOrientation<=0||check.toOrientation<=0))blockers.push({code:'marker_orientation_mismatch',message:'One or more cardinality markers point into a card instead of outward along the relationship.'})
+if(cardContentChecks.some(check=>check.overflow>1))blockers.push({code:'card_content_overflow',message:'One or more object cards do not fully contain their logical label, API name, or key fields.'})
 if(typographyChecks.some(check=>Math.abs(check.apiGap-8)>0.5))blockers.push({code:'api_typography_gap',message:'One or more API names are not eight canvas units below the logical label.'})
 if(typographyChecks.some(check=>!check.formatValid))blockers.push({code:'api_typography_format',message:'One or more API names are not parenthesized or include a forbidden API prefix.'})
+if(routeChecks.length)payload.warnings=[...payload.warnings,routeChecks.length+' relationship connector(s) route behind an unrelated object card ('+routeChecks.slice(0,6).map(check=>check.id).join(', ')+'); the binding is correct but consider render_mode="relayout" or a narrower scope for readability.']
 const errorText=editor.getCurrentPageShapes().filter(shape=>shape.type==='text').some(shape=>helpers.richTextToPlainText(shape.props.richText).trim()==='Error')
 if(errorText)blockers.push({code:'renderer_error_text',message:'Renderer fallback Error text is present.'})
-return{documentId:null,pageId,pageName:editor.getCurrentPage().name,family:FAMILY,createdShapes:counters.created,updatedShapes:counters.updated,deletedShapes:counters.deleted,readiness:{ready:blockers.length===0,blockers,warnings:payload.warnings,lintCount:lints.length,markerChecks,bindingChecks,sequenceGeometryChecks,typographyChecks},lints}
+return{documentId:null,pageId,pageName:editor.getCurrentPage().name,family:FAMILY,createdShapes:counters.created,updatedShapes:counters.updated,deletedShapes:counters.deleted,readiness:{ready:blockers.length===0,blockers,warnings:payload.warnings,lintCount:lints.length,markerChecks,bindingChecks,sequenceGeometryChecks,typographyChecks,cardContentChecks,routeChecks},lints}
 `;
 }

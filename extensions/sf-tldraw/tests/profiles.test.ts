@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildCanvasProgram } from "../lib/canvas-program.ts";
 import { compileProfile } from "../lib/profiles.ts";
+import { DATA_MODEL_CARD, dataModelCardSize } from "../lib/layout.ts";
 import { DEFAULT_TLDRAW_PREFERENCES } from "../lib/settings.ts";
 import type { SalesforceDiagramSpec } from "../lib/types.ts";
 
@@ -64,11 +65,48 @@ describe("deterministic Salesforce profiles", () => {
       renderMode: "preserve",
       preferences: { ...DEFAULT_TLDRAW_PREFERENCES, cardinalityDetail: "full" },
     });
-    const optional = payload.assets.find((asset) => asset.name === "cardinality-zero_or_many.svg");
+    const optional = payload.assets.find(
+      (asset) => asset.name === "cardinality-zero_or_many-neutral.svg",
+    );
     expect(optional).toMatchObject({ width: 48, height: 32, anchor: { x: 48, y: 16 } });
     expect(payload.edges.find((edge) => edge.id === "contact-cases")?.toMarkerAssetId).toBe(
       optional?.id,
     );
+    // Master-detail terminals get their own red-toned marker assets.
+    expect(
+      payload.assets.some((asset) => asset.name === "cardinality-many-master_detail.svg"),
+    ).toBe(true);
+  });
+
+  it("sizes data-model cards from their declared label and API name", () => {
+    const short = dataModelCardSize({ label: "Account", api_name: "Account" });
+    const long = dataModelCardSize({
+      label: "Work Type Group Member",
+      api_name: "WorkTypeGroupMember",
+    });
+    // A longer API name must widen the card, not wrap mid-word inside a fixed one.
+    expect(long.w).toBeGreaterThan(short.w);
+    expect(long.h).toBeGreaterThanOrEqual(short.h);
+    expect(short.w).toBeGreaterThanOrEqual(DATA_MODEL_CARD.textX + DATA_MODEL_CARD.padRight);
+  });
+
+  it("carries relationship kind on the connector instead of an LK/MD label box", () => {
+    const spec = fixture("data-model");
+    if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
+    const relationship = spec.relationships[0];
+    if (!relationship) throw new Error("Expected at least one relationship.");
+    relationship.type = "master_detail";
+    const payload = compileProfile(spec, {
+      renderMode: "preserve",
+      preferences: DEFAULT_TLDRAW_PREFERENCES,
+    });
+    const edge = payload.edges.find((item) => item.id === relationship.id);
+    expect(edge?.label).toBe("");
+    expect(edge?.relationshipType).toBe("master_detail");
+    const neutral = payload.assets.find(
+      (asset) => asset.name === "cardinality-many-neutral.svg",
+    )?.id;
+    expect(edge?.toMarkerAssetId).not.toBe(neutral);
   });
 
   it("emits transform-correct marker placement and verification", () => {
@@ -80,10 +118,29 @@ describe("deterministic Salesforce profiles", () => {
     expect(program).toContain("placeFromLocalAnchor");
     expect(program).toContain("const transform=editor.getShapePageTransform(id)");
     expect(program).toContain("actual=transform.applyToPoint(anchor)");
-    expect(program).toContain("Math.atan2(sv.y,sv.x)+Math.PI");
+    expect(program).toContain("Math.atan2(g.startInward.y,g.startInward.x)");
+    expect(program).toContain("terminalGeometry");
     expect(program).toContain("semantic_binding_mismatch");
     expect(program).toContain("sequence_geometry_mismatch");
     expect(program).not.toContain("anchor.x-16");
+  });
+
+  it("styles data-model connectors by relationship kind and routes them orthogonally", () => {
+    const program = buildCanvasProgram(
+      compileProfile(fixture("data-model"), {
+        renderMode: "preserve",
+        preferences: DEFAULT_TLDRAW_PREFERENCES,
+      }),
+    );
+    expect(program).toContain("const arrowKind=FAMILY==='data_model'?'elbow':'arc'");
+    expect(program).toContain("isMasterDetail?'solid':'dotted'");
+    expect(program).toContain("isMasterDetail?'red':'grey'");
+    // Cards must be re-fronted after connectors exist, or bound arrows paint over them.
+    expect(program).toContain("editor.bringToFront(groupIds)");
+    // Precise side anchors keep the elbow corridor out of unrelated card interiors.
+    expect(program).toContain("normalizedAnchor:anchorFor(side,fraction)");
+    expect(program).toContain("card_content_overflow");
+    expect(program).toContain("routeObstructions");
   });
 
   it("keeps record types hidden by default", () => {

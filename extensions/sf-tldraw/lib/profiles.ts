@@ -13,7 +13,7 @@ import type {
   SequenceSpec,
   TldrawPreferences,
 } from "./types.ts";
-import { resolveVisualAssets } from "./assets.ts";
+import { markerAssetKey, resolveVisualAssets, type MarkerTone } from "./assets.ts";
 import { layoutArchitecture, layoutDataModel, layoutSequence } from "./layout.ts";
 
 export function compileProfile(
@@ -60,16 +60,24 @@ function compileDataModel(spec: DataModelSpec, options: CompileOptions): CanvasP
       observations,
     };
   });
-  const edges: CanvasEdgePayload[] = spec.relationships.map((relationship) => ({
-    id: relationship.id,
-    from: relationship.from,
-    to: relationship.to,
-    label: relationship.type === "master_detail" ? "MD" : "LK",
-    fromCardinality: relationship.from_cardinality,
-    toCardinality: relationship.to_cardinality,
-    fromMarkerAssetId: visuals.markerAssets.get(relationship.from_cardinality),
-    toMarkerAssetId: visuals.markerAssets.get(relationship.to_cardinality),
-  }));
+  // Relationship kind is carried by connector color and dash (grey dotted lookup,
+  // red solid master-detail) instead of a repeated LK/MD label box per connector.
+  const edges: CanvasEdgePayload[] = spec.relationships.map((relationship) => {
+    const tone: MarkerTone = relationship.type === "master_detail" ? "master_detail" : "neutral";
+    return {
+      id: relationship.id,
+      from: relationship.from,
+      to: relationship.to,
+      label: "",
+      relationshipType: relationship.type,
+      fromCardinality: relationship.from_cardinality,
+      toCardinality: relationship.to_cardinality,
+      fromMarkerAssetId: visuals.markerAssets.get(
+        markerAssetKey(relationship.from_cardinality, tone),
+      ),
+      toMarkerAssetId: visuals.markerAssets.get(markerAssetKey(relationship.to_cardinality, tone)),
+    };
+  });
   return basePayload(spec, options, visuals.assets, nodes, edges, [
     ...(options.warnings ?? []),
     ...visuals.warnings,

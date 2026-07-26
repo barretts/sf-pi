@@ -41,9 +41,18 @@ const PRODUCT_MARK_KEYS = new Set([
 const NODE_KINDS = new Set(["salesforce", "external", "user", "data_store", "integration"]);
 
 const LIMITS: Record<DiagramFamily, { nodes: number; edges: number }> = {
-  data_model: { nodes: 18, edges: 28 },
+  data_model: { nodes: 34, edges: 56 },
   architecture: { nodes: 16, edges: 24 },
   sequence: { nodes: 8, edges: 18 },
+};
+
+/**
+ * Above these counts a single data-model page is still rendered deterministically but
+ * gets a readability warning. CTA-scale reference models (FSL, Revenue Cloud, B2B
+ * Commerce) legitimately reach the high twenties, so the hard cap sits well above them.
+ */
+const READABILITY_BUDGET: Partial<Record<DiagramFamily, { nodes: number; edges: number }>> = {
+  data_model: { nodes: 18, edges: 28 },
 };
 
 export function validateDiagramSpec(
@@ -52,20 +61,31 @@ export function validateDiagramSpec(
 ): ValidationResult {
   const errors: ValidationFinding[] = [];
   const warnings: ValidationFinding[] = [];
-  if (!isRecord(value)) {
+  // Several tool-call transports hand object params over as JSON text. Parse that
+  // shape instead of failing a well-formed spec on a transport detail.
+  const candidate = coerceSpecInput(value);
+  if (!isRecord(candidate)) {
     return {
       ok: false,
-      errors: [{ code: "invalid_spec", message: "spec must be an object." }],
+      errors: [
+        {
+          code: "invalid_spec",
+          message:
+            typeof value === "string"
+              ? "spec was a string that is not valid JSON. Pass a Salesforce Diagram Spec object or its exact JSON text."
+              : "spec must be an object.",
+        },
+      ],
       warnings,
     };
   }
 
-  rejectPrivateKeys(value, "$", errors);
-  requiredLiteral(value, "spec_version", "1.0", errors);
-  requiredString(value, "title", errors, 1, 100);
-  requiredString(value, "scope", errors, 1, 180);
+  rejectPrivateKeys(candidate, "$", errors);
+  requiredLiteral(candidate, "spec_version", "1.0", errors);
+  requiredString(candidate, "title", errors, 1, 100);
+  requiredString(candidate, "scope", errors, 1, 180);
 
-  const family = value.family;
+  const family = candidate.family;
   if (family !== "data_model" && family !== "architecture" && family !== "sequence") {
     errors.push({
       code: "invalid_family",
@@ -80,20 +100,32 @@ export function validateDiagramSpec(
     });
   }
 
-  const sourceIds = validateGrounding(value.grounding, errors);
-  if (family === "data_model") validateDataModel(value, sourceIds, errors, warnings);
-  if (family === "architecture") validateArchitecture(value, sourceIds, errors, warnings);
-  if (family === "sequence") validateSequence(value, sourceIds, errors, warnings);
+  const sourceIds = validateGrounding(candidate.grounding, errors);
+  if (family === "data_model") validateDataModel(candidate, sourceIds, errors, warnings);
+  if (family === "architecture") validateArchitecture(candidate, sourceIds, errors, warnings);
+  if (family === "sequence") validateSequence(candidate, sourceIds, errors, warnings);
 
   return {
     ok: errors.length === 0,
     spec:
       errors.length === 0
-        ? (structuredClone(value) as unknown as SalesforceDiagramSpec)
+        ? (structuredClone(candidate) as unknown as SalesforceDiagramSpec)
         : undefined,
     errors,
     warnings,
   };
+}
+
+/** Accept either a spec object or the exact JSON text of one. */
+function coerceSpecInput(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{")) return value;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
 }
 
 function validateGrounding(value: unknown, errors: ValidationFinding[]): Set<string> {
@@ -217,7 +249,7 @@ function validateDataModel(
 ): void {
   const objects = arrayField(value, "objects", errors);
   const relationships = arrayField(value, "relationships", errors);
-  enforceBudget("data_model", objects.length, relationships.length, errors);
+  enforceBudget("data_model", objects.length, relationships.length, errors, warnings);
   const ids = new Set<string>();
   for (let i = 0; i < objects.length; i++) {
     const item = objects[i];
@@ -301,7 +333,7 @@ function validateArchitecture(
 ): void {
   const systems = arrayField(value, "systems", errors);
   const connections = arrayField(value, "connections", errors);
-  enforceBudget("architecture", systems.length, connections.length, errors);
+  enforceBudget("architecture", systems.length, connections.length, errors, warnings);
   const ids = new Set<string>();
   for (let i = 0; i < systems.length; i++) {
     const item = systems[i];
@@ -375,7 +407,7 @@ function validateSequence(
   const participants = arrayField(value, "participants", errors);
   const interactions = arrayField(value, "interactions", errors);
   const activations = optionalArrayField(value, "activations", errors);
-  enforceBudget("sequence", participants.length, interactions.length, errors);
+  enforceBudget("sequence", participants.length, interactions.length, errors, warnings);
   const ids = new Set<string>();
   for (let i = 0; i < participants.length; i++) {
     const item = participants[i];
@@ -727,13 +759,23 @@ function enforceBudget(
   nodes: number,
   edges: number,
   errors: ValidationFinding[],
+  warnings?: ValidationFinding[],
 ): void {
   const limit = LIMITS[family];
-  if (nodes > limit.nodes || edges > limit.edges)
+  if (nodes > limit.nodes || edges > limit.edges) {
     errors.push({
       code: "single_page_density_exceeded",
       message: `${family} single-page limit is ${limit.nodes} nodes and ${limit.edges} connections; split the scope into multiple render calls.`,
     });
+    return;
+  }
+  const budget = READABILITY_BUDGET[family];
+  if (warnings && budget && (nodes > budget.nodes || edges > budget.edges)) {
+    warnings.push({
+      code: "single_page_density_warning",
+      message: `${nodes} nodes and ${edges} connections exceed the comfortable ${family} reading budget of ${budget.nodes} nodes and ${budget.edges} connections; the page still renders deterministically.`,
+    });
+  }
 }
 
 function optionalArrayField(
