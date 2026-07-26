@@ -22,6 +22,7 @@ import {
   fetchGatewayModelGroupInfo,
   fetchGatewayModelIdDiscovery,
   fetchGatewayModelInfoMap,
+  supportsGatewayStrictMode,
   toProviderModelConfig,
   type GatewayModelGroupInfoMap,
   type GatewayModelInfoMap,
@@ -129,25 +130,36 @@ function nativeModel(model: TaggedGatewayModel, root: string): Model<GatewayApi>
 }
 
 /**
- * Repair provider-scoped model-cache entries created before Opus 5 support.
- * Pi intentionally restores that cache without network at startup, so an old
- * 200K/32K non-adaptive entry must not override the new local capability floor.
- * User models.json overrides are composed above this native Provider and still
- * retain final authority.
+ * Repair provider-scoped model-cache entries created before local capability
+ * floors changed. Pi restores this cache without network at startup, so stale
+ * entries must not override current Opus 5 metadata or GPT-5.6 strict-tool
+ * support. User models.json overrides are composed above this native Provider
+ * and still retain final authority.
  */
 export function repairCachedGatewayModel(model: Model<GatewayApi>): Model<GatewayApi> {
-  if (!isOpus5OrNewerModelId(model.id)) return model;
+  const repairOpus5 = isOpus5OrNewerModelId(model.id);
+  const repairStrictMode = supportsGatewayStrictMode(model.id);
+  if (!repairOpus5 && !repairStrictMode) return model;
 
-  const expected = toProviderModelConfig(model.id);
-  Object.assign(model, {
-    api: expected.api,
-    reasoning: expected.reasoning,
-    input: [...expected.input],
-    contextWindow: Math.max(model.contextWindow, expected.contextWindow),
-    maxTokens: Math.max(model.maxTokens, expected.maxTokens),
-    thinkingLevelMap: { ...model.thinkingLevelMap, ...expected.thinkingLevelMap },
-    compat: { ...model.compat, ...expected.compat },
-  });
+  if (repairOpus5) {
+    const expected = toProviderModelConfig(model.id);
+    Object.assign(model, {
+      api: expected.api,
+      reasoning: expected.reasoning,
+      input: [...expected.input],
+      contextWindow: Math.max(model.contextWindow, expected.contextWindow),
+      maxTokens: Math.max(model.maxTokens, expected.maxTokens),
+      thinkingLevelMap: { ...model.thinkingLevelMap, ...expected.thinkingLevelMap },
+      compat: { ...model.compat, ...expected.compat },
+    });
+  }
+
+  if (repairStrictMode) {
+    Object.assign(model, {
+      compat: { ...model.compat, supportsStrictMode: true },
+    });
+  }
+
   return model;
 }
 

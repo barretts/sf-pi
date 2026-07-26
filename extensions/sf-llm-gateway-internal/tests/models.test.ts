@@ -8,6 +8,8 @@
  */
 import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import { getSupportedThinkingLevels, type Api, type Model } from "@earendil-works/pi-ai";
+import { convertResponsesTools } from "@earendil-works/pi-ai/api/openai-responses-shared";
+import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
 import {
   buildBootstrapModelList,
@@ -24,6 +26,7 @@ import {
 type GatewayCompat = NonNullable<ProviderModelConfig["compat"]> & {
   maxTokensField?: string;
   supportsReasoningEffort?: boolean;
+  supportsStrictMode?: boolean;
 };
 
 function gatewayCompat(config: {
@@ -475,6 +478,46 @@ describe("toProviderModelConfig", () => {
       xhigh: "xhigh",
       max: "max",
     });
+  });
+
+  it("marks only GPT-5.6 Sol, Terra, and Luna as strict-tool capable", () => {
+    for (const id of ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]) {
+      expect(gatewayCompat(toProviderModelConfig(id))?.supportsStrictMode, id).toBe(true);
+    }
+
+    for (const id of [
+      "gpt-5.6",
+      "gpt-5.6-sol-bedrock",
+      "gpt-5.6-terra-bedrock",
+      "gpt-5.6-luna-bedrock",
+      "gpt-5.5",
+      "gpt-5.3-codex",
+      "gemini-2.5-pro",
+    ]) {
+      expect(gatewayCompat(toProviderModelConfig(id))?.supportsStrictMode, id).not.toBe(true);
+    }
+  });
+
+  it("restores Pi's explicit strict field for ordinary tools on GPT-5.6 Sol", () => {
+    const cfg = toProviderModelConfig("gpt-5.6-sol");
+    const [tool] = convertResponsesTools(
+      [
+        {
+          name: "subagent_probe",
+          description: "Representative tool with an optional worktree argument.",
+          parameters: Type.Object(
+            {
+              agent: Type.String(),
+              worktree: Type.Optional(Type.Boolean()),
+            },
+            { additionalProperties: false },
+          ),
+        },
+      ],
+      { supportsStrictMode: gatewayCompat(cfg)?.supportsStrictMode ?? false },
+    );
+
+    expect(tool).toMatchObject({ type: "function", strict: false });
   });
 
   it("uses GPT-5.6 Bedrock presets with Bedrock-safe thinking and 272K context", () => {

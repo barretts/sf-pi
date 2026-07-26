@@ -284,6 +284,28 @@ describe("complete native Gateway Provider", () => {
     });
   });
 
+  it("repairs strict-tool support on a stale cached GPT-5.6 Sol model", async () => {
+    const runtime = createGatewayProviderRuntime({ authController: authController() });
+    const { models, modelsStore } = await configuredModels(runtime);
+    const current = runtime.provider.getModels().find((model) => model.id === "gpt-5.6-sol");
+    expect(current).toBeDefined();
+    if (!current) return;
+
+    const staleCompat = { ...current.compat } as { supportsStrictMode?: boolean };
+    delete staleCompat.supportsStrictMode;
+    await modelsStore.write(PROVIDER_NAME, {
+      models: [{ ...current, compat: staleCompat }],
+      checkedAt: 1,
+    });
+
+    await models.refresh({ allowNetwork: false });
+
+    expect(models.getModel(PROVIDER_NAME, "gpt-5.6-sol")).toMatchObject({
+      api: "openai-responses",
+      compat: { supportsStrictMode: true },
+    });
+  });
+
   it("keeps models.json overrides above the registered native Provider", async () => {
     const gateway = createGatewayProviderRuntime({ authController: authController() });
     const baseline = gateway.provider.getModels()[0];

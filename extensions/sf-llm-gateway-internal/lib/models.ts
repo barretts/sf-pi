@@ -88,6 +88,17 @@ const CODEX_OPENAI_COMPAT: ProviderModelConfig["compat"] = {
 };
 
 /**
+ * These exact non-Bedrock Gateway routes accept OpenAI strict tool metadata.
+ * Keep this list narrow: direct-provider support or a matching family name is
+ * not enough evidence for a Gateway route.
+ */
+const STRICT_MODE_GPT56_MODEL_IDS = new Set(["gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
+
+export function supportsGatewayStrictMode(modelId: string): boolean {
+  return STRICT_MODE_GPT56_MODEL_IDS.has(modelId.trim().toLowerCase());
+}
+
+/**
  * Codex thinking-level mapping.
  *
  * Moved from `compat.reasoningEffortMap` to model-level `thinkingLevelMap`
@@ -413,7 +424,7 @@ export function toProviderModelConfig(id: string, info?: GatewayModelInfo): Tagg
       cost: { ...ZERO_COST },
       contextWindow: def.contextWindow,
       maxTokens: def.maxTokens,
-      compat,
+      compat: supportsGatewayStrictMode(def.id) ? { ...compat, supportsStrictMode: true } : compat,
       thinkingLevelMap: isGpt56BedrockResponsesModelId(def.id)
         ? GPT56_BEDROCK_RESPONSES_THINKING_LEVEL_MAP
         : isGpt56Family
