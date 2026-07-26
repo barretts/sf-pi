@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildCanvasProgram } from "../lib/canvas-program.ts";
+import { DATA_MODEL_CARD, dataModelCardSize, layoutDataModel } from "../lib/layout.ts";
 import { compileProfile } from "../lib/profiles.ts";
-import { DATA_MODEL_CARD, dataModelCardSize } from "../lib/layout.ts";
 import { DEFAULT_TLDRAW_PREFERENCES } from "../lib/settings.ts";
 import type { SalesforceDiagramSpec } from "../lib/types.ts";
 
@@ -36,7 +36,14 @@ describe("deterministic Salesforce profiles", () => {
   );
 
   it("uses unchanged icon assets on separate vivid tiles", () => {
-    const payload = compileProfile(fixture("data-model"), {
+    const spec = fixture("data-model");
+    if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
+    // Prove the renderer recovers authentic SLDS colors without requiring the spec to
+    // repeat presentation hex values for every standard object.
+    for (const object of spec.objects) {
+      if (object.icon) delete object.icon.color;
+    }
+    const payload = compileProfile(spec, {
       renderMode: "preserve",
       preferences: DEFAULT_TLDRAW_PREFERENCES,
     });
@@ -57,6 +64,16 @@ describe("deterministic Salesforce profiles", () => {
       "Case",
       "CaseComment",
       "EmailMessage",
+    ]);
+    const tileNames = payload.nodes.map(
+      (node) => payload.assets.find((asset) => asset.id === node.iconTileAssetId)?.name,
+    );
+    expect(tileNames).toEqual([
+      "tile-#5867e8.svg",
+      "tile-#9602c7.svg",
+      "tile-#ff538a.svg",
+      "tile-#ff5d2d.svg",
+      "tile-#939393.svg",
     ]);
   });
 
@@ -88,6 +105,34 @@ describe("deterministic Salesforce profiles", () => {
     expect(long.w).toBeGreaterThan(short.w);
     expect(long.h).toBeGreaterThanOrEqual(short.h);
     expect(short.w).toBeGreaterThanOrEqual(DATA_MODEL_CARD.textX + DATA_MODEL_CARD.padRight);
+  });
+
+  it("elongates high-degree hubs so connection terminals receive distinct slots", () => {
+    const spec = fixture("data-model");
+    if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
+    const account = spec.objects[0];
+    if (!account) throw new Error("Expected an Account fixture object.");
+    const leaves = Array.from({ length: 10 }, (_, index) => ({
+      ...structuredClone(account),
+      id: `leaf-${index}`,
+      label: `Leaf ${index}`,
+      api_name: `Leaf${index}`,
+    }));
+    spec.objects = [account, ...leaves];
+    spec.relationships = leaves.map((leaf, index) => ({
+      id: `hub-leaf-${index}`,
+      from: account.id,
+      to: leaf.id,
+      type: "lookup" as const,
+      from_cardinality: "one" as const,
+      to_cardinality: "many" as const,
+      evidence: [...account.evidence],
+    }));
+    const base = dataModelCardSize(account);
+    const hub = layoutDataModel(spec).find((node) => node.id === account.id);
+    expect(hub).toBeDefined();
+    expect(Math.max(hub?.w ?? 0, hub?.h ?? 0)).toBeGreaterThanOrEqual(500);
+    expect((hub?.w ?? 0) > base.w || (hub?.h ?? 0) > base.h).toBe(true);
   });
 
   it("carries relationship kind on the connector instead of an LK/MD label box", () => {
@@ -141,6 +186,9 @@ describe("deterministic Salesforce profiles", () => {
     expect(program).toContain("normalizedAnchor:anchorFor(side,fraction)");
     expect(program).toContain("card_content_overflow");
     expect(program).toContain("routeObstructions");
+    // White/transparent-style cards have an opaque backing so routes never show through.
+    expect(program).toContain("card-background");
+    expect(program).toContain("payload.preferences.cardFill==='family'");
   });
 
   it("keeps record types hidden by default", () => {

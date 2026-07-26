@@ -98,6 +98,12 @@ const Params = Type.Object(
       }),
     ),
     cardinality_detail: Type.Optional(StringEnum(["simplified", "full"] as const)),
+    card_fill: Type.Optional(
+      StringEnum(["transparent", "family"] as const, {
+        description:
+          "Data-model card interior. Defaults to the transparent (white) card from settings.",
+      }),
+    ),
     ldv_threshold: Type.Optional(StringEnum(["1M", "2M", "5M", "10M"] as const)),
     record_type_mode: Type.Optional(StringEnum(["off", "auto", "always"] as const)),
     interaction_mode: Type.Optional(StringEnum(["static", "step_through"] as const)),
@@ -128,6 +134,7 @@ type Input = {
   page_name?: string;
   render_mode?: RenderMode;
   cardinality_detail?: TldrawPreferences["cardinalityDetail"];
+  card_fill?: TldrawPreferences["cardFill"];
   ldv_threshold?: TldrawPreferences["ldvThreshold"];
   record_type_mode?: TldrawPreferences["recordTypeMode"];
   interaction_mode?: TldrawPreferences["interactionMode"];
@@ -301,6 +308,7 @@ export function registerTldrawCanvasTool(pi: ExtensionAPI): void {
                 ...(input.cardinality_detail
                   ? { cardinalityDetail: input.cardinality_detail }
                   : {}),
+                ...(input.card_fill ? { cardFill: input.card_fill } : {}),
                 ...(input.ldv_threshold ? { ldvThreshold: input.ldv_threshold } : {}),
                 ...(input.record_type_mode ? { recordTypeMode: input.record_type_mode } : {}),
                 ...(input.interaction_mode ? { interactionMode: input.interaction_mode } : {}),
@@ -473,6 +481,7 @@ export function effectiveSettingsText(cwd: string): string {
   const settings = readEffectiveTldrawPreferences(cwd);
   return [
     `Cardinality: ${settings.cardinalityDetail}`,
+    `Card fill: ${settings.cardFill}`,
     `LDV threshold: ${settings.ldvThreshold}`,
     `Record types: ${settings.recordTypeMode}`,
     `Interaction: ${settings.interactionMode}`,

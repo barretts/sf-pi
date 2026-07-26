@@ -19,9 +19,9 @@ function text(id,x,y,w,label,size='s',align='start',meta={},color='black',autoSi
 function image(id,x,y,w,h,assetId,altText,rotation=0,meta={}){return{id,type:'image',x,y,rotation,meta,props:{w,h,playing:false,url:'',assetId,crop:null,flipX:false,flipY:false,altText}}}
 function sequenceColorFor(node){if(node.kind==='salesforce'){const index=payload.nodes.filter(item=>item.kind==='salesforce').findIndex(item=>item.id===node.id);return['yellow','light-green','light-blue','orange'][Math.max(0,index)%4]}return node.kind==='data_store'?'light-green':node.kind==='integration'?'light-violet':node.kind==='user'?'light-blue':node.kind==='external'?'light-blue':'grey'}
 function colorFor(node){if(FAMILY==='sequence')return sequenceColorFor(node);if(FAMILY!=='data_model')return node.kind==='salesforce'?'blue':node.kind==='data_store'?'green':node.kind==='external'?'grey':'violet';return node.family==='custom'?'orange':node.family==='external'?'light-green':node.family==='special'?'light-red':'blue'}
-function fillFor(node){return'solid'}
+function fillFor(node){if(FAMILY!=='data_model')return'solid';return payload.preferences.cardFill==='family'?'solid':'none'}
 function sequenceLineStyleCount(){return new Set((payload.sequenceInteractions??[]).map(item=>item.meaning==='response'?'dashed':item.meaning==='async'?'dotted':'solid')).size}
-function wantedKeys(){const keys=new Set(['header:title','header:scope','header:grounding']);if(FAMILY!=='sequence'||sequenceLineStyleCount()>1)keys.add('header:legend');for(const node of payload.nodes){for(const role of ['group','card','label'])keys.add('node:'+node.id+':'+role);if(node.iconTileAssetId)keys.add('node:'+node.id+':tile');if(node.iconAssetId)keys.add('node:'+node.id+':icon');if(node.apiName)keys.add('node:'+node.id+':api');if(node.subtitle)keys.add('node:'+node.id+':subtitle');if(node.keyFields?.length)keys.add('node:'+node.id+':keys');if(node.boundary)keys.add('node:'+node.id+':boundary');if(FAMILY==='sequence')keys.add('node:'+node.id+':lifeline');for(let i=0;i<(node.observations?.length??0);i++)keys.add('node:'+node.id+':observation:'+i)}for(const edge of payload.edges){keys.add('edge:'+edge.id+':arrow');if(FAMILY!=='data_model')keys.add('edge:'+edge.id+':label');if(FAMILY==='sequence')keys.add('edge:'+edge.id+':label-bg');if(FAMILY==='data_model'){keys.add('edge:'+edge.id+':from-marker');keys.add('edge:'+edge.id+':to-marker')}}for(const interaction of payload.sequenceInteractions??[]){keys.add('edge:'+interaction.id+':from-anchor');keys.add('edge:'+interaction.id+':to-anchor')}for(const activation of payload.sequenceActivations??[])keys.add('node:'+activation.participantId+':activation:'+activation.id);return keys}
+function wantedKeys(){const keys=new Set(['header:title','header:scope','header:grounding']);if(FAMILY!=='sequence'||sequenceLineStyleCount()>1)keys.add('header:legend');for(const node of payload.nodes){for(const role of ['group','card','label'])keys.add('node:'+node.id+':'+role);if(FAMILY==='data_model')keys.add('node:'+node.id+':bg');if(node.iconTileAssetId)keys.add('node:'+node.id+':tile');if(node.iconAssetId)keys.add('node:'+node.id+':icon');if(node.apiName)keys.add('node:'+node.id+':api');if(node.subtitle)keys.add('node:'+node.id+':subtitle');if(node.keyFields?.length)keys.add('node:'+node.id+':keys');if(node.boundary)keys.add('node:'+node.id+':boundary');if(FAMILY==='sequence')keys.add('node:'+node.id+':lifeline');for(let i=0;i<(node.observations?.length??0);i++)keys.add('node:'+node.id+':observation:'+i)}for(const edge of payload.edges){keys.add('edge:'+edge.id+':arrow');if(FAMILY!=='data_model')keys.add('edge:'+edge.id+':label');if(FAMILY==='sequence')keys.add('edge:'+edge.id+':label-bg');if(FAMILY==='data_model'){keys.add('edge:'+edge.id+':from-marker');keys.add('edge:'+edge.id+':to-marker')}}for(const interaction of payload.sequenceInteractions??[]){keys.add('edge:'+interaction.id+':from-anchor');keys.add('edge:'+interaction.id+':to-anchor')}for(const activation of payload.sequenceActivations??[])keys.add('node:'+activation.participantId+':activation:'+activation.id);return keys}
 const existingPage=editor.getPages().find(page=>page.name===payload.pageName)
 const pageId=existingPage?.id??PageRecordType.createId('sf-tldraw-page-'+hash(payload.pageName))
 if(!existingPage)editor.createPage({id:pageId,name:payload.pageName})
@@ -38,7 +38,8 @@ function upsert(shape,{position='managed'}={}){const current=editor.getShape(sha
 function moveShapeToPage(id,x,y){const bounds=editor.getShapePageBounds(id);const dx=x-bounds.x,dy=y-bounds.y;if(Math.abs(dx)>0.01||Math.abs(dy)>0.01)helpers.translateShapes([id],dx,dy)}
 const maxX=Math.max(1200,...payload.nodes.map(node=>node.x+node.w))+100
 let headerBottom=0
-const legend=FAMILY==='data_model'?'bar/crow foot = declared cardinality · grey dotted = lookup · red solid = master-detail · fill: blue standard · orange custom · pink other · green external':FAMILY==='architecture'?'solid = direction · dashed = async/batch · dotted = dependency':'step number precedes message · solid = request/event · dashed = response · dotted = async'
+const familyKey=payload.preferences.cardFill==='family'?'fill':'border'
+const legend=FAMILY==='data_model'?'bar/crow foot = declared cardinality · grey dotted = lookup · red solid = master-detail · '+familyKey+': blue standard · orange custom · pink other · green external':FAMILY==='architecture'?'solid = direction · dashed = async/batch · dotted = dependency':'step number precedes message · solid = request/event · dashed = response · dotted = async'
 // Header rows are stacked from measured bounds so a long scope or legend can never
 // collide with the row below it, whatever the diagram width turns out to be.
 function stackHeaderRow(key,y,width,label,size,color){const id=sid('header:'+key);upsert(text(id,80,y,width,label,size,'start',managed('header:'+key,'header',key),color),{position:'always'});return editor.getShapePageBounds(id)}
@@ -60,10 +61,13 @@ if(FAMILY==='sequence'){
 const cardBackgrounds=new Map(),nodeGroups=new Map(),foreground=[],cardContentChecks=[],routeChecks=[]
 for(const node of payload.nodes){
  const prefix='node:'+node.id+':'
- const ids={group:sid(prefix+'group'),card:sid(prefix+'card'),tile:sid(prefix+'tile'),icon:sid(prefix+'icon'),label:sid(prefix+'label'),api:sid(prefix+'api'),subtitle:sid(prefix+'subtitle'),keys:sid(prefix+'keys'),boundary:sid(prefix+'boundary')}
+ const ids={group:sid(prefix+'group'),bg:sid(prefix+'bg'),card:sid(prefix+'card'),tile:sid(prefix+'tile'),icon:sid(prefix+'icon'),label:sid(prefix+'label'),api:sid(prefix+'api'),subtitle:sid(prefix+'subtitle'),keys:sid(prefix+'keys'),boundary:sid(prefix+'boundary')}
  const groupExists=!!editor.getShape(ids.group)
  const childIds=[]
  const cardFill=FAMILY==='architecture'?'none':fillFor(node)
+ // An opaque white backing keeps object cards readable and keeps connector routes from
+ // showing through, whether or not the family tint is switched on.
+ if(FAMILY==='data_model'){upsert(geo(ids.bg,node.x,node.y,node.w,node.h,'white','solid','solid','',managed(prefix+'bg',node.id,'card-background')),{position:groupExists?'never':'managed'});childIds.push(ids.bg)}
  upsert(geo(ids.card,node.x,node.y,node.w,node.h,colorFor(node),cardFill,'solid','',managed(prefix+'card',node.id,'card')),{position:groupExists?'never':'managed'});childIds.push(ids.card);cardBackgrounds.set(node.id,ids.card)
  if(FAMILY==='sequence'){
   const cardBounds=editor.getShapePageBounds(ids.card),hasVisual=Boolean(node.iconTileAssetId&&node.iconAssetId),iconSize=44,iconX=cardBounds.x+18,iconY=cardBounds.y+(cardBounds.h-iconSize)/2
@@ -86,9 +90,13 @@ for(const node of payload.nodes){
  if(node.subtitle){const label=editor.getShape(ids.label),subtitle=editor.getShape(ids.subtitle),labelBounds=editor.getShapePageBounds(label.id),subtitleBounds=editor.getShapePageBounds(subtitle.id);const dy=labelBounds.maxY+10-subtitleBounds.y;if(Math.abs(dy)>0.01)helpers.translateShapes([subtitle.id],0,dy)}
  if(FAMILY==='data_model'){const cardBounds=editor.getShapePageBounds(ids.card);let contentBottom=cardBounds.y+106,contentRight=cardBounds.x+180
   for(const cid of [ids.label,ids.api,ids.keys]){if(!editor.getShape(cid))continue;const b=editor.getShapePageBounds(cid);contentBottom=Math.max(contentBottom,b.maxY);contentRight=Math.max(contentRight,b.maxX)}
-  const neededW=Math.round(contentRight+22-cardBounds.x);if(neededW>cardBounds.w+0.5)editor.updateShape({id:ids.card,type:'geo',props:{w:neededW}})
-  const needed=Math.round(contentBottom+26-cardBounds.y);if(needed>cardBounds.h+0.5)editor.updateShape({id:ids.card,type:'geo',props:{h:needed}})
+  const neededW=Math.round(contentRight+22-cardBounds.x);if(neededW>cardBounds.w+0.5)for(const id of [ids.card,ids.bg])if(editor.getShape(id))editor.updateShape({id,type:'geo',props:{w:neededW}})
+  const needed=Math.round(contentBottom+26-cardBounds.y);if(needed>cardBounds.h+0.5)for(const id of [ids.card,ids.bg])if(editor.getShape(id))editor.updateShape({id,type:'geo',props:{h:needed}})
   const fitted=editor.getShapePageBounds(ids.card);let overflow=0
+  // Preserve-mode pages can already contain a human-resized card. Synchronize the new
+  // opaque backing to the actual card after every grow/move pass, not only to the
+  // deterministic layout size used when the shape was first created.
+  if(editor.getShape(ids.bg)){editor.updateShape({id:ids.bg,type:'geo',props:{w:fitted.w,h:fitted.h}});moveShapeToPage(ids.bg,fitted.x,fitted.y)}
   for(const cid of [ids.label,ids.api,ids.keys]){if(!editor.getShape(cid))continue;const b=editor.getShapePageBounds(cid);overflow+=Math.max(0,fitted.x+8-b.x)+Math.max(0,b.maxX-(fitted.maxX-8))+Math.max(0,fitted.y+8-b.y)+Math.max(0,b.maxY-(fitted.maxY-6))}
   cardContentChecks.push({id:node.id,overflow:Math.round(overflow*100)/100})}
  if(!groupExists){const present=childIds.filter(id=>editor.getShape(id));if(present.length>1){editor.groupShapes(present,{groupId:ids.group,select:false});counters.created++;editor.updateShape({id:ids.group,type:'group',meta:managed(prefix+'group',node.id,'group')})}}

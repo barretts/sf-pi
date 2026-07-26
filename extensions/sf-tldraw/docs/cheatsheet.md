@@ -116,7 +116,7 @@ Every semantic element has an `evidence` array containing declared source ids.
         "label": "Account",
         "api_name": "Account",
         "family": "standard",
-        "icon": { "category": "standard", "name": "account", "color": "#5867E8" },
+        "icon": { "category": "standard", "name": "account" },
         "evidence": ["objects"]
       },
       {
@@ -124,7 +124,7 @@ Every semantic element has an `evidence` array containing declared source ids.
         "label": "Case",
         "api_name": "Case",
         "family": "standard",
-        "icon": { "category": "standard", "name": "case", "color": "#FF538A" },
+        "icon": { "category": "standard", "name": "case" },
         "evidence": ["objects"]
       }
     ],
@@ -146,12 +146,27 @@ Every semantic element has an `evidence` array containing declared source ids.
 
 Cardinality values are `one`, `many`, `zero_or_one`, or `zero_or_many`. Do not invent optionality. Full optionality appears only with `cardinality_detail="full"`.
 
+Per-render presentation overrides:
+
+```json
+{
+  "cardinality_detail": "full",
+  "card_fill": "transparent"
+}
+```
+
+`card_fill` accepts `transparent` (default white/transparent-style card) or `family`.
+
 `type` drives the connector itself, so there are no repeated `LK`/`MD` label boxes:
 
 - `lookup` renders a grey dotted orthogonal connector with grey terminals
 - `master_detail` renders a red solid orthogonal connector with red terminals
 
-`family` drives the card fill: `standard` blue, `custom` light orange, `special` light pink, `external` light green.
+SLDS icons automatically use their authentic bundled Design System colors, so omit `icon.color` unless an explicit presentation override is required.
+
+`family` drives the card border: `standard` blue, `custom` light orange, `special` light pink, `external` light green. Card interiors default to the white/transparent-style treatment. Set `card_fill="family"` on the render call, or change **Card fill** in SF Pi Manager, to apply the same family tint to card interiors.
+
+A degree-aware second layout pass elongates hubs with many relationships along the side carrying their connection points. Anchor slots use a deterministic pitch, and every DAG orientation/ranker candidate is scored only after its own hub-growth pass.
 
 The single-page hard cap for `data_model` is 34 objects and 56 relationships. Above 18 objects or 28 relationships the render still succeeds and returns a readability warning; prefer splitting a large model into several scoped pages, as reference sheets normally do.
 

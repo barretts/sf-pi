@@ -31,6 +31,12 @@ const ROWS: Row[] = [
     values: ["simplified", "full"],
   },
   {
+    key: "cardFill",
+    label: "Card fill",
+    description: "Transparent keeps white object cards; family tints them by object family.",
+    values: ["transparent", "family"],
+  },
+  {
     key: "ldvThreshold",
     label: "LDV threshold",
     description: "Minimum observed row count that receives an LDV pill.",
@@ -82,7 +88,7 @@ class SfTldrawConfigPanel implements Focusable {
     const effective = readEffectiveTldrawPreferences(this.cwd);
     const lines = [
       ` ${t.fg("accent", t.bold("🎨 SF tldraw Settings"))}`,
-      ` ${t.fg("dim", "Four scalar presentation choices only. Diagram grammar, icons, palette, and fonts stay deterministic.")}`,
+      ` ${t.fg("dim", "Five scalar presentation choices only. Diagram grammar, icons, palette, and fonts stay deterministic.")}`,
       "",
       ` ${t.fg("muted", "Scope:")} ${t.fg("text", this.scope)}`,
       "",
@@ -115,6 +121,7 @@ class SfTldrawConfigPanel implements Focusable {
     const sentinel = this.scope === "project" ? INHERIT : DEFAULT;
     return {
       cardinalityDetail: scoped.cardinalityDetail ?? sentinel,
+      cardFill: scoped.cardFill ?? sentinel,
       ldvThreshold: scoped.ldvThreshold ?? sentinel,
       recordTypeMode: scoped.recordTypeMode ?? sentinel,
       interactionMode: scoped.interactionMode ?? sentinel,

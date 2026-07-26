@@ -172,6 +172,8 @@ export type ProductMarkKey =
 
 export interface TldrawPreferences {
   cardinalityDetail: "simplified" | "full";
+  /** Data-model card interior: white (default) or the object-family tint. */
+  cardFill: "transparent" | "family";
   ldvThreshold: "1M" | "2M" | "5M" | "10M";
   recordTypeMode: "off" | "auto" | "always";
   interactionMode: "static" | "step_through";

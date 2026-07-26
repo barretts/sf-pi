@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** Four inherited, non-secret sf-tldraw preferences stored in Pi settings. */
+/** Five inherited, non-secret sf-tldraw preferences stored in Pi settings. */
 import {
   globalSettingsPath,
   projectSettingsPath,
@@ -15,6 +15,7 @@ import type {
 
 export const DEFAULT_TLDRAW_PREFERENCES: TldrawPreferences = {
   cardinalityDetail: "simplified",
+  cardFill: "transparent",
   ldvThreshold: "2M",
   recordTypeMode: "off",
   interactionMode: "static",
@@ -103,6 +104,8 @@ function sanitize(value: unknown): Partial<TldrawPreferences> {
   const result: Partial<TldrawPreferences> = {};
   if (input.cardinalityDetail === "simplified" || input.cardinalityDetail === "full")
     result.cardinalityDetail = input.cardinalityDetail;
+  if (input.cardFill === "transparent" || input.cardFill === "family")
+    result.cardFill = input.cardFill;
   if (["1M", "2M", "5M", "10M"].includes(String(input.ldvThreshold)))
     result.ldvThreshold = input.ldvThreshold as TldrawPreferences["ldvThreshold"];
   if (["off", "auto", "always"].includes(String(input.recordTypeMode)))

@@ -69,6 +69,7 @@ export async function renderSalesforceDiagram(
   const effective = readEffectiveTldrawPreferences(context.cwd);
   const preferences: TldrawPreferences = {
     cardinalityDetail: request.preferences?.cardinalityDetail ?? effective.cardinalityDetail,
+    cardFill: request.preferences?.cardFill ?? effective.cardFill,
     ldvThreshold: request.preferences?.ldvThreshold ?? effective.ldvThreshold,
     recordTypeMode: request.preferences?.recordTypeMode ?? effective.recordTypeMode,
     interactionMode: request.preferences?.interactionMode ?? effective.interactionMode,

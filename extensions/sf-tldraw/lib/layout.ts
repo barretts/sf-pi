@@ -57,8 +57,45 @@ export function dataModelCardSize(object: {
   };
 }
 
+/**
+ * Connector anchors are spread across the middle 68% of a card side, so a side carrying
+ * n connectors needs enough length for n terminals at this pitch. High-degree hub
+ * objects are therefore elongated along the side they connect on, the way the published
+ * Salesforce ERD posters stretch Account and Opportunity into bars and columns.
+ */
+const ANCHOR_PITCH = 46;
+const ANCHOR_SPREAD = 0.68;
+const MAX_CARD_EXTENT = 780;
+const SIDE_GAP = 20;
+
+type CardSide = "left" | "right" | "top" | "bottom";
+
+function sideLength(connectorCount: number): number {
+  if (connectorCount <= 1) return 0;
+  return Math.ceil(((connectorCount - 1) * ANCHOR_PITCH) / ANCHOR_SPREAD);
+}
+
+/** Facing sides for a relationship, matching the canvas program's binding rule. */
+function facingSides(
+  from: PositionedNode,
+  to: PositionedNode,
+): { from: CardSide; to: CardSide } | null {
+  if (to.x >= from.x + from.w + SIDE_GAP) return { from: "right", to: "left" };
+  if (from.x >= to.x + to.w + SIDE_GAP) return { from: "left", to: "right" };
+  if (to.y >= from.y + from.h + SIDE_GAP) return { from: "bottom", to: "top" };
+  if (from.y >= to.y + to.h + SIDE_GAP) return { from: "top", to: "bottom" };
+  return null;
+}
+
+const DATA_MODEL_CANDIDATES: GraphCandidate[] = [
+  { rankdir: "LR", ranker: "network-simplex" },
+  { rankdir: "TB", ranker: "network-simplex" },
+  { rankdir: "LR", ranker: "tight-tree" },
+  { rankdir: "TB", ranker: "tight-tree" },
+];
+
 export function layoutDataModel(spec: DataModelSpec): PositionedNode[] {
-  const sizes = new Map(
+  const content = new Map(
     spec.objects.map((object) => {
       const size = dataModelCardSize(object);
       const extra =
@@ -68,7 +105,70 @@ export function layoutDataModel(spec: DataModelSpec): PositionedNode[] {
       return [object.id, { w: size.w, h: size.h + extra }];
     }),
   );
-  return layoutGraph(
+
+  // Each orientation gets its own hub-growth pass. Growing a hub for LR and then
+  // selecting TB would turn a required horizontal bar into a tall column (or vice
+  // versa). Scoring the completed two-pass candidates keeps the DAG strategy pure,
+  // deterministic, and safe for concurrent renders.
+  let best: { nodes: PositionedNode[]; score: number } | undefined;
+  for (const candidate of DATA_MODEL_CANDIDATES) {
+    const first = layoutDataModelGraph(spec, content, candidate);
+    const grown = growHubCards(spec, first, content);
+    const nodes = grown ? layoutDataModelGraph(spec, grown, candidate) : first;
+    const score = layoutAspectScore(nodes);
+    if (!best || score < best.score - 1e-9) best = { nodes, score };
+  }
+  if (!best) throw new Error("No data-model layout candidate produced a result.");
+  return best.nodes;
+}
+
+/**
+ * Second pass: measure how many connectors each card side will carry at the first-pass
+ * positions, then grow the card so every terminal gets its own anchor slot.
+ */
+function growHubCards(
+  spec: DataModelSpec,
+  positions: PositionedNode[],
+  content: Map<string, { w: number; h: number }>,
+): Map<string, { w: number; h: number }> | undefined {
+  const boxes = new Map(positions.map((node) => [node.id, node]));
+  const counts = new Map<string, Record<CardSide, number>>();
+  for (const id of content.keys()) counts.set(id, { left: 0, right: 0, top: 0, bottom: 0 });
+  for (const relationship of spec.relationships) {
+    const from = boxes.get(relationship.from);
+    const to = boxes.get(relationship.to);
+    if (!from || !to) continue;
+    const sides = facingSides(from, to);
+    if (!sides) continue;
+    const fromCounts = counts.get(relationship.from);
+    const toCounts = counts.get(relationship.to);
+    if (fromCounts) fromCounts[sides.from] += 1;
+    if (toCounts) toCounts[sides.to] += 1;
+  }
+  const grown = new Map<string, { w: number; h: number }>();
+  let changed = false;
+  for (const [id, size] of content) {
+    const side = counts.get(id) ?? { left: 0, right: 0, top: 0, bottom: 0 };
+    const h = Math.min(
+      MAX_CARD_EXTENT,
+      Math.max(size.h, sideLength(Math.max(side.left, side.right))),
+    );
+    const w = Math.min(
+      MAX_CARD_EXTENT,
+      Math.max(size.w, sideLength(Math.max(side.top, side.bottom))),
+    );
+    if (h !== size.h || w !== size.w) changed = true;
+    grown.set(id, { w, h });
+  }
+  return changed ? grown : undefined;
+}
+
+function layoutDataModelGraph(
+  spec: DataModelSpec,
+  sizes: Map<string, { w: number; h: number }>,
+  candidate: GraphCandidate,
+): PositionedNode[] {
+  return layoutGraphWith(
     spec.objects.map((object) => object.id),
     spec.relationships.map((relationship) => ({
       id: relationship.id,
@@ -81,13 +181,8 @@ export function layoutDataModel(spec: DataModelSpec): PositionedNode[] {
       rankSep: 240,
       nodeSep: 90,
       sizes,
-      candidates: [
-        { rankdir: "LR", ranker: "network-simplex" },
-        { rankdir: "TB", ranker: "network-simplex" },
-        { rankdir: "LR", ranker: "tight-tree" },
-        { rankdir: "TB", ranker: "tight-tree" },
-      ],
     },
+    candidate,
   );
 }
 
@@ -148,7 +243,7 @@ function layoutGraph(
     rankSep: number;
     nodeSep: number;
     sizes?: Map<string, { w: number; h: number }>;
-    candidates?: Array<{ rankdir: "LR" | "TB"; ranker: "network-simplex" | "tight-tree" }>;
+    candidates?: GraphCandidate[];
   },
 ): PositionedNode[] {
   const candidates = options.candidates ?? [
@@ -157,13 +252,22 @@ function layoutGraph(
   let best: { nodes: PositionedNode[]; score: number } | undefined;
   for (const candidate of candidates) {
     const nodes = layoutGraphWith(nodeIds, edges, options, candidate);
-    const width = Math.max(...nodes.map((node) => node.x + node.w)) - GRAPH_LEFT;
-    const height = Math.max(...nodes.map((node) => node.y + node.h)) - GRAPH_TOP;
-    const score = Math.abs(Math.log(width / Math.max(1, height) / TARGET_ASPECT));
+    const score = layoutAspectScore(nodes);
     if (!best || score < best.score - 1e-9) best = { nodes, score };
   }
   if (!best) throw new Error("No graph layout candidate produced a result.");
   return best.nodes;
+}
+
+export type GraphCandidate = {
+  rankdir: "LR" | "TB";
+  ranker: "network-simplex" | "tight-tree";
+};
+
+function layoutAspectScore(nodes: PositionedNode[]): number {
+  const width = Math.max(...nodes.map((node) => node.x + node.w)) - GRAPH_LEFT;
+  const height = Math.max(...nodes.map((node) => node.y + node.h)) - GRAPH_TOP;
+  return Math.abs(Math.log(width / Math.max(1, height) / TARGET_ASPECT));
 }
 
 function layoutGraphWith(
@@ -176,7 +280,7 @@ function layoutGraphWith(
     nodeSep: number;
     sizes?: Map<string, { w: number; h: number }>;
   },
-  candidate: { rankdir: "LR" | "TB"; ranker: "network-simplex" | "tight-tree" },
+  candidate: GraphCandidate,
 ): PositionedNode[] {
   const graph = new dagre.graphlib.Graph({ multigraph: true });
   graph.setGraph({

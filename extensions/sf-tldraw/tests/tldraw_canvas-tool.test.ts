@@ -19,6 +19,14 @@ describe("tldraw_canvas family tool", () => {
     expect(tool.promptGuidelines.join("\n")).toMatch(/OS automation/i);
   });
 
+  it("exposes the data-model card-fill override", () => {
+    const tool = registeredTool();
+    const schema = JSON.stringify(tool.parameters);
+    expect(schema).toContain('"card_fill"');
+    expect(schema).toContain('"transparent"');
+    expect(schema).toContain('"family"');
+  });
+
   it("loads the cheatsheet lazily without contacting the runtime", async () => {
     const tool = registeredTool();
     const fetchMock = vi.fn();

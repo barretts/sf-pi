@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import type {
   CanvasAssetPayload,
   DiagramIcon,
+  IconCategory,
   EndpointCardinality,
   ObjectFamily,
   ProductMarkKey,
@@ -14,11 +15,46 @@ import type {
 } from "./types.ts";
 
 const require = createRequire(import.meta.url);
-const ICON_PACKAGE_ROOT = path.join(
-  path.dirname(require.resolve("@salesforce-ux/design-system/package.json")),
-  "assets",
-  "icons",
+const DESIGN_SYSTEM_ROOT = path.dirname(
+  require.resolve("@salesforce-ux/design-system/package.json"),
 );
+const ICON_PACKAGE_ROOT = path.join(DESIGN_SYSTEM_ROOT, "assets", "icons");
+const ICON_CSS_PATH = path.join(DESIGN_SYSTEM_ROOT, "css", "icons", "base", "index.css");
+
+/**
+ * SLDS ships each icon's authentic tile color as the fallback of the
+ * `--slds-c-icon-color-background` custom property. Reading it keeps every object card's
+ * icon chip in its real Salesforce color instead of collapsing a whole diagram to one
+ * hue per object family.
+ */
+let sldsIconColors: Map<string, string> | undefined;
+
+function iconColorKey(category: IconCategory, name: string): string {
+  const slug = category === "custom" ? name.replace(/^custom/, "") : name.replace(/_/g, "-");
+  return `${category}/${slug}`;
+}
+
+function loadSldsIconColors(): Map<string, string> {
+  if (sldsIconColors) return sldsIconColors;
+  const colors = new Map<string, string>();
+  try {
+    const css = readFileSync(ICON_CSS_PATH, "utf8");
+    const rule =
+      /\.slds-icon-(standard|custom|action|doctype)-([a-z0-9-]+)\s*\{\s*background-color:[^;]*?rgb\((\d+),\s*(\d+),\s*(\d+)\)/g;
+    for (let match = rule.exec(css); match; match = rule.exec(css)) {
+      const [, category, slug, r, g, b] = match;
+      if (!category || !slug || !r || !g || !b) continue;
+      const hex = [r, g, b]
+        .map((channel) => Number(channel).toString(16).padStart(2, "0"))
+        .join("");
+      colors.set(`${category}/${slug}`, `#${hex}`);
+    }
+  } catch {
+    // A missing or restructured stylesheet only costs authentic colors, never a render.
+  }
+  sldsIconColors = colors;
+  return colors;
+}
 
 export const PRODUCT_MARK_REGISTRY: Record<
   ProductMarkKey,
@@ -61,10 +97,7 @@ export const PRODUCT_MARK_REGISTRY: Record<
   slack: { label: "Slack", sourceUrl: "https://slack.com/media-kit" },
 };
 
-/**
- * Icon-tile colors are kept in the same family palette as the card fills so a
- * card and its icon chip read as one object family.
- */
+/** Last-resort tile colors when SLDS has no icon-specific color for a visual. */
 const FAMILY_COLORS: Record<ObjectFamily, string> = {
   standard: "#5867E8",
   custom: "#E8792B",
@@ -158,7 +191,10 @@ export function resolveVisualAssets(
         `Required fallback icon ${icon.category}/${icon.name} is missing from @salesforce-ux/design-system.`,
       );
     const iconId = stableAssetId(`icon-${icon.category}-${icon.name}`);
-    const tileColor = icon.color ?? FAMILY_COLORS[family];
+    const tileColor =
+      icon.color ??
+      loadSldsIconColors().get(iconColorKey(icon.category, icon.name)) ??
+      FAMILY_COLORS[family];
     const tileId = stableAssetId(`tile-${tileColor}`);
     assets.set(iconId, {
       id: iconId,

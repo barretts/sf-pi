@@ -32,17 +32,21 @@ describe("sf-tldraw settings", () => {
   it("resolves each field as project then global then default", () => {
     expect(settings.readEffectiveTldrawPreferences(cwd)).toMatchObject({
       cardinalityDetail: "simplified",
+      cardFill: "transparent",
       ldvThreshold: "2M",
       recordTypeMode: "off",
       interactionMode: "static",
     });
+    settings.writeTldrawPreference(cwd, "global", "cardFill", "family");
     settings.writeTldrawPreference(cwd, "global", "ldvThreshold", "5M");
     settings.writeTldrawPreference(cwd, "global", "recordTypeMode", "auto");
     settings.writeTldrawPreference(cwd, "project", "recordTypeMode", "always");
     expect(settings.readEffectiveTldrawPreferences(cwd)).toMatchObject({
+      cardFill: "family",
       ldvThreshold: "5M",
       recordTypeMode: "always",
       sources: {
+        cardFill: { scope: "global" },
         ldvThreshold: { scope: "global" },
         recordTypeMode: { scope: "project" },
       },
@@ -65,9 +69,18 @@ describe("sf-tldraw settings", () => {
     mkdirSync(projectDir, { recursive: true });
     writeFileSync(
       path.join(projectDir, "settings.json"),
-      JSON.stringify({ sfPi: { tldraw: { ldvThreshold: "999M", recordTypeMode: "sometimes" } } }),
+      JSON.stringify({
+        sfPi: {
+          tldraw: {
+            cardFill: "pattern",
+            ldvThreshold: "999M",
+            recordTypeMode: "sometimes",
+          },
+        },
+      }),
     );
     expect(settings.readEffectiveTldrawPreferences(cwd)).toMatchObject({
+      cardFill: "transparent",
       ldvThreshold: "2M",
       recordTypeMode: "off",
     });

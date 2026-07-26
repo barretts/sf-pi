@@ -81,10 +81,12 @@ Every spec declares `grounding.mode` as `reference` or `org`. Reference sources 
 
 ### Data model grammar
 
-- Object-family fill: blue standard, light orange custom, light pink other, light green external
-- Separate vivid SLDS icon tiles in the same family palette
+- White object cards by default, with object-family borders: blue standard, light orange custom, light pink other, light green external
+- Optional family-tinted card fill through the `cardFill` setting or per-render `card_fill="family"`
+- Authentic per-icon SLDS tile colors read from the bundled Design System stylesheet; Account, Contact, Case, Product, Work Order, and other visuals keep their distinct Salesforce colors
 - Logical label plus parenthesized API name with an 8-unit measured gap; API names never wrap
-- Content-fitted card size, then a measured height/width grow pass so text always stays inside its card
+- Content-fitted base card size, followed by a measured height/width grow pass so text always stays inside its card
+- Degree-aware second layout pass: high-connection hubs elongate along the side carrying their terminals, giving each connection a distinct, evenly spaced anchor slot
 - Optional, sourced LDV and OWD pills at fixed anchors
 - Relationship kind carried by the connector itself: grey dotted lookup, red solid master-detail. No repeated `LK`/`MD` label boxes
 - Orthogonal (elbow) connectors bound to precise facing card sides, with anchors spread along each side so parallel connectors and their terminals do not stack
@@ -92,7 +94,7 @@ Every spec declares `grounding.mode` as `reference` or `org`. Reference sources 
 - Object cards re-fronted after connectors exist, because tldraw keeps a bound arrow above the shapes it binds to
 - No record-type display by default
 
-Layout tries every candidate rank direction and ranker, then keeps the one whose bounding box is closest to a landscape page, so hub-and-spoke reference models do not degrade into a single tall ladder.
+Layout evaluates every candidate rank direction and ranker with its own degree-aware growth pass, then keeps the completed layout whose bounding box is closest to a landscape page. The process is pure and deterministic: an LR candidate grows left/right connection hubs vertically, while a TB candidate grows top/bottom hubs horizontally, matching the long bars and columns used by published Salesforce ERDs.
 
 Marker placement solves the local marker anchor through tldraw's origin-based shape transform. For elbow connectors the terminal direction comes from the resolved orthogonal route rather than the binding handles. Readiness then resolves the anchor back into page space with `getShapePageTransform()` and requires a terminal distance of at most one canvas unit. This covers horizontal, reversed, diagonal, and vertical connectors.
 
@@ -116,14 +118,15 @@ A single page accepts at most eight participants and 18 interactions, with reada
 
 ## Settings
 
-Only four scalar presentation choices are configurable:
+Only five scalar presentation choices are configurable:
 
 - cardinality detail: `simplified` or `full`
+- card fill: `transparent` (default white/transparent-style card) or `family` (family tint)
 - LDV threshold: `1M`, `2M`, `5M`, or `10M`
 - record-type mode: `off`, `auto`, or `always`
 - interaction mode: `static` or `step_through`
 
-Each field resolves project → global → default. Project **Inherit global** and global **Use default** delete that scoped field.
+Each field resolves project → global → default. Project **Inherit global** and global **Use default** delete that scoped field. Open the extension settings in SF Pi Manager to toggle card fill, or override one render with `card_fill="transparent" | "family"`.
 
 `step_through` is source-gated: the initial implementation returns an explicit recovery to `static` rather than pretending controls exist or overwriting a pre-existing document script. It never autoplays.
 
