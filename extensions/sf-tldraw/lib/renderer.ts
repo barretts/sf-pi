@@ -129,6 +129,20 @@ export async function renderSalesforceDiagram(
       client.screenshot(document.id, { size: "full", mode: "canvas" }, context.signal),
       client.screenshot(document.id, { size: "small", mode: "canvas" }, context.signal),
     ]);
+    if (
+      full.pageName !== result.pageName ||
+      thumbnail.pageName !== result.pageName ||
+      full.captureMode !== "canvas" ||
+      thumbnail.captureMode !== "canvas"
+    ) {
+      return {
+        ok: false,
+        reason: "evidence_page_mismatch",
+        message: `Diagram readiness passed, but screenshot evidence did not belong to rendered page '${result.pageName}'.`,
+        result,
+        recoverVia: { action: actionForFamily(request.family) },
+      };
+    }
     let artifact: RenderArtifact;
     try {
       artifact = persistRenderArtifact({

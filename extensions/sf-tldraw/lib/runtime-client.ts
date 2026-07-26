@@ -408,7 +408,11 @@ export function validateRuntimeScreenshot(value: unknown): RuntimeScreenshot {
   if (
     typeof screenshot.filePath !== "string" ||
     typeof screenshot.width !== "number" ||
+    !Number.isFinite(screenshot.width) ||
+    screenshot.width <= 0 ||
     typeof screenshot.height !== "number" ||
+    !Number.isFinite(screenshot.height) ||
+    screenshot.height <= 0 ||
     typeof screenshot.pageName !== "string" ||
     (screenshot.captureMode !== "canvas" && screenshot.captureMode !== "window")
   ) {

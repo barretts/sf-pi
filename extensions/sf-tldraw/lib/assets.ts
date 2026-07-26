@@ -6,6 +6,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import type {
   CanvasAssetPayload,
+  DataModelObject,
   DiagramIcon,
   IconCategory,
   EndpointCardinality,
@@ -120,6 +121,45 @@ const SYSTEM_FALLBACKS: Record<string, DiagramIcon> = {
   integration: { category: "utility", name: "connected_apps", color: "#FE9339" },
 };
 
+const STANDARD_ICON_ALIASES: Record<string, string> = {
+  currencytype: "currency",
+  emailmessage: "email",
+  event: "event",
+  opportunitylineitem: "opportunity",
+  orderitem: "orders",
+  pricebook2: "pricebook",
+  pricebookentry: "pricebook_entry",
+  product2: "product",
+  quote: "quotes",
+  quotelineitem: "quotes",
+  task: "task",
+};
+
+/** Infer a verified SLDS object icon when a zero-shot spec omits presentation metadata. */
+function inferredDataModelIcon(node: DataModelObject): DiagramIcon | undefined {
+  if (node.family !== "standard") return undefined;
+  const withoutSuffix = node.api_name?.replace(/__(?:c|x|mdt)$/i, "") ?? "";
+  const rawApi = withoutSuffix.split("__").at(-1) ?? "";
+  const sources = [rawApi, node.api_name ?? "", node.label];
+  const candidates = new Set<string>();
+  for (const source of sources) {
+    const compact = source.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+    if (STANDARD_ICON_ALIASES[compact]) candidates.add(STANDARD_ICON_ALIASES[compact]);
+    const snake = source
+      .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+      .replace(/[^A-Za-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .toLowerCase();
+    if (snake) candidates.add(snake.replace(/_+2$/, ""));
+  }
+  for (const name of candidates) {
+    const icon: DiagramIcon = { category: "standard", name };
+    if (readIcon(icon)) return icon;
+  }
+  return undefined;
+}
+
 /** Cardinality markers are drawn in the tone of the relationship they terminate. */
 export type MarkerTone = "neutral" | "master_detail";
 
@@ -169,7 +209,10 @@ export function resolveVisualAssets(
     const systemFallback =
       SYSTEM_FALLBACKS[visualNode.kind ?? "external"] ?? SYSTEM_FALLBACKS.external;
     let icon =
-      node.icon ?? (spec.family === "data_model" ? FALLBACK_ICONS[family] : systemFallback);
+      node.icon ??
+      (spec.family === "data_model"
+        ? (inferredDataModelIcon(node as DataModelObject) ?? FALLBACK_ICONS[family])
+        : systemFallback);
     if ("product_mark" in node && node.product_mark) {
       const registry = PRODUCT_MARK_REGISTRY[node.product_mark];
       if (!registry?.assetPath)

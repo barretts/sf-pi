@@ -40,9 +40,7 @@ describe("deterministic Salesforce profiles", () => {
     if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
     // Prove the renderer recovers authentic SLDS colors without requiring the spec to
     // repeat presentation hex values for every standard object.
-    for (const object of spec.objects) {
-      if (object.icon) delete object.icon.color;
-    }
+    for (const object of spec.objects) delete object.icon;
     const payload = compileProfile(spec, {
       renderMode: "preserve",
       preferences: DEFAULT_TLDRAW_PREFERENCES,
@@ -95,7 +93,8 @@ describe("deterministic Salesforce profiles", () => {
     ).toBe(true);
   });
 
-  it("sizes data-model cards from their declared label and API name", () => {
+  it("sizes data-model cards from their declared label and optional API name", () => {
+    const conceptual = dataModelCardSize({ label: "Party" });
     const short = dataModelCardSize({ label: "Account", api_name: "Account" });
     const long = dataModelCardSize({
       label: "Work Type Group Member",
@@ -105,14 +104,15 @@ describe("deterministic Salesforce profiles", () => {
     expect(long.w).toBeGreaterThan(short.w);
     expect(long.h).toBeGreaterThanOrEqual(short.h);
     expect(short.w).toBeGreaterThanOrEqual(DATA_MODEL_CARD.textX + DATA_MODEL_CARD.padRight);
+    expect(conceptual.h).toBeLessThanOrEqual(short.h);
   });
 
-  it("elongates high-degree hubs so connection terminals receive distinct slots", () => {
+  it("elongates high-degree hubs so final connection sides retain marker pitch", () => {
     const spec = fixture("data-model");
     if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
     const account = spec.objects[0];
     if (!account) throw new Error("Expected an Account fixture object.");
-    const leaves = Array.from({ length: 10 }, (_, index) => ({
+    const leaves = Array.from({ length: 20 }, (_, index) => ({
       ...structuredClone(account),
       id: `leaf-${index}`,
       label: `Leaf ${index}`,
@@ -131,16 +131,116 @@ describe("deterministic Salesforce profiles", () => {
     const base = dataModelCardSize(account);
     const hub = layoutDataModel(spec).find((node) => node.id === account.id);
     expect(hub).toBeDefined();
-    expect(Math.max(hub?.w ?? 0, hub?.h ?? 0)).toBeGreaterThanOrEqual(500);
+    expect(Math.max(hub?.w ?? 0, hub?.h ?? 0)).toBeGreaterThanOrEqual(1_200);
     expect((hub?.w ?? 0) > base.w || (hub?.h ?? 0) > base.h).toBe(true);
   });
 
-  it("carries relationship kind on the connector instead of an LK/MD label box", () => {
+  it("packs disconnected components into a bounded landscape poster", () => {
+    const spec = fixture("data-model");
+    if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
+    const template = spec.objects[0];
+    if (!template) throw new Error("Expected a fixture object.");
+    spec.objects = Array.from({ length: 18 }, (_, index) => ({
+      ...structuredClone(template),
+      id: `island-${index}`,
+      label: `Island ${index}`,
+      api_name: `Island${index}`,
+    }));
+    spec.relationships = [
+      [0, 1],
+      [1, 2],
+      [3, 4],
+      [4, 5],
+    ].map(([from, to], index) => ({
+      id: `component-edge-${index}`,
+      from: `island-${from}`,
+      to: `island-${to}`,
+      type: "lookup" as const,
+      from_cardinality: "one" as const,
+      to_cardinality: "many" as const,
+      evidence: [...template.evidence],
+    }));
+    const nodes = layoutDataModel(spec);
+    const width =
+      Math.max(...nodes.map((node) => node.x + node.w)) - Math.min(...nodes.map((node) => node.x));
+    const height =
+      Math.max(...nodes.map((node) => node.y + node.h)) - Math.min(...nodes.map((node) => node.y));
+    expect(new Set(nodes.map((node) => node.x)).size).toBeGreaterThan(3);
+    expect(Math.max(width / height, height / width)).toBeLessThan(4);
+    for (let left = 0; left < nodes.length; left++) {
+      for (let right = left + 1; right < nodes.length; right++) {
+        const a = nodes[left];
+        const b = nodes[right];
+        if (!a || !b) continue;
+        const overlapX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const overlapY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        expect(overlapX > 0 && overlapY > 0, `${a.id}/${b.id}`).toBe(false);
+      }
+    }
+  });
+
+  it("preserves evidenced source geometry on the first render", () => {
+    const spec = fixture("data-model");
+    if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
+    spec.layout_mode = "source";
+    for (const [index, object] of spec.objects.entries()) {
+      object.source_position = {
+        x: (index % 3) * 500,
+        y: Math.floor(index / 3) * 360,
+        w: 300,
+        h: 180,
+      };
+    }
+    const first = layoutDataModel(spec);
+    const second = layoutDataModel(structuredClone(spec));
+    expect(second).toEqual(first);
+    expect(first.find((node) => node.id === spec.objects[1]?.id)?.x).toBeGreaterThan(
+      first.find((node) => node.id === spec.objects[0]?.id)?.x ?? 0,
+    );
+  });
+
+  it("grows source-layout hubs along declared terminal sides", () => {
+    const spec = fixture("data-model");
+    if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
+    const hub = structuredClone(spec.objects[0]);
+    if (!hub) throw new Error("Expected a fixture hub.");
+    hub.id = "hub";
+    hub.source_position = { x: 800, y: 800, w: 300, h: 180 };
+    const leaves = Array.from({ length: 10 }, (_, index) => ({
+      ...structuredClone(hub),
+      id: `source-leaf-${index}`,
+      label: `Source Leaf ${index}`,
+      api_name: `SourceLeaf${index}`,
+      source_position: { x: index * 420, y: 0, w: 300, h: 180 },
+    }));
+    spec.layout_mode = "source";
+    spec.objects = [hub, ...leaves];
+    spec.relationships = leaves.map((leaf, index) => ({
+      id: `source-edge-${index}`,
+      from: hub.id,
+      to: leaf.id,
+      type: "lookup" as const,
+      from_cardinality: "one" as const,
+      to_cardinality: "many" as const,
+      from_anchor: { side: "top" as const, fraction: 0.08 + index * 0.08 },
+      to_anchor: { side: "bottom" as const, fraction: 0.5 },
+      evidence: [...hub.evidence],
+    }));
+    const positionedHub = layoutDataModel(spec).find((node) => node.id === hub.id);
+    expect(positionedHub?.w).toBeGreaterThanOrEqual(600);
+  });
+
+  it("carries relationship kind and optional end semantics on the connector", () => {
     const spec = fixture("data-model");
     if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
     const relationship = spec.relationships[0];
     if (!relationship) throw new Error("Expected at least one relationship.");
     relationship.type = "master_detail";
+    relationship.field_api_name = "AccountId";
+    relationship.from_anchor = { side: "right", fraction: 0.3 };
+    relationship.to_anchor = { side: "left", fraction: 0.7 };
+    relationship.from_label = "child of";
+    relationship.to_label = "parent of";
     const payload = compileProfile(spec, {
       renderMode: "preserve",
       preferences: DEFAULT_TLDRAW_PREFERENCES,
@@ -148,6 +248,13 @@ describe("deterministic Salesforce profiles", () => {
     const edge = payload.edges.find((item) => item.id === relationship.id);
     expect(edge?.label).toBe("");
     expect(edge?.relationshipType).toBe("master_detail");
+    expect(edge).toMatchObject({
+      fieldApiName: "AccountId",
+      fromAnchor: { side: "right", fraction: 0.3 },
+      toAnchor: { side: "left", fraction: 0.7 },
+      fromLabel: "child of",
+      toLabel: "parent of",
+    });
     const neutral = payload.assets.find(
       (asset) => asset.name === "cardinality-many-neutral.svg",
     )?.id;
@@ -186,6 +293,12 @@ describe("deterministic Salesforce profiles", () => {
     expect(program).toContain("normalizedAnchor:anchorFor(side,fraction)");
     expect(program).toContain("card_content_overflow");
     expect(program).toContain("routeObstructions");
+    expect(program).toContain("routeTraffic");
+    expect(program).toContain("renderSelfEdge");
+    expect(program).toContain("outsidePoint");
+    expect(program).toContain("marker_overlap");
+    expect(program).toContain("the document may have reached its page limit");
+    expect(program).toContain("tldraw did not select the requested page");
     // White/transparent-style cards have an opaque backing so routes never show through.
     expect(program).toContain("card-background");
     expect(program).toContain("payload.preferences.cardFill==='family'");

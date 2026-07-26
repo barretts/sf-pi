@@ -83,18 +83,25 @@ Every spec declares `grounding.mode` as `reference` or `org`. Reference sources 
 
 - White object cards by default, with object-family borders: blue standard, light orange custom, light pink other, light green external
 - Optional family-tinted card fill through the `cardFill` setting or per-render `card_fill="family"`
-- Authentic per-icon SLDS tile colors read from the bundled Design System stylesheet; Account, Contact, Case, Product, Work Order, and other visuals keep their distinct Salesforce colors
-- Logical label plus parenthesized API name with an 8-unit measured gap; API names never wrap
+- Authentic per-icon SLDS tile colors read from the bundled Design System stylesheet; verified standard-object icons are inferred from label/API name when a zero-shot spec omits presentation metadata
+- Logical label plus optional parenthesized API name with an 8-unit measured gap; references that do not publish a physical API name can omit it
+- Solid physical-object cards, dotted conceptual cards, dashed record-type cards, and borderless-style external entities
 - Content-fitted base card size, followed by a measured height/width grow pass so text always stays inside its card
-- Degree-aware second layout pass: high-connection hubs elongate along the side carrying their terminals, giving each connection a distinct, evenly spaced anchor slot
+- Bounded convergence passes: high-connection hubs elongate after every relayout until the final sides retain distinct terminal slots
 - Optional, sourced LDV and OWD pills at fixed anchors
 - Relationship kind carried by the connector itself: grey dotted lookup, red solid master-detail. No repeated `LK`/`MD` label boxes
-- Orthogonal (elbow) connectors bound to precise facing card sides, with anchors spread along each side so parallel connectors and their terminals do not stack
-- Vector cardinality markers in the relationship's own tone, attached to actual clipped arrow terminals
+- Orthogonal (elbow) connectors preserve evidenced side plans when supplied; otherwise facing and alternate plans are scored by card obstructions, independent-edge crossings, shared corridors, and length
+- Source-layout mode preserves evidence-backed poster geometry and terminal-side order on the first render while adding enough corridor spacing for editable vector markers
+- Parallel connectors and terminals are ordered geometrically rather than by relationship id
+- Recursive relationships use explicit exterior three-segment loops with two distinct card ports
+- Optional relationship-end names and field API names render on opaque borderless backings
+- Vector cardinality markers in the relationship's own tone, attached to actual clipped arrow terminals; marker overlap is a readiness blocker
 - Object cards re-fronted after connectors exist, because tldraw keeps a bound arrow above the shapes it binds to
 - No record-type display by default
 
-Layout evaluates every candidate rank direction and ranker with its own degree-aware growth pass, then keeps the completed layout whose bounding box is closest to a landscape page. The process is pure and deterministic: an LR candidate grows left/right connection hubs vertically, while a TB candidate grows top/bottom hubs horizontally, matching the long bars and columns used by published Salesforce ERDs.
+Automatic layout evaluates a fixed matrix of rank direction, ranker, and spacing strategies. Each candidate converges its hub dimensions, packs disconnected components into landscape shelves, and is scored by estimated card obstructions, independent-edge crossings, shared corridors, route length, area, and aspect—in that order. `layout_mode="source"` instead preserves normalized source positions and card proportions from an evidenced reference. Both paths are pure and deterministic.
+
+A data-model page accepts up to 160 entities and 260 relationships, covering the current official Gallery maximum of 127/188 with a bounded margin. One object can carry at most 36 relationship terminals—the capacity of a 2,400-unit side at the verified pitch. Pages above 34/56 receive a poster-scale readability warning rather than being silently split or shrunk.
 
 Marker placement solves the local marker anchor through tldraw's origin-based shape transform. For elbow connectors the terminal direction comes from the resolved orthogonal route rather than the binding handles. Readiness then resolves the anchor back into page space with `getShapePageTransform()` and requires a terminal distance of at most one canvas unit. This covers horizontal, reversed, diagonal, and vertical connectors.
 
@@ -153,6 +160,7 @@ extensions/sf-tldraw/
     types.ts                ← implementation module
   tests/
     artifacts.test.ts       ← unit / smoke test
+    data-model-gallery-matrix.live.test.ts← unit / smoke test
     deferred-status.test.ts ← unit / smoke test
     live-runtime.test.ts    ← unit / smoke test
     profiles.test.ts        ← unit / smoke test
@@ -200,6 +208,18 @@ SF_TLDRAW_SEQUENCE_MATRIX=1 npx vitest run extensions/sf-tldraw/tests/sequence-m
 
 The matrix runs serially, validates every managed shape, captures full and thumbnail evidence, and writes private `index.json`, `report.html`, and `report.md` artifacts under `tldraw-artifacts/sequence-matrix/`. A case is ready only when label backings mask every intersecting lifeline or activation bar in the verified z-order.
 
+A normalized external Data Model Gallery corpus can be replayed without committing Salesforce/Lucidchart source material. The manifest is a JSON array of `{ index?, slug, category, title, file, maxRouteObstructions?, maxRouteCrossings?, maxSharedCorridors? }`. Every `file` must resolve inside the manifest directory, and slugs must match `[a-z0-9][a-z0-9-]{0,79}`. The stable case identity is `index-slug`, so the same public model title can legitimately recur in different product categories. Reuse one existing page for large corpora so the desktop document's page cap does not affect the run. Pin the expected count/hash for release qualification:
+
+```bash
+SF_TLDRAW_DATA_MODEL_GALLERY_MANIFEST=/path/to/spec-manifest.json \
+SF_TLDRAW_DATA_MODEL_GALLERY_PAGE="Gallery Verification" \
+SF_TLDRAW_DATA_MODEL_GALLERY_EXPECTED_COUNT=230 \
+SF_TLDRAW_DATA_MODEL_GALLERY_EXPECTED_HASH=<sha256> \
+npx vitest run extensions/sf-tldraw/tests/data-model-gallery-matrix.live.test.ts
+```
+
+The run validates and compiles every case deterministically, renders serially, requires zero lints and marker overlaps, captures each full/thumbnail artifact, and writes a private index plus Markdown report under `tldraw-artifacts/data-model-gallery-matrix/`.
+
 ## Troubleshooting
 
 **The tool says no tldraw document is open:**
@@ -207,6 +227,9 @@ Open or create a board in tldraw offline, then run `tldraw_canvas` with `action=
 
 **Status reports a stale server configuration:**
 Quit and restart tldraw offline so it rewrites its per-launch `server.json` and bearer token.
+
+**A render says the document may have reached its page limit:**
+The desktop document refused a new page. Reuse an existing extension-managed page with `render_mode="replace"`, or open another document and pass its `document_id`. sf-tldraw verifies page creation and never reports a render on the wrong page.
 
 **A render is blocked by readiness checks:**
 Inspect the returned blocker and screenshot only after correcting the spec or layout. A render with lints or detached connector decorations is intentionally not reported complete.

@@ -15,7 +15,7 @@ Read [`README.md`](./README.md) and [`docs/cheatsheet.md`](./docs/cheatsheet.md)
 | Family-to-canvas compilation                             | `lib/profiles.ts`                        |
 | Fixed tldraw editor program and readiness checks         | `lib/canvas-program.ts`                  |
 | Render orchestration and evidence                        | `lib/renderer.ts`, `lib/artifacts.ts`    |
-| Four inherited preferences                               | `lib/settings.ts`, `lib/config-panel.ts` |
+| Five inherited preferences                               | `lib/settings.ts`, `lib/config-panel.ts` |
 
 ## Invariants
 
@@ -27,7 +27,9 @@ Read [`README.md`](./README.md) and [`docs/cheatsheet.md`](./docs/cheatsheet.md)
 - Sequence activation intervals must be explicit, evidenced spec elements; never infer processing duration from adjacent messages.
 - Cross-lane message labels require measured borderless backings and verified z-order above intersecting lifelines or activation bars.
 - Cardinality placement must use clipped `getArrowInfo()` terminals and verify the local marker anchor through `getShapePageTransform(marker).applyToPoint(...)`.
-- A successful render requires zero actionable tldraw lints and marker distance at most one canvas unit.
+- Recursive data-model relationships require an exterior route with distinct card ports; never accept a centre-bound self arrow.
+- A successful render requires zero actionable tldraw lints, marker distance at most one canvas unit, and no overlapping marker bounds.
+- Verify that requested page creation succeeded before rendering; never fall through to whichever page was already active.
 - Preserve user positioning and annotations by default. Only shapes carrying `meta.sfTldraw.managed === true` belong to this extension.
 - Never add AppleScript, keystrokes, browser automation, or direct `.tldraw` archive generation as a create-document fallback.
 - Keep `docs/cheatsheet.md` lazy. Do not register it as a skill or inject it into every prompt.

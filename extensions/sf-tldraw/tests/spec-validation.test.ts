@@ -136,20 +136,19 @@ describe("Salesforce Diagram Spec validation", () => {
     );
   });
 
-  it("requires verified explicit icons for standard objects", () => {
+  it("allows standard objects to use deterministic verified icon inference", () => {
     const spec = dataModelFixture();
     const firstObject = spec.objects[0];
     if (!firstObject) throw new Error("Expected at least one data-model object.");
     delete firstObject.icon;
-    const result = validateDiagramSpec(spec, "data_model");
-    expect(result.errors.map((error) => error.code)).toContain("standard_icon_required");
+    expect(validateDiagramSpec(spec, "data_model").ok).toBe(true);
   });
 
-  it("rejects unreadably dense single-page specs", () => {
+  it("rejects models beyond the bounded official-gallery envelope", () => {
     const spec = dataModelFixture();
     const template = spec.objects[0];
     if (!template) throw new Error("Expected at least one data-model object.");
-    spec.objects = Array.from({ length: 35 }, (_, index) => ({
+    spec.objects = Array.from({ length: 161 }, (_, index) => ({
       ...template,
       id: `object-${index}`,
       api_name: `Object${index}`,
@@ -158,13 +157,37 @@ describe("Salesforce Diagram Spec validation", () => {
     expect(result.errors.map((error) => error.code)).toContain("single_page_density_exceeded");
   });
 
-  it("warns but still renders CTA-scale data models above the reading budget", () => {
+  it("rejects a hub whose terminal demand exceeds one readable card side", () => {
+    const spec = dataModelFixture();
+    const hub = spec.objects[0];
+    if (!hub) throw new Error("Expected at least one data-model object.");
+    const leaves = Array.from({ length: 37 }, (_, index) => ({
+      ...structuredClone(hub),
+      id: `degree-leaf-${index}`,
+      api_name: `DegreeLeaf${index}`,
+    }));
+    spec.objects = [hub, ...leaves];
+    spec.relationships = leaves.map((leaf, index) => ({
+      id: `degree-edge-${index}`,
+      from: hub.id,
+      to: leaf.id,
+      type: "lookup" as const,
+      from_cardinality: "one" as const,
+      to_cardinality: "many" as const,
+      evidence: [...hub.evidence],
+    }));
+    expect(validateDiagramSpec(spec, "data_model").errors.map((error) => error.code)).toContain(
+      "node_degree_exceeded",
+    );
+  });
+
+  it("warns but still renders poster-scale data models above the reading budget", () => {
     const spec = dataModelFixture();
     const template = spec.objects[0];
     if (!template) throw new Error("Expected at least one data-model object.");
     spec.objects = [
       ...spec.objects,
-      ...Array.from({ length: 20 }, (_, index) => ({
+      ...Array.from({ length: 35 }, (_, index) => ({
         ...template,
         id: `object-${index}`,
         api_name: `Object${index}`,
@@ -173,6 +196,43 @@ describe("Salesforce Diagram Spec validation", () => {
     const result = validateDiagramSpec(spec, "data_model");
     expect(result.ok).toBe(true);
     expect(result.warnings.map((warning) => warning.code)).toContain("single_page_density_warning");
+  });
+
+  it("accepts conceptual entities without API names and empty relationship arrays", () => {
+    const spec = dataModelFixture();
+    const firstObject = spec.objects[0];
+    if (!firstObject) throw new Error("Expected at least one data-model object.");
+    delete firstObject.api_name;
+    firstObject.entity_kind = "conceptual";
+    firstObject.family = "special";
+    spec.objects = [firstObject];
+    spec.relationships = [];
+    expect(validateDiagramSpec(spec, "data_model").ok).toBe(true);
+  });
+
+  it("validates complete source layouts and precise relationship anchors", () => {
+    const spec = dataModelFixture();
+    spec.layout_mode = "source";
+    for (const [index, object] of spec.objects.entries()) {
+      object.source_position = { x: index * 400, y: index * 200, w: 320, h: 180 };
+    }
+    const relationship = spec.relationships[0];
+    if (!relationship) throw new Error("Expected a relationship fixture.");
+    relationship.from_anchor = { side: "right", fraction: 0.25 };
+    relationship.to_anchor = { side: "left", fraction: 0.75 };
+    expect(validateDiagramSpec(spec, "data_model").ok).toBe(true);
+
+    delete spec.objects[0]!.source_position;
+    relationship.from_anchor.fraction = 1.5;
+    delete relationship.to_anchor;
+    const invalid = validateDiagramSpec(spec, "data_model");
+    expect(invalid.errors.map((error) => error.code)).toEqual(
+      expect.arrayContaining([
+        "source_position_required",
+        "invalid_relationship_anchor",
+        "relationship_anchor_pair_required",
+      ]),
+    );
   });
 
   it("accepts a spec passed as exact JSON text", () => {

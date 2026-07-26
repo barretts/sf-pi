@@ -137,6 +137,8 @@ Every semantic element has an `evidence` array containing declared source ids.
         "from_cardinality": "one",
         "to_cardinality": "many",
         "field_api_name": "AccountId",
+        "from_label": "account for",
+        "to_label": "cases",
         "evidence": ["objects"]
       }
     ]
@@ -162,13 +164,33 @@ Per-render presentation overrides:
 - `lookup` renders a grey dotted orthogonal connector with grey terminals
 - `master_detail` renders a red solid orthogonal connector with red terminals
 
-SLDS icons automatically use their authentic bundled Design System colors, so omit `icon.color` unless an explicit presentation override is required.
+SLDS icons automatically use their authentic bundled Design System colors. For standard objects, omit the whole `icon` field when the logical/API name maps to a bundled standard icon; the renderer verifies the asset and otherwise falls back safely. Use `icon.color` only for an explicit presentation override.
 
-`family` drives the card border: `standard` blue, `custom` light orange, `special` light pink, `external` light green. Card interiors default to the white/transparent-style treatment. Set `card_fill="family"` on the render call, or change **Card fill** in SF Pi Manager, to apply the same family tint to card interiors.
+`family` drives the card border: `standard` blue, `custom` light orange, `special` light pink, `external` light green. Card interiors default to the white/transparent-style treatment. Set `card_fill="family"` on the render call, or change **Card fill** in SF Pi Manager, to apply the same family tint to card interiors. Optional `entity_kind` values add Gallery implementation semantics: `object` solid, `conceptual` dotted, `record_type` dashed, and `external` borderless-style. `api_name` can be omitted when the authoritative model does not publish one.
 
-A degree-aware second layout pass elongates hubs with many relationships along the side carrying their connection points. Anchor slots use a deterministic pitch, and every DAG orientation/ranker candidate is scored only after its own hub-growth pass.
+Automatic layout evaluates a bounded LR/TB × ranker × spacing matrix. Each candidate repeatedly recounts final-side traffic, elongates hubs, packs disconnected components, and is scored by card obstructions, route crossings, shared corridors, path length, area, and aspect. Runtime ports follow opposite-end geometry rather than relationship-id order.
 
-The single-page hard cap for `data_model` is 34 objects and 56 relationships. Above 18 objects or 28 relationships the render still succeeds and returns a readability warning; prefer splitting a large model into several scoped pages, as reference sheets normally do.
+To preserve an official poster arrangement, set `layout_mode` to `source` and give every object an evidenced `source_position`:
+
+```json
+{
+  "layout_mode": "source",
+  "objects": [
+    {
+      "id": "account",
+      "label": "Account",
+      "api_name": "Account",
+      "family": "standard",
+      "source_position": { "x": 120, "y": 480, "w": 320, "h": 180 },
+      "evidence": ["objects"]
+    }
+  ]
+}
+```
+
+Relationships can optionally provide evidenced `from_anchor`/`to_anchor` values such as `{ "side": "right", "fraction": 0.35 }`. Anchors must be provided as a pair. The renderer preserves both declared sides and their relative terminal order while enforcing marker clearance. Recursive relationships use an exterior route that honors declared sides. `from_label`, `to_label`, and `field_api_name` are optional and render on opaque borderless backings.
+
+The bounded single-page hard cap for `data_model` is 160 objects and 260 relationships, with at most 36 relationship terminals on one object. Above 34 objects or 56 relationships the render still succeeds with a poster-scale readability warning. The renderer never silently splits or shrinks a model.
 
 Optional sourced observations:
 
@@ -303,7 +325,7 @@ Connection meanings: `directional`, `async_or_batch`, `dependency`. Labels are r
 
 Interaction kinds are `request`, `response`, `async`, and `event`. Steps are unique and contiguous from 1. Message labels use measured borderless backings so intermediate lifelines and activation bars can't cross the text. Activation intervals are optional, explicit, and evidenced; the renderer never infers processing duration. Activation intervals for one participant can't overlap until nested-bar routing is supported. Self-interactions are rejected until loop routing is supported. The single-page budget is eight participants and 18 interactions, with readability warnings above six participants or 12 interactions. Static is the default; there is no autoplay.
 
-Data-model renders also report `routeChecks`: connectors whose orthogonal route passes behind an unrelated card. These are warnings, not blockers — the binding is still correct — but they mean the picture is harder to read, so prefer a narrower scope or `render_mode="relayout"`.
+Data-model results quantify three kinds of traffic: `routeChecks` for routes behind unrelated cards, `routeCrossingChecks` for independent crossings, and `sharedCorridorChecks` for collinear traffic. These remain warnings because dense non-planar models can make them unavoidable; every binding and terminal is still verified. `markerOverlapChecks` is stricter: any overlap blocks readiness.
 
 ## Update modes
 
@@ -322,7 +344,9 @@ A successful result requires:
 - every semantic connector bound through tldraw helpers
 - marker anchor-to-terminal distance ≤ 1 canvas unit
 - markers oriented outward along the relationship, never into a card
-- logical-label/API-name gap of 8 ± 0.5 canvas units
+- zero overlapping cardinality-marker pairs
+- exact requested page selected; failed page creation never falls through to another page
+- logical-label/API-name gap of 8 ± 0.5 canvas units when an API name exists
 - every data-model card fully containing its label, API name, and key fields
 - no renderer `Error` fallback text
 - full and thumbnail screenshots written to the run artifact directory

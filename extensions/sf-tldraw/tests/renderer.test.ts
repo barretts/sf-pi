@@ -48,6 +48,50 @@ describe("sf-tldraw renderer evidence gate", () => {
     });
   });
 
+  it("rejects screenshot evidence captured from a different page", async () => {
+    vi.resetModules();
+    const fakeClient = {
+      capabilities: vi.fn(async () => ({ execute: true, screenshot: true })),
+      documents: vi.fn(async () => [{ id: "doc-1", name: "Board", focusOrder: 0 }]),
+      resolveDocument: vi.fn(async () => ({ id: "doc-1", name: "Board", focusOrder: 0 })),
+      readServerConfig: vi.fn(() => ({ port: 7236, token: "not-returned" })),
+      execute: vi.fn(async () => ({
+        pageId: "page-1",
+        pageName: "Rendered Page",
+        family: "data_model",
+        createdShapes: 10,
+        updatedShapes: 0,
+        deletedShapes: 0,
+        readiness: {
+          ready: true,
+          blockers: [],
+          warnings: [],
+          lintCount: 0,
+          markerChecks: [],
+          bindingChecks: [],
+          sequenceGeometryChecks: [],
+          typographyChecks: [],
+        },
+      })),
+      screenshot: vi.fn(async () => ({
+        filePath: path.join(cwd, "unused.jpg"),
+        width: 100,
+        height: 80,
+        pageName: "Different Page",
+        captureMode: "canvas",
+      })),
+    } as unknown as TldrawRuntimeClient;
+    const spec = JSON.parse(
+      readFileSync(path.join(import.meta.dirname, "fixtures", "data-model.json"), "utf8"),
+    );
+    const { renderSalesforceDiagram } = await import("../lib/renderer.ts");
+    const outcome = await renderSalesforceDiagram(
+      { family: "data_model", spec, pageName: "Rendered Page" },
+      { cwd, client: fakeClient },
+    );
+    expect(outcome).toMatchObject({ ok: false, reason: "evidence_page_mismatch" });
+  });
+
   it("does not return success when screenshot evidence cannot be validated and persisted", async () => {
     vi.resetModules();
     const invalidImage = path.join(cwd, "outside.jpg");

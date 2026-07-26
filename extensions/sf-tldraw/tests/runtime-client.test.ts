@@ -88,6 +88,26 @@ describe("TldrawRuntimeClient", () => {
     expect(bodies.some((body) => body.includes("api.getScreenshot"))).toBe(true);
   });
 
+  it("rejects screenshot metadata with non-positive dimensions", async () => {
+    const fetchImpl = vi.fn(async () =>
+      json({
+        success: true,
+        result: {
+          filePath: screenshotPath,
+          width: 0,
+          height: 712,
+          pageName: "Page",
+          captureMode: "canvas",
+        },
+      }),
+    ) as unknown as typeof fetch;
+    const client = new TldrawRuntimeClient({ fetchImpl, serverConfigPath: configPath });
+    await expect(client.screenshot("doc-1")).rejects.toMatchObject({
+      code: "invalid_response",
+      message: expect.stringMatching(/incomplete screenshot metadata/i),
+    });
+  });
+
   it("rejects screenshot paths outside the dedicated capture directory", async () => {
     const outside = path.join(dir, "outside.jpg");
     writeFileSync(outside, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));

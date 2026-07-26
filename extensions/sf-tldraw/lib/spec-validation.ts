@@ -39,20 +39,19 @@ const PRODUCT_MARK_KEYS = new Set([
 ]);
 
 const NODE_KINDS = new Set(["salesforce", "external", "user", "data_store", "integration"]);
+const MAX_DATA_MODEL_NODE_DEGREE = 36;
 
 const LIMITS: Record<DiagramFamily, { nodes: number; edges: number }> = {
-  data_model: { nodes: 34, edges: 56 },
+  // The official Gallery currently reaches 127 entities / 188 relationships. Keep a
+  // bounded margin above that corpus while still refusing accidental unbounded pages.
+  data_model: { nodes: 160, edges: 260 },
   architecture: { nodes: 16, edges: 24 },
   sequence: { nodes: 8, edges: 18 },
 };
 
-/**
- * Above these counts a single data-model page is still rendered deterministically but
- * gets a readability warning. CTA-scale reference models (FSL, Revenue Cloud, B2B
- * Commerce) legitimately reach the high twenties, so the hard cap sits well above them.
- */
+/** Above these counts the page is poster-scale rather than comfortably screen-readable. */
 const READABILITY_BUDGET: Partial<Record<DiagramFamily, { nodes: number; edges: number }>> = {
-  data_model: { nodes: 18, edges: 28 },
+  data_model: { nodes: 34, edges: 56 },
 };
 
 export function validateDiagramSpec(
@@ -248,8 +247,19 @@ function validateDataModel(
   warnings: ValidationFinding[],
 ): void {
   const objects = arrayField(value, "objects", errors);
-  const relationships = arrayField(value, "relationships", errors);
+  const relationships = arrayFieldAllowEmpty(value, "relationships", errors);
   enforceBudget("data_model", objects.length, relationships.length, errors, warnings);
+  if (
+    value.layout_mode !== undefined &&
+    value.layout_mode !== "auto" &&
+    value.layout_mode !== "source"
+  ) {
+    errors.push({
+      code: "invalid_layout_mode",
+      message: "layout_mode must be auto or source when provided.",
+      path: "layout_mode",
+    });
+  }
   const ids = new Set<string>();
   for (let i = 0; i < objects.length; i++) {
     const item = objects[i];
@@ -260,7 +270,7 @@ function validateDataModel(
     }
     const id = validateUniqueId(item.id, path, ids, errors);
     requiredString(item, "label", errors, 1, 80, `${path}.label`);
-    const apiName = requiredString(item, "api_name", errors, 1, 128, `${path}.api_name`);
+    const apiName = optionalString(item, "api_name", errors, 1, 128, `${path}.api_name`);
     if (apiName && !API_NAME_RE.test(apiName))
       errors.push({
         code: "invalid_api_name",
@@ -274,14 +284,25 @@ function validateDataModel(
         path: `${path}.family`,
       });
     }
-    validateIcon(item.icon, `${path}.icon`, errors);
-    if (item.family === "standard" && !item.icon) {
+    if (
+      item.entity_kind !== undefined &&
+      !["object", "record_type", "conceptual", "external"].includes(String(item.entity_kind))
+    ) {
       errors.push({
-        code: "standard_icon_required",
-        message: "Standard objects require an explicit verified SLDS icon.",
-        path: `${path}.icon`,
+        code: "invalid_entity_kind",
+        message: "entity_kind must be object, record_type, conceptual, or external.",
+        path: `${path}.entity_kind`,
       });
     }
+    validateSourcePosition(item.source_position, `${path}.source_position`, errors);
+    if (value.layout_mode === "source" && !isRecord(item.source_position)) {
+      errors.push({
+        code: "source_position_required",
+        message: "Every object requires source_position when layout_mode='source'.",
+        path: `${path}.source_position`,
+      });
+    }
+    validateIcon(item.icon, `${path}.icon`, errors);
     validateEvidence(item.evidence, sourceIds, `${path}.evidence`, errors);
     validateOptionalStringArray(item.key_fields, `${path}.key_fields`, 4, errors);
     if (isRecord(item.observations))
@@ -289,6 +310,7 @@ function validateDataModel(
     if (!id) continue;
   }
   const relationshipIds = new Set<string>();
+  const degrees = new Map([...ids].map((id) => [id, 0]));
   for (let i = 0; i < relationships.length; i++) {
     const item = relationships[i];
     const path = `relationships[${i}]`;
@@ -303,6 +325,12 @@ function validateDataModel(
     validateUniqueId(item.id, path, relationshipIds, errors);
     validateEndpoint(item.from, ids, `${path}.from`, errors);
     validateEndpoint(item.to, ids, `${path}.to`, errors);
+    if (typeof item.from === "string" && degrees.has(item.from)) {
+      degrees.set(item.from, (degrees.get(item.from) ?? 0) + 1);
+    }
+    if (typeof item.to === "string" && degrees.has(item.to)) {
+      degrees.set(item.to, (degrees.get(item.to) ?? 0) + 1);
+    }
     if (item.type !== "lookup" && item.type !== "master_detail")
       errors.push({
         code: "invalid_relationship_type",
@@ -321,7 +349,26 @@ function validateDataModel(
         path: `${path}.field_api_name`,
       });
     }
+    validateRelationshipAnchor(item.from_anchor, `${path}.from_anchor`, errors);
+    validateRelationshipAnchor(item.to_anchor, `${path}.to_anchor`, errors);
+    if ((item.from_anchor === undefined) !== (item.to_anchor === undefined)) {
+      errors.push({
+        code: "relationship_anchor_pair_required",
+        message: "from_anchor and to_anchor must be provided together.",
+        path,
+      });
+    }
+    optionalString(item, "from_label", errors, 1, 80, `${path}.from_label`);
+    optionalString(item, "to_label", errors, 1, 80, `${path}.to_label`);
     validateEvidence(item.evidence, sourceIds, `${path}.evidence`, errors);
+  }
+  for (const [id, degree] of degrees) {
+    if (degree <= MAX_DATA_MODEL_NODE_DEGREE) continue;
+    errors.push({
+      code: "node_degree_exceeded",
+      message: `Object '${id}' has ${degree} relationship terminals; the single-card limit is ${MAX_DATA_MODEL_NODE_DEGREE}. Split the scope or introduce an evidenced continuation view.`,
+      path: "relationships",
+    });
   }
 }
 
@@ -795,6 +842,22 @@ function optionalArrayField(
   return value[key] as unknown[];
 }
 
+function arrayFieldAllowEmpty(
+  value: Record<string, unknown>,
+  key: string,
+  errors: ValidationFinding[],
+): unknown[] {
+  if (!Array.isArray(value[key])) {
+    errors.push({
+      code: `missing_${key}`,
+      message: `${key} must be an array.`,
+      path: key,
+    });
+    return [];
+  }
+  return value[key] as unknown[];
+}
+
 function arrayField(
   value: Record<string, unknown>,
   key: string,
@@ -839,6 +902,80 @@ function requiredString(
     return null;
   }
   return field.trim();
+}
+
+function optionalString(
+  value: Record<string, unknown>,
+  key: string,
+  errors: ValidationFinding[],
+  min: number,
+  max: number,
+  path = key,
+): string | null {
+  if (value[key] === undefined) return null;
+  return requiredString(value, key, errors, min, max, path);
+}
+
+function validateRelationshipAnchor(
+  value: unknown,
+  path: string,
+  errors: ValidationFinding[],
+): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    errors.push({
+      code: "invalid_relationship_anchor",
+      message: "Relationship anchor must be an object.",
+      path,
+    });
+    return;
+  }
+  if (!["left", "right", "top", "bottom"].includes(String(value.side))) {
+    errors.push({
+      code: "invalid_relationship_anchor",
+      message: "Relationship anchor side must be left, right, top, or bottom.",
+      path: `${path}.side`,
+    });
+  }
+  if (
+    typeof value.fraction !== "number" ||
+    !Number.isFinite(value.fraction) ||
+    value.fraction < 0.05 ||
+    value.fraction > 0.95
+  ) {
+    errors.push({
+      code: "invalid_relationship_anchor",
+      message: "Relationship anchor fraction must be between 0.05 and 0.95.",
+      path: `${path}.fraction`,
+    });
+  }
+}
+
+function validateSourcePosition(value: unknown, path: string, errors: ValidationFinding[]): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    errors.push({
+      code: "invalid_source_position",
+      message: "source_position must be an object.",
+      path,
+    });
+    return;
+  }
+  for (const key of ["x", "y", "w", "h"] as const) {
+    const coordinate = value[key];
+    if (
+      typeof coordinate !== "number" ||
+      !Number.isFinite(coordinate) ||
+      Math.abs(coordinate) > 1_000_000 ||
+      ((key === "w" || key === "h") && coordinate <= 0)
+    ) {
+      errors.push({
+        code: "invalid_source_position",
+        message: `source_position.${key} must be a finite ${key === "w" || key === "h" ? "positive " : ""}number within the supported canvas range.`,
+        path: `${path}.${key}`,
+      });
+    }
+  }
 }
 
 function rejectPrivateKeys(value: unknown, path: string, errors: ValidationFinding[]): void {

@@ -61,13 +61,26 @@ export interface DiagramIcon {
 }
 
 export type ObjectFamily = "standard" | "custom" | "external" | "special";
+export type DataModelEntityKind = "object" | "record_type" | "conceptual" | "external";
 export type EndpointCardinality = "one" | "many" | "zero_or_one" | "zero_or_many";
+
+export interface DataModelSourcePosition {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 export interface DataModelObject {
   id: string;
   label: string;
-  api_name: string;
+  /** Optional when an authoritative reference does not publish a physical API name. */
+  api_name?: string;
   family: ObjectFamily;
+  /** Official Gallery implementation semantics, expressed by the card border style. */
+  entity_kind?: DataModelEntityKind;
+  /** Optional evidence-backed source geometry used only when layout_mode='source'. */
+  source_position?: DataModelSourcePosition;
   icon?: DiagramIcon;
   key_fields?: string[];
   observations?: {
@@ -78,6 +91,11 @@ export interface DataModelObject {
   evidence: string[];
 }
 
+export interface DataModelRelationshipAnchor {
+  side: "left" | "right" | "top" | "bottom";
+  fraction: number;
+}
+
 export interface DataModelRelationship {
   id: string;
   from: string;
@@ -86,11 +104,19 @@ export interface DataModelRelationship {
   from_cardinality: EndpointCardinality;
   to_cardinality: EndpointCardinality;
   field_api_name?: string;
+  /** Optional evidenced source terminals used with source layout. */
+  from_anchor?: DataModelRelationshipAnchor;
+  to_anchor?: DataModelRelationshipAnchor;
+  /** Directional relationship-end phrases from an authoritative ERD. */
+  from_label?: string;
+  to_label?: string;
   evidence: string[];
 }
 
 export interface DataModelSpec extends BaseDiagramSpec {
   family: "data_model";
+  /** Source mode preserves an official reference's relative grouping on first render. */
+  layout_mode?: "auto" | "source";
   objects: DataModelObject[];
   relationships: DataModelRelationship[];
 }
@@ -289,6 +315,7 @@ export interface CanvasNodePayload extends PositionedNode {
   apiName?: string;
   subtitle?: string;
   family?: ObjectFamily;
+  entityKind?: DataModelEntityKind;
   iconAssetId?: string;
   iconTileAssetId?: string;
   keyFields?: string[];
@@ -305,6 +332,11 @@ export interface CanvasEdgePayload {
   meaning?: ArchitectureConnection["meaning"] | SequenceInteraction["kind"];
   /** Data-model only. Drives connector color and dash instead of an LK/MD label box. */
   relationshipType?: DataModelRelationship["type"];
+  fieldApiName?: string;
+  fromAnchor?: DataModelRelationshipAnchor;
+  toAnchor?: DataModelRelationshipAnchor;
+  fromLabel?: string;
+  toLabel?: string;
   fromCardinality?: EndpointCardinality;
   toCardinality?: EndpointCardinality;
   fromMarkerAssetId?: string;
@@ -359,6 +391,12 @@ export interface RenderReadiness {
   cardContentChecks?: Array<{ id: string; overflow: number }>;
   /** Data-model only: connectors whose orthogonal route passes behind an unrelated card. */
   routeChecks?: Array<{ id: string; obstructedBy: string[] }>;
+  /** Data-model only: final routed segments that cross another relationship. */
+  routeCrossingChecks?: Array<{ id: string; crosses: string[] }>;
+  /** Data-model only: final routed segments that share a collinear corridor. */
+  sharedCorridorChecks?: Array<{ id: string; sharesWith: string[] }>;
+  /** Data-model only: cardinality marker pairs whose rendered bounds overlap. */
+  markerOverlapChecks?: Array<{ first: string; second: string }>;
 }
 
 export interface CanvasExecutionResult {
