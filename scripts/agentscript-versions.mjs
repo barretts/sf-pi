@@ -12,16 +12,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  AGENT_SCRIPT_PACKAGES,
+  collectLockedAgentScriptVersions,
+} from "../extensions/sf-agentscript/lib/package-catalog.ts";
 import { npmRegistryPackageUrl } from "./lib/npm-registry-url.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-
-const PACKAGES = [
-  { name: "@sf-agentscript/agentforce", kind: "direct" },
-  { name: "@sf-agentscript/compiler", kind: "transitive" },
-  { name: "@sf-agentscript/language", kind: "direct" },
-  { name: "@sf-agentscript/lsp", kind: "direct" },
-];
 
 function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, "utf8"));
@@ -30,15 +27,6 @@ function readJson(filePath) {
 function declaredVersions() {
   const pkg = readJson(path.join(ROOT, "package.json"));
   return pkg.dependencies ?? {};
-}
-
-function lockVersion(packageName) {
-  try {
-    const lock = readJson(path.join(ROOT, "package-lock.json"));
-    return lock.packages?.[`node_modules/${packageName}`]?.version;
-  } catch {
-    return undefined;
-  }
 }
 
 async function latestVersion(packageName) {
@@ -54,10 +42,14 @@ async function latestVersion(packageName) {
 }
 
 const deps = declaredVersions();
+const lock = readJson(path.join(ROOT, "package-lock.json"));
+const lockedVersions = collectLockedAgentScriptVersions(lock.packages ?? {});
 const rows = [];
-for (const pkg of PACKAGES) {
+for (const pkg of AGENT_SCRIPT_PACKAGES) {
   const declared = deps[pkg.name];
-  const resolved = lockVersion(pkg.name);
+  const resolvedVersions = lockedVersions.get(pkg.name) ?? [];
+  const resolved =
+    resolvedVersions.length === 1 ? resolvedVersions[0] : resolvedVersions.join(", ");
   const latest = await latestVersion(pkg.name);
   rows.push({
     package: pkg.name,
@@ -66,15 +58,29 @@ for (const pkg of PACKAGES) {
     resolved: resolved ?? "—",
     latest: typeof latest === "string" ? latest : "unknown",
     status:
-      typeof latest === "string" && resolved
-        ? latest === resolved
-          ? "current"
-          : "update available"
-        : "unknown",
+      resolvedVersions.length > 1
+        ? "duplicate versions"
+        : typeof latest === "string" && resolved
+          ? latest === resolved
+            ? "current"
+            : "update available"
+          : "unknown",
   });
 }
 
 console.table(rows);
+const coherenceIssues = rows.flatMap((row) => {
+  if (row.resolved === "—") return [`${row.package} is unresolved`];
+  if (row.kind === "direct" && row.declared === "—") return [`${row.package} is undeclared`];
+  if (row.status === "duplicate versions") return [`${row.package} resolves ${row.resolved}`];
+  return [];
+});
+console.log(
+  coherenceIssues.length === 0
+    ? "\nPackage coherence: current graph resolves one version per package."
+    : `\nPackage coherence issues: ${coherenceIssues.join("; ")}`,
+);
+if (coherenceIssues.length > 0) process.exitCode = 1;
 console.log("\nIntentional refresh workflow:");
 console.log(
   "  npm install --save-exact @sf-agentscript/agentforce@<version> @sf-agentscript/language@<version> @sf-agentscript/lsp@<version>",

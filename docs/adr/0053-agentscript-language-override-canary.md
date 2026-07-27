@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted; canary retired after upstream package convergence
 
 ## Context
 
@@ -60,3 +60,7 @@ The initial canary forces:
 Remove the overrides and this canary posture when the direct AgentScript
 packages SF Pi uses naturally resolve the desired `@sf-agentscript/language`
 and `@sf-agentscript/types` versions without transitive duplication.
+
+## Outcome
+
+The canary was removed after the pinned Agent Script packages naturally converged on one language, parser, dialect, and types graph. SF Pi retains a read-only **Agent Script Package Coherence** check so future dependency refreshes detect missing or duplicated foundational versions without restoring an override by default.

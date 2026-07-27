@@ -301,6 +301,78 @@ describe("inspectFile", () => {
     expect(result.stats).toMatchObject({ model_config: 1, access: 1, context: 1 });
   });
 
+  test("projects connected subagents and new workflow-relevant blocks", async () => {
+    const filePath = await writeAgent(
+      "new-capabilities.agent",
+      [
+        "config:",
+        '    agent_name: "Capability_Bot"',
+        "    runtime:",
+        "        streaming: True",
+        "    file_upload:",
+        '        mode: "auto"',
+        "",
+        "system:",
+        '    instructions: "help"',
+        "    recommended_prompts:",
+        "        in_conversation: True",
+        "        welcome_screen: False",
+        "        starter_prompts:",
+        '            - "Track order"',
+        "",
+        "variables:",
+        "    done: mutable boolean = False",
+        "",
+        "connected_subagent helper:",
+        '    target: "agent://Helper"',
+        '    description: "Helper"',
+        "    delegate_escalation: False",
+        "    after_response:",
+        "        set @variables.done = True",
+        "",
+        "subagent worker:",
+        '    description: "Worker"',
+        "    skills:",
+        "        summarize:",
+        '            description: "Summarize"',
+        "",
+        "start_agent main:",
+        '    description: "Entry"',
+        "    skills:",
+        "        greet:",
+        '            description: "Greet"',
+        "    reasoning:",
+        "        instructions: ->",
+        "            transition to @connected_subagent.helper",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await inspectFile(filePath);
+    expect(result.ok).toBe(true);
+    expect(result.components?.config).toMatchObject({
+      "runtime.streaming": true,
+      "file_upload.mode": "auto",
+    });
+    expect(result.components?.system?.recommended_prompts).toEqual({
+      in_conversation: true,
+      welcome_screen: false,
+      starter_prompts: ["Track order"],
+    });
+    expect(result.components?.start_agents?.[0].skills).toEqual(["greet"]);
+    expect(result.components?.start_agents?.[0].connected_subagent_refs).toEqual(["helper"]);
+    expect(result.components?.subagents[0].skills).toEqual(["summarize"]);
+    expect(result.components?.connected_subagents).toEqual([
+      expect.objectContaining({
+        name: "helper",
+        target: "agent://Helper",
+        delegate_escalation: false,
+        has_after_response: true,
+      }),
+    ]);
+    expect(result.stats?.connected_subagents).toBe(1);
+  });
+
   test("agent_type is surfaced on components.config (not components.system)", async () => {
     // Locks in the SDK schema: agent_type is a `config:` field. An
     // earlier inspect summary mirrored it onto `system` too, which was

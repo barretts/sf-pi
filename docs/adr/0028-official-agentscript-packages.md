@@ -5,6 +5,6 @@ SF Agent Script uses exact-versioned public `@sf-agentscript/*` npm packages as 
 ## Consequences
 
 - `@sf-agentscript/agentforce` is the primary parser/compiler/dialect source for local Agent Script authoring.
-- `@sf-agentscript/language` and `@sf-agentscript/lsp` own generic AgentScript quick fixes and reference/definition semantics where SF Pi exposes those capabilities.
-- SF Pi keeps Structural Agent Script Inspection because it is an agent-friendly projection, not a generic LSP feature.
+- `@sf-agentscript/language` and `@sf-agentscript/lsp` own generic AgentScript diagnostics, quick fixes, and reference/definition semantics where SF Pi exposes those capabilities. Explicit compile/check preserves every upstream severity; automatic edit-loop feedback narrows presentation to errors and warnings.
+- SF Pi keeps Structural Agent Script Inspection because it is a stable agent-facing projection, not a raw compiler AST or generic LSP feature.
 - Package versions are pinned exactly so diagnostic and compile behavior change only through intentional dependency refreshes.

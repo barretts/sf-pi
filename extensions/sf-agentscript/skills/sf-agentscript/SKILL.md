@@ -77,17 +77,19 @@ Use before inspecting deeply, mutating, previewing, or publishing.
 
 Use `fallback="server"` only when local severity-1 diagnostics look like dialect-version skew. It requires `target_org` and costs a network call.
 
+Explicit compile/check returns every upstream diagnostic severity. `clean=true` means no severity-1 errors; warnings, information, and hints remain visible evidence. Automatic compile-on-save feedback stays limited to errors and warnings.
+
 `mode="format"` writes canonical SDK formatting and refuses parse errors.
 
 ### Inspect
 
-Use `inspect/structure` instead of reading whole files. It returns components, line numbers, refs, stats, and parse-error flags.
+Use `inspect/structure` instead of reading whole files. It returns stable workflow projections—not raw AST—including components, connected-agent targets, skills, runtime/file-upload settings, recommended prompts, line numbers, refs, stats, and parse-error flags.
 
 Use `inspect/context_profile` before previewing or publishing voice, messaging, linked-variable, or stateful agents.
 
 Use `inspect/find_references` before mutating a symbol. Use `inspect/definition` when you only need the declaration.
 
-Use `inspect/check_targets` before publish when action targets must resolve in the org. Requires `target_org`.
+Use `inspect/check_targets` before publish when action or connected-agent targets must resolve in the org. Requires `target_org`; schemes without a proven resolver remain explicitly unverifiable.
 
 Use `inspect/review` before publish or after behavioral changes. It is deterministic: no hidden model call, no numeric score. Readiness is `ready`, `ready_with_warnings`, `blocked`, or `partial`. Pass `target_org` to include read-only org checks: action-target resolution, Service Agent user readiness, and surface readiness probes such as Agentforce settings, phone number, voice/messaging channel, ServiceChannel, published voice planner, routing-flow, and fallback-queue checks for channel-linked agents. Pass `output_path` to write a Markdown report.
 

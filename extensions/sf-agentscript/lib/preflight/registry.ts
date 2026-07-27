@@ -4,10 +4,8 @@
  *
  * Each resolver declares the schemes it handles (`["flow"]`,
  * `["apex","apexRest"]`, etc.) and the registry uses scheme as the
- * lookup key. Schemes not in the registry resolve to `unverifiable` —
- * matches the agentscript compiler's permissive stance ("any scheme is
- * a valid invocation_target_type") while still surfacing the gap to
- * the user.
+ * lookup key. Schemes not in the registry resolve to `unverifiable`:
+ * compiler validity is preserved, but sf-pi does not guess org existence.
  */
 
 import { agentforceResolver } from "./resolvers/agentforce.ts";

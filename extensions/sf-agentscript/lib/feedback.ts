@@ -4,8 +4,8 @@
  *
  * The agent-facing surface is:
  *
- *   File has errors/actionable warnings   → append a `LSP feedback:` block
- *   File was broken, now clean            → append a `LSP now clean:` note
+ *   File has errors/warnings              → append a `LSP feedback:` block
+ *   File was broken, now error-free       → append a `LSP now clean:` note
  *   First time SDK is unavailable         → append a one-time `LSP setup note:`
  *   Clean file that was never broken      → stay silent
  *
@@ -28,6 +28,7 @@ import {
   type SfPiDiagnosticMetadataItem,
   type SfPiDiagnosticsMetadata,
 } from "../../../lib/common/display/diagnostics.ts";
+import { isAgentScriptCompileValid } from "./diagnostics.ts";
 import type {
   AgentScriptCheckResult,
   AgentScriptDiagnostic,
@@ -164,7 +165,13 @@ function renderDiagnosticLine(diagnostic: AgentScriptDiagnostic): string {
     MAX_SINGLE_DIAGNOSTIC_BYTES,
   );
   const severityTag =
-    diagnostic.severity === 2 ? " [warning]" : diagnostic.severity === 3 ? " [info]" : "";
+    diagnostic.severity === 2
+      ? " [warning]"
+      : diagnostic.severity === 3
+        ? " [info]"
+        : diagnostic.severity === 4
+          ? " [hint]"
+          : "";
   return `- L${line}${severityTag}: ${body}`;
 }
 
@@ -274,30 +281,37 @@ export function buildToolResultUpdate(
     );
   }
 
+  // Automatic edit-loop feedback is intentionally narrower than explicit
+  // compile/check: preserve errors and warnings, but leave information/hints
+  // available on demand so they do not repeat after every file edit.
+  const diagnostics = checkResult.diagnostics.filter((diagnostic) => diagnostic.severity <= 2);
+  const diagnosticKeys = new Set(
+    diagnostics.map((diagnostic) => `${diagnostic.range.start.line}::${diagnostic.code ?? ""}`),
+  );
+  const quickFixes = checkResult.quickFixes.filter((fix) =>
+    diagnosticKeys.has(`${fix.diagnosticLine}::${fix.diagnosticCode ?? ""}`),
+  );
+
   // Decide whether to include a dialect header this turn. Only include it the
   // first time we feed back anything for this file, so we don't repeat it on
   // every edit.
   const firstFeedbackForFile = !state.dialectReportedByFile.has(filePath);
   const dialectHeader = firstFeedbackForFile ? renderDialectHeader(checkResult.dialect) : null;
 
-  if (checkResult.diagnostics.length > 0) {
-    state.lastStatusByFile.set(filePath, "error");
+  if (diagnostics.length > 0) {
+    const hasErrors = !isAgentScriptCompileValid(diagnostics);
+    state.lastStatusByFile.set(filePath, hasErrors ? "error" : "clean");
     state.dialectReportedByFile.add(filePath);
-    const renderedText = renderErrorFeedback(
-      filePath,
-      dialectHeader,
-      checkResult.diagnostics,
-      checkResult.quickFixes,
-    );
+    const renderedText = renderErrorFeedback(filePath, dialectHeader, diagnostics, quickFixes);
     return appendTextPart(
       existingContent,
       renderedText,
       buildAgentScriptMetadata({
         filePath,
-        status: "error",
+        status: hasErrors ? "error" : "clean",
         renderedText,
-        diagnostics: checkResult.diagnostics,
-        quickFixes: checkResult.quickFixes,
+        diagnostics,
+        quickFixes,
         dialect: dialectHeader ?? undefined,
       }),
       existingDetails,
@@ -392,6 +406,15 @@ function buildAgentScriptMetadata(options: {
   const diagnostics = options.diagnostics.map((diagnostic) =>
     toDiagnosticItem(diagnostic, options.quickFixes),
   );
+  const summary =
+    options.status === "clean" && diagnostics.length > 0
+      ? `${fileName} is compile-valid with ${diagnostics.length} diagnostic${diagnostics.length === 1 ? "" : "s"}`
+      : buildDiagnosticsSummary({
+          status: options.status,
+          fileName,
+          diagnostics,
+          unavailableReason: options.unavailableReason,
+        });
   return {
     source: "sf-agentscript",
     status: options.status,
@@ -399,12 +422,7 @@ function buildAgentScriptMetadata(options: {
     fileName,
     language: "agentscript",
     generatedAt: new Date().toISOString(),
-    summary: buildDiagnosticsSummary({
-      status: options.status,
-      fileName,
-      diagnostics,
-      unavailableReason: options.unavailableReason,
-    }),
+    summary,
     renderedText: options.renderedText,
     diagnostics,
     dialect: options.dialect,

@@ -87,7 +87,7 @@ describe("compileResultMarkdown", () => {
     });
     expect(md).toMatch(/✅/);
     expect(md).toMatch(/compiles/);
-    expect(md).toMatch(/Informational diagnostics present; compile is valid/);
+    expect(md).toMatch(/Non-blocking diagnostics present; compile is valid/);
     expect(md).not.toMatch(/❌/);
   });
 

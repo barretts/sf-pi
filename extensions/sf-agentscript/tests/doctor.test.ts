@@ -1,6 +1,11 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { describe, expect, test } from "vitest";
-import { npmRegistryPackageUrl, renderDoctorReport, type DoctorStatus } from "../lib/doctor.ts";
+import {
+  npmRegistryPackageUrl,
+  packageCoherenceIssues,
+  renderDoctorReport,
+  type DoctorStatus,
+} from "../lib/doctor.ts";
 
 function baseStatus(): DoctorStatus {
   return {
@@ -26,6 +31,8 @@ function baseStatus(): DoctorStatus {
         loaded: true,
       },
     ],
+    packageCoherent: true,
+    packageIssues: [],
     dialectsProbed: ["agentforce"],
     upstreamNote: "@sf-agentscript/agentforce@2.5.32",
     salesforceCoreResolved: true,
@@ -51,5 +58,28 @@ describe("renderDoctorReport", () => {
     expect(report).toContain(
       "@sf-agentscript/compiler: transitive, not declared, resolved 2.6.9, latest 2.7.0, update available",
     );
+    expect(report).toContain("package coherence: one compatible toolchain");
+  });
+
+  test("reports missing declarations and duplicate foundational versions", () => {
+    const issues = packageCoherenceIssues([
+      {
+        name: "@sf-agentscript/language",
+        kind: "direct",
+        resolvedVersion: "2.20.0",
+        resolvedVersions: ["2.18.0", "2.20.0"],
+        loaded: true,
+      },
+      {
+        name: "@sf-agentscript/parser",
+        kind: "transitive",
+        loaded: false,
+      },
+    ]);
+    expect(issues).toEqual([
+      "@sf-agentscript/language is not declared directly",
+      "@sf-agentscript/language resolves multiple versions: 2.18.0, 2.20.0",
+      "@sf-agentscript/parser is not resolvable",
+    ]);
   });
 });

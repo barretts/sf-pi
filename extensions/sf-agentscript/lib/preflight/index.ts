@@ -8,9 +8,8 @@
  *
  * The registry implementation dispatches each parsed URI by scheme to a
  * TargetResolver. Schemes not in the registry classify as
- * `unverifiable` — this matches the agentscript compiler's permissive
- * stance ("any scheme is a valid invocation_target_type") while still
- * surfacing the gap to the user.
+ * `unverifiable` — the compiler owns scheme validity, while sf-pi claims org
+ * existence only for schemes with an authoritative product-specific resolver.
  */
 
 import type { Connection } from "@salesforce/core";

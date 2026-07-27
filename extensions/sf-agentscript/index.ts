@@ -36,7 +36,7 @@ import type {
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import { isEditToolResult, isWriteToolResult } from "@earendil-works/pi-coding-agent";
-import { checkAgentScriptFile } from "./lib/diagnostics.ts";
+import { checkAgentScriptFile, isAgentScriptCompileValid } from "./lib/diagnostics.ts";
 import { isAgentScriptFile, resolveToolPath } from "./lib/file-classify.ts";
 import {
   buildToolResultUpdate,
@@ -408,8 +408,9 @@ async function handleCheckSubcommand(
     }
     return;
   }
-  if (result.diagnostics.length > 0) state.lastStatusByFile.set(filePath, "error");
-  else state.lastStatusByFile.set(filePath, "clean");
+  const hasErrors = !isAgentScriptCompileValid(result.diagnostics);
+  const hasWarnings = result.diagnostics.some((diagnostic) => diagnostic.severity === 2);
+  state.lastStatusByFile.set(filePath, hasErrors ? "error" : "clean");
   state.dialectReportedByFile.add(filePath);
 
   if (!ctx.hasUI) return;
@@ -418,7 +419,7 @@ async function handleCheckSubcommand(
     return;
   }
   const rendered = renderErrorFeedback(filePath, null, result.diagnostics, result.quickFixes);
-  ctx.ui.notify(rendered, "warning");
+  ctx.ui.notify(rendered, hasErrors || hasWarnings ? "warning" : "info");
 }
 
 // -------------------------------------------------------------------------------------------------

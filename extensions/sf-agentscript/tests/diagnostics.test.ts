@@ -305,7 +305,7 @@ describe("checkAgentScriptFile (integration)", () => {
     );
   });
 
-  it("flags bare numeric action inputs and outputs", async () => {
+  it("does not impose legacy numeric I/O guidance over upstream", async () => {
     const file = writeTempAgent(
       [
         "system:",
@@ -335,9 +335,7 @@ describe("checkAgentScriptFile (integration)", () => {
     );
 
     const result = await checkAgentScriptFile(file);
-    const numeric = result.diagnostics.filter((d) => d.code === "numeric-action-io");
-    expect(numeric).toHaveLength(2);
-    expect(numeric.every((d) => d.severity === 2)).toBe(true);
+    expect(result.diagnostics.some((d) => d.code === "numeric-action-io")).toBe(false);
   });
 
   it("flags invalid connection messaging route config", async () => {
@@ -485,7 +483,7 @@ describe("checkAgentScriptFile (integration)", () => {
     expect(outputScope.some((d) => d.severity === 2)).toBe(true);
   });
 
-  it("flags procedural statements inside literal instructions", async () => {
+  it("delegates literal instruction syntax diagnostics upstream", async () => {
     const file = writeTempAgent(
       [
         "system:",
@@ -496,6 +494,9 @@ describe("checkAgentScriptFile (integration)", () => {
         "",
         "access:",
         '    default_agent_user: "hello@world.com"',
+        "",
+        "variables:",
+        "    verified: boolean = False",
         "",
         "start_agent hello_world:",
         '    description: "Entry topic."',
@@ -514,9 +515,8 @@ describe("checkAgentScriptFile (integration)", () => {
     );
 
     const result = await checkAgentScriptFile(file);
-    const literal = result.diagnostics.filter((d) => d.code === "literal-mode-procedural-text");
-    expect(literal.length).toBeGreaterThanOrEqual(1);
-    expect(literal.every((d) => d.severity === 2)).toBe(true);
+    expect(result.diagnostics.some((d) => d.code === "literal-mode-procedural-text")).toBe(false);
+    expect(result.diagnostics.some((d) => d.code === "instruction-template-syntax")).toBe(true);
   });
 
   it("warns on run inside after_reasoning", async () => {

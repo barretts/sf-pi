@@ -106,9 +106,9 @@ const cases: ParityCase[] = [
   },
   {
     name: "bare numeric action inputs and outputs",
-    localCodes: ["numeric-action-io"],
+    localCodes: [],
     upstreamCodes: ["action-missing-input"],
-    classification: "sf-pi-owned",
+    classification: "upstream-owned",
     source: withStart(
       action(
         "calc",
@@ -184,9 +184,9 @@ const cases: ParityCase[] = [
   },
   {
     name: "procedural statements inside literal instructions",
-    localCodes: ["literal-mode-procedural-text"],
+    localCodes: [],
     upstreamCodes: ["unused-variable", "instruction-template-syntax"],
-    classification: "sf-pi-owned",
+    classification: "upstream-owned",
     source: agent([
       ...baseHead,
       "variables:",
@@ -238,7 +238,7 @@ const cases: ParityCase[] = [
     name: "Employee Agent with Service-Agent-only wiring",
     localCodes: ["employee-agent-connection-messaging", "employee-agent-escalate"],
     upstreamCodes: [],
-    classification: "upstream-owned",
+    classification: "sf-pi-owned",
     source: agent([
       "system:",
       '    instructions: "You are helpful."',
@@ -297,8 +297,6 @@ describe("local hardening diagnostic parity", () => {
       "employee-agent-connection-messaging",
       "employee-agent-escalate",
       "inputs-out-of-scope",
-      "literal-mode-procedural-text",
-      "numeric-action-io",
       "outputs-out-of-scope",
       "prompt-template-output-flags",
       "run-in-after-reasoning",

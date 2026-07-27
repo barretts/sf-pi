@@ -12,6 +12,7 @@ import { existsSync } from "node:fs";
 import { access, constants } from "node:fs/promises";
 import type { ExtensionDoctorReport } from "../../../lib/common/doctor/registry.ts";
 import { boundedPromise } from "./bounded-salesforce-transport.ts";
+import { AGENT_SCRIPT_PACKAGES, collectLockedAgentScriptVersions } from "./package-catalog.ts";
 import { AGENTFORCE_SDK_PACKAGE, loadAgentforceSDK } from "./sdk.ts";
 import { probeSfapReadiness, type SfapReadinessReport } from "./sfap-readiness.ts";
 
@@ -24,6 +25,7 @@ export interface AgentScriptPackageStatus {
   kind: "direct" | "transitive";
   declaredVersion?: string;
   resolvedVersion?: string;
+  resolvedVersions?: string[];
   latestVersion?: string;
   freshness?: "current" | "update_available" | "unknown";
   loaded: boolean;
@@ -34,6 +36,8 @@ export interface DoctorStatus {
   sdkPackage: string;
   sdkPackageVersion?: string;
   agentScriptPackages: AgentScriptPackageStatus[];
+  packageCoherent: boolean;
+  packageIssues: string[];
   dialectsProbed: string[];
   loadError?: string;
   upstreamNote: string;
@@ -74,6 +78,7 @@ export async function probeDoctor(
   }
 
   const agentScriptPackages = await readAgentScriptPackageStatuses(options.includeFreshness);
+  const packageIssues = packageCoherenceIssues(agentScriptPackages);
   const sdkPackageVersion = agentScriptPackages.find(
     (pkg) => pkg.name === AGENTFORCE_SDK_PACKAGE,
   )?.declaredVersion;
@@ -133,6 +138,8 @@ export async function probeDoctor(
     sdkPackage: AGENTFORCE_SDK_PACKAGE,
     sdkPackageVersion,
     agentScriptPackages,
+    packageCoherent: packageIssues.length === 0,
+    packageIssues,
     dialectsProbed,
     loadError,
     upstreamNote,
@@ -157,21 +164,19 @@ async function readAgentScriptPackageStatuses(
     dependencies = {};
   }
 
-  const packages: Array<{ name: string; kind: "direct" | "transitive" }> = [
-    { name: AGENTFORCE_SDK_PACKAGE, kind: "direct" },
-    { name: "@sf-agentscript/compiler", kind: "transitive" },
-    { name: "@sf-agentscript/language", kind: "direct" },
-    { name: "@sf-agentscript/lsp", kind: "direct" },
-  ];
+  const lockedVersions = await readLockedPackageVersions(fs);
 
   return Promise.all(
-    packages.map(async (pkg) => {
+    AGENT_SCRIPT_PACKAGES.map(async (pkg) => {
       const resolvedVersion = await readInstalledPackageVersion(pkg.name);
+      const resolvedVersions =
+        lockedVersions.get(pkg.name) ?? (resolvedVersion ? [resolvedVersion] : []);
       const latestVersion = includeFreshness ? await fetchLatestNpmVersion(pkg.name) : undefined;
       return {
         ...pkg,
         declaredVersion: dependencies[pkg.name],
         resolvedVersion,
+        ...(resolvedVersions.length > 0 ? { resolvedVersions } : {}),
         latestVersion,
         freshness: latestVersion
           ? resolvedVersion === latestVersion
@@ -182,6 +187,36 @@ async function readAgentScriptPackageStatuses(
       };
     }),
   );
+}
+
+async function readLockedPackageVersions(
+  fs: typeof import("node:fs/promises"),
+): Promise<Map<string, string[]>> {
+  try {
+    const raw = await fs.readFile(new URL("../../../package-lock.json", import.meta.url), "utf8");
+    const lock = JSON.parse(raw) as {
+      packages?: Record<string, { version?: string }>;
+    };
+    return collectLockedAgentScriptVersions(lock.packages ?? {});
+  } catch {
+    // Installed packages may not retain the repository lockfile. Runtime
+    // resolution still proves the primary package path in that environment.
+    return new Map();
+  }
+}
+
+export function packageCoherenceIssues(packages: AgentScriptPackageStatus[]): string[] {
+  const issues: string[] = [];
+  for (const pkg of packages) {
+    if (!pkg.loaded) issues.push(`${pkg.name} is not resolvable`);
+    if (pkg.kind === "direct" && !pkg.declaredVersion) {
+      issues.push(`${pkg.name} is not declared directly`);
+    }
+    if ((pkg.resolvedVersions?.length ?? 0) > 1) {
+      issues.push(`${pkg.name} resolves multiple versions: ${pkg.resolvedVersions?.join(", ")}`);
+    }
+  }
+  return issues;
 }
 
 export function npmRegistryPackageUrl(packageName: string): string {
@@ -279,20 +314,19 @@ export async function runExtensionDoctor(cwd: string): Promise<ExtensionDoctorRe
     });
   }
 
-  const missingPackage = status.agentScriptPackages.find((pkg) => !pkg.loaded);
-  if (missingPackage) {
+  if (!status.packageCoherent) {
     checks.push({
       id: "agentscript.package-versions",
       severity: "warn",
-      title: "Some @sf-agentscript packages are not resolvable",
-      detail: status.agentScriptPackages.map(renderPackageStatusCompact).join("; "),
-      fix: "Run `npm install` at the repo root.",
+      title: "AgentScript package graph is not coherent",
+      detail: status.packageIssues.join("; "),
+      fix: "Run `npm install` at the repo root and re-run /sf-agentscript doctor --packages.",
     });
   } else if (status.agentScriptPackages.length > 0) {
     checks.push({
       id: "agentscript.package-versions",
       severity: "ok",
-      title: "AgentScript package versions resolved",
+      title: "AgentScript package graph is coherent",
       detail: status.agentScriptPackages.map(renderPackageStatusCompact).join("; "),
     });
   }
@@ -359,6 +393,11 @@ export function renderDoctorReport(status: DoctorStatus): string {
     for (const pkg of status.agentScriptPackages) {
       lines.push(renderPackageStatusLine(pkg));
     }
+    lines.push(
+      status.packageCoherent
+        ? "✅ package coherence: one compatible toolchain"
+        : `⚠️  package coherence: ${status.packageIssues.join("; ")}`,
+    );
   }
 
   if (status.salesforceCoreResolved) {

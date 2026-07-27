@@ -66,7 +66,7 @@ export async function checkAgentUserStatus(
       short_message:
         input.agent_type === "AgentforceEmployeeAgent"
           ? "Employee Agent — no Einstein Agent User wiring required."
-          : `agent_type='${input.agent_type}' — agent-user wiring not applicable.`,
+          : `agent_type='${input.agent_type}' — agent-user wiring is not evaluated by sf-pi.`,
     };
   }
 

@@ -34,6 +34,8 @@ Rules:
   - `rename` is reference-safe for declarable symbols (`@subagent.X`, `@topic.X`, `@actions.X`, `@variables.X`) and accepts legacy component paths.
   - `insert` / `delete` intentionally guide callers to generic file edits followed by compile/check for broader source construction.
 - `agent_file` may be omitted only when exactly one current `.agent` file exists on the active Pi branch. Ambiguity is refused with structured candidates.
+- Explicit compile/check preserves every upstream diagnostic severity. `clean=true` means no severity-1 errors; warnings, information, and hints remain visible without blocking preview or publish guards. Automatic compile-on-save feedback is intentionally limited to errors and warnings.
+- `inspect/structure` is a stable workflow projection, not raw compiler AST. It includes connected-agent topology, skills, runtime/file-upload settings, and recommended-prompt settings needed for planning, review, and preflight.
 
 ## Branch-Durable Tool State
 
@@ -237,6 +239,7 @@ extensions/sf-agentscript/
     manager-action-panels.ts← implementation module
     mutate.ts               ← implementation module
     mutation-policy.ts      ← implementation module
+    package-catalog.ts      ← implementation module
     preflight.ts            ← implementation module
     preview-tool.ts         ← implementation module
     sdk.ts                  ← implementation module
@@ -292,6 +295,7 @@ extensions/sf-agentscript/
     mutate-dry-run.test.ts  ← unit / smoke test
     mutate-emit-regression.test.ts← unit / smoke test
     mutate.test.ts          ← unit / smoke test
+    package-coherence.test.ts← unit / smoke test
     path-containment.test.ts← unit / smoke test
     phone-settings-readiness.test.ts← unit / smoke test
     planner-readiness.test.ts← unit / smoke test
@@ -323,6 +327,7 @@ extensions/sf-agentscript/
     tool-schema-openai-strict.test.ts← unit / smoke test
     tool-types.test.ts      ← unit / smoke test
     trace-digest.test.ts    ← unit / smoke test
+    upstream-capabilities.test.ts← unit / smoke test
   AGENTS.md                 ← extension-specific agent editing rules
   CREDITS.md                ← extension attribution
   index.ts                  ← Pi extension entry point
@@ -334,7 +339,7 @@ extensions/sf-agentscript/
 
 ## AgentScript Package Updates
 
-Check current, resolved, and npm-latest official AgentScript package versions with:
+Check current, resolved, and npm-latest official AgentScript package versions, plus missing or duplicate foundational versions, with:
 
 ```bash
 npm run agentscript:versions
@@ -342,13 +347,7 @@ npm run agentscript:versions
 
 Refresh direct AgentScript dependencies intentionally with `npm install --save-exact`; `@sf-agentscript/compiler` remains transitive through `@sf-agentscript/agentforce` unless SF Pi imports it directly.
 
-SF Pi may temporarily use an npm override canary for `@sf-agentscript/language` and the matching `@sf-agentscript/types` when the latest language-service behavior is needed before every upstream package declaration catches up. When that canary is active, verify a single effective language/types pair with:
-
-```bash
-npm ls @sf-agentscript/language @sf-agentscript/types --all
-```
-
-Remove the override once the direct AgentScript packages naturally resolve the same versions without transitive duplication. See [`ADR 0053`](../../docs/adr/0053-agentscript-language-override-canary.md).
+The former npm override canary is retired because the pinned official packages now converge naturally. The version command verifies one effective compiler, dialect, parser, language, LSP, and types graph. See [`ADR 0053`](../../docs/adr/0053-agentscript-language-override-canary.md).
 
 ## Testing Strategy
 

@@ -24,10 +24,11 @@ export interface InspectResult {
      * Earlier versions of this summary mirrored it onto `system` too,
      * which was a stale model — readers should use `config.agent_type`.
      */
-    system?: { instructions: string };
+    system?: { instructions: string; recommended_prompts?: Record<string, unknown> };
     start_agents?: ComponentSummary[];
     topics: ComponentSummary[];
     subagents: ComponentSummary[];
+    connected_subagents?: ConnectedSubagentSummary[];
     variables: VariableSummary[];
     actions: ComponentSummary[];
     connections?: ConnectionSummary[];
@@ -40,6 +41,7 @@ export interface InspectResult {
     start_agents?: number;
     topics: number;
     subagents: number;
+    connected_subagents?: number;
     variables: number;
     actions: number;
     connections?: number;
@@ -63,14 +65,18 @@ export interface ComponentSummary {
   description?: string;
   /** `@actions.X` referenced anywhere in this component. */
   action_refs?: string[];
-  /** `@subagent.X` referenced anywhere in this component. */
+  /** `@subagent.X` or `@topic.X` referenced anywhere in this component. */
   subagent_refs?: string[];
+  /** `@connected_subagent.X` referenced anywhere in this component. */
+  connected_subagent_refs?: string[];
   /** `@variables.X` referenced anywhere in this component. */
   variable_refs?: string[];
   /** `@response_formats.X` / `@response_actions.X` references in this component. */
   response_format_refs?: string[];
   /** `@utils.X` references such as `@utils.end_session`. */
   utility_refs?: string[];
+  /** Stable names declared under this component's optional `skills:` block. */
+  skills?: string[];
   /**
    * For action declarations only: the raw `target:` URI (e.g. `flow://X`,
    * `apex://X`, `generatePromptResponse://X`). Empty for topics/subagents.
@@ -103,6 +109,11 @@ export interface VariableSummary {
   visibility?: string;
   is_displayable?: boolean;
   is_used_by_planner?: boolean;
+}
+
+export interface ConnectedSubagentSummary extends ComponentSummary {
+  delegate_escalation?: boolean;
+  has_after_response: boolean;
 }
 
 export interface ConnectionSummary extends ComponentSummary {
@@ -258,6 +269,7 @@ function collectAtRefs(
   refs: {
     actions: Set<string>;
     subagents: Set<string>;
+    connectedSubagents: Set<string>;
     variables: Set<string>;
     responseFormats: Set<string>;
     utilities: Set<string>;
@@ -271,6 +283,8 @@ function collectAtRefs(
     if (ref.namespace === "actions") refs.actions.add(ref.property);
     else if (ref.namespace === "subagent" || ref.namespace === "topic") {
       refs.subagents.add(ref.property);
+    } else if (ref.namespace === "connected_subagent") {
+      refs.connectedSubagents.add(ref.property);
     } else if (ref.namespace === "variables") refs.variables.add(ref.property);
     else if (ref.namespace === "response_formats" || ref.namespace === "response_actions") {
       refs.responseFormats.add(ref.property);
@@ -294,6 +308,7 @@ function summarizeWithRefs(
   const refs = {
     actions: new Set<string>(),
     subagents: new Set<string>(),
+    connectedSubagents: new Set<string>(),
     variables: new Set<string>(),
     responseFormats: new Set<string>(),
     utilities: new Set<string>(),
@@ -307,11 +322,16 @@ function summarizeWithRefs(
   if (typeof desc === "string") summary.description = truncate(desc, 200);
   if (refs.actions.size) summary.action_refs = Array.from(refs.actions).sort();
   if (refs.subagents.size) summary.subagent_refs = Array.from(refs.subagents).sort();
+  if (refs.connectedSubagents.size) {
+    summary.connected_subagent_refs = Array.from(refs.connectedSubagents).sort();
+  }
   if (refs.variables.size) summary.variable_refs = Array.from(refs.variables).sort();
   if (refs.responseFormats.size) {
     summary.response_format_refs = Array.from(refs.responseFormats).sort();
   }
   if (refs.utilities.size) summary.utility_refs = Array.from(refs.utilities).sort();
+  const skills = paramNames(e.skills);
+  if (skills) summary.skills = skills;
   // Action declarations carry a `target:` URI — surface it so downstream
   // consumers (publish pre-flight, doctor checks) can validate without
   // re-parsing the AST.
@@ -321,6 +341,27 @@ function summarizeWithRefs(
   if (inputNames) summary.input_names = inputNames;
   const outputNames = paramNames(e.outputs);
   if (outputNames) summary.output_names = outputNames;
+  return summary;
+}
+
+function summarizeConnectedSubagent(
+  name: string,
+  entry: unknown,
+  walkAstExpressions: WalkAstExpressions,
+  decomposeAtMemberExpression: DecomposeAtMemberExpression,
+): ConnectedSubagentSummary {
+  const summary = summarizeWithRefs(
+    name,
+    entry,
+    walkAstExpressions,
+    decomposeAtMemberExpression,
+  ) as ConnectedSubagentSummary;
+  const e = entry as Record<string, unknown>;
+  const delegateEscalation = unwrapScalar(e.delegate_escalation);
+  if (typeof delegateEscalation === "boolean") {
+    summary.delegate_escalation = delegateEscalation;
+  }
+  summary.has_after_response = e.after_response !== undefined;
   return summary;
 }
 
@@ -522,6 +563,9 @@ export function projectInspectStructure(input: {
   const subagents = namedMapEntries(ast.subagent).map(([n, e]) =>
     summarizeWithRefs(n, e, input.walkAstExpressions, input.decomposeAtMemberExpression),
   );
+  const connectedSubagents = namedMapEntries(ast.connected_subagent).map(([n, e]) =>
+    summarizeConnectedSubagent(n, e, input.walkAstExpressions, input.decomposeAtMemberExpression),
+  );
   // Top-level `actions:` block.
   const topLevelActions = namedMapEntries(ast.actions).map(([n, e]) =>
     summarizeWithRefs(n, e, input.walkAstExpressions, input.decomposeAtMemberExpression),
@@ -590,6 +634,7 @@ export function projectInspectStructure(input: {
     ...(startAgents.length > 0 ? { start_agents: startAgents } : {}),
     topics,
     subagents,
+    ...(connectedSubagents.length > 0 ? { connected_subagents: connectedSubagents } : {}),
     variables,
     actions,
     ...(connections.length > 0 ? { connections } : {}),
@@ -607,6 +652,7 @@ export function projectInspectStructure(input: {
       start_agents: startAgents.length,
       topics: topics.length,
       subagents: subagents.length,
+      ...(connectedSubagents.length > 0 ? { connected_subagents: connectedSubagents.length } : {}),
       variables: variables.length,
       actions: actions.length,
       connections: connections.length,
@@ -622,23 +668,22 @@ export function projectInspectStructure(input: {
 
 function extractConfigSummary(configNode: unknown): Record<string, unknown> | undefined {
   if (!configNode || typeof configNode !== "object") return undefined;
-  const c = configNode as Record<string, unknown>;
-  // Surface flat scalar fields. Skip CST/internal markers.
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(c)) {
-    if (k.startsWith("__")) continue;
-    const scalar = unwrapScalar(v);
-    if (scalar !== undefined) out[k] = scalar;
-  }
-  return Object.keys(out).length ? out : undefined;
+  const fields = summarizeBlockFields(configNode);
+  return Object.keys(fields).length > 0 ? fields : undefined;
 }
 
-function extractSystemSummary(systemNode: unknown): { instructions: string } | undefined {
+function extractSystemSummary(
+  systemNode: unknown,
+): { instructions: string; recommended_prompts?: Record<string, unknown> } | undefined {
   if (!systemNode || typeof systemNode !== "object") return undefined;
   const s = systemNode as Record<string, unknown>;
   const instructions = unwrapScalar(s.instructions);
+  const recommendedPrompts = summarizeBlockFields(s.recommended_prompts);
   return {
     instructions: truncate(instructions, MAX_INSTRUCTIONS_CHARS),
+    ...(Object.keys(recommendedPrompts).length > 0
+      ? { recommended_prompts: recommendedPrompts }
+      : {}),
   };
   // agent_type used to be mirrored here but it lives on the `config:`
   // block per the SDK schema. extractConfigSummary already surfaces it

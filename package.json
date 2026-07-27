@@ -88,7 +88,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:sf-llm-gateway-internal:codex": "vitest run extensions/sf-llm-gateway-internal/tests/codex-regression.test.ts",
-    "agentscript:versions": "node scripts/agentscript-versions.mjs",
+    "agentscript:versions": "node --experimental-strip-types scripts/agentscript-versions.mjs",
     "e2e:d360-sweep": "node --experimental-strip-types scripts/e2e/d360-capability-sweep.ts",
     "e2e:sf-apex-harness": "node --experimental-strip-types scripts/e2e/sf-apex-harness-e2e.ts",
     "e2e:sf-browser-harden": "node --experimental-strip-types scripts/e2e/sf-browser-pack-harden.ts",

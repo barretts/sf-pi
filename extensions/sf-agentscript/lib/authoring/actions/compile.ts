@@ -5,6 +5,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { connForAgentApi } from "../../agent-api-auth.ts";
 import { getAgentScriptAnalysis, invalidateAgentScriptAnalysis } from "../../analysis-snapshot.ts";
+import { isAgentScriptCompileValid } from "../../diagnostics.ts";
 import { isAgentScriptFile } from "../../file-classify.ts";
 import { serverCompile } from "../../lifecycle.ts";
 import { loadAgentforceSDK } from "../../sdk.ts";
@@ -176,13 +177,14 @@ async function actionCheck(
     };
   });
 
+  const clean = isAgentScriptCompileValid(result.diagnostics);
   const details = withAgentScriptBranchState(
     {
       ok: true as const,
       action: "compile.check" as const,
       agent_file: agentFile,
       path: agentFile,
-      clean: result.diagnostics.length === 0,
+      clean,
       diagnostic_count: result.diagnostics.length,
       quick_fix_count: quickFixesView.length,
       dialect: result.dialect ?? null,
@@ -192,7 +194,7 @@ async function actionCheck(
     },
     compileEvents(
       agentFile,
-      result.diagnostics.length === 0,
+      clean,
       result.diagnostics.length,
       quickFixesView.length,
       "compile.check",
@@ -331,15 +333,21 @@ export function renderCheckSummary(
   const sev1 = diagnostics.filter((d) => d.severity === 1).length;
   const sev2 = diagnostics.filter((d) => d.severity === 2).length;
   const sev3 = diagnostics.filter((d) => d.severity === 3).length;
+  const sev4 = diagnostics.filter((d) => d.severity === 4).length;
   const ordered = [...diagnostics].sort((a, b) => a.severity - b.severity);
   const sampleLines = ordered.slice(0, MAX_SAMPLE_LINES).map((d) => {
-    const tag = d.severity === 1 ? "E" : d.severity === 2 ? "W" : "I";
+    const tag = d.severity === 1 ? "E" : d.severity === 2 ? "W" : d.severity === 3 ? "I" : "H";
     const code = d.code ?? "(no-code)";
     const line = (d.range?.start?.line ?? 0) + 1;
     return `  • [${tag}] ${code} @ L${line}`;
   });
   const overflow = diagnostics.length - sampleLines.length;
-  const severitySummary = [`${sev1}E`, `${sev2}W`, ...(sev3 > 0 ? [`${sev3}I`] : [])].join("·");
+  const severitySummary = [
+    `${sev1}E`,
+    `${sev2}W`,
+    ...(sev3 > 0 ? [`${sev3}I`] : []),
+    ...(sev4 > 0 ? [`${sev4}H`] : []),
+  ].join("·");
   const hasBlocking = sev1 > 0;
   const hasWarnings = sev2 > 0;
   const icon = hasBlocking ? "❌" : hasWarnings ? "⚠️" : "✅";
@@ -347,10 +355,10 @@ export function renderCheckSummary(
   const head =
     hasBlocking || hasWarnings
       ? `${icon} ${agentFile} — ${diagnostics.length} issue(s) (${severitySummary}), ${quickFixCount} fix(es) ready`
-      : `${icon} ${agentFile} compiles (${severitySummary}) — ${diagnostics.length} info ${issueWord}, ${quickFixCount} fix(es) ready`;
+      : `${icon} ${agentFile} compiles (${severitySummary}) — ${diagnostics.length} ${issueWord}, ${quickFixCount} fix(es) ready`;
   const lines = [head];
   if (!hasBlocking && !hasWarnings) {
-    lines.push("  ⚠ Informational diagnostics present; compile is valid.");
+    lines.push("  ⚠ Non-blocking diagnostics present; compile is valid.");
   }
   lines.push(...sampleLines);
   if (overflow > 0) lines.push(`  …and ${overflow} more in details.diagnostics`);

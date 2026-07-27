@@ -7,10 +7,7 @@
 
 ## Problem
 
-The agentscript compiler accepts **any** scheme on a `target:` URI as the
-action's `invocation_target_type`. The runtime then resolves the scheme at
-publish-time / preview-start / runtime — and surfaces failures with cryptic
-errors:
+The Agent Script compiler validates a broad product-owned scheme list on each `target:` URI, but scheme validity does not prove that the named target exists in a specific org. The runtime resolves the target at publish-time, preview-start, or invocation and can surface late failures:
 
 | Surface                                 | Error when target is missing                                                |
 | --------------------------------------- | --------------------------------------------------------------------------- |

@@ -250,8 +250,11 @@ async function actionCheckTargets(
     : await (await getAgentScriptAnalysis(agentFile)).getInspect();
   if (!inspect.ok)
     return toolError(`Inspect failed: ${inspect.reason ?? "unknown"}`, inspect.reason_detail);
-  const actions = inspect.components?.actions ?? [];
-  if (actions.length === 0) {
+  const targets = [
+    ...(inspect.components?.actions ?? []),
+    ...(inspect.components?.connected_subagents ?? []),
+  ];
+  if (targets.length === 0) {
     return toolOk(
       withAgentScriptBranchState(
         {
@@ -267,7 +270,7 @@ async function actionCheckTargets(
         },
         inspectEvents(agentFile, "check_targets"),
       ),
-      `✓ ${agentFile} declares no actions — nothing to check.`,
+      `✓ ${agentFile} declares no target-bearing actions or connected subagents — nothing to check.`,
     );
   }
   let conn;
@@ -282,8 +285,8 @@ async function actionCheckTargets(
       : await connFromAlias(targetOrg);
   }
   const result = timings
-    ? await timings.time("action_target_preflight", () => checkActionTargets(conn, actions))
-    : await checkActionTargets(conn, actions);
+    ? await timings.time("action_target_preflight", () => checkActionTargets(conn, targets))
+    : await checkActionTargets(conn, targets);
   const summaryLines = [
     result.ok
       ? `✓ All ${result.total} action target(s) resolved in org`
@@ -523,7 +526,10 @@ async function actionReview(
       });
     }
     if (input.target_org) {
-      const actions = inspect.components?.actions ?? [];
+      const actions = [
+        ...(inspect.components?.actions ?? []),
+        ...(inspect.components?.connected_subagents ?? []),
+      ];
       try {
         let conn;
         try {

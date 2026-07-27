@@ -1,79 +1,27 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /**
- * Run the official AgentScript SDK over a `.agent` file and produce a filtered,
- * agent-friendly result.
+ * Run the official AgentScript SDK over a `.agent` file and preserve its
+ * complete diagnostic result.
  *
- * Decision rules (see README for the agent-facing behavior matrix):
- *
- *   Severity 1 (Error)            always included
- *   Severity 2 (Warning)          included only for known-actionable codes
- *   Severity 3 (Information)      included only for known quick-fixable cleanup
- *   Severity 4 (Hint)             always dropped
- *
- * Actionable codes are the ones our diagnostics layer can pair with a
- * machine-applyable fix (`code-actions.ts` knows how to build TextEdits for
- * them). We keep the allowlists explicit so the agent never sees low-value
- * lint noise it can't act on.
+ * Explicit compile/check returns every upstream severity. Automatic
+ * compile-on-save narrows that result to errors and warnings at its presentation
+ * boundary so informational hints do not flood edit-loop context. Quick-fix
+ * availability is independent from diagnostic visibility.
  */
 
 import fs from "node:fs/promises";
 import { analyzeAgentScriptSource } from "./agentforce-document.ts";
 import { buildQuickFixes } from "./code-actions.ts";
 import { buildLocalDiagnostics } from "./local-lints.ts";
-import type { AgentScriptCheckResult, AgentScriptDiagnostic } from "./types.ts";
-
-// -------------------------------------------------------------------------------------------------
-// Actionability filter
-// -------------------------------------------------------------------------------------------------
-
-/**
- * Severity-2 warning codes that are worth surfacing to the agent because we
- * can build a deterministic fix for them. Everything else at severity 2 is
- * dropped to keep the feedback stream focused on things the agent can actually
- * resolve.
- */
-const ACTIONABLE_WARNING_CODES = new Set<string>([
-  "deprecated-field",
-  "invalid-version",
-  "unknown-dialect",
-  "invalid-modifier",
-  "unknown-type",
-  "object-type-missing-schema",
-  "config-ignored-default-agent-user",
-]);
-
-/**
- * Upstream emits unused-variable as informational cleanup with DiagnosticTag
- * Unnecessary and a removalRange. Surface it because the official LSP provider
- * supplies a deterministic quick fix, but keep upstream's lower severity.
- */
-const ACTIONABLE_INFO_CODES = new Set<string>(["unused-variable"]);
-
-function isActionable(diagnostic: AgentScriptDiagnostic): boolean {
-  // Severity 1 (Error): always include.
-  if (diagnostic.severity === 1) return true;
-
-  // Severity 2 (Warning): include only when we know how to act on it.
-  if (diagnostic.severity === 2 && diagnostic.code) {
-    return ACTIONABLE_WARNING_CODES.has(diagnostic.code);
-  }
-
-  // Severity 3 (Information): include only for quick-fixable cleanup.
-  if (diagnostic.severity === 3 && diagnostic.code) {
-    return ACTIONABLE_INFO_CODES.has(diagnostic.code) && hasRemovalRange(diagnostic);
-  }
-
-  return false;
-}
-
-function hasRemovalRange(diagnostic: AgentScriptDiagnostic): boolean {
-  const range = diagnostic.data?.removalRange;
-  return !!range && typeof range === "object";
-}
+import type { AgentScriptCheckResult } from "./types.ts";
 
 // -------------------------------------------------------------------------------------------------
 // Public API
 // -------------------------------------------------------------------------------------------------
+
+export function isAgentScriptCompileValid(diagnostics: readonly { severity: number }[]): boolean {
+  return !diagnostics.some((diagnostic) => diagnostic.severity === 1);
+}
 
 /**
  * Read `filePath`, run parse + compile, return a filtered result.
@@ -111,9 +59,8 @@ export async function checkAgentScriptSource(source: string): Promise<AgentScrip
     };
   }
 
-  const filtered = analysis.analysis.compileDiagnostics.filter(isActionable);
   const localDiagnostics = buildLocalDiagnostics(source);
-  const diagnostics = [...filtered, ...localDiagnostics];
+  const diagnostics = [...analysis.analysis.compileDiagnostics, ...localDiagnostics];
   const quickFixes = await buildQuickFixes(source, diagnostics, analysis.analysis.documentState);
 
   return {

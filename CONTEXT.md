@@ -284,6 +284,38 @@ _Avoid_: Apex IDE, code generator, debugger suite
 The agentic Apex development cycle coordinated by an **Apex Lifecycle Extension**: plan the change, edit files, diagnose locally, observe runtime behavior, run targeted tests, and repeat until verified.
 _Avoid_: test runner only, log viewer only
 
+**Agent Script Hardening Diagnostic**:
+An SF Pi-owned deterministic diagnostic for a proven Salesforce publish or runtime failure that the official Agent Script toolchain does not cover. It is removed or narrowed when upstream owns or contradicts the behavior.
+_Avoid_: generic language rule, duplicate upstream diagnostic, competing compiler policy, speculative warning
+
+**Agent Script Compile Validity**:
+An Agent Script source is compile-valid when it has no severity-1 diagnostics. Warnings, information, and hints remain visible evidence but do not make valid source fail compilation.
+_Avoid_: diagnostic-free validity, clean-with-notices status, hidden warning, hidden information
+
+**Agent Script Structural Projection**:
+A compact, stable, agent-facing summary of workflow topology and review/preflight facts derived from the official Agent Script AST. It excludes compiler-internal nodes, CST wrappers, cycles, and parser-specific implementation detail.
+_Avoid_: raw AST, CST dump, compiler mirror, universal feature inventory
+
+**Agent Script Target Preflight**:
+A read-only org existence check for a compiler-valid target using one authoritative product-specific lookup. Targets without a proven lookup remain explicitly unverifiable rather than being guessed present or missing.
+_Avoid_: scheme validation, always-valid assumption, generic metadata framework, guessed resolver
+
+**Agent User Readiness Scope**:
+SF Pi authoritatively checks Service Agent user wiring, treats the known Employee Agent path as not applicable, and reports other compiler-valid agent types as not evaluated. Compiler-valid type does not imply SF Pi-verified setup readiness.
+_Avoid_: guessed type policy, every non-Service type is ready, unsupported-type blocker
+
+**Agent Script Package Coherence**:
+The official Agent Script parser, compiler, dialect, language, LSP, and types packages resolve as one compatible toolchain without missing or duplicate foundational versions. It is a read-only health claim, not an update mechanism.
+_Avoid_: latest-only check, generic dependency health, automatic package update, version-count dashboard
+
+**Agent Script Integration Contract Test**:
+A deterministic test of the boundary SF Pi owns: official package loading, diagnostic preservation, stable structural projection, target-preflight routing, or package coherence. Upstream compiler internals and live Salesforce execution are separate evidence tiers.
+_Avoid_: upstream test mirror, internal AST assertion, release-note checklist, local proof of runtime behavior
+
+**Agent Script Diagnostic Presentation**:
+Explicit compile/check returns every upstream diagnostic severity, while automatic compile-on-save feedback surfaces errors and warnings only. Information and hints remain available on demand without becoming repeated edit-loop noise.
+_Avoid_: hidden explicit diagnostic, all-hints-on-save, automatic context flood, fixability-as-visibility
+
 **Diagnostics Handoff**:
 A temporary ownership transition where a lifecycle-specific extension takes over diagnostics for its domain while the older shared diagnostics extension yields that domain when both are enabled.
 _Avoid_: duplicate diagnostics, immediate deprecation

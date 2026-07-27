@@ -168,6 +168,42 @@ describe("buildToolResultUpdate", () => {
     expect(state.lastStatusByFile.get("/billing.agent")).toBe("error");
   });
 
+  it("emits warnings without marking a compile-valid file as broken", () => {
+    const state = createState();
+    const update = buildToolResultUpdate({
+      filePath: "/warning.agent",
+      existingContent: [],
+      checkResult: makeOk({
+        diagnostics: [makeDiagnostic({ severity: 2, code: "available-when-non-boolean" })],
+      }),
+      state,
+    });
+    const details = update?.details as Record<string, unknown> | undefined;
+    const metadata = details?.[SF_PI_DIAGNOSTICS_DETAILS_KEY] as
+      { status?: string; summary?: string; diagnostics?: unknown[] } | undefined;
+    expect(metadata?.status).toBe("clean");
+    expect(metadata?.summary).toContain("compile-valid with 1 diagnostic");
+    expect(metadata?.diagnostics).toHaveLength(1);
+    expect(state.lastStatusByFile.get("/warning.agent")).toBe("clean");
+  });
+
+  it("keeps information and hints out of automatic edit-loop feedback", () => {
+    const state = createState();
+    const update = buildToolResultUpdate({
+      filePath: "/info.agent",
+      existingContent: [],
+      checkResult: makeOk({
+        diagnostics: [
+          makeDiagnostic({ severity: 3, code: "collect-experimental" }),
+          makeDiagnostic({ severity: 4, code: "derived-description" }),
+        ],
+      }),
+      state,
+    });
+    expect(update).toBeUndefined();
+    expect(state.lastStatusByFile.get("/info.agent")).toBe("clean");
+  });
+
   it("skips the dialect header on follow-up feedback for the same file", () => {
     const state = createState();
     const first = buildToolResultUpdate({

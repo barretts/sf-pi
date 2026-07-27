@@ -143,6 +143,22 @@ describe("checkActionTargets", () => {
     for (const t of result.targets) expect(t.status).toBe("ok");
   });
 
+  it("verifies connected agents for both supported target aliases", async () => {
+    const conn = fakeConn([
+      { sobject: "BotDefinition", rows: [{ DeveloperName: "Refund_Agent" }] },
+    ]);
+    const result = await checkActionTargets(conn, [
+      { name: "refunds", target: "agent://Refund_Agent" },
+      { name: "missing", target: "agentforce://Missing_Agent" },
+    ] as ComponentSummary[]);
+    expect(result.resolved).toBe(1);
+    expect(result.missing).toBe(1);
+    expect(result.targets).toEqual([
+      expect.objectContaining({ name: "refunds", status: "ok" }),
+      expect.objectContaining({ name: "missing", status: "missing" }),
+    ]);
+  });
+
   it("flags missing targets and continues", async () => {
     const conn = fakeConn([
       { sobject: "Flow", rows: [{ Definition: { DeveloperName: "Found" }, Metadata: {} }] },

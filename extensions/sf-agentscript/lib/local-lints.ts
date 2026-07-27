@@ -226,48 +226,6 @@ function hasOutputsBlock(action: ActionBlock): boolean {
   return action.lines.some((l) => l.indent > action.indent && /^outputs\s*:/.test(l.trimmed));
 }
 
-function isIoBlock(line: LineInfo): "inputs" | "outputs" | undefined {
-  if (/^inputs\s*:/.test(line.trimmed)) return "inputs";
-  if (/^outputs\s*:/.test(line.trimmed)) return "outputs";
-  return undefined;
-}
-
-function numericTypeOnLine(line: LineInfo): boolean {
-  // Common Agent Script shapes:
-  //   amount: number
-  //   amount: integer
-  //   type: number
-  const direct = /^"?[A-Za-z_][\w:.-]*"?\s*:\s*(number|integer|long)\b/.exec(line.trimmed);
-  if (direct) return true;
-  return /^type\s*:\s*(number|integer|long)\b/.test(line.trimmed);
-}
-
-function collectNumericActionIo(
-  action: ActionBlock,
-): Array<{ section: "inputs" | "outputs"; line: LineInfo }> {
-  const out: Array<{ section: "inputs" | "outputs"; line: LineInfo }> = [];
-  for (let i = 0; i < action.lines.length; i++) {
-    const section = isIoBlock(action.lines[i]);
-    if (!section) continue;
-    const sectionIndent = action.lines[i].indent;
-    for (const line of action.lines.slice(i + 1)) {
-      if (line.trimmed.length > 0 && line.indent <= sectionIndent) break;
-      if (numericTypeOnLine(line)) out.push({ section, line });
-    }
-  }
-  return out;
-}
-
-function numericMessage(scheme: string | undefined): string {
-  if (scheme === "flow") {
-    return 'Bare numeric action I/O can fail at publish for flow targets. Use object + complex_data_type_name: "lightning__numberType" for numeric Flow parameters.';
-  }
-  if (scheme === "apex") {
-    return 'Bare numeric action I/O can fail at publish for Apex targets. Use object + complex_data_type_name such as "lightning__integerType" or "lightning__doubleType" to match the @InvocableVariable type.';
-  }
-  return "Bare numeric action I/O can fail at publish. Use object + the correct complex_data_type_name for target-backed action parameters.";
-}
-
 const ROUTE_FIELDS = ["outbound_route_type", "outbound_route_name", "escalation_message"] as const;
 
 type RouteField = (typeof ROUTE_FIELDS)[number];
@@ -367,45 +325,6 @@ function addOutputsScopeDiagnostics(
   }
 }
 
-const PROCEDURAL_TEXT_RE = /^(?:\|\s*)?(?:if\s+@|set\s+@|transition\s+to\s+@|run\s+@)/;
-
-function addLiteralModeProceduralDiagnostics(
-  lines: readonly LineInfo[],
-  diagnostics: AgentScriptDiagnostic[],
-): void {
-  for (let i = 0; i < lines.length; i++) {
-    const header = lines[i];
-    if (!/^instructions\s*:\s*\|/.test(header.trimmed)) continue;
-
-    const inlineText = header.trimmed.replace(/^instructions\s*:\s*\|\s*/, "");
-    if (PROCEDURAL_TEXT_RE.test(inlineText)) {
-      diagnostics.push(
-        diagnostic(
-          header,
-          "literal-mode-procedural-text",
-          "instructions: | is literal text. Use instructions: -> when you need if/set/run/transition statements to execute.",
-          2,
-          "instructions",
-        ),
-      );
-    }
-
-    for (const line of lines.slice(i + 1)) {
-      if (line.trimmed.length > 0 && line.indent <= header.indent) break;
-      if (line.trimmed.startsWith("#") || line.trimmed.length === 0) continue;
-      if (!PROCEDURAL_TEXT_RE.test(line.trimmed)) continue;
-      diagnostics.push(
-        diagnostic(
-          line,
-          "literal-mode-procedural-text",
-          "This looks like executable Agent Script inside literal instructions. Use instructions: -> so it runs instead of being sent to the LLM as text.",
-          2,
-        ),
-      );
-    }
-  }
-}
-
 function addRunInAfterReasoningDiagnostics(
   lines: readonly LineInfo[],
   diagnostics: AgentScriptDiagnostic[],
@@ -490,7 +409,6 @@ export function buildLocalDiagnostics(source: string): AgentScriptDiagnostic[] {
   addConnectionMessagingDiagnostics(findConnectionMessagingBlock(lines), diagnostics);
   addInputsScopeDiagnostics(lines, diagnostics);
   addOutputsScopeDiagnostics(lines, diagnostics);
-  addLiteralModeProceduralDiagnostics(lines, diagnostics);
   addRunInAfterReasoningDiagnostics(lines, diagnostics);
 
   const config = parseConfig(lines);
@@ -563,17 +481,6 @@ export function buildLocalDiagnostics(source: string): AgentScriptDiagnostic[] {
           action.target,
           { action: action.name, target: action.target, ref_name: refName },
         ),
-      );
-    }
-
-    for (const item of collectNumericActionIo(action)) {
-      diagnostics.push(
-        diagnostic(item.line, "numeric-action-io", numericMessage(scheme), 2, "number", {
-          action: action.name,
-          target: action.target,
-          section: item.section,
-          scheme,
-        }),
       );
     }
   }

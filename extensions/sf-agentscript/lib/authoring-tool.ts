@@ -215,6 +215,7 @@ export function registerAuthoringTool(pi: ExtensionAPI): void {
       "agentscript_authoring uses `verb` + `mode`: verb=create|compile|inspect|mutate. compile mode defaults to check; inspect mode defaults to structure; mutate requires mode.",
       "Use `agent_file` for `.agent` paths. It may be omitted only when exactly one current agent_file exists on the current Pi branch; ambiguity returns structured candidates instead of guessing.",
       "Read-only modes: compile/check and inspect/*, except inspect/check_targets and inspect/review with target_org perform read-only org checks. Write modes: create, compile/format, mutate/* (unless dry_run=true).",
+      "compile/check preserves every upstream diagnostic severity; clean=true means no severity-1 errors. Warnings, information, and hints remain visible without blocking preview or publish guards.",
       "Preferred loop: compile/check → inspect/structure or inspect/review → mutate with dry_run for risky edits → compile/check again → preview/eval/lifecycle.",
       "Use mutate/apply_quick_fix from compile quick_fixes.apply_via. Do not use the generic edit tool when mutate supports the change.",
       "inspect/review is deterministic v1: readiness is ready | ready_with_warnings | blocked | partial; no numeric score and no hidden LLM review. Pass output_path to write a Markdown report.",

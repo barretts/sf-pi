@@ -8,8 +8,8 @@
  *   - clean files emit a single `✓` line
  *   - files with errors emit `❌ <path> — N issue(s) (kE·mW[·nI]), F fix(es) ready`
  *     followed by up to MAX_SAMPLE_LINES bullets, errors first
- *   - files with only info diagnostics emit an overall ✅ plus a warning note
- *   - bullet shape is `  • [E|W|I] <code> @ L<1-based-line>`
+ *   - files with only information/hints emit an overall ✅ plus a notice
+ *   - bullet shape is `  • [E|W|I|H] <code> @ L<1-based-line>`
  *   - excess diagnostics are summarized as `…and X more in details.diagnostics`
  */
 
@@ -17,7 +17,7 @@ import { describe, expect, test } from "vitest";
 import { renderCheckSummary } from "../lib/authoring/actions/compile.ts";
 
 function makeDiag(
-  severity: 1 | 2 | 3,
+  severity: 1 | 2 | 3 | 4,
   code: string,
   line: number,
 ): { severity: number; code: string; range: { start: { line: number } }; message: string } {
@@ -56,9 +56,15 @@ describe("renderCheckSummary", () => {
     const out = renderCheckSummary("/tmp/X.agent", diags, 8);
     const lines = out.split("\n");
     expect(lines[0]).toContain("✅ /tmp/X.agent compiles (0E·0W·8I)");
-    expect(lines[1]).toBe("  ⚠ Informational diagnostics present; compile is valid.");
+    expect(lines[1]).toBe("  ⚠ Non-blocking diagnostics present; compile is valid.");
     expect(lines).toHaveLength(8); // header + warning note + 5 samples + overflow
     expect(lines[7]).toBe("  …and 3 more in details.diagnostics");
+  });
+
+  test("includes hint counts and labels without failing compilation", () => {
+    const out = renderCheckSummary("/tmp/X.agent", [makeDiag(4, "derived-description", 3)], 0);
+    expect(out).toContain("compiles (0E·0W·1H)");
+    expect(out).toContain("[H] derived-description @ L3");
   });
 
   test("missing diagnostic code falls back to '(no-code)'", () => {

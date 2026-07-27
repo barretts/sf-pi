@@ -114,6 +114,7 @@ function formatCompileBody(details: CompileResultDetails, theme: Theme | undefin
   const sev1 = diagnostics.filter((d) => d.severity === 1).length;
   const sev2 = diagnostics.filter((d) => d.severity === 2).length;
   const sev3 = diagnostics.filter((d) => d.severity === 3).length;
+  const sev4 = diagnostics.filter((d) => d.severity === 4).length;
   const fixCount = details.quick_fix_count ?? 0;
 
   const icon = sev1 > 0 ? "❌" : sev2 > 0 ? "⚠️" : "✅";
@@ -126,13 +127,14 @@ function formatCompileBody(details: CompileResultDetails, theme: Theme | undefin
   if (sev1 > 0) headerBits.push(err(`● ${sev1} error${sev1 === 1 ? "" : "s"}`));
   if (sev2 > 0) headerBits.push(warn(`⚠ ${sev2} warning${sev2 === 1 ? "" : "s"}`));
   if (sev3 > 0) headerBits.push(dim(`ⓘ ${sev3} info`));
+  if (sev4 > 0) headerBits.push(dim(`· ${sev4} hint${sev4 === 1 ? "" : "s"}`));
   if (fixCount > 0) headerBits.push(fg("accent", `🔧 ${fixCount} quick-fix ready`));
 
   const lines: string[] = [];
   lines.push(headerBits.join("  "));
   lines.push(dim(dialectName));
-  if (sev1 === 0 && sev2 === 0 && sev3 > 0) {
-    lines.push(warn("⚠ Informational diagnostics present; compile is valid."));
+  if (sev1 === 0 && sev2 === 0 && (sev3 > 0 || sev4 > 0)) {
+    lines.push(warn("⚠ Non-blocking diagnostics present; compile is valid."));
   }
   lines.push("");
 

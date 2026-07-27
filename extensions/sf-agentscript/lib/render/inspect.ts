@@ -18,9 +18,17 @@ interface ComponentSummary {
   description?: string;
   action_refs?: string[];
   subagent_refs?: string[];
+  connected_subagent_refs?: string[];
   variable_refs?: string[];
   response_format_refs?: string[];
   utility_refs?: string[];
+  target?: string;
+  skills?: string[];
+}
+
+interface ConnectedSubagentSummary extends ComponentSummary {
+  delegate_escalation?: boolean;
+  has_after_response: boolean;
 }
 
 interface VariableSummary {
@@ -62,10 +70,11 @@ export interface InspectStructureDetails {
   dialect?: { name?: string; version?: string };
   components?: {
     config?: Record<string, unknown>;
-    system?: { instructions?: string };
+    system?: { instructions?: string; recommended_prompts?: Record<string, unknown> };
     start_agents?: ComponentSummary[];
     topics: ComponentSummary[];
     subagents: ComponentSummary[];
+    connected_subagents?: ConnectedSubagentSummary[];
     variables: VariableSummary[];
     actions: ComponentSummary[];
     connections?: ConnectionSummary[];
@@ -78,6 +87,7 @@ export interface InspectStructureDetails {
     start_agents?: number;
     topics?: number;
     subagents?: number;
+    connected_subagents?: number;
     variables?: number;
     actions?: number;
     connections?: number;
@@ -172,11 +182,15 @@ function formatStructureBody(
 
   // System / config
   if (components.system) {
-    const at = ""; // The current inspect doesn't return a line for system / config.
-    lines.push(`  ${accent("🪪")} ${bold("system")}${at ? "  " + dim(at) : ""}`);
+    const prompts = components.system.recommended_prompts ? dim(" · recommended prompts") : "";
+    lines.push(`  ${accent("🪪")} ${bold("system")}${prompts}`);
   }
   if (components.config && Object.keys(components.config).length > 0) {
-    lines.push(`  ${accent("⚙ ")} ${bold("config")}`);
+    const nested = ["runtime", "file_upload"].filter((name) =>
+      Object.keys(components.config ?? {}).some((key) => key.startsWith(`${name}.`)),
+    );
+    const suffix = nested.length > 0 ? dim(` · ${nested.join(", ")}`) : "";
+    lines.push(`  ${accent("⚙ ")} ${bold("config")}${suffix}`);
   }
   if (components.model_config) {
     lines.push(blockSummaryLine("🧠", "model_config", components.model_config, code, dim, bold));
@@ -196,7 +210,11 @@ function formatStructureBody(
       const util = s.utility_refs?.length
         ? dim(` · utils ${s.utility_refs.map(code).join(", ")}`)
         : "";
-      lines.push(`     ${ln} 🏁 ${code(s.name)}${util}`);
+      const skills = s.skills?.length ? dim(` · skills ${s.skills.map(code).join(", ")}`) : "";
+      const connected = s.connected_subagent_refs?.length
+        ? dim(` · connects ${s.connected_subagent_refs.map(code).join(", ")}`)
+        : "";
+      lines.push(`     ${ln} 🏁 ${code(s.name)}${util}${skills}${connected}`);
     }
   }
 
@@ -209,6 +227,9 @@ function formatStructureBody(
       const nm = padRightVisible(code(t.name), widestName + 2);
       const refsParts: string[] = [];
       if (t.subagent_refs?.length) refsParts.push(`→ ${t.subagent_refs.map(code).join(", ")}`);
+      if (t.connected_subagent_refs?.length) {
+        refsParts.push(`connects ${t.connected_subagent_refs.map(code).join(", ")}`);
+      }
       if (t.action_refs?.length) refsParts.push(`uses ${t.action_refs.map(code).join(", ")}`);
       if (t.variable_refs?.length) refsParts.push(`reads ${t.variable_refs.map(code).join(", ")}`);
       const desc = t.description ? dim(`— ${clipLine(t.description, 40)}`) : "";
@@ -222,7 +243,24 @@ function formatStructureBody(
     lines.push(`  ${heading("🤝")} ${bold(`subagents (${components.subagents.length})`)}`);
     for (const s of components.subagents) {
       const ln = s.line !== undefined ? dim(padRightVisible(`L${s.line}`, 5)) : dim("     ");
-      lines.push(`     ${ln} 🤖 ${code(s.name)}`);
+      const skills = s.skills?.length ? dim(` · skills ${s.skills.map(code).join(", ")}`) : "";
+      lines.push(`     ${ln} 🤖 ${code(s.name)}${skills}`);
+    }
+  }
+
+  if (components.connected_subagents && components.connected_subagents.length > 0) {
+    lines.push(
+      `  ${heading("🔗")} ${bold(`connected_subagents (${components.connected_subagents.length})`)}`,
+    );
+    for (const s of components.connected_subagents) {
+      const ln = s.line !== undefined ? dim(padRightVisible(`L${s.line}`, 5)) : dim("     ");
+      const target = s.target ? dim(` → ${s.target}`) : "";
+      const flags = [
+        s.delegate_escalation === false ? "orchestrator escalation" : null,
+        s.has_after_response ? "after_response" : null,
+      ].filter(Boolean);
+      const suffix = flags.length > 0 ? dim(` · ${flags.join(", ")}`) : "";
+      lines.push(`     ${ln} ${code(s.name)}${target}${suffix}`);
     }
   }
 
@@ -280,6 +318,7 @@ function formatStructureBody(
     `${stats.start_agents ?? components.start_agents?.length ?? 0} start`,
     `${stats.topics ?? 0} topics`,
     `${stats.subagents ?? 0} subagents`,
+    `${stats.connected_subagents ?? components.connected_subagents?.length ?? 0} connected`,
     `${stats.actions ?? 0} actions`,
     `${stats.variables ?? 0} variables`,
     `${stats.connections ?? components.connections?.length ?? 0} connections`,
