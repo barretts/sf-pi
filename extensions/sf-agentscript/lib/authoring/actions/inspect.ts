@@ -17,7 +17,7 @@ import { buildFeatureProfile } from "../../feature-profile.ts";
 import { isAgentScriptFile } from "../../file-classify.ts";
 import { findDefinition, findReferences } from "../../inspect.ts";
 import { connFromAlias } from "../../../../../lib/common/sf-conn/connection.ts";
-import { checkActionTargets } from "../../preflight.ts";
+import { checkActionTargets, checkConnectedAgentReadinessGraph } from "../../preflight.ts";
 import { diagnoseRuntimeSmoke, type RuntimeSmokeResult } from "../../preflight/runtime-smoke.ts";
 import { collectOrgReviewFindings } from "../../review/org-checks.ts";
 import type { ReviewFinding } from "../../review/types.ts";
@@ -287,6 +287,18 @@ async function actionCheckTargets(
   const result = timings
     ? await timings.time("action_target_preflight", () => checkActionTargets(conn, targets))
     : await checkActionTargets(conn, targets);
+  const connectedGraph = timings
+    ? await timings.time("connected_readiness_graph", () =>
+        checkConnectedAgentReadinessGraph(conn, agentFile),
+      )
+    : await checkConnectedAgentReadinessGraph(conn, agentFile);
+  const graphIssues = connectedGraph.issues.filter(
+    (issue) =>
+      issue.depth > 1 ||
+      issue.kind === "source_unavailable" ||
+      issue.kind === "cycle" ||
+      issue.kind === "depth_limit",
+  );
   const runtimeNotReady = result.targets.filter(
     (target) => target.runtime_readiness === "not_ready",
   );
@@ -316,6 +328,14 @@ async function actionCheckTargets(
   }
   if (result.targets.length > 8)
     summaryLines.push(`  …and ${result.targets.length - 8} more in details.targets`);
+  if (connectedGraph.nodes.length > 1) {
+    summaryLines.push(
+      `Connected graph: ${connectedGraph.nodes.length} node(s) · ${graphIssues.length} transitive warning(s)`,
+    );
+    for (const issue of graphIssues.slice(0, 5)) {
+      summaryLines.push(`  ⚠ ${issue.path.join(" → ")} — ${issue.detail}`);
+    }
+  }
   return toolOk(
     withAgentScriptBranchState(
       {
@@ -328,6 +348,7 @@ async function actionCheckTargets(
         missing: result.missing,
         unverifiable: result.unverifiable,
         targets: result.targets,
+        connected_graph: connectedGraph,
       },
       [
         ...inspectEvents(agentFile, "check_targets"),

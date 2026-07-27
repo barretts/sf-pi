@@ -47,6 +47,13 @@ export interface PublishDetails {
       ref_name: string;
       detail: string;
     }>;
+    transitive_connected_warnings?: Array<{
+      kind: string;
+      agent_name: string;
+      depth: number;
+      path: string[];
+      detail: string;
+    }>;
     skipped?: string;
   };
 }
@@ -232,6 +239,18 @@ function formatPublishBody(
     );
     for (const target of runtimeUnready.slice(0, 6)) {
       lines.push(`     ${fg("warning", "•")} ${code(target.name)}  ${dim(target.detail)}`);
+    }
+  }
+  const transitiveWarnings = details.preflight?.transitive_connected_warnings ?? [];
+  if (transitiveWarnings.length > 0) {
+    lines.push("");
+    lines.push(
+      `  ${fg("warning", "⚠")}  ${bold(`${transitiveWarnings.length} transitive connected-agent warning(s)`)}`,
+    );
+    for (const warning of transitiveWarnings.slice(0, 6)) {
+      lines.push(
+        `     ${fg("warning", "•")} ${code(warning.path.join(" → "))}  ${dim(warning.detail)}`,
+      );
     }
   }
 

@@ -420,6 +420,11 @@ describe("summarizeLastExecution (eval source)", () => {
     expect(types).toContain("FunctionStep");
     const llm = d.timeline.find((r) => r.t === "LLMStep");
     expect(llm?.tool_calls).toEqual(["go_password"]);
+    expect(d.stats.related_agent_calls).toBeNull();
+    expect(d.connected_agent_evidence).toEqual({
+      status: "unavailable",
+      reason: "eval_api_does_not_expose_related_agent_step",
+    });
     expect(d.notes?.[0]).toMatch(/eval/i);
   });
 

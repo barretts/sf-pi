@@ -42,7 +42,11 @@ const SCORING_EVALUATORS = new Set([
 ]);
 
 /** Evaluators that assert (return is_pass). */
-const ASSERTION_EVALUATORS = new Set(["evaluator.string_assertion", "evaluator.json_assertion"]);
+const ASSERTION_EVALUATORS = new Set([
+  "evaluator.string_assertion",
+  "evaluator.numeric_assertion",
+  "evaluator.list_assertion",
+]);
 
 /** Default metric_name for scoring evaluators when caller omits it. */
 const DEFAULT_METRIC_NAMES: Record<string, string> = {
@@ -242,13 +246,22 @@ function normalizeAssertionEvaluator(out: Record<string, unknown>, evalType: str
     }
   }
   if (typeof out.operator === "string") out.operator = out.operator.toLowerCase();
-  if (!("metric_name" in out)) out.metric_name = evalType.split(".")[1];
+  // string_assertion is the only live-proven assertion that accepts metric_name.
+  if (evalType === "evaluator.string_assertion" && !("metric_name" in out)) {
+    out.metric_name = "string_assertion";
+  }
 }
 
 export function normalizeEvaluatorFields(steps: EvalStep[]): EvalStep[] {
   return steps.map((step) => {
     const evalType = step.type ?? "";
     if (!evalType.startsWith("evaluator.")) return step;
+
+    if (evalType === "evaluator.json_assertion") {
+      throw new Error(
+        "evaluator.json_assertion is not supported by the live Evaluation API. Use string_assertion, numeric_assertion, or list_assertion based on the value type.",
+      );
+    }
 
     const out: Record<string, unknown> = { ...step };
     if (SCORING_EVALUATORS.has(evalType)) {

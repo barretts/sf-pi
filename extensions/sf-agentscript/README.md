@@ -36,7 +36,7 @@ Rules:
 - `agent_file` may be omitted only when exactly one current `.agent` file exists on the active Pi branch. Ambiguity is refused with structured candidates.
 - Explicit compile/check preserves every upstream diagnostic severity. `clean=true` means no severity-1 errors; warnings, information, and hints remain visible without blocking preview or publish guards. Automatic compile-on-save feedback is intentionally limited to errors and warnings.
 - `inspect/structure` is a stable workflow projection, not raw compiler AST. It includes connected-agent topology, skills, runtime/file-upload settings, and recommended-prompt settings needed for planning, review, and preflight.
-- `inspect/check_targets` reports target existence separately from connected-agent runtime readiness. An existing connected agent without an Active version produces a non-blocking warning and activation hint rather than being mislabeled as missing.
+- `inspect/check_targets` reports target existence separately from connected-agent runtime readiness. An existing connected agent without an Active version produces a non-blocking warning and activation hint rather than being mislabeled as missing. Local project sources are traversed cycle-safely to depth five for transitive readiness; remote-only descendants remain explicitly unverifiable.
 
 ## Branch-Durable Tool State
 
@@ -78,7 +78,11 @@ Use `agentscript_authoring { "verb": "inspect", "mode": "runtime_smoke", "target
 
 `agentscript_eval action="run"` creates a lightweight `status.json` in the run directory before it posts Evaluation API batches. The status artifact records pointer-sized local facts such as status, phase, spec path, org, test count, batch count, and timeout; it does not contain raw eval responses, prompts, traces, transcripts, or failure payloads.
 
-Eval batches keep the compatibility default timeout of 300 seconds, but callers can pass `batch_timeout_ms` for shorter local runs. Client-side request timeouts are terminal for a batch instead of being retried three times. Eval-created sessions usually disappear before the live planner trace endpoint can read them, so eval runs synthesize trace artifacts from inline Evaluation API data by default; use `agentscript_eval action="trace"` for explicit live trace drill-down when the session is known to be resident. Generated specs include routing probes, targeted action probes, and connected-agent invocation probes when those components are present.
+Eval batches keep the compatibility default timeout of 300 seconds, but callers can pass `batch_timeout_ms` for shorter local runs. Client-side request timeouts are terminal for a batch instead of being retried three times. Non-2xx batch responses are persisted in `batch-failures.json`, make the run fail, and can never produce a green zero-result run.
+
+Generated specs compile an internal stateful scenario model into the existing Evaluation API step graph. `include_multi_turn_tests` defaults to true. Multi-turn scenarios are generated only from statically provable `after_response` state updates and simple source branches; unsupported dynamic behavior is reported in `skipped_multi_turn` instead of guessed. This uses a real shared Evaluation API session rather than synthetic conversation-history injection. Salesforce documents conversation history as contextual input for Testing API test cases, but that is a different proof boundary: [Build Tests in Metadata API](https://developer.salesforce.com/docs/ai/agentforce/guide/testing-api-build-tests.html).
+
+Eval-created sessions usually disappear before the live planner trace endpoint can read them, so eval runs synthesize trace artifacts from inline Evaluation API data by default; use `agentscript_eval action="trace"` for explicit live trace drill-down when the session is known to be resident. The Evaluation API does not expose `RelatedAgentStep`, so eval digests report connected-agent call evidence as unavailable rather than zero or inferred; preview remains authoritative for direct invocation counts.
 
 ## Runtime Flow
 
@@ -159,6 +163,7 @@ extensions/sf-agentscript/
       persist.ts            ← implementation module
       render.ts             ← implementation module
       safety-probes.ts      ← implementation module
+      scenario.ts           ← implementation module
       sfap.ts               ← implementation module
       spec-generator.ts     ← implementation module
       synthesize-trace.ts   ← implementation module
@@ -185,6 +190,7 @@ extensions/sf-agentscript/
         settings.ts         ← implementation module
         types.ts            ← implementation module
       bundle-type.ts        ← implementation module
+      connected-graph.ts    ← implementation module
       index.ts              ← implementation module
       parse.ts              ← implementation module
       registry.ts           ← implementation module
@@ -231,6 +237,7 @@ extensions/sf-agentscript/
     feature-profile.ts      ← implementation module
     feedback.ts             ← implementation module
     file-classify.ts        ← implementation module
+    inspect-eval-projection.ts← implementation module
     inspect-structure.ts    ← implementation module
     inspect.ts              ← implementation module
     lifecycle-divergence.ts ← implementation module
@@ -264,6 +271,7 @@ extensions/sf-agentscript/
     bounded-salesforce-transport.test.ts← unit / smoke test
     code-actions.test.ts    ← unit / smoke test
     compile-summary.test.ts ← unit / smoke test
+    connected-readiness-graph.test.ts← unit / smoke test
     create.test.ts          ← unit / smoke test
     custom-ps.test.ts       ← unit / smoke test
     deploy-permission-set.test.ts← unit / smoke test
@@ -273,9 +281,11 @@ extensions/sf-agentscript/
     doctor.test.ts          ← unit / smoke test
     eval-active-ids.test.ts ← unit / smoke test
     eval-agent-id-injection.test.ts← unit / smoke test
+    eval-batch-failure.test.ts← unit / smoke test
     eval-normalize.test.ts  ← unit / smoke test
     eval-persist-status.test.ts← unit / smoke test
     eval-plan-id-path.test.ts← unit / smoke test
+    eval-scenario.test.ts   ← unit / smoke test
     eval-sfap.test.ts       ← unit / smoke test
     eval-spec-generator.test.ts← unit / smoke test
     eval-state-pairing.test.ts← unit / smoke test

@@ -26,7 +26,11 @@ import { boundedRestRequest, boundedSoqlQuery } from "./bounded-salesforce-trans
 import { sfap404Message } from "./errors/sfap-404.ts";
 import { isSfapRoutingFailure, sfapRequest } from "./eval/sfap.ts";
 import { inspectFile, type InspectResult } from "./inspect.ts";
-import { checkActionTargets, checkBundleType } from "./preflight.ts";
+import {
+  checkActionTargets,
+  checkBundleType,
+  checkConnectedAgentReadinessGraph,
+} from "./preflight.ts";
 import { loadAgentforceSDK } from "./sdk.ts";
 import type { TimingCollector } from "./timings.ts";
 
@@ -159,6 +163,13 @@ export interface PublishResult {
       name: string;
       target: string;
       ref_name: string;
+      detail: string;
+    }>;
+    transitive_connected_warnings?: Array<{
+      kind: string;
+      agent_name: string;
+      depth: number;
+      path: string[];
       detail: string;
     }>;
     /** Total declared actions and connected agents inspected. */
@@ -470,6 +481,16 @@ export async function publishAgent(opts: PublishOptions): Promise<PublishResult>
             : await checkActionTargets(opts.conn, targeted);
           const missing = tcheck.targets.filter((t) => t.status === "missing");
           const runtimeUnready = tcheck.targets.filter((t) => t.runtime_readiness === "not_ready");
+          const connectedGraph = opts.timings
+            ? await opts.timings.time("connected_readiness_graph", () =>
+                checkConnectedAgentReadinessGraph(opts.conn, agentPath),
+              )
+            : await checkConnectedAgentReadinessGraph(opts.conn, agentPath);
+          const transitiveWarnings = connectedGraph.issues.filter(
+            (issue) =>
+              (issue.depth > 1 && ["missing", "runtime_not_ready"].includes(issue.kind)) ||
+              ["source_unavailable", "cycle", "depth_limit"].includes(issue.kind),
+          );
           preflightFindings = {
             actions_inspected: tcheck.total,
             ...(missing.length > 0
@@ -491,6 +512,17 @@ export async function publishAgent(opts: PublishOptions): Promise<PublishResult>
                     target: target.target,
                     ref_name: target.ref_name,
                     detail: target.runtime_detail ?? "Connected agent has no Active version.",
+                  })),
+                }
+              : {}),
+            ...(transitiveWarnings.length > 0
+              ? {
+                  transitive_connected_warnings: transitiveWarnings.map((issue) => ({
+                    kind: issue.kind,
+                    agent_name: issue.agent_name,
+                    depth: issue.depth,
+                    path: issue.path,
+                    detail: issue.detail,
                   })),
                 }
               : {}),

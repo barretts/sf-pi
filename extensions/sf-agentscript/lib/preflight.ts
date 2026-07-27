@@ -9,6 +9,7 @@
 export {
   checkActionTargets,
   checkBundleType,
+  checkConnectedAgentReadinessGraph,
   extractActionTargets,
   listResolvers,
   registeredSchemes,
@@ -16,6 +17,7 @@ export {
   type ActionTargetCheck,
   type BundleTypeCheckResult,
   type CheckActionTargetsResult,
+  type ConnectedAgentReadinessGraph,
   type TargetResolver,
   type TargetStatus,
 } from "./preflight/index.ts";

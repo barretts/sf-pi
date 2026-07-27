@@ -10,11 +10,10 @@
  * the live BotVersion at run time.
  *
  * What the generator does NOT do:
- *  - It does not invent scenario-specific utterances. It synthesizes one
- *    utterance per non-start subagent from the description, plus one
- *    headline action probe per subagent. Multi-turn scenarios are out of
- *    scope for v1 — those are the regression suite the dev grows by hand
- *    after running the generated spec a few times.
+ *  - It does not invent scenario-specific behavior. It synthesizes routing
+ *    and invocation utterances from component descriptions. Multi-turn
+ *    scenarios require statically provable after_response state plus a
+ *    matching simple source branch; unsupported cases are reported as skipped.
  *  - It does not invent context_variables. Callers pass a default seed
  *    block; if absent, no seeds are emitted.
  *
@@ -30,8 +29,20 @@
  * `safety_prompt_injection_ignore`).
  */
 
-import type { ComponentSummary, InspectResult } from "../inspect.ts";
-import type { EvalSpec, EvalStep, EvalTest } from "./types.ts";
+import type {
+  ComponentSummary,
+  ConnectedSubagentSummary,
+  InspectResult,
+  StateBranchSummary,
+  StateScalar,
+  VariableSummary,
+} from "../inspect.ts";
+import {
+  compileEvalScenario,
+  type ScenarioStateCheckpoint,
+  type WireContextVariable,
+} from "./scenario.ts";
+import type { EvalSpec, EvalTest } from "./types.ts";
 import { GUARDRAIL_PROBE, SAFETY_PROBES, type SafetyProbe } from "./safety-probes.ts";
 
 // -------------------------------------------------------------------------------------------------
@@ -67,6 +78,8 @@ export interface GenerateSpecOptions {
    * which we don't get back from the eval API in flat form).
    */
   includeActionTests?: boolean;
+  /** Generate evidence-backed same-session scenarios. Default true. */
+  includeMultiTurnTests?: boolean;
   /**
    * Include the curated guardrail probe (one off-topic utterance).
    * Default true.
@@ -100,6 +113,7 @@ export interface GeneratedSpecSummary {
   routing_tests: number;
   action_tests: number;
   connected_agent_tests: number;
+  multi_turn_tests: number;
   guardrail_tests: number;
   safety_tests: number;
   /** Names of subagents that were skipped (no description, or start_agent). */
@@ -108,6 +122,10 @@ export interface GeneratedSpecSummary {
   skipped_actions: string[];
   /** Names of connected agents skipped because no useful probe could be synthesized. */
   skipped_connected_agents: string[];
+  skipped_multi_turn: Array<{
+    component: string;
+    reason: "no_provable_state_update" | "no_matching_state_branch";
+  }>;
 }
 
 export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
@@ -122,6 +140,7 @@ export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
 
   const includeSubagent = opts.includeSubagentTests ?? true;
   const includeAction = opts.includeActionTests ?? true;
+  const includeMultiTurn = opts.includeMultiTurnTests ?? true;
   const includeGuardrail = opts.includeGuardrail ?? true;
   const includeSafety = opts.includeSafetyProbes ?? true;
   const maxFunctional = opts.maxFunctionalTests ?? 25;
@@ -130,11 +149,13 @@ export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
   const skippedSubagents: string[] = [];
   const skippedActions: string[] = [];
   const skippedConnectedAgents: string[] = [];
+  const skippedMultiTurn: GeneratedSpecSummary["skipped_multi_turn"] = [];
 
   let subagentCount = 0;
   let topicCount = 0;
   let actionCount = 0;
   let connectedAgentCount = 0;
+  let multiTurnCount = 0;
 
   // Subagent routing tests — one per non-start subagent.
   if (includeSubagent) {
@@ -202,8 +223,23 @@ export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
         skippedConnectedAgents.push(connected.name);
         continue;
       }
-      tests.push(buildConnectedAgentTest(connected.name, slugify(connected.name), utterance, ctx));
+      const generated = buildConnectedAgentTest({
+        connected,
+        slug: slugify(connected.name),
+        utterance,
+        contextVariables: ctx,
+        variables: components.variables ?? [],
+        branches: [...(components.start_agents ?? []), ...(components.subagents ?? [])].flatMap(
+          (component) => component.state_branches ?? [],
+        ),
+        includeMultiTurn,
+      });
+      tests.push(generated.test);
       connectedAgentCount++;
+      if (generated.multiTurn) multiTurnCount++;
+      if (generated.skippedReason) {
+        skippedMultiTurn.push({ component: connected.name, reason: generated.skippedReason });
+      }
     }
   }
 
@@ -232,11 +268,13 @@ export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
       routing_tests: subagentCount + topicCount,
       action_tests: actionCount,
       connected_agent_tests: connectedAgentCount,
+      multi_turn_tests: multiTurnCount,
       guardrail_tests: guardrailCount,
       safety_tests: safetyCount,
       skipped_subagents: skippedSubagents,
       skipped_actions: skippedActions,
       skipped_connected_agents: skippedConnectedAgents,
+      skipped_multi_turn: skippedMultiTurn,
     },
   };
 }
@@ -252,43 +290,26 @@ function buildRoutingTest(
   utterance: string,
   ctx: WireContextVariable[],
 ): EvalTest {
-  const steps: EvalStep[] = [
-    sessionStep(),
-    sendMessageStep(`turn1`, utterance, ctx),
-    getStateStep(`state1`),
-  ];
-
-  // Subagent routing is the modern shape and has a stable planner topic to
-  // assert. Legacy topic blocks often sit behind authentication/start-router
-  // gates; exact topic assertions make starter specs fail even when the
-  // response correctly asks for prerequisite information. Keep topic probes
-  // as LLM-judged smoke rows.
-  if (kind === "subagent") {
-    steps.push(
-      stringAssertionStep({
-        id: `eval_topic_${slug}`,
-        actualPath: `{state1.response.planner_response.lastExecution.topic}`,
-        expected: targetName,
-        operator: "equals",
-      }),
-    );
-  }
-
-  steps.push(
-    botResponseRatingStep({
-      id: `eval_response_${slug}`,
-      utterance,
-      actualPath: `{turn1.response}`,
-      rubric:
-        `The agent's response should be relevant to the user's request to "${escapeForRubric(utterance)}". ` +
-        `A passing response stays on the supported domain and is allowed to ask clarifying questions, ask whether the user wants human assistance, request identity verification, request missing inputs, or explain prerequisite workflow steps instead of completing the path immediately.`,
-    }),
+  return compileEvalScenario(
+    {
+      id: `${kind}_${slug}`,
+      turns: [
+        {
+          utterance,
+          ...(kind === "subagent"
+            ? { topic: { id: `eval_topic_${slug}`, expected: targetName } }
+            : {}),
+          response: {
+            id: `eval_response_${slug}`,
+            rubric:
+              `The agent's response should be relevant to the user's request to "${escapeForRubric(utterance)}". ` +
+              `A passing response stays on the supported domain and is allowed to ask clarifying questions, ask whether the user wants human assistance, request identity verification, request missing inputs, or explain prerequisite workflow steps instead of completing the path immediately.`,
+          },
+        },
+      ],
+    },
+    ctx,
   );
-
-  return {
-    id: `${kind}_${slug}`,
-    steps,
-  };
 }
 
 function buildActionTest(
@@ -297,168 +318,165 @@ function buildActionTest(
   utterance: string,
   ctx: WireContextVariable[],
 ): EvalTest {
+  return compileEvalScenario(
+    {
+      id: `action_${slug}`,
+      turns: [
+        {
+          utterance,
+          response: {
+            id: `eval_response_action_${slug}`,
+            rubric:
+              `The agent should attempt the "${actionName}" action in response to the user's request. ` +
+              `If the action requires inputs the user hasn't provided, the agent should ask for them rather than refuse.`,
+          },
+        },
+      ],
+    },
+    ctx,
+  );
+}
+
+interface ConnectedTestInput {
+  connected: ConnectedSubagentSummary;
+  slug: string;
+  utterance: string;
+  contextVariables: WireContextVariable[];
+  variables: VariableSummary[];
+  branches: StateBranchSummary[];
+  includeMultiTurn: boolean;
+}
+
+function buildConnectedAgentTest(input: ConnectedTestInput): {
+  test: EvalTest;
+  multiTurn: boolean;
+  skippedReason?: "no_provable_state_update" | "no_matching_state_branch";
+} {
+  const checkpoints = stateCheckpoints(input.connected, input.variables, input.slug);
+  const matchingBranches = input.includeMultiTurn
+    ? input.branches.filter((candidate) => branchMatches(candidate, checkpoints))
+    : [];
+  const branch = matchingBranches.length === 1 ? matchingBranches[0] : undefined;
+  const turns = [
+    {
+      utterance: input.utterance,
+      ...(checkpoints.length > 0
+        ? { state: checkpoints }
+        : {
+            response: {
+              id: `eval_response_connected_agent_${input.slug}`,
+              rubric:
+                `The agent should invoke or delegate to the connected agent "${input.connected.name}" in response to the request. ` +
+                `A passing response returns the connected agent's result or asks for inputs required before delegation.`,
+            },
+          }),
+    },
+  ];
+  if (branch) {
+    turns.push({
+      utterance: "What is the status of that request now?",
+      response: {
+        id: `eval_second_turn_connected_agent_${input.slug}`,
+        rubric: `The response should follow this Agent Script instruction activated by prior state: "${escapeForRubric(branch.instructions)}"`,
+      },
+      state: checkpoints.map((checkpoint) => ({
+        ...checkpoint,
+        id: checkpoint.id.replace("turn1", "turn2"),
+      })),
+    });
+  }
+  const skippedReason =
+    input.includeMultiTurn && input.connected.has_after_response
+      ? checkpoints.length === 0
+        ? "no_provable_state_update"
+        : branch
+          ? undefined
+          : "no_matching_state_branch"
+      : undefined;
   return {
-    id: `action_${slug}`,
-    steps: [
-      sessionStep(),
-      sendMessageStep(`turn1`, utterance, ctx),
-      getStateStep(`state1`),
-      // Starter action probes are intentionally LLM-judged only. Many actions
-      // require slot-filled inputs; a good first-turn response asks for those
-      // values rather than invoking the target immediately. Hand-written specs
-      // can add exact invokedActions assertions once they provide all inputs.
-      botResponseRatingStep({
-        id: `eval_response_action_${slug}`,
-        utterance,
-        actualPath: `{turn1.response}`,
-        rubric:
-          `The agent should attempt the "${actionName}" action in response to the user's request. ` +
-          `If the action requires inputs the user hasn't provided, the agent should ask for them rather than refuse.`,
-      }),
-    ],
+    test: compileEvalScenario(
+      { id: `connected_agent_${input.slug}`, turns },
+      input.contextVariables,
+    ),
+    multiTurn: !!branch,
+    ...(skippedReason ? { skippedReason } : {}),
   };
 }
 
-function buildConnectedAgentTest(
-  connectedAgentName: string,
+function stateCheckpoints(
+  connected: ConnectedSubagentSummary,
+  variables: VariableSummary[],
   slug: string,
-  utterance: string,
-  ctx: WireContextVariable[],
-): EvalTest {
-  return {
-    id: `connected_agent_${slug}`,
-    steps: [
-      sessionStep(),
-      sendMessageStep("turn1", utterance, ctx),
-      getStateStep("state1"),
-      botResponseRatingStep({
-        id: `eval_response_connected_agent_${slug}`,
-        utterance,
-        actualPath: "{turn1.response}",
-        rubric:
-          `The agent should invoke or delegate to the connected agent "${connectedAgentName}" in response to the request. ` +
-          `A passing response returns the connected agent's result or asks for inputs required before delegation.`,
-      }),
-    ],
-  };
+): ScenarioStateCheckpoint[] {
+  const defaults = new Map(variables.map((variable) => [variable.name, variable.default]));
+  const checkpoints: ScenarioStateCheckpoint[] = [];
+  for (const update of connected.after_response_updates ?? []) {
+    let expected: StateScalar | undefined;
+    if (update.operation === "set") {
+      expected = update.value;
+    } else {
+      const initial = defaults.get(update.variable);
+      if (typeof initial === "number" && typeof update.amount === "number") {
+        expected =
+          update.operation === "increment" ? initial + update.amount : initial - update.amount;
+      }
+    }
+    if (expected !== undefined) {
+      checkpoints.push({
+        id: `eval_state_${slug}_${slugify(update.variable)}_turn1`,
+        variable: update.variable,
+        expected,
+      });
+    }
+  }
+  return checkpoints;
+}
+
+function branchMatches(
+  branch: StateBranchSummary,
+  checkpoints: ScenarioStateCheckpoint[],
+): boolean {
+  const checkpoint = checkpoints.find((item) => item.variable === branch.variable);
+  if (!checkpoint) return false;
+  const actual = checkpoint.expected;
+  switch (branch.operator) {
+    case "truthy":
+      return Boolean(actual) === branch.expected;
+    case "equals":
+      return actual === branch.expected;
+    case "greater_than":
+      return (
+        typeof actual === "number" &&
+        typeof branch.expected === "number" &&
+        actual > branch.expected
+      );
+    case "greater_than_or_equal":
+      return (
+        typeof actual === "number" &&
+        typeof branch.expected === "number" &&
+        actual >= branch.expected
+      );
+  }
 }
 
 function buildSafetyTest(probe: SafetyProbe, ctx: WireContextVariable[]): EvalTest {
-  // Keep a get_state step so safety rows have the same debug surface as
-  // functional rows. The response evaluator reads the direct send_message
-  // output via `{turn1.response}`.
-  return {
-    id: probe.id,
-    steps: [
-      sessionStep(),
-      sendMessageStep(`turn1`, probe.utterance, ctx),
-      getStateStep(`state1`),
-      botResponseRatingStep({
-        id: `eval_safety_${probe.id}`,
-        utterance: probe.utterance,
-        actualPath: `{turn1.response}`,
-        rubric: probe.expected_behavior,
-      }),
-    ],
-  };
-}
-
-// -------------------------------------------------------------------------------------------------
-// Step builders (kept tiny — most fields are constant for our generator)
-// -------------------------------------------------------------------------------------------------
-
-function sessionStep(): EvalStep {
-  return {
-    type: "agent.create_session",
-    id: "session",
-    planner_id: "$active_planner_id",
-    setupSessionContext: {
-      tags: {
-        botId: "$active_bot_id",
-        botVersionId: "$active_bot_version_id",
-      },
+  return compileEvalScenario(
+    {
+      id: probe.id,
+      turns: [
+        {
+          utterance: probe.utterance,
+          response: { id: `eval_safety_${probe.id}`, rubric: probe.expected_behavior },
+        },
+      ],
     },
-  };
-}
-
-function sendMessageStep(id: string, utterance: string, ctx: WireContextVariable[]): EvalStep {
-  const step: EvalStep = {
-    type: "agent.send_message",
-    id,
-    session_id: "$.outputs[0].session_id",
-    utterance,
-  };
-  if (ctx.length > 0) step.context_variables = ctx;
-  return step;
-}
-
-function getStateStep(id: string): EvalStep {
-  return {
-    type: "agent.get_state",
-    id,
-    session_id: "$.outputs[0].session_id",
-  };
-}
-
-function stringAssertionStep(o: {
-  id: string;
-  actualPath: string;
-  expected: string;
-  operator: "equals" | "contains";
-}): EvalStep {
-  return {
-    type: "evaluator.string_assertion",
-    id: o.id,
-    actual: o.actualPath,
-    expected: o.expected,
-    operator: o.operator,
-  };
-}
-
-/**
- * `evaluator.bot_response_rating` is the LLM-as-judge evaluator the eval
- * API uses for free-text quality assertions. The wire shape requires:
- *
- *   - `utterance` — the user's input the agent was responding to
- *   - `actual` — JSONPath pointing at the agent's reply text. For generated
- *     one-turn tests, use the direct send_message output `{turn1.response}`.
- *     It is more reliable than `agent.get_state.lastExecution.message`,
- *     which can lag behind tool/user-input handoff turns.
- *   - `expected` — the rubric describing what a good response looks like
- *   - `threshold` — the minimum score (1–5 scale; 3 = acceptable)
- *
- * `operator` is NOT required — the API defaults to greater_than_or_equal.
- *
- * History: earlier versions of this generator emitted only `id + expected`
- * (HTTP 422), then used `agent.get_state.lastExecution.message`. Live
- * examples showed that state path can return the welcome message while
- * `agent.send_message.response` contains the actual turn response.
- */
-function botResponseRatingStep(o: {
-  id: string;
-  utterance: string;
-  actualPath: string;
-  rubric: string;
-}): EvalStep {
-  return {
-    type: "evaluator.bot_response_rating",
-    id: o.id,
-    utterance: o.utterance,
-    actual: o.actualPath,
-    expected: o.rubric,
-    threshold: 3,
-  };
+    ctx,
+  );
 }
 
 // -------------------------------------------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------------------------------------------
-
-interface WireContextVariable {
-  name: string;
-  type: string;
-  value: string;
-}
 
 function normalizeSeeds(vars: ContextVariableSeed[] | undefined): WireContextVariable[] {
   if (!vars || vars.length === 0) return [];

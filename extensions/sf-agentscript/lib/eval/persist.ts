@@ -9,6 +9,7 @@
  *   <run_dir>/
  *   ├── metadata.json           # spec, org, version, timing, totals, latency summary
  *   ├── raw.json                # full HTML-decoded merged response
+ *   ├── batch-failures.json     # non-2xx batch bodies (when any batch fails)
  *   ├── transcript.jsonl        # one line per turn, sortable + diff-able
  *   ├── failures.jsonl          # one line per failed test, LLM-shaped
  *   └── traces/
@@ -23,6 +24,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   EvalApiResponse,
+  EvalBatchFailure,
   EvalSpec,
   FailureRecord,
   LastExecution,
@@ -47,6 +49,7 @@ export interface PersistInput {
   traces: Map<string, unknown | null>;
   metadata: RunMetadata;
   failures: FailureRecord[];
+  batchFailures?: EvalBatchFailure[];
   /**
    * Optional: the post-normalize spec, used to cross-reference user
    * utterances onto each turn in transcript.jsonl. The eval API doesn't
@@ -117,6 +120,14 @@ export async function writeRun(input: PersistInput): Promise<void> {
 
   // raw.json — the full merged eval response (already HTML-decoded by caller)
   await writeFile(path.join(runDir, "raw.json"), JSON.stringify(merged, null, 2), "utf-8");
+
+  if (input.batchFailures && input.batchFailures.length > 0) {
+    await writeFile(
+      path.join(runDir, "batch-failures.json"),
+      JSON.stringify(input.batchFailures, null, 2),
+      "utf-8",
+    );
+  }
 
   // transcript.jsonl — one entry per agent.send_message turn across all tests
   const transcriptLines: string[] = [];

@@ -89,7 +89,7 @@ Use `inspect/context_profile` before previewing or publishing voice, messaging, 
 
 Use `inspect/find_references` before mutating a symbol. Use `inspect/definition` when you only need the declaration.
 
-Use `inspect/check_targets` before publish when action or connected-agent targets must resolve in the org. Requires `target_org`; schemes without a proven resolver remain explicitly unverifiable. Connected-agent existence and runtime readiness are separate: an existing target without an Active version warns and provides an activation hint without blocking parent publication.
+Use `inspect/check_targets` before publish when action or connected-agent targets must resolve in the org. Requires `target_org`; schemes without a proven resolver remain explicitly unverifiable. Connected-agent existence and runtime readiness are separate: an existing target without an Active version warns and provides an activation hint without blocking parent publication. Local project sources are traversed cycle-safely to depth five; transitive gaps warn, while direct targets retain existing blocker semantics.
 
 Use `inspect/review` before publish or after behavioral changes. It is deterministic: no hidden model call, no numeric score. Readiness is `ready`, `ready_with_warnings`, `blocked`, or `partial`. Pass `target_org` to include read-only org checks: action-target resolution, Service Agent user readiness, and surface readiness probes such as Agentforce settings, phone number, voice/messaging channel, ServiceChannel, published voice planner, routing-flow, and fallback-queue checks for channel-linked agents. Locally valid `runtime`, `file_upload`, and experimental `collect` usage remain non-blocking org-compiler compatibility risks until live server compile succeeds. Pass `output_path` to write a Markdown report.
 
@@ -130,9 +130,11 @@ Preview send output uses two surfaces: the human renderer shows a rich Preview T
 
 Use `generate_spec` to bootstrap a starter regression spec from a `.agent` file. Use `run` with `agent_api_name` so the runner resolves/injects Active BotVersion ids safely by default.
 
-For long or exploratory local runs, pass `batch_timeout_ms` to cap each Evaluation API batch POST. The default remains 300000ms, and client-side timeouts are not retried. During a run, inspect `.pi/state/sf-agentscript/runs/<run_id>/status.json` for the current phase when persistence is enabled.
+For long or exploratory local runs, pass `batch_timeout_ms` to cap each Evaluation API batch POST. The default remains 300000ms, and client-side timeouts are not retried. Non-2xx batches fail the run and persist full evidence in `batch-failures.json`; never accept a green run whose returned test count is lower than the generated spec. During a run, inspect `.pi/state/sf-agentscript/runs/<run_id>/status.json` for the current phase when persistence is enabled.
 
-Eval runs synthesize trace artifacts from inline Evaluation API data by default. Generated specs include connected-agent invocation probes in addition to subagent routing and targeted action probes. Use `agentscript_eval action="trace"` only when you explicitly need a live planner trace and have a known resident `session_id`/`plan_id`.
+`generate_spec` uses an internal stateful scenario compiler. `include_multi_turn_tests` defaults to true and generates same-session turn sequences only when `after_response` updates and a matching source branch are statically provable. Exact state checkpoints use live-supported string or numeric evaluators; dynamic updates appear in `skipped_multi_turn` rather than being guessed. Generated specs also include connected-agent invocation probes, subagent routing, and targeted action probes.
+
+Eval runs synthesize trace artifacts from inline Evaluation API data by default. Eval does not expose `RelatedAgentStep`; connected-agent call counts are therefore unavailable, not zero and not inferred from LLM events. Use `agentscript_preview` for authoritative connected-call telemetry, and use `agentscript_eval action="trace"` only when you explicitly need a live planner trace and have a known resident `session_id`/`plan_id`.
 
 Use `$latest_*` placeholders or `version_resolution="latest"` only for the publish → eval → activate loop, and pass `acknowledge_inactive_version=true` when deliberately testing a non-Active version.
 

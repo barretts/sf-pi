@@ -145,6 +145,26 @@ describe("normalizeEvaluatorFields", () => {
     });
   });
 
+  test("numeric assertion normalizes aliases and operator", () => {
+    const out = normalizeEvaluatorFields(
+      autoCorrectFields([
+        {
+          type: "evaluator.numeric_assertion",
+          id: "na",
+          actualValue: "{state.value}",
+          expectedValue: 1,
+          comparator: "EQUALS",
+        },
+      ]),
+    );
+    expect(out[0]).toMatchObject({
+      actual: "{state.value}",
+      expected: 1,
+      operator: "equals",
+    });
+    expect("metric_name" in out[0]).toBe(false);
+  });
+
   test("unknown evaluator types are left alone (no metric_name injection)", () => {
     const step: EvalStep = {
       type: "evaluator.bot_response_rating",
@@ -221,6 +241,25 @@ describe("injectDefaults", () => {
 });
 
 describe("normalizeSpec composition", () => {
+  test("rejects unsupported json_assertion before a network call", () => {
+    const spec: EvalSpec = {
+      tests: [
+        {
+          id: "bad",
+          steps: [
+            {
+              type: "evaluator.json_assertion",
+              id: "json",
+              actual: "$.value",
+              expected: true,
+            },
+          ],
+        },
+      ],
+    };
+    expect(() => normalizeSpec(spec)).toThrow(/json_assertion.*not supported/i);
+  });
+
   test("runs all six passes in order on a realistic spec", () => {
     const spec: EvalSpec = {
       tests: [

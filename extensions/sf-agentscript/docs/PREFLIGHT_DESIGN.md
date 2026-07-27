@@ -331,6 +331,6 @@ createCatalogItemRequest, externalConnector, executeIntegrationProcedure)
 remains backlog. They're rare in real-world agents and require feature
 licenses; user demand will dictate priority.
 
-Phase 4 (transitive walk for `agentforce://` connected agents) also
-remains backlog — the immediate-resolution check ships today; resolving
-targets two hops deep needs a recursive planner.
+### Phase 4 shipped: transitive connected-agent readiness
+
+Connected-agent source present in the same local SFDX project is traversed cycle-safely to depth five. Each discovered node is checked for `BotDefinition` existence and an Active `BotVersion`. Direct target failures retain existing blocker/warning semantics; transitive missing/inactive descendants warn without blocking root publication. Active remote-only targets have unverifiable descendants because sf-pi does not retrieve or infer remote Agent Script topology.

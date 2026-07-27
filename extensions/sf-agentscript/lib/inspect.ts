@@ -20,6 +20,10 @@ import { projectInspectStructure, type InspectResult } from "./inspect-structure
 export type {
   InspectResult,
   ComponentSummary,
+  ConnectedSubagentSummary,
+  StateBranchSummary,
+  StateScalar,
+  StateUpdateSummary,
   VariableSummary,
   ConnectionSummary,
   ResponseFormatSummary,

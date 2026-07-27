@@ -37,6 +37,8 @@ describe("generateSpec", () => {
     expect(out.summary.routing_tests).toBe(0);
     expect(out.summary.action_tests).toBe(0);
     expect(out.summary.connected_agent_tests).toBe(0);
+    expect(out.summary.multi_turn_tests).toBe(0);
+    expect(out.summary.skipped_multi_turn).toEqual([]);
     expect(out.summary.guardrail_tests).toBe(1);
     expect(out.summary.safety_tests).toBe(SAFETY_PROBES.length);
     // Total = guardrail (1) + safety probes
@@ -205,6 +207,8 @@ describe("generateSpec", () => {
       includeGuardrail: false,
     });
     expect(out.summary.connected_agent_tests).toBe(1);
+    expect(out.summary.multi_turn_tests).toBe(0);
+    expect(out.summary.skipped_multi_turn).toEqual([]);
     expect(out.spec.tests.map((test) => test.id)).toEqual(["connected_agent_release_helper"]);
     const send = out.spec.tests[0].steps.find((step) => step.type === "agent.send_message")!;
     expect(send.utterance).toContain("return the release-lab acknowledgement");
@@ -212,6 +216,83 @@ describe("generateSpec", () => {
       (step) => step.type === "evaluator.bot_response_rating",
     )!;
     expect(rating.expected).toMatch(/connected agent/i);
+  });
+
+  test("generates a state-grounded two-turn connected-agent scenario", () => {
+    const out = generateSpec({
+      inspect: fakeInspect({
+        variables: [
+          { name: "completed", type: "boolean", mutable: true, default: false },
+          { name: "attempts", type: "number", mutable: true, default: 0 },
+        ],
+        start_agents: [
+          {
+            name: "main",
+            state_branches: [
+              {
+                variable: "completed",
+                operator: "truthy",
+                expected: true,
+                instructions: "Report that the helper completed successfully.",
+              },
+            ],
+          },
+        ],
+        connected_subagents: [
+          {
+            name: "release_helper",
+            description: "Return the release-lab acknowledgement.",
+            target: "agent://Release_Helper",
+            line: 12,
+            has_after_response: true,
+            after_response_updates: [
+              { variable: "completed", operation: "set", value: true },
+              { variable: "attempts", operation: "increment", amount: 1 },
+            ],
+          },
+        ],
+      }),
+      includeSafetyProbes: false,
+      includeGuardrail: false,
+    });
+    expect(out.summary.connected_agent_tests).toBe(1);
+    expect(out.summary.multi_turn_tests).toBe(1);
+    expect(out.summary.skipped_multi_turn).toEqual([]);
+    const steps = out.spec.tests[0].steps;
+    expect(steps.filter((step) => step.type === "agent.send_message")).toHaveLength(2);
+    expect(steps.filter((step) => step.type === "agent.get_state")).toHaveLength(2);
+    expect(steps.filter((step) => step.type === "evaluator.numeric_assertion")).toHaveLength(4);
+    expect(
+      steps.find((step) => step.id === "eval_response_connected_agent_release_helper"),
+    ).toBeUndefined();
+    expect(
+      steps.find((step) => step.id === "eval_second_turn_connected_agent_release_helper"),
+    ).toMatchObject({
+      actual: "{turn2.response}",
+      expected: expect.stringContaining("Report that the helper completed successfully"),
+    });
+  });
+
+  test("reports an after_response block with no provable update as skipped", () => {
+    const out = generateSpec({
+      inspect: fakeInspect({
+        connected_subagents: [
+          {
+            name: "dynamic_helper",
+            description: "Run dynamic work.",
+            target: "agent://Dynamic_Helper",
+            line: 12,
+            has_after_response: true,
+          },
+        ],
+      }),
+      includeSafetyProbes: false,
+      includeGuardrail: false,
+    });
+    expect(out.summary.multi_turn_tests).toBe(0);
+    expect(out.summary.skipped_multi_turn).toEqual([
+      { component: "dynamic_helper", reason: "no_provable_state_update" },
+    ]);
   });
 
   test("safety probes are included by default and use bot_response_rating", () => {

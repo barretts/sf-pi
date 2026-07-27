@@ -37,6 +37,13 @@ export interface EvalApiResponse {
   results?: TestResult[];
 }
 
+export interface EvalBatchFailure {
+  batch_index: number;
+  status: number;
+  test_ids: string[];
+  body: unknown;
+}
+
 export interface TestResult {
   id?: string;
   outputs?: EvalOutput[];
@@ -246,6 +253,9 @@ export interface RunMetadata {
   completed: string;
   duration_ms: number;
   tests_count: number;
+  returned_tests_count?: number;
+  missing_test_ids?: string[];
+  failed_batches?: number;
   batches: number;
   concurrency: number;
   traces_mode: TracesMode;

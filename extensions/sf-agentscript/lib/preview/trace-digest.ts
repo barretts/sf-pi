@@ -55,7 +55,7 @@ export interface DigestStats {
   vars_updated: number;
   topic_changes: number;
   function_calls: number;
-  related_agent_calls: number;
+  related_agent_calls: number | null;
   errors: number;
 }
 
@@ -149,6 +149,10 @@ export interface TraceDigest {
   state_variables?: Record<string, unknown>;
   /** Tool enablement and called action input/output previews. */
   tool_activity?: ToolActivityDigest;
+  connected_agent_evidence?: {
+    status: "observed" | "unavailable";
+    reason?: "eval_api_does_not_expose_related_agent_step" | "production_api_has_no_plan_trace";
+  };
   /** Rule-based preview findings. Render only when non-empty. */
   diagnostics?: TraceFindingDigest[];
   /** Step-level errors aggregated across the timeline. */
@@ -667,6 +671,7 @@ export function summarizeTrace(trace: unknown, opts: SummarizeOptions = {}): Tra
     ...(variableChanges.length > 0 ? { variable_changes: variableChanges } : {}),
     ...(stateVariables ? { state_variables: stateVariables } : {}),
     ...(toolActivity ? { tool_activity: toolActivity } : {}),
+    connected_agent_evidence: { status: "observed" },
     ...(diagnostics.length > 0 ? { diagnostics } : {}),
     errors,
     stats,
@@ -817,7 +822,7 @@ export function summarizeLastExecution(
     vars_updated: 0,
     topic_changes: 0,
     function_calls: lastExec?.invokedActions?.length ?? 0,
-    related_agent_calls: 0,
+    related_agent_calls: null,
     errors: errors.length,
   };
 
@@ -844,11 +849,16 @@ export function summarizeLastExecution(
     },
     timeline,
     ...(stateVariables ? { state_variables: stateVariables } : {}),
+    connected_agent_evidence: {
+      status: "unavailable",
+      reason: "eval_api_does_not_expose_related_agent_step",
+    },
     errors,
     stats,
     summary_line,
     notes: [
       "source=eval — the Evaluation API does not expose a fine-grained step timeline; LLM events are reconstructed from lastExecution.llmEvents.",
+      "Connected-agent invocation count is unavailable because the Evaluation API does not expose RelatedAgentStep evidence.",
     ],
   };
 }
@@ -1012,7 +1022,7 @@ export function summarizeProductionResponse(
     vars_updated: 0,
     topic_changes: 0,
     function_calls: functionCalls,
-    related_agent_calls: 0,
+    related_agent_calls: null,
     errors: errors.length,
   };
 
@@ -1035,6 +1045,10 @@ export function summarizeProductionResponse(
       // No trace_file: production-v1 has no fetchable per-plan trace.
     },
     timeline,
+    connected_agent_evidence: {
+      status: "unavailable",
+      reason: "production_api_has_no_plan_trace",
+    },
     errors,
     stats,
     summary_line,

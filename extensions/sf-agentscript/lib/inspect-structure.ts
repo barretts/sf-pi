@@ -8,6 +8,19 @@
  * compact JSON surface agents use for navigation and planning.
  */
 
+import {
+  projectAfterResponseUpdates,
+  projectStateBranches,
+  type StateBranchSummary,
+  type StateUpdateSummary,
+} from "./inspect-eval-projection.ts";
+
+export type {
+  StateBranchSummary,
+  StateScalar,
+  StateUpdateSummary,
+} from "./inspect-eval-projection.ts";
+
 // Public types
 // -------------------------------------------------------------------------------------------------
 
@@ -87,6 +100,8 @@ export interface ComponentSummary {
   input_names?: string[];
   /** Action declaration output names, when present. */
   output_names?: string[];
+  /** Simple source branches that can ground generated second-turn eval expectations. */
+  state_branches?: StateBranchSummary[];
   /**
    * For action declarations only: the parent component when the action is
    * inline-declared inside a subagent or topic body (e.g. `subagent.triage`).
@@ -114,6 +129,7 @@ export interface VariableSummary {
 export interface ConnectedSubagentSummary extends ComponentSummary {
   delegate_escalation?: boolean;
   has_after_response: boolean;
+  after_response_updates?: StateUpdateSummary[];
 }
 
 export interface ConnectionSummary extends ComponentSummary {
@@ -341,6 +357,8 @@ function summarizeWithRefs(
   if (inputNames) summary.input_names = inputNames;
   const outputNames = paramNames(e.outputs);
   if (outputNames) summary.output_names = outputNames;
+  const branches = projectStateBranches(e, decomposeAtMemberExpression);
+  if (branches.length > 0) summary.state_branches = branches;
   return summary;
 }
 
@@ -362,6 +380,8 @@ function summarizeConnectedSubagent(
     summary.delegate_escalation = delegateEscalation;
   }
   summary.has_after_response = e.after_response !== undefined;
+  const updates = projectAfterResponseUpdates(e, decomposeAtMemberExpression);
+  if (updates.length > 0) summary.after_response_updates = updates;
   return summary;
 }
 

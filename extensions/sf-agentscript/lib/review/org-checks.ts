@@ -6,7 +6,7 @@ import { inferAgentTypeFromTemplate } from "../agent-user/agent-config.ts";
 import { checkAgentUserStatus } from "../agent-user/status.ts";
 import type { AgentFeatureProfile } from "../feature-profile.ts";
 import type { ComponentSummary } from "../inspect.ts";
-import { checkActionTargets } from "../preflight.ts";
+import { checkActionTargets, checkConnectedAgentReadinessGraph } from "../preflight.ts";
 import { checkSurfaceReadiness } from "../preflight/surface-readiness.ts";
 import type { ReviewFinding } from "./types.ts";
 
@@ -92,6 +92,20 @@ async function collectActionTargetFindings(
         },
       });
     }
+  }
+  const graph = await checkConnectedAgentReadinessGraph(input.conn, input.agentFile);
+  for (const issue of graph.issues) {
+    const isTransitiveReadiness =
+      issue.depth > 1 && ["missing", "runtime_not_ready"].includes(issue.kind);
+    const isTopologyGap = ["source_unavailable", "cycle", "depth_limit"].includes(issue.kind);
+    if (!isTransitiveReadiness && !isTopologyGap) continue;
+    findings.push({
+      id: `connected-graph-${issue.kind}-${issue.agent_name}-${issue.depth}`,
+      severity: "warning",
+      category: "org",
+      message: `Connected-agent readiness graph: ${issue.path.join(" → ")}`,
+      evidence: [issue.detail],
+    });
   }
   return findings;
 }

@@ -216,6 +216,12 @@ const Params = Type.Object({
         "Optional for action='generate_spec'. Include one invocation probe per targeted action and connected agent. Default true.",
     }),
   ),
+  include_multi_turn_tests: Type.Optional(
+    Type.Boolean({
+      description:
+        "Optional for action='generate_spec'. Include evidence-backed same-session scenarios for provable after_response state and branch behavior. Default true.",
+    }),
+  ),
   include_guardrail: Type.Optional(
     Type.Boolean({
       description:
@@ -233,7 +239,7 @@ const Params = Type.Object({
       minimum: 1,
       maximum: 200,
       description:
-        "Optional for action='generate_spec'. Cap the subagent + action test count. Default 25.",
+        "Optional for action='generate_spec'. Cap the subagent + action + connected-agent test count. Default 25.",
     }),
   ),
 });
@@ -268,6 +274,7 @@ interface ParamsAny {
   }>;
   include_subagent_tests?: boolean;
   include_action_tests?: boolean;
+  include_multi_turn_tests?: boolean;
   include_guardrail?: boolean;
   include_safety_probes?: boolean;
   max_functional_tests?: number;
@@ -454,7 +461,11 @@ async function actionRun(
     : recordRunInIndex(ctx.cwd, result.run_id));
 
   const inlineThreshold = input.inline_threshold ?? 5;
-  const passed = result.totals.test_fail === 0 && result.totals.errors === 0;
+  const passed =
+    result.failed_batches === 0 &&
+    result.totals.tests === result.metadata.tests_count &&
+    result.totals.test_fail === 0 &&
+    result.totals.errors === 0;
   const head = headline(result, passed);
 
   const summary = {
@@ -464,6 +475,19 @@ async function actionRun(
     totals: result.metadata.totals,
     latency: result.latency,
     failed_batches: result.failed_batches,
+    returned_tests: result.metadata.returned_tests_count,
+    expected_tests: result.metadata.tests_count,
+    missing_test_ids: result.metadata.missing_test_ids,
+    ...(result.batch_failures.length > 0
+      ? {
+          batch_failures: result.batch_failures.slice(0, 3).map((failure) => ({
+            batch_index: failure.batch_index,
+            status: failure.status,
+            test_ids: failure.test_ids,
+            body_preview: JSON.stringify(failure.body).slice(0, 1200),
+          })),
+        }
+      : {}),
   };
 
   const failureCount = result.failures.length;
@@ -829,6 +853,7 @@ async function actionGenerateSpec(
       contextVariables: input.context_variables,
       includeSubagentTests: input.include_subagent_tests,
       includeActionTests: input.include_action_tests,
+      includeMultiTurnTests: input.include_multi_turn_tests,
       includeGuardrail: input.include_guardrail,
       includeSafetyProbes: input.include_safety_probes,
       maxFunctionalTests: input.max_functional_tests,
@@ -857,7 +882,11 @@ async function actionGenerateSpec(
   }
 
   const summary = result.summary;
-  const totals = `${summary.total_tests} test(s): ${summary.subagent_tests} subagent, ${summary.action_tests} action, ${summary.guardrail_tests} guardrail, ${summary.safety_tests} safety`;
+  const totals =
+    `${summary.total_tests} test(s): ${summary.subagent_tests} subagent, ` +
+    `${summary.action_tests} action, ${summary.connected_agent_tests} connected, ` +
+    `${summary.multi_turn_tests} multi-turn, ${summary.guardrail_tests} guardrail, ` +
+    `${summary.safety_tests} safety`;
   const head = `✨ spec generated for ${path.basename(agentFile)}\n${totals}${writtenPath ? `\nWritten: ${writtenPath}` : ""}`;
 
   // Hand back the next-step hint so the LLM chains directly into a run.

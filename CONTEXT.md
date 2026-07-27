@@ -304,6 +304,10 @@ _Avoid_: scheme validation, always-valid assumption, generic metadata framework,
 A read-only fact, separate from target existence, that says whether a connected agent has an Active version available for runtime invocation. A not-ready result warns and provides an activation path without redefining the target as missing or blocking parent-agent publication.
 _Avoid_: target existence, missing agent, publish blocker, inferred callability
 
+**Connected Agent Readiness Graph**:
+A cycle-safe graph, bounded to five levels, built from Agent Script sources present in the same local Salesforce project, with each discovered node checked for org existence and Active-version readiness. An active target whose source is not local has unverifiable descendants rather than inferred topology. Direct readiness keeps existing blocker/warning semantics; transitive gaps warn without blocking root publication.
+_Avoid_: remote source retrieval, BotVersion topology inference, unbounded recursion, active means transitively ready, transitive publish blocker
+
 **Agent User Readiness Scope**:
 SF Pi authoritatively checks Service Agent user wiring, treats the known Employee Agent path as not applicable, and reports other compiler-valid agent types as not evaluated. Compiler-valid type does not imply SF Pi-verified setup readiness.
 _Avoid_: guessed type policy, every non-Service type is ready, unsupported-type blocker
@@ -319,6 +323,26 @@ _Avoid_: deprecated topic scaffold, empty behavioral node, unconditional first-s
 **Agent Script Integration Contract Test**:
 A deterministic test of the boundary SF Pi owns: official package loading, diagnostic preservation, stable structural projection, target-preflight routing, or package coherence. Upstream compiler internals and live Salesforce execution are separate evidence tiers.
 _Avoid_: upstream test mirror, internal AST assertion, release-note checklist, local proof of runtime behavior
+
+**Agent Script Eval Scenario**:
+A transport-independent regression definition with one shared agent session, an ordered sequence of user turns, per-turn response and routing expectations, explicit state checkpoints, and evidence provenance. It models real stateful conversation rather than injecting synthetic conversation history.
+_Avoid_: raw Evaluation API steps, unrelated one-turn test bundle, synthetic history presented as state progression, free-form prompt script
+
+**Agent Script Eval Scenario Compiler**:
+The deterministic translation from an **Agent Script Eval Scenario** to the current Salesforce Evaluation API step graph. It centralizes session reuse, step IDs, references, state checkpoints, and evaluator wiring so generation does not depend directly on transport details.
+_Avoid_: second eval backend, per-generator step assembly, transport-specific scenario model, hidden evaluator inference
+
+**Agent Script Eval State Checkpoint**:
+A per-turn assertion derived from a statically provable Agent Script state update, such as a literal assignment or simple arithmetic over a known default. Dynamic updates without an exact expected value are reported as skipped rather than guessed.
+_Avoid_: inferred state, LLM-generated expected value, expression interpreter, response-only continuity claim
+
+**Agent Script Eval Branch Expectation**:
+A second-turn behavioral expectation derived from a simple source branch whose condition is provably activated by an **Agent Script Eval State Checkpoint**. When no such branch can be proven, automatic generation omits the behavioral turn and reports the gap.
+_Avoid_: generic continue prompt, guessed branch, LLM-authored expected behavior, condition interpreter
+
+**Agent Script Eval Evidence Availability**:
+An explicit statement of whether the Evaluation API directly exposes a requested runtime fact. Unavailable evidence is represented as unknown with a reason, never as zero and never inferred from ambiguous LLM event ordering.
+_Avoid_: inferred connected call, zero-as-unknown, synthetic trace presented as direct telemetry, missing-field guess
 
 **Agent Script Diagnostic Presentation**:
 Explicit compile/check returns every upstream diagnostic severity, while automatic compile-on-save feedback surfaces errors and warnings only. Information and hints remain available on demand without becoming repeated edit-loop noise.

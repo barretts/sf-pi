@@ -381,6 +381,48 @@ describe("inspectFile", () => {
     );
   });
 
+  test("projects provable after_response updates and simple state branches", async () => {
+    const source = [
+      "config:",
+      '    agent_name: "Stateful_Bot"',
+      "system:",
+      '    instructions: "Coordinate"',
+      "variables:",
+      "    completed: mutable boolean = False",
+      "    attempts: mutable number = 0",
+      "connected_subagent helper:",
+      '    target: "agent://Helper"',
+      '    description: "Help"',
+      "    after_response:",
+      "        set @variables.completed = True",
+      "        set @variables.attempts = @variables.attempts + 1",
+      "start_agent main:",
+      '    description: "Entry"',
+      "    reasoning:",
+      "        instructions: ->",
+      "            if @variables.completed:",
+      "                | Report that the helper completed successfully.",
+      "            else:",
+      "                | Invoke the helper.",
+      "",
+    ].join("\n");
+    const filePath = await writeAgent("stateful-projection.agent", source);
+    const result = await inspectFile(filePath);
+    expect(result.ok).toBe(true);
+    expect(result.components?.connected_subagents?.[0].after_response_updates).toEqual([
+      { variable: "completed", operation: "set", value: true },
+      { variable: "attempts", operation: "increment", amount: 1 },
+    ]);
+    expect(result.components?.start_agents?.[0].state_branches).toEqual([
+      {
+        variable: "completed",
+        operator: "truthy",
+        expected: true,
+        instructions: "Report that the helper completed successfully.",
+      },
+    ]);
+  });
+
   test("surfaces collect as an org compiler compatibility risk", async () => {
     const source = [
       "config:",

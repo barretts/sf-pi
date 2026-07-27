@@ -48,6 +48,7 @@ import {
 import { resolveOrgIdentity } from "../../../../lib/common/sf-conn/connection.ts";
 import type {
   EvalApiResponse,
+  EvalBatchFailure,
   EvalSpec,
   FailureRecord,
   LatencySummary,
@@ -127,6 +128,7 @@ export interface RunEvalResult {
   metadata: RunMetadata;
   /** Number of batches that returned non-200. */
   failed_batches: number;
+  batch_failures: EvalBatchFailure[];
 }
 
 function enforceLatestAcknowledgement(ids: ResolvedAgentIds, opts: RunEvalOptions): void {
@@ -375,6 +377,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
 
     const results: Array<EvalApiResponse["results"]> = new Array(batches.length).fill(null);
     let failedBatches = 0;
+    const batchFailures: EvalBatchFailure[] = [];
     const sema = makeSemaphore(concurrency);
     await (opts.timings
       ? opts.timings.time("eval_batches", () =>
@@ -403,6 +406,12 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
                   }
                 } else {
                   failedBatches++;
+                  batchFailures.push({
+                    batch_index: idx,
+                    status: res.status,
+                    test_ids: b.map((test) => test.id),
+                    body: res.body,
+                  });
                   const snippet = JSON.stringify(res.body).slice(0, 1500);
                   log(`  batch ${idx + 1}/${batches.length}: HTTP ${res.status}  ${snippet}`);
                   results[idx] = [];
@@ -430,6 +439,12 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
                 }
               } else {
                 failedBatches++;
+                batchFailures.push({
+                  batch_index: idx,
+                  status: res.status,
+                  test_ids: b.map((test) => test.id),
+                  body: res.body,
+                });
                 const snippet = JSON.stringify(res.body).slice(0, 1500);
                 log(`  batch ${idx + 1}/${batches.length}: HTTP ${res.status}  ${snippet}`);
                 results[idx] = [];
@@ -443,6 +458,10 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
     const merged = opts.timings
       ? await opts.timings.time("decode_eval_response", () => deepDecode(mergedRaw))
       : deepDecode(mergedRaw);
+    const returnedTestIds = new Set(
+      (merged.results ?? []).map((test) => test.id).filter((id): id is string => !!id),
+    );
+    const missingTestIds = tests.map((test) => test.id).filter((id) => !returnedTestIds.has(id));
 
     // 5. Trace surface — synthesize-then-merge.
     //
@@ -605,6 +624,9 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       completed: completedAt.toISOString(),
       duration_ms: completedAt.getTime() - startedAt.getTime(),
       tests_count: tests.length,
+      returned_tests_count: merged.results?.length ?? 0,
+      missing_test_ids: missingTestIds,
+      failed_batches: failedBatches,
       batches: batches.length,
       concurrency,
       traces_mode: tracesMode,
@@ -627,14 +649,34 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
     if (runDir) {
       await (opts.timings
         ? opts.timings.time("persist_eval_run", () =>
-            writeRun({ runDir, merged, traces, metadata, failures, spec }),
+            writeRun({
+              runDir,
+              merged,
+              traces,
+              metadata,
+              failures,
+              batchFailures,
+              spec,
+            }),
           )
-        : writeRun({ runDir, merged, traces, metadata, failures, spec }));
-      await writeStatus("completed", "completed", {
-        testsCount: tests.length,
-        batches: batches.length,
-        completed: completedAt,
-      });
+        : writeRun({
+            runDir,
+            merged,
+            traces,
+            metadata,
+            failures,
+            batchFailures,
+            spec,
+          }));
+      await writeStatus(
+        failedBatches > 0 ? "failed" : "completed",
+        failedBatches > 0 ? "batch_failure" : "completed",
+        {
+          testsCount: tests.length,
+          batches: batches.length,
+          completed: completedAt,
+        },
+      );
       terminalStatusWritten = true;
       log(`Artifacts: ${runDir}/`);
     }
@@ -648,6 +690,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       merged,
       metadata,
       failed_batches: failedBatches,
+      batch_failures: batchFailures,
     };
   } catch (err) {
     if (!terminalStatusWritten) {

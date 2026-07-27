@@ -292,7 +292,7 @@ function formatSendBody(
     stats.function_calls > 0
       ? `${ok(`${stats.function_calls} action${stats.function_calls === 1 ? "" : "s"}`)}`
       : null,
-    stats.related_agent_calls > 0
+    typeof stats.related_agent_calls === "number" && stats.related_agent_calls > 0
       ? `${ok(`${stats.related_agent_calls} agent call${stats.related_agent_calls === 1 ? "" : "s"}`)}`
       : null,
     stats.vars_updated > 0

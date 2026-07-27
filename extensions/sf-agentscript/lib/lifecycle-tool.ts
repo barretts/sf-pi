@@ -396,6 +396,7 @@ async function actionPublish(
       : `  • AiAuthoringBundle deploy skipped/not reported`;
     const missing = result.preflight?.missing_action_targets ?? [];
     const runtimeUnready = result.preflight?.runtime_unready_targets ?? [];
+    const transitiveWarnings = result.preflight?.transitive_connected_warnings ?? [];
     const preflightLines: string[] = [];
     for (const risk of featureProfile?.publish_risks ?? []) {
       preflightLines.push(`  ⚠️ ${risk.message}`);
@@ -420,6 +421,14 @@ async function actionPublish(
       );
       for (const target of runtimeUnready.slice(0, 4)) {
         preflightLines.push(`     • ${target.name} → ${target.ref_name} — ${target.detail}`);
+      }
+    }
+    if (transitiveWarnings.length > 0) {
+      preflightLines.push(
+        `  ⚠️ ${transitiveWarnings.length} transitive connected-agent readiness warning(s):`,
+      );
+      for (const warning of transitiveWarnings.slice(0, 4)) {
+        preflightLines.push(`     • ${warning.path.join(" → ")} — ${warning.detail}`);
       }
     }
     return toolOk(

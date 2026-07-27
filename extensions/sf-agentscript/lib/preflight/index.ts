@@ -14,6 +14,10 @@
 
 import type { Connection } from "@salesforce/core";
 import type { ComponentSummary } from "../inspect.ts";
+import {
+  discoverConnectedAgentGraph,
+  type ConnectedAgentReadinessGraph,
+} from "./connected-graph.ts";
 import { extractActionTargets } from "./parse.ts";
 import { resolverForScheme } from "./registry.ts";
 import type {
@@ -24,6 +28,13 @@ import type {
 } from "./types.ts";
 
 export { checkBundleType, type BundleTypeCheckResult } from "./bundle-type.ts";
+export {
+  MAX_CONNECTED_AGENT_DEPTH,
+  type ConnectedAgentReadinessGraph,
+  type ConnectedReadinessEdge,
+  type ConnectedReadinessIssue,
+  type ConnectedReadinessNode,
+} from "./connected-graph.ts";
 export { extractActionTargets } from "./parse.ts";
 export { listResolvers, registeredSchemes } from "./registry.ts";
 export type {
@@ -162,4 +173,48 @@ export async function checkActionTargets(
     missing,
     unverifiable,
   };
+}
+
+export async function checkConnectedAgentReadinessGraph(
+  conn: Connection,
+  rootAgentFile: string,
+): Promise<ConnectedAgentReadinessGraph> {
+  const graph = await discoverConnectedAgentGraph(rootAgentFile);
+  const targets = graph.nodes
+    .filter((node) => node.depth > 0)
+    .map((node) => ({
+      name: node.agent_name,
+      target: `agent://${node.agent_name}`,
+    })) as ComponentSummary[];
+  if (targets.length === 0) return graph;
+  const readiness = await checkActionTargets(conn, targets);
+  const byName = new Map(readiness.targets.map((target) => [target.ref_name, target]));
+  for (const node of graph.nodes) {
+    if (node.depth === 0) continue;
+    const target = byName.get(node.agent_name);
+    if (!target) continue;
+    node.status = target.status;
+    node.runtime_readiness = target.runtime_readiness;
+    node.detail = target.runtime_detail ?? target.detail;
+    if (target.status === "missing") {
+      graph.issues.push({
+        kind: "missing",
+        agent_name: node.agent_name,
+        depth: node.depth,
+        path: node.path,
+        detail: target.detail ?? `Connected agent '${node.agent_name}' is missing.`,
+      });
+    } else if (target.runtime_readiness === "not_ready") {
+      graph.issues.push({
+        kind: "runtime_not_ready",
+        agent_name: node.agent_name,
+        depth: node.depth,
+        path: node.path,
+        detail:
+          target.runtime_detail ?? `Connected agent '${node.agent_name}' is not runtime-ready.`,
+      });
+    }
+  }
+  graph.issues.sort((a, b) => a.depth - b.depth || a.agent_name.localeCompare(b.agent_name));
+  return graph;
 }
