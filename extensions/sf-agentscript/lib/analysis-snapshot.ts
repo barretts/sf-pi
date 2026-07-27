@@ -68,7 +68,7 @@ export async function getAgentScriptAnalysis(
     async getFeatureProfile() {
       featureProfilePromise ??= (async () => {
         const inspect = await snapshot.getInspect();
-        return inspect.ok ? buildFeatureProfile(inspect) : undefined;
+        return inspect.ok ? buildFeatureProfile(inspect, source) : undefined;
       })();
       return featureProfilePromise;
     },

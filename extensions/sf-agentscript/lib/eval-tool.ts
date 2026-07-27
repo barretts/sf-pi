@@ -73,7 +73,7 @@ const Params = Type.Object({
     ],
     {
       description:
-        "run: full multi-turn regression. get_failure: drill into a previous run's failure. trace: fetch a planner trace by (session_id, plan_id). resolve_active: look up Active BotVersion ids for $active_* placeholders. generate_spec: synthesize a starter eval spec from a `.agent` file (subagent routing + action probes + safety/guardrail block).",
+        "run: full multi-turn regression. get_failure: drill into a previous run's failure. trace: fetch a planner trace by (session_id, plan_id). resolve_active: look up Active BotVersion ids for $active_* placeholders. generate_spec: synthesize a starter eval spec from a `.agent` file (subagent routing + action/connected-agent probes + safety/guardrail block).",
     },
   ),
   target_org: Type.Optional(Type.String({ description: "sf CLI alias / username." })),
@@ -213,7 +213,7 @@ const Params = Type.Object({
   include_action_tests: Type.Optional(
     Type.Boolean({
       description:
-        "Optional for action='generate_spec'. Include one invocation probe per top-level action with a target. Default true.",
+        "Optional for action='generate_spec'. Include one invocation probe per targeted action and connected agent. Default true.",
     }),
   ),
   include_guardrail: Type.Optional(
@@ -778,7 +778,7 @@ async function actionResolveActive(
 // action = generate_spec
 //
 // Read a `.agent` file via the existing inspect machinery, derive a starter
-// regression spec covering subagent routing + action probes + safety/guardrail
+// regression spec covering subagent routing + action/connected-agent probes + safety/guardrail
 // rows, optionally write it to disk. The output spec uses `$active_*`
 // placeholders so it runs against whichever BotVersion is Active at run time.
 // -------------------------------------------------------------------------------------------------

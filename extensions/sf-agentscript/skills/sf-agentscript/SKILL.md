@@ -26,7 +26,7 @@ Use this skill whenever the user is editing `.agent` files, debugging an Agentfo
 
 Rules:
 
-- `verb="create"` omits `mode` and requires `bundle_name`. Both templates generate subagents, not deprecated topics: `minimal` deterministically enters one primary subagent; `agentforce-default` exposes planner-selectable transition actions for `job_spec.subagents`. `job_spec.topics` is a legacy alias and loses when both fields are supplied.
+- `verb="create"` omits `mode` and requires `bundle_name`. Both templates generate subagents, not deprecated topics, and include required welcome/error system messages: `minimal` deterministically enters one primary subagent; `agentforce-default` exposes planner-selectable transition actions for `job_spec.subagents`. `job_spec.topics` is a legacy alias and loses when both fields are supplied.
 - `verb="compile"` defaults `mode` to `check`; `mode="format"` writes canonical SDK formatting.
 - `verb="inspect"` defaults `mode` to `structure`; modes: `structure`, `context_profile`, `find_references`, `definition`, `check_targets`, `review`, `runtime_smoke`.
 - `verb="mutate"` requires `mode`; modes: `set_field`, `rename`, `insert`, `delete`, `apply_quick_fix`.
@@ -91,7 +91,7 @@ Use `inspect/find_references` before mutating a symbol. Use `inspect/definition`
 
 Use `inspect/check_targets` before publish when action or connected-agent targets must resolve in the org. Requires `target_org`; schemes without a proven resolver remain explicitly unverifiable. Connected-agent existence and runtime readiness are separate: an existing target without an Active version warns and provides an activation hint without blocking parent publication.
 
-Use `inspect/review` before publish or after behavioral changes. It is deterministic: no hidden model call, no numeric score. Readiness is `ready`, `ready_with_warnings`, `blocked`, or `partial`. Pass `target_org` to include read-only org checks: action-target resolution, Service Agent user readiness, and surface readiness probes such as Agentforce settings, phone number, voice/messaging channel, ServiceChannel, published voice planner, routing-flow, and fallback-queue checks for channel-linked agents. Pass `output_path` to write a Markdown report.
+Use `inspect/review` before publish or after behavioral changes. It is deterministic: no hidden model call, no numeric score. Readiness is `ready`, `ready_with_warnings`, `blocked`, or `partial`. Pass `target_org` to include read-only org checks: action-target resolution, Service Agent user readiness, and surface readiness probes such as Agentforce settings, phone number, voice/messaging channel, ServiceChannel, published voice planner, routing-flow, and fallback-queue checks for channel-linked agents. Locally valid `runtime`, `file_upload`, and experimental `collect` usage remain non-blocking org-compiler compatibility risks until live server compile succeeds. Pass `output_path` to write a Markdown report.
 
 Use `inspect/runtime_smoke` only after a test call or message. It is read-only and diagnoses recent VoiceCall, AgentWork, and MessagingSession records; it does not place calls, send messages, or replace preview/eval.
 
@@ -132,7 +132,7 @@ Use `generate_spec` to bootstrap a starter regression spec from a `.agent` file.
 
 For long or exploratory local runs, pass `batch_timeout_ms` to cap each Evaluation API batch POST. The default remains 300000ms, and client-side timeouts are not retried. During a run, inspect `.pi/state/sf-agentscript/runs/<run_id>/status.json` for the current phase when persistence is enabled.
 
-Eval runs synthesize trace artifacts from inline Evaluation API data by default. Use `agentscript_eval action="trace"` only when you explicitly need a live planner trace and have a known resident `session_id`/`plan_id`.
+Eval runs synthesize trace artifacts from inline Evaluation API data by default. Generated specs include connected-agent invocation probes in addition to subagent routing and targeted action probes. Use `agentscript_eval action="trace"` only when you explicitly need a live planner trace and have a known resident `session_id`/`plan_id`.
 
 Use `$latest_*` placeholders or `version_resolution="latest"` only for the publish → eval → activate loop, and pass `acknowledge_inactive_version=true` when deliberately testing a non-Active version.
 
@@ -144,7 +144,7 @@ Use `publish` to ship a new agent/version. Set `activate=true` only when you int
 
 Use `agent_user_status`, `diagnose_agent_user`, and `provision_agent_user` for Service Agent user wiring. Provision defaults to `dry_run=true`; pass `dry_run=false` only after reviewing the plan. Live provisioning deploys a synthesized Permission Set for Apex action access with bounded Metadata API start/poll timeouts so stalled deploys return diagnostics instead of waiting on SDR's long default poll window.
 
-Do not infer activation/deactivation targets from branch state. Pass `agent_api_name` explicitly for `activate`, `deactivate`, and `list_versions`.
+Do not infer activation/deactivation targets from branch state. Pass `agent_api_name` explicitly for `activate`, `deactivate`, and `list_versions`. If a connected helper cannot deactivate because it is in use, deactivate dependent parent agents first, confirm their versions are Inactive, then retry after status propagation.
 
 ## Production observability handoff
 

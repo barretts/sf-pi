@@ -574,11 +574,13 @@ export function summarizeTrace(trace: unknown, opts: SummarizeOptions = {}): Tra
       for (const update of variableUpdates(step)) {
         const name = asString(update.variable_name);
         if (!name || isInternalVariable(name)) continue;
+        const previousValue =
+          "variable_old_value" in update ? update.variable_old_value : update.variable_past_value;
         variableChanges.push({
           step: i,
           name,
           value_preview: valuePreview(update.variable_new_value),
-          previous_value_preview: valuePreview(update.variable_old_value),
+          previous_value_preview: valuePreview(previousValue),
           reason: asString(update.variable_change_reason),
         });
       }

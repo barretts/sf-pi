@@ -29,6 +29,9 @@ export function generateMinimal(bundleName: string, jobSpec?: AgentJobSpec): str
   lines.push("system:", "    instructions: |");
   appendTemplateLines(lines, description, 8);
   lines.push(
+    "    messages:",
+    `        welcome: "Welcome to ${safeName}. How can I help?"`,
+    '        error: "I could not complete that request. Please try again."',
     "",
     "subagent primary:",
     '    description: "Primary responsibility for this agent."',

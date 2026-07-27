@@ -55,6 +55,9 @@ export function generateAgentforceDefault(bundleName: string, jobSpec?: AgentJob
   for (const line of instructions.split("\n")) {
     lines.push(`        ${line}`);
   }
+  lines.push("    messages:");
+  lines.push(`        welcome: "Welcome to ${escapeString(bundleName)}. How can I help?"`);
+  lines.push('        error: "I could not complete that request. Please try again."');
   lines.push("");
 
   // variables block (only when seeded)

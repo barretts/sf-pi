@@ -44,13 +44,14 @@ export interface FeatureRisk {
     | "connection_surface_publish_may_require_channel_entitlement"
     | "response_format_publish_may_require_surface_entitlement"
     | "runtime_org_compiler_compatibility"
-    | "file_upload_org_compiler_compatibility";
+    | "file_upload_org_compiler_compatibility"
+    | "collect_org_compiler_compatibility";
   severity: "warn";
   message: string;
   evidence: string[];
 }
 
-export function buildFeatureProfile(inspect: InspectResult): AgentFeatureProfile {
+export function buildFeatureProfile(inspect: InspectResult, source?: string): AgentFeatureProfile {
   const components = inspect.components;
   const variables = components?.variables ?? [];
   const linked = variables.filter((v) => v.linked || v.modifier === "linked" || v.source);
@@ -108,6 +109,7 @@ export function buildFeatureProfile(inspect: InspectResult): AgentFeatureProfile
       responseFormats,
       connections,
       config: components?.config ?? {},
+      source,
     }),
   };
 }
@@ -129,6 +131,7 @@ function buildPublishRisks(input: {
   responseFormats: Array<{ connection: string; name: string; source?: string; target?: string }>;
   connections: Array<{ name: string }>;
   config: Record<string, unknown>;
+  source?: string;
 }): FeatureRisk[] {
   const risks: FeatureRisk[] = [];
   const voiceLinked = input.linked.filter((v) => v.source_namespace === "VoiceCall");
@@ -190,6 +193,15 @@ function buildPublishRisks(input: {
         .filter((key) => key.startsWith("file_upload."))
         .sort()
         .map((key) => `config.${key}`),
+    });
+  }
+  if (input.source && /^\s*collect\s+@/m.test(input.source)) {
+    risks.push({
+      code: "collect_org_compiler_compatibility",
+      severity: "warn",
+      message:
+        "collect is locally compile-valid but experimental, and target-org server compiler support can lag the installed Agent Script packages. Validate with a live preview before publish.",
+      evidence: ["collect statement"],
     });
   }
   return risks;

@@ -381,6 +381,36 @@ describe("inspectFile", () => {
     );
   });
 
+  test("surfaces collect as an org compiler compatibility risk", async () => {
+    const source = [
+      "config:",
+      '    agent_name: "Collect_Bot"',
+      "system:",
+      '    instructions: "Collect one value"',
+      "variables:",
+      "    email: mutable string = None",
+      "subagent gather:",
+      '    description: "Gather"',
+      "    reasoning:",
+      "        instructions: ->",
+      "            collect @variables.email",
+      '                message: "Email?"',
+      "start_agent main:",
+      '    description: "Entry"',
+      "    before_reasoning:",
+      "        transition to @subagent.gather",
+      "",
+    ].join("\n");
+    const filePath = await writeAgent("collect-risk.agent", source);
+    const result = await inspectFile(filePath);
+    expect(result.ok).toBe(true);
+    expect(buildFeatureProfile(result, source).publish_risks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "collect_org_compiler_compatibility" }),
+      ]),
+    );
+  });
+
   test("agent_type is surfaced on components.config (not components.system)", async () => {
     // Locks in the SDK schema: agent_type is a `config:` field. An
     // earlier inspect summary mirrored it onto `system` too, which was

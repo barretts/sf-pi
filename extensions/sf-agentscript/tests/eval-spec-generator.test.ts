@@ -36,6 +36,7 @@ describe("generateSpec", () => {
     expect(out.summary.topic_tests).toBe(0);
     expect(out.summary.routing_tests).toBe(0);
     expect(out.summary.action_tests).toBe(0);
+    expect(out.summary.connected_agent_tests).toBe(0);
     expect(out.summary.guardrail_tests).toBe(1);
     expect(out.summary.safety_tests).toBe(SAFETY_PROBES.length);
     // Total = guardrail (1) + safety probes
@@ -69,7 +70,7 @@ describe("generateSpec", () => {
   test("subagent send_message uses session JSONPath; topic assertion uses state output", () => {
     const out = generateSpec({
       inspect: fakeInspect({
-        subagents: [{ name: "billing", description: "Handles billing." }],
+        subagents: [{ name: "billing", description: "Handle billing." }],
       }),
       includeSafetyProbes: false,
       includeGuardrail: false,
@@ -185,6 +186,32 @@ describe("generateSpec", () => {
     );
     const rating = out.spec.tests[0].steps.find((s) => s.type === "evaluator.bot_response_rating")!;
     expect(rating.expected).toMatch(/attempt the "lookup_balance" action/);
+  });
+
+  test("connected agents receive functional invocation probes", () => {
+    const out = generateSpec({
+      inspect: fakeInspect({
+        connected_subagents: [
+          {
+            name: "release_helper",
+            description: "Return the release-lab acknowledgement.",
+            target: "agent://Release_Helper",
+            line: 12,
+            has_after_response: false,
+          },
+        ],
+      }),
+      includeSafetyProbes: false,
+      includeGuardrail: false,
+    });
+    expect(out.summary.connected_agent_tests).toBe(1);
+    expect(out.spec.tests.map((test) => test.id)).toEqual(["connected_agent_release_helper"]);
+    const send = out.spec.tests[0].steps.find((step) => step.type === "agent.send_message")!;
+    expect(send.utterance).toContain("return the release-lab acknowledgement");
+    const rating = out.spec.tests[0].steps.find(
+      (step) => step.type === "evaluator.bot_response_rating",
+    )!;
+    expect(rating.expected).toMatch(/connected agent/i);
   });
 
   test("safety probes are included by default and use bot_response_rating", () => {

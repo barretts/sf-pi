@@ -46,6 +46,14 @@ describe("agentscript_authoring create scaffolds emit explicit agent_type (Issue
     expect(svc).toMatch(/access:\n\s+default_agent_user:\s*"svc@example\.com"/);
   });
 
+  test("templates include required system messages", () => {
+    for (const source of [generateMinimal("Tiny_Bot"), generateAgentforceDefault("Default_Bot")]) {
+      expect(source).toContain("    messages:");
+      expect(source).toMatch(/\n\s+welcome:\s*".+"/);
+      expect(source).toMatch(/\n\s+error:\s*".+"/);
+    }
+  });
+
   test("templates use subagents instead of deprecated topics", () => {
     const minimal = generateMinimal("Tiny_Bot", { description: "Answer basic questions." });
     expect(minimal).toContain("subagent primary:");

@@ -214,6 +214,12 @@ describe("summarizeTrace (preview source)", () => {
                 variable_new_value: "500xx000001",
                 variable_change_reason: "set by route",
               },
+              {
+                variable_name: "attempts",
+                variable_past_value: 0,
+                variable_new_value: 1,
+                variable_change_reason: "incremented",
+              },
               { variable_name: "__plannerScratch", variable_new_value: "noise" },
               { variable_name: "AgentScriptInternal_state", variable_new_value: true },
             ],
@@ -229,6 +235,13 @@ describe("summarizeTrace (preview source)", () => {
         previous_value_preview: "null",
         value_preview: "500xx000001",
         reason: "set by route",
+      },
+      {
+        step: 0,
+        name: "attempts",
+        previous_value_preview: "0",
+        value_preview: "1",
+        reason: "incremented",
       },
     ]);
   });

@@ -317,7 +317,7 @@ async function actionPublish(
       ? await timings.time("inspect_structure", () => analysis.getInspect())
       : await analysis.getInspect();
     if (inspect.ok) {
-      featureProfile = buildFeatureProfile(inspect);
+      featureProfile = (await analysis.getFeatureProfile()) ?? buildFeatureProfile(inspect);
       for (const risk of featureProfile.publish_risks) {
         stream(`Pre-flight warning — ${risk.message}`);
       }

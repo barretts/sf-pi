@@ -182,6 +182,30 @@ describe("mapAgentApiError (preview surface)", () => {
     expect(m.message).not.toContain("compiler.invalid");
   });
 
+  test("HTTP 200 server compile failure maps experimental collect skew", () => {
+    const m = mapPreviewError(
+      200,
+      {
+        status: "failure",
+        errors: [{ errorType: "CompilationError", description: "Syntax error" }],
+      },
+      {
+        phase: "start",
+        surface: "agent_file",
+        publishFeatureRisks: [
+          {
+            code: "collect_org_compiler_compatibility",
+            message: "collect may not be accepted by the target org compiler.",
+            evidence: ["collect statement"],
+          },
+        ],
+      },
+    );
+    expect(m.matched).toBe("org-compiler-feature-skew");
+    expect(m.message).toContain("collect_org_compiler_compatibility");
+    expect(m.message).not.toContain("CompilationError");
+  });
+
   test("unknown errors pass through verbatim with matched=null", () => {
     const m = mapPreviewError(
       500,
@@ -303,6 +327,22 @@ describe("mapAgentApiError (lifecycle surface, Issue 4 patterns)", () => {
     // 500-on-preview falls through to default; should NOT match
     // internal-error-publish.
     expect(m.matched).not.toBe("internal-error-publish");
+  });
+
+  test("deactivation dependency lock explains ordering and propagation", () => {
+    const m = mapAgentApiError(
+      0,
+      "Activation request did not succeed: Agent you are trying to deactivate is in use by other agents",
+      {
+        phase: "deactivate",
+        surface: "lifecycle",
+        agentApiName: "Shared_Helper",
+      },
+    );
+    expect(m.matched).toBe("deactivation-dependent-agent");
+    expect(m.message).toMatch(/dependent .*agents/i);
+    expect(m.message).toMatch(/propagat/i);
+    expect(m.message).not.toMatch(/agent_type/);
   });
 
   test("activation-rejected catch-all → inspect hint", () => {

@@ -60,8 +60,8 @@ export interface GenerateSpecOptions {
    */
   includeSubagentTests?: boolean;
   /**
-   * Include action invocation tests. Default true. One test per top-level
-   * action whose target looks like a real Flow/Apex (i.e. has a `target:`).
+   * Include action invocation tests. Default true. One test per targeted
+   * action plus one functional probe per connected agent.
    * The probe is "use the {action description}" — the assertion is a
    * bot_response_rating only (action invocation requires a planner trace
    * which we don't get back from the eval API in flat form).
@@ -99,12 +99,15 @@ export interface GeneratedSpecSummary {
   /** Total routing tests across topic + subagent blocks. */
   routing_tests: number;
   action_tests: number;
+  connected_agent_tests: number;
   guardrail_tests: number;
   safety_tests: number;
   /** Names of subagents that were skipped (no description, or start_agent). */
   skipped_subagents: string[];
   /** Names of actions that were skipped (no target, or no description). */
   skipped_actions: string[];
+  /** Names of connected agents skipped because no useful probe could be synthesized. */
+  skipped_connected_agents: string[];
 }
 
 export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
@@ -126,10 +129,12 @@ export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
   const tests: EvalTest[] = [];
   const skippedSubagents: string[] = [];
   const skippedActions: string[] = [];
+  const skippedConnectedAgents: string[] = [];
 
   let subagentCount = 0;
   let topicCount = 0;
   let actionCount = 0;
+  let connectedAgentCount = 0;
 
   // Subagent routing tests — one per non-start subagent.
   if (includeSubagent) {
@@ -186,6 +191,22 @@ export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
     }
   }
 
+  // Connected-agent invocation probes use the same LLM-judged posture as
+  // ordinary action probes because the Evaluation API doesn't expose a
+  // RelatedAgentStep timeline in its flat lastExecution surface.
+  if (includeAction) {
+    for (const connected of components.connected_subagents ?? []) {
+      if (subagentCount + topicCount + actionCount + connectedAgentCount >= maxFunctional) break;
+      const utterance = synthesizeActionUtterance(connected);
+      if (!connected.target || !utterance) {
+        skippedConnectedAgents.push(connected.name);
+        continue;
+      }
+      tests.push(buildConnectedAgentTest(connected.name, slugify(connected.name), utterance, ctx));
+      connectedAgentCount++;
+    }
+  }
+
   // Guardrail probe.
   let guardrailCount = 0;
   if (includeGuardrail) {
@@ -210,10 +231,12 @@ export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
       topic_tests: topicCount,
       routing_tests: subagentCount + topicCount,
       action_tests: actionCount,
+      connected_agent_tests: connectedAgentCount,
       guardrail_tests: guardrailCount,
       safety_tests: safetyCount,
       skipped_subagents: skippedSubagents,
       skipped_actions: skippedActions,
+      skipped_connected_agents: skippedConnectedAgents,
     },
   };
 }
@@ -291,6 +314,30 @@ function buildActionTest(
         rubric:
           `The agent should attempt the "${actionName}" action in response to the user's request. ` +
           `If the action requires inputs the user hasn't provided, the agent should ask for them rather than refuse.`,
+      }),
+    ],
+  };
+}
+
+function buildConnectedAgentTest(
+  connectedAgentName: string,
+  slug: string,
+  utterance: string,
+  ctx: WireContextVariable[],
+): EvalTest {
+  return {
+    id: `connected_agent_${slug}`,
+    steps: [
+      sessionStep(),
+      sendMessageStep("turn1", utterance, ctx),
+      getStateStep("state1"),
+      botResponseRatingStep({
+        id: `eval_response_connected_agent_${slug}`,
+        utterance,
+        actualPath: "{turn1.response}",
+        rubric:
+          `The agent should invoke or delegate to the connected agent "${connectedAgentName}" in response to the request. ` +
+          `A passing response returns the connected agent's result or asks for inputs required before delegation.`,
       }),
     ],
   };
@@ -448,7 +495,7 @@ function normalizeDescriptionForUtterance(description: string): string {
   return description
     .trim()
     .replace(
-      /^(handles|manages|provides|creates|attempts|assesses|conducts|presents|retrieves|analyzes|evaluates|calculates|fetches|initiates|notifies|converts|updates|processes)\b\s*/i,
+      /^(handle|handles|manages|provides|creates|attempts|assesses|conducts|presents|retrieves|analyzes|evaluates|calculates|fetches|initiates|notifies|converts|updates|processes)\b\s*/i,
       "",
     )
     .replace(/^the\s+/i, "the ")

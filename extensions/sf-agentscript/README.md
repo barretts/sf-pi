@@ -26,7 +26,7 @@ multi-turn evals, and publish/activation workflows. Salesforce calls use
 
 Rules:
 
-- `verb="create"` omits `mode` and requires `bundle_name`. Generated templates use subagents rather than deprecated topic blocks: `minimal` deterministically enters one primary subagent, while `agentforce-default` exposes one planner-selectable transition per requested responsibility. Use `job_spec.subagents`; `job_spec.topics` remains a legacy alias and is ignored when `subagents` is supplied.
+- `verb="create"` omits `mode` and requires `bundle_name`. Generated templates use subagents rather than deprecated topic blocks: `minimal` deterministically enters one primary subagent, while `agentforce-default` exposes one planner-selectable transition per requested responsibility. Both include required welcome/error system messages so create → review is ready by construction. Use `job_spec.subagents`; `job_spec.topics` remains a legacy alias and is ignored when `subagents` is supplied.
 - `verb="compile"` defaults `mode` to `check`; `mode="format"` writes canonical SDK formatting.
 - `verb="inspect"` defaults `mode` to `structure`; modes include `context_profile`, `find_references`, `definition`, `check_targets`, and `review`.
 - `verb="mutate"` requires `mode`; modes include `set_field`, `rename`, `insert`, `delete`, and `apply_quick_fix`.
@@ -56,7 +56,7 @@ Auto-resolution validates referenced disk artifacts before use and proceeds only
 
 - compile blockers and warnings
 - structural/readiness findings that can be proven from the parsed file
-- publish-risk signals from the feature profile, including non-blocking warnings when locally compile-valid `runtime` or `file_upload` configuration may be ahead of the target org's server compiler
+- publish-risk signals from the feature profile, including non-blocking warnings when locally compile-valid `runtime`, `file_upload`, or experimental `collect` behavior may be ahead of the target org's server compiler
 - read-only action-target checks when `target_org` is provided
 - read-only surface readiness checks, such as Agentforce settings, phone number, voice/messaging channel, ServiceChannel, published voice planner, routing-flow, and fallback-queue probes for channel-linked agents when `target_org` is provided
 - Service Agent user readiness checks for `access.default_agent_user` license/user/system permission-set wiring when `target_org` is provided
@@ -78,7 +78,7 @@ Use `agentscript_authoring { "verb": "inspect", "mode": "runtime_smoke", "target
 
 `agentscript_eval action="run"` creates a lightweight `status.json` in the run directory before it posts Evaluation API batches. The status artifact records pointer-sized local facts such as status, phase, spec path, org, test count, batch count, and timeout; it does not contain raw eval responses, prompts, traces, transcripts, or failure payloads.
 
-Eval batches keep the compatibility default timeout of 300 seconds, but callers can pass `batch_timeout_ms` for shorter local runs. Client-side request timeouts are terminal for a batch instead of being retried three times. Eval-created sessions usually disappear before the live planner trace endpoint can read them, so eval runs synthesize trace artifacts from inline Evaluation API data by default; use `agentscript_eval action="trace"` for explicit live trace drill-down when the session is known to be resident.
+Eval batches keep the compatibility default timeout of 300 seconds, but callers can pass `batch_timeout_ms` for shorter local runs. Client-side request timeouts are terminal for a batch instead of being retried three times. Eval-created sessions usually disappear before the live planner trace endpoint can read them, so eval runs synthesize trace artifacts from inline Evaluation API data by default; use `agentscript_eval action="trace"` for explicit live trace drill-down when the session is known to be resident. Generated specs include routing probes, targeted action probes, and connected-agent invocation probes when those components are present.
 
 ## Runtime Flow
 
@@ -371,9 +371,10 @@ Salesforce auth is resolved through `@salesforce/core` `Connection` using the sa
 ## Troubleshooting
 
 - **Agent Script SDK unavailable:** run `/sf-agentscript doctor` to inspect the official SDK package resolution.
-- **Preview server compile returns HTTP 400 with downstream 422:** the installed local compiler can recognize newer Agent Script fields before the target org's server compiler rollout accepts them. Run `inspect/structure` to review source-based compatibility risks; currently `config.runtime` and `config.file_upload` require live target-org validation.
+- **Preview server compile rejects locally valid syntax:** the installed local compiler can recognize newer Agent Script features before the target org's server compiler rollout accepts them. Run `inspect/structure` to review source-based compatibility risks; currently `config.runtime`, `config.file_upload`, and experimental `collect` require live target-org validation.
 - **Preview session not found:** confirm `target_org` matches the org used at preview start, or start a fresh preview session.
 - **Eval run appears stuck:** inspect `.pi/state/sf-agentscript/runs/<run_id>/status.json` for the current phase. Pass `batch_timeout_ms` for shorter local probes.
 - **Eval trace fetch returns null:** eval-created sessions may be closed by the service before live trace fetch succeeds; synthesized traces and failure records remain in the run directory.
 - **Service Agent publish/activation fails:** run `agentscript_lifecycle action="diagnose_agent_user"`, then `provision_agent_user` in dry-run mode before executing changes.
+- **Deactivation says the agent is in use by other agents:** deactivate dependent parent agents first, confirm their versions are Inactive, then retry after activation status propagation completes.
 - **Service Agent provisioning appears stuck:** the live provisioner deploys a synthesized Permission Set through Metadata API. That deploy is bounded by sf-pi timeouts and should return a timeout diagnostic instead of inheriting SDR's 60-minute default poll window.

@@ -84,18 +84,22 @@ export function mapAgentApiError(
 
   // -- 2. local/package compiler ahead of the target-org server compiler -----
   const orgCompilerRisks = (context.publishFeatureRisks ?? []).filter((risk) =>
-    ["runtime_org_compiler_compatibility", "file_upload_org_compiler_compatibility"].includes(
-      risk.code ?? "",
-    ),
+    [
+      "runtime_org_compiler_compatibility",
+      "file_upload_org_compiler_compatibility",
+      "collect_org_compiler_compatibility",
+    ].includes(risk.code ?? ""),
   );
   if (
     (context.phase === "start" || context.phase === "publish") &&
     orgCompilerRisks.length > 0 &&
-    (status === 400 || status === 422 || /422 Unprocessable Entity|parseandcompile/i.test(text))
+    (status === 400 ||
+      status === 422 ||
+      /422 Unprocessable Entity|parseandcompile|CompilationError|Syntax error/i.test(text))
   ) {
     return {
       message:
-        `The installed local compiler accepts this Agent Script source, but the target org's server compiler rejected one or more newer configuration blocks. ` +
+        `The installed local compiler accepts this Agent Script source, but the target org's server compiler rejected one or more newer language or configuration features. ` +
         `Server compiler rollout can lag local package support.\n\n` +
         orgCompilerRisks
           .map(
@@ -104,7 +108,7 @@ export function mapAgentApiError(
               (risk.evidence?.length ? ` Evidence: ${risk.evidence.join(", ")}` : ""),
           )
           .join("\n") +
-        `\n\nRemove or isolate these blocks for this org, or retry after the org server compiler supports them. A local compile alone cannot prove target-org acceptance.`,
+        `\n\nRemove or isolate these features for this org, or retry after the org server compiler supports them. A local compile alone cannot prove target-org acceptance.`,
       recover_via: context.agentFile
         ? {
             tool: "agentscript_authoring",
@@ -315,7 +319,23 @@ export function mapAgentApiError(
     };
   }
 
-  // -- 11. Activation rejected — generic catch-all -----------------------------
+  // -- 11. Deactivation blocked by a dependent connected agent ---------------
+  if (/trying to deactivate is in use by other agents/i.test(text)) {
+    const apiName = context.agentApiName ?? "<agent>";
+    return {
+      message:
+        `Agent '${apiName}' cannot be deactivated while another agent still uses it as a connected dependency. ` +
+        `Deactivate dependent parent agents first, confirm their versions are Inactive, then retry. ` +
+        `Activation status propagation can lag briefly after the parent deactivates.`,
+      recover_via: {
+        tool: "agentscript_lifecycle",
+        params: { action: "list_versions", agent_api_name: apiName },
+      },
+      matched: "deactivation-dependent-agent",
+    };
+  }
+
+  // -- 12. Activation rejected — generic catch-all -----------------------------
   // Anything matching "Activation request did not succeed: <unknown body>"
   // that #7 didn't catch falls through here with the original message plus
   // a hint to inspect the .agent and the BotDefinition.
