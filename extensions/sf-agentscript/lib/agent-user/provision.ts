@@ -204,7 +204,7 @@ export async function runProvision(
       });
       // For dry-runs we can't continue past create_user (we don't have a userId).
       // Surface the remaining steps as 'would_execute' summaries.
-      return finalize(addRemainingDryRunSteps(steps, before, input, dryRun), before, dryRun);
+      return finalize(addRemainingDryRunSteps(steps, input), before, dryRun);
     }
     const created = await createAgentUser(
       conn,
@@ -408,9 +408,7 @@ export async function runProvision(
  */
 function addRemainingDryRunSteps(
   steps: ProvisionStep[],
-  before: DiagnoseReport,
   input: RunProvisionInput,
-  _dryRun: boolean,
 ): ProvisionStep[] {
   steps.push({
     id: "assign_system_ps",
