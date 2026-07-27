@@ -44,7 +44,7 @@ export interface AgentUserStatus {
 export interface AgentUserStatusInput {
   /** From the .agent file: `config.agent_type`. */
   agent_type: "AgentforceServiceAgent" | "AgentforceEmployeeAgent" | string;
-  /** From the .agent file: `config.default_agent_user`. */
+  /** From the .agent file: `access.default_agent_user`. */
   default_agent_user?: string;
 }
 
@@ -78,7 +78,7 @@ export async function checkAgentUserStatus(
       agent_type: "Service",
       reason: "no_default_agent_user",
       short_message:
-        `Service Agent has no 'default_agent_user' in config — add one ` +
+        `Service Agent has no 'default_agent_user' in access — add one ` +
         `(or run agentscript_lifecycle action='diagnose_agent_user' to see ` +
         `which Einstein Agent Users exist in this org).`,
     };

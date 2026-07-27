@@ -47,6 +47,8 @@ describe("readAgentConfigSliceFromSource", () => {
   test("infers Service Agent from agent_template when agent_type is absent", async () => {
     const r = await readAgentConfigSliceFromSource(
       `${BASE_CONFIG}    agent_template: "SvcCopilotTmpl__AgentforceServiceAgent"
+
+access:
     default_agent_user: "agent@example.com"${BASE_REST}`,
     );
     expect(r.ok).toBe(true);
@@ -55,6 +57,16 @@ describe("readAgentConfigSliceFromSource", () => {
     expect(r.agent_type_source).toBe("agent_template");
     expect(r.agent_template).toBe("SvcCopilotTmpl__AgentforceServiceAgent");
     expect(r.default_agent_user).toBe("agent@example.com");
+  });
+
+  test("reads legacy config.default_agent_user during migration", async () => {
+    const r = await readAgentConfigSliceFromSource(
+      `${BASE_CONFIG}    agent_type: "AgentforceServiceAgent"
+    default_agent_user: "legacy@example.com"${BASE_REST}`,
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok === false) throw new Error(r.reason_detail);
+    expect(r.default_agent_user).toBe("legacy@example.com");
   });
 
   test("explicit agent_type wins when agent_template is also present", async () => {

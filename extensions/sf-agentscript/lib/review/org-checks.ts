@@ -15,6 +15,7 @@ export interface CollectOrgReviewFindingsInput {
   actions: ComponentSummary[];
   profile: AgentFeatureProfile;
   config: Record<string, unknown>;
+  access: Record<string, unknown>;
   agentFile: string;
   targetOrg: string;
   phoneNumber?: string;
@@ -32,9 +33,11 @@ export async function collectOrgReviewFindings(
         ? inferAgentTypeFromTemplate(agentTemplate)
         : undefined;
   const defaultAgentUser =
-    typeof input.config.default_agent_user === "string"
-      ? input.config.default_agent_user
-      : undefined;
+    typeof input.access.default_agent_user === "string"
+      ? input.access.default_agent_user
+      : typeof input.config.default_agent_user === "string"
+        ? input.config.default_agent_user
+        : undefined;
   const agentApiName =
     typeof input.config.agent_name === "string" ? input.config.agent_name : undefined;
 

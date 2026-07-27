@@ -33,7 +33,7 @@ describe("agentscript_authoring create scaffolds emit explicit agent_type (Issue
       agent_user: "support@example.com",
     });
     expect(src).toMatch(/agent_type:\s*"AgentforceServiceAgent"/);
-    expect(src).toMatch(/default_agent_user:\s*"support@example\.com"/);
+    expect(src).toMatch(/access:\n\s+default_agent_user:\s*"support@example\.com"/);
   });
 
   test("minimal template applies the same agent_type rule", () => {
@@ -43,10 +43,10 @@ describe("agentscript_authoring create scaffolds emit explicit agent_type (Issue
 
     const svc = generateMinimal("Tiny_Bot", { agent_user: "svc@example.com" });
     expect(svc).toMatch(/agent_type:\s*"AgentforceServiceAgent"/);
-    expect(svc).toMatch(/default_agent_user:\s*"svc@example\.com"/);
+    expect(svc).toMatch(/access:\n\s+default_agent_user:\s*"svc@example\.com"/);
   });
 
-  test("both forms compile clean and the Service form does not raise config-missing-default-agent-user", async () => {
+  test("both forms compile clean and the Service form does not report a missing default agent user", async () => {
     const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
     const { tmpdir } = await import("node:os");
     const path = await import("node:path");

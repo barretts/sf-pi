@@ -75,7 +75,7 @@ must provision the license first.
 
 ### Einstein Agent User exists + active
 
-Resolves `default_agent_user` from the .agent's `config:` block to a
+Resolves `default_agent_user` from the .agent's top-level `access:` block to a
 `User` row. When it doesn't resolve, diagnose lists candidate active
 Einstein Agent Users (`Profile.Name = 'Einstein Agent User' AND IsActive = true`)
 so the LLM can either rename `default_agent_user` to one of them or
@@ -167,7 +167,7 @@ when there's anything to fix.
 ## Why didn't `sf project deploy` apply my changes?
 
 This is the single biggest gotcha in the iteration loop. Symptom:
-you edited the `.agent`'s `config:` block (e.g. added or changed
+you edited the `.agent`'s `config:` or `access:` block (e.g. changed
 `agent_type` / `default_agent_user`), shipped it with
 `sf project deploy start -m AiAuthoringBundle:<Name>`, and the
 deploy succeeded — but the running agent in the org is still using
@@ -182,7 +182,7 @@ Why this happens:
   `<target>{agentApiName}.{versionDeveloperName}</target>` element
   into the `.bundle-meta.xml` so the bundle is linked to a specific
   BotVersion; (3) deploy the bundle via SDR. The publish path is
-  the only one that threads `config.agent_type` / `default_agent_user`
+  the only one that threads `config.agent_type` / `access.default_agent_user`
   through into the BotDefinition record.
 - `sf project deploy start` does **only** step 3. The bundle XML
   - `.agent` source land in the org as draft authoring source. No

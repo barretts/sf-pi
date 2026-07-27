@@ -71,7 +71,7 @@ export interface InspectStructureDetails {
     connections?: ConnectionSummary[];
     modalities?: ModalitySummary[];
     model_config?: BlockSummary;
-    security?: BlockSummary;
+    access?: BlockSummary;
     context?: BlockSummary;
   };
   stats?: {
@@ -83,7 +83,7 @@ export interface InspectStructureDetails {
     connections?: number;
     modalities?: number;
     model_config?: number;
-    security?: number;
+    access?: number;
     context?: number;
   };
   has_parse_errors?: boolean;
@@ -181,8 +181,8 @@ function formatStructureBody(
   if (components.model_config) {
     lines.push(blockSummaryLine("🧠", "model_config", components.model_config, code, dim, bold));
   }
-  if (components.security) {
-    lines.push(blockSummaryLine("🔐", "security", components.security, code, dim, bold));
+  if (components.access) {
+    lines.push(blockSummaryLine("🔐", "access", components.access, code, dim, bold));
   }
   if (components.context) {
     lines.push(blockSummaryLine("🧩", "context", components.context, code, dim, bold));
@@ -285,7 +285,7 @@ function formatStructureBody(
     `${stats.connections ?? components.connections?.length ?? 0} connections`,
     `${stats.modalities ?? components.modalities?.length ?? 0} modalities`,
     stats.model_config ? "model_config" : null,
-    stats.security ? "security" : null,
+    stats.access ? "access" : null,
     stats.context ? "context" : null,
     refTotals > 0 ? `${refTotals} @-refs` : null,
   ].filter(Boolean) as string[];

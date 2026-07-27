@@ -39,26 +39,25 @@ export async function processAgentforceDocument(
   uri = AGENTFORCE_DOCUMENT_URI,
   options: { compile?: boolean } = {},
 ): Promise<DocumentState> {
-  const [{ compile, getParser }, { defaultDialects, processDocument }] = await Promise.all([
+  // The LSP is dialect-agnostic. Inject the dialect paired with the same SDK
+  // parser/compiler instead of depending on registry names that can change.
+  const [agentforce, lsp] = await Promise.all([
     import("@sf-agentscript/agentforce"),
     import("@sf-agentscript/lsp"),
   ]);
-
-  const agentforceDialect = defaultDialects.find((dialect) => dialect.name === "agentforce");
-  if (!agentforceDialect) {
-    throw new Error("@sf-agentscript/lsp did not expose the agentforce dialect.");
-  }
+  const agentforceDialect =
+    agentforce.agentforceDialect as unknown as (typeof lsp.defaultDialects)[number];
 
   return suppressAgentforceSchemaDebugLog(() =>
-    processDocument(uri, source, {
+    lsp.processDocument(uri, source, {
       dialects: [agentforceDialect],
       defaultDialect: agentforceDialect.name,
-      parser: getParser() as unknown as LspParser,
+      parser: agentforce.getParser() as unknown as LspParser,
       compile: options.compile
         ? (dialectName) =>
             dialectName === "agentforce"
               ? {
-                  compile: (ast) => compile(ast as never),
+                  compile: (ast) => agentforce.compile(ast as never),
                 }
               : undefined
         : undefined,

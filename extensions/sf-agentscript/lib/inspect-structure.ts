@@ -33,7 +33,7 @@ export interface InspectResult {
     connections?: ConnectionSummary[];
     modalities?: ModalitySummary[];
     model_config?: BlockSummary;
-    security?: BlockSummary;
+    access?: BlockSummary;
     context?: BlockSummary;
   };
   stats?: {
@@ -45,7 +45,7 @@ export interface InspectResult {
     connections?: number;
     modalities?: number;
     model_config?: number;
-    security?: number;
+    access?: number;
     context?: number;
   };
   /**
@@ -581,7 +581,7 @@ export function projectInspectStructure(input: {
   );
   const modalities = namedMapEntries(ast.modality).map(([n, e]) => summarizeModality(n, e));
   const modelConfig = summarizeBlock(ast.model_config);
-  const security = summarizeBlock(ast.security);
+  const access = summarizeBlock(ast.access);
   const context = summarizeBlock(ast.context);
 
   const components = {
@@ -595,7 +595,7 @@ export function projectInspectStructure(input: {
     ...(connections.length > 0 ? { connections } : {}),
     ...(modalities.length > 0 ? { modalities } : {}),
     ...(modelConfig ? { model_config: modelConfig } : {}),
-    ...(security ? { security } : {}),
+    ...(access ? { access } : {}),
     ...(context ? { context } : {}),
   };
 
@@ -612,7 +612,7 @@ export function projectInspectStructure(input: {
       connections: connections.length,
       modalities: modalities.length,
       ...(modelConfig ? { model_config: 1 } : {}),
-      ...(security ? { security: 1 } : {}),
+      ...(access ? { access: 1 } : {}),
       ...(context ? { context: 1 } : {}),
     },
     has_parse_errors: input.hasParseErrors,

@@ -30,7 +30,7 @@ Rules:
 - `verb="compile"` defaults `mode` to `check`; `mode="format"` writes canonical SDK formatting.
 - `verb="inspect"` defaults `mode` to `structure`; modes include `context_profile`, `find_references`, `definition`, `check_targets`, and `review`.
 - `verb="mutate"` requires `mode`; modes include `set_field`, `rename`, `insert`, `delete`, and `apply_quick_fix`.
-  - `set_field` is a structured scalar field update/upsert for existing top-level Agentforce schema components. It supports first-level scalar fields on singular blocks (for example `config`, `system`, `model_config`, `knowledge`) and named entries (for example `start_agent.main`, `subagent.billing`, `connection.messaging`, `variables.customer_id`, `actions.lookup`). It does not create missing blocks or nested paths.
+  - `set_field` is a structured scalar field update/upsert for existing top-level Agentforce schema components. It supports first-level scalar fields on singular blocks (for example `config`, `access`, `system`, `model_config`, `knowledge`) and named entries (for example `start_agent.main`, `subagent.billing`, `connection.messaging`, `variables.customer_id`, `actions.lookup`). It does not create missing blocks or nested paths.
   - `rename` is reference-safe for declarable symbols (`@subagent.X`, `@topic.X`, `@actions.X`, `@variables.X`) and accepts legacy component paths.
   - `insert` / `delete` intentionally guide callers to generic file edits followed by compile/check for broader source construction.
 - `agent_file` may be omitted only when exactly one current `.agent` file exists on the active Pi branch. Ambiguity is refused with structured candidates.
@@ -56,7 +56,7 @@ Auto-resolution validates referenced disk artifacts before use and proceeds only
 - publish-risk signals from the feature profile
 - read-only action-target checks when `target_org` is provided
 - read-only surface readiness checks, such as Agentforce settings, phone number, voice/messaging channel, ServiceChannel, published voice planner, routing-flow, and fallback-queue probes for channel-linked agents when `target_org` is provided
-- Service Agent user readiness checks for `default_agent_user` license/user/system permission-set wiring when `target_org` is provided
+- Service Agent user readiness checks for `access.default_agent_user` license/user/system permission-set wiring when `target_org` is provided
 
 Readiness values are `ready`, `ready_with_warnings`, `blocked`, and `partial`. There is no numeric score and no hidden model call. Pass `output_path` to write a Markdown report.
 

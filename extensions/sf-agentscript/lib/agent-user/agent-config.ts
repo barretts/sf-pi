@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /**
- * Read `config.agent_type` and `config.default_agent_user` from a parsed
+ * Read `config.agent_type` and `access.default_agent_user` from a parsed
  * .agent file. Tiny on purpose — the agent-user verbs only need those two
  * fields, and depending on the broader inspect surface here would couple
  * lifecycle preflight to inspect's evolving shape.
@@ -30,9 +30,9 @@ export interface AgentConfigSliceFailure {
 }
 
 /**
- * Read the .agent file at `agentFile` and return its `config` block's
- * agent_type / default_agent_user / agent_name fields. All three are
- * optional in the source — we only return them when present.
+ * Read the .agent file at `agentFile` and return its config identity plus
+ * access.default_agent_user. Legacy config.default_agent_user remains readable
+ * so existing bundles can receive the upstream migration quick fix.
  */
 export async function readAgentConfigSlice(
   agentFile: string,
@@ -101,7 +101,8 @@ export async function readAgentConfigSliceFromSource(
       out.agent_type_source = "agent_template";
     }
   }
-  const default_agent_user = unwrapScalar(config.default_agent_user);
+  const access = ast.access as Record<string, unknown> | undefined;
+  const default_agent_user = unwrapScalar(access?.default_agent_user ?? config.default_agent_user);
   if (typeof default_agent_user === "string") out.default_agent_user = default_agent_user;
   const agent_name = unwrapScalar(config.agent_name);
   if (typeof agent_name === "string") out.agent_name = agent_name;

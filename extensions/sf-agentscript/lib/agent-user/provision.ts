@@ -156,7 +156,7 @@ export async function runProvision(
           action: "skipped",
           detail:
             "Aborted: no default_agent_user in the .agent and no username_override " +
-            "supplied. Set 'config.default_agent_user' in the .agent file (or pass " +
+            "supplied. Set 'access.default_agent_user' in the .agent file (or pass " +
             "username_override) and re-run.",
         },
       ],

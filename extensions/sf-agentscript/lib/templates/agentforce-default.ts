@@ -36,10 +36,14 @@ export function generateAgentforceDefault(bundleName: string, jobSpec?: AgentJob
   lines.push(
     `    description: "${escapeString(jobSpec?.description ?? `${bundleName} agent (scaffolded by sf-agentscript).`)}"`,
   );
-  if (default_agent_user) {
-    lines.push(`    default_agent_user: "${escapeString(default_agent_user)}"`);
-  }
   lines.push("");
+
+  // access block (Service Agents only)
+  if (default_agent_user) {
+    lines.push("access:");
+    lines.push(`    default_agent_user: "${escapeString(default_agent_user)}"`);
+    lines.push("");
+  }
 
   // system block
   lines.push("system:");

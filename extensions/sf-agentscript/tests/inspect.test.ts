@@ -250,7 +250,7 @@ describe("inspectFile", () => {
     );
   });
 
-  test("surfaces model_config, security, and context blocks", async () => {
+  test("surfaces model_config, access, and context blocks", async () => {
     const filePath = await writeAgent(
       "newer-blocks.agent",
       [
@@ -263,16 +263,16 @@ describe("inspectFile", () => {
         "model_config:",
         '    model: "model://sfdc_ai__DefaultGPT4"',
         "",
-        "security:",
+        "access:",
         "    sharing_policy:",
         "        use_default_sharing_entities: True",
         "        custom_sharing_entities:",
-        "            - Account",
-        "            - Contact",
+        '            - "Account"',
+        '            - "Contact"',
         "    verified_customer_record_access:",
         "        use_default_objects: False",
         "        additional_objects:",
-        "            - Case",
+        '            - "Case"',
         "",
         "context:",
         "    memory:",
@@ -289,7 +289,7 @@ describe("inspectFile", () => {
     expect(result.components?.model_config).toMatchObject({
       fields: { model: "model://sfdc_ai__DefaultGPT4" },
     });
-    expect(result.components?.security?.fields).toMatchObject({
+    expect(result.components?.access?.fields).toMatchObject({
       "sharing_policy.use_default_sharing_entities": true,
       "sharing_policy.custom_sharing_entities": ["Account", "Contact"],
       "verified_customer_record_access.use_default_objects": false,
@@ -298,7 +298,7 @@ describe("inspectFile", () => {
     expect(result.components?.context?.fields).toMatchObject({
       "memory.enabled": true,
     });
-    expect(result.stats).toMatchObject({ model_config: 1, security: 1, context: 1 });
+    expect(result.stats).toMatchObject({ model_config: 1, access: 1, context: 1 });
   });
 
   test("agent_type is surfaced on components.config (not components.system)", async () => {

@@ -83,7 +83,7 @@ export interface DiagnoseReport {
 export interface RunDiagnoseInput {
   /** From .agent: `config.agent_type`. */
   agent_type: "AgentforceServiceAgent" | "AgentforceEmployeeAgent" | string;
-  /** From .agent: `config.default_agent_user`. */
+  /** From .agent: `access.default_agent_user`. */
   default_agent_user?: string;
   /** From .agent: every action with a target — used for apex_class_access. */
   actions: readonly ComponentSummary[];
@@ -195,14 +195,14 @@ export async function runDiagnose(
       id: "agent_user_exists",
       status: "missing",
       detail:
-        `No 'default_agent_user' in the .agent config. ` +
+        `No 'default_agent_user' in the .agent access block. ` +
         (candidates.length > 0
           ? `${candidates.length} active Einstein Agent User(s) in this org: ` +
             candidates.map((c) => c.Username).join(", ")
           : `No active Einstein Agent Users in this org either.`),
       fix_hint:
         candidates.length > 0
-          ? `Add 'default_agent_user: "${candidates[0].Username}"' to the .agent config and re-publish.`
+          ? `Add 'default_agent_user: "${candidates[0].Username}"' to the .agent access block and re-publish.`
           : `Run agentscript_lifecycle action='provision_agent_user' to create one.`,
     });
   } else {

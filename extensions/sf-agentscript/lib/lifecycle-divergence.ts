@@ -113,7 +113,7 @@ export async function checkBundleVsBotDivergence(
     detail: diverged
       ? `Local .agent file is newer than v${row.VersionNumber} ` +
         `(file mtime ${mtimeIso}, version created ${row.CreatedDate}). ` +
-        `If you've edited config.agent_type / default_agent_user since the ` +
+        `If you've edited config.agent_type / access.default_agent_user since the ` +
         `last publish, re-publish via agentscript_lifecycle action='publish' ` +
         `— 'sf project deploy' alone does NOT propagate config-block changes ` +
         `to the BotDefinition.`

@@ -291,7 +291,7 @@ export function mapAgentApiError(
       message:
         `Activation rejected by the org. Original message: ${text.slice(0, 400)}\n\n` +
         `Run agentscript_authoring inspect/structure on the .agent and confirm 'config.agent_type' ` +
-        `and 'config.default_agent_user' match what the BotDefinition expects. ` +
+        `and 'access.default_agent_user' match what the BotDefinition expects. ` +
         `If you're not sure what the org expects, run ` +
         `agentscript_lifecycle action='diagnose_agent_user'.`,
       recover_via: context.agentFile

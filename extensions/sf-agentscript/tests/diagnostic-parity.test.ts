@@ -25,6 +25,8 @@ const baseHead = [
   "",
   "config:",
   '    agent_name: "Bot"',
+  "",
+  "access:",
   '    default_agent_user: "hello@example.com"',
   "",
 ];
@@ -132,6 +134,8 @@ const cases: ParityCase[] = [
       "config:",
       '    agent_name: "ServiceBot"',
       '    agent_type: "AgentforceServiceAgent"',
+      "",
+      "access:",
       '    default_agent_user: "service@example.com"',
       "",
       "connection messaging:",
@@ -181,7 +185,7 @@ const cases: ParityCase[] = [
   {
     name: "procedural statements inside literal instructions",
     localCodes: ["literal-mode-procedural-text"],
-    upstreamCodes: ["unused-variable"],
+    upstreamCodes: ["unused-variable", "instruction-template-syntax"],
     classification: "sf-pi-owned",
     source: agent([
       ...baseHead,
@@ -233,7 +237,7 @@ const cases: ParityCase[] = [
   {
     name: "Employee Agent with Service-Agent-only wiring",
     localCodes: ["employee-agent-connection-messaging", "employee-agent-escalate"],
-    upstreamCodes: ["config-ignored-default-agent-user"],
+    upstreamCodes: [],
     classification: "upstream-owned",
     source: agent([
       "system:",
@@ -242,6 +246,8 @@ const cases: ParityCase[] = [
       "config:",
       '    agent_name: "EmployeeBot"',
       '    agent_type: "AgentforceEmployeeAgent"',
+      "",
+      "access:",
       '    default_agent_user: "service@example.com"',
       "",
       "connection messaging:",
