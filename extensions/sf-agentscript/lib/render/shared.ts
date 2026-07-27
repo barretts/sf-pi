@@ -54,8 +54,9 @@ export function styleForStep(stepType: string): StepStyle {
 
 // ─── Width helpers ─────────────────────────────────────────────────────────────
 
-const ANSI_RE = /\x1b\[[0-9;]*m/g;
-const OSC8_RE = /\x1b\]8;;[^\x1b]*\x1b\\/g;
+const ESC = String.fromCharCode(27);
+const ANSI_RE = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
+const OSC8_RE = new RegExp(`${ESC}\\]8;;[^${ESC}]*${ESC}\\\\`, "g");
 
 /** Strip ANSI + OSC 8 sequences so we can measure visible width for padding. */
 export function stripAnsi(s: string): string {

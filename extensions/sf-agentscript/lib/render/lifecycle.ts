@@ -311,8 +311,9 @@ function formatVersionsTable(
 function formatActivateLine(
   details: ActivateDetails,
   theme: Theme | undefined,
-  _ansi: boolean,
+  ansi: boolean,
 ): string {
+  void ansi;
   const fg = (token: Parameters<Theme["fg"]>[0], s: string): string =>
     theme ? theme.fg(token, s) : s;
   const bold = (s: string): string => (theme ? theme.bold(s) : `**${s}**`);
