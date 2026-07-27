@@ -37,10 +37,14 @@ export interface ActionTarget {
  *                      missing. Publish proceeds; runtime is responsible.
  */
 export type TargetStatus = "ok" | "missing" | "unverifiable";
+export type TargetRuntimeReadiness = "ready" | "not_ready" | "unverifiable";
 
 export interface ActionTargetCheck extends ActionTarget {
   status: TargetStatus;
   detail?: string;
+  /** Runtime callability is separate from metadata existence. */
+  runtime_readiness?: TargetRuntimeReadiness;
+  runtime_detail?: string;
   /** Human-readable label for the metadata type (e.g. "Flow", "ApexClass"). */
   metadata_label?: string;
 }
@@ -58,6 +62,8 @@ export interface CheckActionTargetsResult {
 export interface TargetResolution {
   status: TargetStatus;
   detail?: string;
+  runtime_readiness?: TargetRuntimeReadiness;
+  runtime_detail?: string;
   reason?: string;
   data?: Record<string, unknown>;
 }

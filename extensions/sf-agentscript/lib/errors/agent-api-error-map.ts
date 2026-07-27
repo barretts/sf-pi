@@ -82,7 +82,40 @@ export function mapAgentApiError(
     };
   }
 
-  // -- 2. preview start with unsupported / unlicensed connection surface -----
+  // -- 2. local/package compiler ahead of the target-org server compiler -----
+  const orgCompilerRisks = (context.publishFeatureRisks ?? []).filter((risk) =>
+    ["runtime_org_compiler_compatibility", "file_upload_org_compiler_compatibility"].includes(
+      risk.code ?? "",
+    ),
+  );
+  if (
+    (context.phase === "start" || context.phase === "publish") &&
+    orgCompilerRisks.length > 0 &&
+    (status === 400 || status === 422 || /422 Unprocessable Entity|parseandcompile/i.test(text))
+  ) {
+    return {
+      message:
+        `The installed local compiler accepts this Agent Script source, but the target org's server compiler rejected one or more newer configuration blocks. ` +
+        `Server compiler rollout can lag local package support.\n\n` +
+        orgCompilerRisks
+          .map(
+            (risk) =>
+              `• ${risk.code ?? "org-compiler-compatibility"}: ${risk.message ?? "target-org support is not yet proven"}` +
+              (risk.evidence?.length ? ` Evidence: ${risk.evidence.join(", ")}` : ""),
+          )
+          .join("\n") +
+        `\n\nRemove or isolate these blocks for this org, or retry after the org server compiler supports them. A local compile alone cannot prove target-org acceptance.`,
+      recover_via: context.agentFile
+        ? {
+            tool: "agentscript_authoring",
+            params: { verb: "inspect", mode: "structure", agent_file: context.agentFile },
+          }
+        : undefined,
+      matched: "org-compiler-feature-skew",
+    };
+  }
+
+  // -- 3. preview start with unsupported / unlicensed connection surface -----
   if (/Failed to populate planner surface/i.test(text)) {
     return {
       message:

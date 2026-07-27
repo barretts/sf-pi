@@ -285,6 +285,52 @@ describe("summarizeTrace (preview source)", () => {
     ]);
   });
 
+  test("classifies RelatedAgentStep as a connected-agent invocation", () => {
+    const d = summarizeTrace({
+      plan: [
+        {
+          type: "EnabledToolsStep",
+          data: { agent_name: "main", enabled_tools: ["ask_helper"] },
+        },
+        {
+          type: "LLMStep",
+          data: {
+            agent_name: "Main",
+            prompt_response: JSON.stringify({
+              tool_invocations: [{ function: { name: "ask_helper", arguments: "{}" } }],
+            }),
+          },
+        },
+        {
+          type: "RelatedAgentStep",
+          relatedAgentApiName: "smoke_helper",
+          relatedAgentName: "SF Pi Smoke Helper",
+          relatedAgentSessionId: "session-1",
+          executionLatency: 1371,
+          delegationType: "SYNC",
+          steps: [{ type: "PlannerResponseStep", message: "SF PI HELPER OK" }],
+        },
+      ],
+    });
+
+    expect(d.stats.function_calls).toBe(0);
+    expect(d.stats.related_agent_calls).toBe(1);
+    expect(d.tool_activity?.related_agents).toEqual([
+      {
+        step: 2,
+        name: "SF Pi Smoke Helper",
+        api_name: "smoke_helper",
+        session_id: "session-1",
+        latency_ms: 1371,
+        delegation_type: "SYNC",
+        response_preview: "SF PI HELPER OK",
+      },
+    ]);
+    expect(d.diagnostics).toBeUndefined();
+    expect(d.summary_line).toContain("1 agent call");
+    expect(d.summary_line).not.toContain("no fn calls");
+  });
+
   test("unknown step type still emits a row with hint preview", () => {
     const d = summarizeTrace({ plan: FAKE_PLAN });
     const future = d.timeline.find((r) => r.t === "FutureNewStepKindStep");

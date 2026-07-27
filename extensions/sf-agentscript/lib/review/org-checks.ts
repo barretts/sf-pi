@@ -75,6 +75,22 @@ async function collectActionTargetFindings(
         message: `Action target could not be verified: ${target.name} → ${target.target}`,
         evidence: target.detail ? [target.detail] : undefined,
       });
+    } else if (target.runtime_readiness === "not_ready") {
+      findings.push({
+        id: `connected-agent-not-ready-${target.name}`,
+        severity: "warning",
+        category: "org",
+        message: `Connected agent exists but is not runtime-ready: ${target.name} → ${target.target}`,
+        evidence: target.runtime_detail ? [target.runtime_detail] : undefined,
+        recover_via: {
+          tool: "agentscript_lifecycle",
+          params: {
+            action: "activate",
+            agent_api_name: target.ref_name,
+            target_org: input.targetOrg,
+          },
+        },
+      });
     }
   }
   return findings;

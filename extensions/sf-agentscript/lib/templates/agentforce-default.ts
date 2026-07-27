@@ -5,7 +5,8 @@
  * reasonable starting point" so the scaffold can evolve in one place.
  *
  * Fields the spec accepts:
- *   description, agent_user, topics: [{name, description?}], variables: [...]
+ *   description, agent_user, subagents: [{name, description?}], variables: [...]
+ *   (`topics` remains a legacy alias for `subagents`.)
  *
  * Output is always parse-clean against the official SDK package (we validate after
  * generation; if validation fails, that's a template bug).
@@ -71,7 +72,7 @@ export function generateAgentforceDefault(bundleName: string, jobSpec?: AgentJob
       const modifier = v.mutable ? "mutable " : "";
       const defaultClause = v.default !== undefined ? ` = ${formatVariableDefault(v.default)}` : "";
       lines.push(
-        `    # TODO(sf-pi scaffold): wire @variables.${v.name} into a topic / before_reasoning. Compile will report 'unused-variable' until then.`,
+        `    # TODO(sf-pi scaffold): wire @variables.${v.name} into a subagent / before_reasoning. Compile will report 'unused-variable' until then.`,
       );
       lines.push(`    ${v.name}: ${modifier}${v.type}${defaultClause}`);
       if (v.description) {
@@ -81,33 +82,59 @@ export function generateAgentforceDefault(bundleName: string, jobSpec?: AgentJob
     lines.push("");
   }
 
-  // topic blocks (one per spec entry, or one minimal default if none provided)
-  const topics =
-    jobSpec?.topics && jobSpec.topics.length > 0
-      ? jobSpec.topics
-      : [
-          {
-            name: defaultTopicName(bundleName),
-            description: "Primary topic for this agent.",
-          },
-        ];
-  for (const t of topics) {
-    lines.push(`topic ${t.name}:`);
-    lines.push(`    description: "${escapeString(t.description ?? "")}"`);
+  // Subagent blocks (one per requested responsibility, or one default).
+  const requestedSubagents =
+    jobSpec?.subagents && jobSpec.subagents.length > 0
+      ? jobSpec.subagents
+      : jobSpec?.topics && jobSpec.topics.length > 0
+        ? jobSpec.topics
+        : undefined;
+  const subagents = requestedSubagents ?? [
+    {
+      name: defaultSubagentName(bundleName),
+      description: "Primary responsibility for this agent.",
+    },
+  ];
+  for (const subagent of subagents) {
+    const responsibility =
+      subagent.description?.trim() || `Handle requests assigned to ${subagent.name}.`;
+    lines.push(`subagent ${subagent.name}:`);
+    lines.push(`    description: "${escapeString(responsibility)}"`);
+    lines.push("    reasoning:");
+    lines.push("        instructions: ->");
+    appendProcedureLines(lines, responsibility, 12);
     lines.push("");
   }
 
-  // start_agent block — required by the agentforce dialect to anchor execution.
+  // The start agent exposes one planner-selectable transition per subagent.
   lines.push("start_agent main:");
-  lines.push(`    description: "Entry point for ${escapeString(bundleName)}."`);
-  lines.push(`    transition to @topic.${topics[0].name}`);
+  lines.push(`    description: "Route requests for ${escapeString(bundleName)}."`);
+  lines.push("    reasoning:");
+  lines.push("        instructions: ->");
+  lines.push(
+    "            | Route the request to the most relevant subagent using exactly one transition action.",
+  );
+  lines.push("        actions:");
+  for (const subagent of subagents) {
+    const responsibility =
+      subagent.description?.trim() || `Handle requests assigned to ${subagent.name}.`;
+    lines.push(
+      `            route_to_${subagent.name}: @utils.transition to @subagent.${subagent.name}`,
+    );
+    lines.push(`                description: "${escapeString(responsibility)}"`);
+  }
   lines.push("");
 
   return lines.join("\n");
 }
 
-function defaultTopicName(bundleName: string): string {
+function defaultSubagentName(bundleName: string): string {
   return bundleName.toLowerCase().replace(/[^a-z0-9_]/g, "_") || "main";
+}
+
+function appendProcedureLines(lines: string[], value: string, spaces: number): void {
+  const indent = " ".repeat(spaces);
+  for (const line of value.split("\n")) lines.push(`${indent}| ${line}`);
 }
 
 function escapeString(s: string): string {

@@ -42,7 +42,9 @@ export interface FeatureRisk {
     | "voice_linked_variable_publish_may_require_channel_entitlement"
     | "voice_modality_publish_may_require_channel_entitlement"
     | "connection_surface_publish_may_require_channel_entitlement"
-    | "response_format_publish_may_require_surface_entitlement";
+    | "response_format_publish_may_require_surface_entitlement"
+    | "runtime_org_compiler_compatibility"
+    | "file_upload_org_compiler_compatibility";
   severity: "warn";
   message: string;
   evidence: string[];
@@ -105,6 +107,7 @@ export function buildFeatureProfile(inspect: InspectResult): AgentFeatureProfile
       modalities,
       responseFormats,
       connections,
+      config: components?.config ?? {},
     }),
   };
 }
@@ -125,6 +128,7 @@ function buildPublishRisks(input: {
   modalities: string[];
   responseFormats: Array<{ connection: string; name: string; source?: string; target?: string }>;
   connections: Array<{ name: string }>;
+  config: Record<string, unknown>;
 }): FeatureRisk[] {
   const risks: FeatureRisk[] = [];
   const voiceLinked = input.linked.filter((v) => v.source_namespace === "VoiceCall");
@@ -162,6 +166,30 @@ function buildPublishRisks(input: {
       message:
         "response_formats can depend on a surface entitlement or target implementation. Validate in an entitled org before relying on publish.",
       evidence: input.responseFormats.map((f) => `${f.connection}.${f.name}`),
+    });
+  }
+  if (Object.keys(input.config).some((key) => key.startsWith("runtime."))) {
+    risks.push({
+      code: "runtime_org_compiler_compatibility",
+      severity: "warn",
+      message:
+        "config.runtime is locally compile-valid, but target-org server compiler support can lag the installed Agent Script packages. Validate with a live preview before publish.",
+      evidence: Object.keys(input.config)
+        .filter((key) => key.startsWith("runtime."))
+        .sort()
+        .map((key) => `config.${key}`),
+    });
+  }
+  if (Object.keys(input.config).some((key) => key.startsWith("file_upload."))) {
+    risks.push({
+      code: "file_upload_org_compiler_compatibility",
+      severity: "warn",
+      message:
+        "config.file_upload is locally compile-valid, but target-org server compiler support can lag the installed Agent Script packages. Validate with a live preview before publish.",
+      evidence: Object.keys(input.config)
+        .filter((key) => key.startsWith("file_upload."))
+        .sort()
+        .map((key) => `config.${key}`),
     });
   }
   return risks;

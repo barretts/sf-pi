@@ -300,6 +300,10 @@ _Avoid_: raw AST, CST dump, compiler mirror, universal feature inventory
 A read-only org existence check for a compiler-valid target using one authoritative product-specific lookup. Targets without a proven lookup remain explicitly unverifiable rather than being guessed present or missing.
 _Avoid_: scheme validation, always-valid assumption, generic metadata framework, guessed resolver
 
+**Connected Agent Runtime Readiness**:
+A read-only fact, separate from target existence, that says whether a connected agent has an Active version available for runtime invocation. A not-ready result warns and provides an activation path without redefining the target as missing or blocking parent-agent publication.
+_Avoid_: target existence, missing agent, publish blocker, inferred callability
+
 **Agent User Readiness Scope**:
 SF Pi authoritatively checks Service Agent user wiring, treats the known Employee Agent path as not applicable, and reports other compiler-valid agent types as not evaluated. Compiler-valid type does not imply SF Pi-verified setup readiness.
 _Avoid_: guessed type policy, every non-Service type is ready, unsupported-type blocker
@@ -308,6 +312,10 @@ _Avoid_: guessed type policy, every non-Service type is ready, unsupported-type 
 The official Agent Script parser, compiler, dialect, language, LSP, and types packages resolve as one compatible toolchain without missing or duplicate foundational versions. It is a read-only health claim, not an update mechanism.
 _Avoid_: latest-only check, generic dependency health, automatic package update, version-count dashboard
 
+**Agent Script Scaffold Routing**:
+The routing contract for generated Agent Script bundles: a single generated subagent is entered deterministically, while a multi-subagent scaffold exposes one planner-selectable transition per subagent with descriptions derived from the requested responsibilities.
+_Avoid_: deprecated topic scaffold, empty behavioral node, unconditional first-subagent routing, hidden router
+
 **Agent Script Integration Contract Test**:
 A deterministic test of the boundary SF Pi owns: official package loading, diagnostic preservation, stable structural projection, target-preflight routing, or package coherence. Upstream compiler internals and live Salesforce execution are separate evidence tiers.
 _Avoid_: upstream test mirror, internal AST assertion, release-note checklist, local proof of runtime behavior
@@ -315,6 +323,14 @@ _Avoid_: upstream test mirror, internal AST assertion, release-note checklist, l
 **Agent Script Diagnostic Presentation**:
 Explicit compile/check returns every upstream diagnostic severity, while automatic compile-on-save feedback surfaces errors and warnings only. Information and hints remain available on demand without becoming repeated edit-loop noise.
 _Avoid_: hidden explicit diagnostic, all-hints-on-save, automatic context flood, fixability-as-visibility
+
+**Connected Agent Invocation**:
+A successful Agent Script planner handoff to another agent, represented by a `RelatedAgentStep`. It is successful tool activity with its own count and evidence, not a function call.
+_Avoid_: function call, ordinary action call, topic transition, enabled-but-unused tool
+
+**Agent Script Org Compiler Compatibility Risk**:
+A non-blocking source-based warning that a locally compile-valid Agent Script feature may not yet be accepted by the target org's server compiler. Only a server compile proves org acceptance; the risk does not make local compilation invalid.
+_Avoid_: local compile error, entitlement failure, cached org capability, universal unsupported-feature claim
 
 **Diagnostics Handoff**:
 A temporary ownership transition where a lifecycle-specific extension takes over diagnostics for its domain while the older shared diagnostics extension yields that domain when both are enabled.

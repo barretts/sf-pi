@@ -115,6 +115,8 @@ export async function checkActionTargets(
         ...t,
         status: detailed.status,
         detail: detailed.detail,
+        runtime_readiness: detailed.runtime_readiness,
+        runtime_detail: detailed.runtime_detail,
         metadata_label: resolver.metadataLabel,
       });
       if (detailed.status === "ok") resolved++;

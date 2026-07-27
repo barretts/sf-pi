@@ -154,7 +154,14 @@ export interface PublishResult {
       /** Human-readable metadata type label (e.g. "Flow", "ApexClass"). */
       metadata_label?: string;
     }>;
-    /** Total declared actions inspected. */
+    /** Connected agents that exist but have no Active version. Non-blocking. */
+    runtime_unready_targets?: Array<{
+      name: string;
+      target: string;
+      ref_name: string;
+      detail: string;
+    }>;
+    /** Total declared actions and connected agents inspected. */
     actions_inspected?: number;
     /** When pre-flight was skipped (no Connection, etc.) the reason lives here. */
     skipped?: string;
@@ -447,7 +454,12 @@ export async function publishAgent(opts: PublishOptions): Promise<PublishResult>
           (opts.timings
             ? await opts.timings.time("inspect_structure", () => inspectFile(agentPath))
             : await inspectFile(agentPath));
-        const actions = inspect.ok ? (inspect.components?.actions ?? []) : [];
+        const actions = inspect.ok
+          ? [
+              ...(inspect.components?.actions ?? []),
+              ...(inspect.components?.connected_subagents ?? []),
+            ]
+          : [];
         const targeted = actions.filter((a) => typeof a.target === "string" && a.target.length > 0);
         if (targeted.length > 0) {
           log(`Pre-flighting ${targeted.length} action target(s) against the org…`);
@@ -457,6 +469,7 @@ export async function publishAgent(opts: PublishOptions): Promise<PublishResult>
               )
             : await checkActionTargets(opts.conn, targeted);
           const missing = tcheck.targets.filter((t) => t.status === "missing");
+          const runtimeUnready = tcheck.targets.filter((t) => t.runtime_readiness === "not_ready");
           preflightFindings = {
             actions_inspected: tcheck.total,
             ...(missing.length > 0
@@ -468,6 +481,16 @@ export async function publishAgent(opts: PublishOptions): Promise<PublishResult>
                     ref_name: m.ref_name,
                     detail: m.detail ?? "",
                     metadata_label: m.metadata_label,
+                  })),
+                }
+              : {}),
+            ...(runtimeUnready.length > 0
+              ? {
+                  runtime_unready_targets: runtimeUnready.map((target) => ({
+                    name: target.name,
+                    target: target.target,
+                    ref_name: target.ref_name,
+                    detail: target.runtime_detail ?? "Connected agent has no Active version.",
                   })),
                 }
               : {}),

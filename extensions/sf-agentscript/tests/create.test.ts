@@ -38,7 +38,9 @@ describe("createBundle", () => {
     const source = await readFile(result.agent_path, "utf8");
     expect(source).toContain("Billing_Bot");
     expect(source).toContain("system:");
-    expect(source).toContain("topic ");
+    expect(source).toContain("subagent billing_bot:");
+    expect(source).toContain("route_to_billing_bot: @utils.transition to @subagent.billing_bot");
+    expect(source).not.toMatch(/^topic /m);
   });
 
   test("minimal template also compiles clean", async () => {
@@ -52,6 +54,10 @@ describe("createBundle", () => {
     }
     const source = await readFile(result.agent_path, "utf8");
     expect(source).toContain("Tiny_Bot");
+    expect(source).toContain("subagent primary:");
+    expect(source).toContain("before_reasoning:");
+    expect(source).toContain("transition to @subagent.primary");
+    expect(source).not.toMatch(/^topic /m);
   });
 
   test("seeds topics and variables from the job spec", async () => {
@@ -60,7 +66,7 @@ describe("createBundle", () => {
       bundle_name: "Seeded_Bot",
       job_spec: {
         description: "Custom seed.",
-        topics: [{ name: "billing", description: "Handle billing" }],
+        subagents: [{ name: "billing", description: "Handle billing" }],
         variables: [{ name: "is_verified", type: "boolean", mutable: true, default: false }],
       },
     });
@@ -69,8 +75,10 @@ describe("createBundle", () => {
     }
     const source = await readFile(result.agent_path, "utf8");
     expect(source).toContain("Custom seed.");
-    expect(source).toContain("topic billing:");
+    expect(source).toContain("subagent billing:");
+    expect(source).toContain("route_to_billing: @utils.transition to @subagent.billing");
     expect(source).toContain("is_verified");
+    expect(source).not.toMatch(/^topic /m);
   });
 
   test("refuses to overwrite by default and returns reason='exists'", async () => {

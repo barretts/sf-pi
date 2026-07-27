@@ -111,10 +111,8 @@ describe("checkActionTargets", () => {
     // construct a Connection-like stub whose only required attribute is
     // `request` (used by connRequest under the hood).
     const handler = vi.fn((options: { url: string }) => {
-      // The Tooling soql goes via /tooling/query?q=...
-      const m = /from%20(\w+)/i.exec(options.url) || /FROM%20(\w+)/.exec(options.url);
-      const sobject = m?.[1] ?? "";
-      const found = records.find((r) => r.sobject === sobject);
+      const url = decodeURIComponent(options.url);
+      const found = records.find((entry) => url.includes(`FROM ${entry.sobject}`));
       return Promise.resolve({ records: found?.rows ?? [] });
     });
     return { request: handler } as unknown as Parameters<typeof checkActionTargets>[0];
@@ -143,20 +141,43 @@ describe("checkActionTargets", () => {
     for (const t of result.targets) expect(t.status).toBe("ok");
   });
 
-  it("verifies connected agents for both supported target aliases", async () => {
+  it("separates connected-agent existence from active runtime readiness", async () => {
     const conn = fakeConn([
-      { sobject: "BotDefinition", rows: [{ DeveloperName: "Refund_Agent" }] },
+      {
+        sobject: "BotDefinition",
+        rows: [
+          {
+            DeveloperName: "Refund_Agent",
+            BotVersions: {
+              records: [{ DeveloperName: "v2", VersionNumber: 2, Status: "Active" }],
+            },
+          },
+          { DeveloperName: "Draft_Agent", BotVersions: { records: [] } },
+        ],
+      },
     ]);
     const result = await checkActionTargets(conn, [
       { name: "refunds", target: "agent://Refund_Agent" },
+      { name: "draft", target: "agentforce://Draft_Agent" },
       { name: "missing", target: "agentforce://Missing_Agent" },
     ] as ComponentSummary[]);
-    expect(result.resolved).toBe(1);
+    expect(result.resolved).toBe(2);
     expect(result.missing).toBe(1);
     expect(result.targets).toEqual([
-      expect.objectContaining({ name: "refunds", status: "ok" }),
+      expect.objectContaining({
+        name: "refunds",
+        status: "ok",
+        runtime_readiness: "ready",
+        runtime_detail: "Active version v2 is available for connected-agent invocation.",
+      }),
+      expect.objectContaining({
+        name: "draft",
+        status: "ok",
+        runtime_readiness: "not_ready",
+      }),
       expect.objectContaining({ name: "missing", status: "missing" }),
     ]);
+    expect(result.targets[1].runtime_detail).toMatch(/activate/i);
   });
 
   it("flags missing targets and continues", async () => {

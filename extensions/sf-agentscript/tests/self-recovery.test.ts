@@ -52,10 +52,10 @@ describe("self-recovery loop (create → compile → inspect → mutate → comp
     expect(compile1.ok).toBe(true);
     expect(compile1.diagnostics.filter((d) => d.severity === 1)).toHaveLength(0);
 
-    // 3. INSPECT — navigable graph with at least one topic.
+    // 3. INSPECT — modern scaffold has a navigable subagent graph.
     const inspect1 = await inspectFile(filePath);
     expect(inspect1.ok).toBe(true);
-    expect(inspect1.stats?.topics ?? 0).toBeGreaterThanOrEqual(1);
+    expect(inspect1.stats?.subagents ?? 0).toBeGreaterThanOrEqual(1);
 
     // 4. INJECT a controlled error: drop the description field from
     //    `start_agent`. The agentforce dialect requires `description` on

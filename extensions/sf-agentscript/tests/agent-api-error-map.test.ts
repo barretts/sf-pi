@@ -155,6 +155,33 @@ describe("mapAgentApiError (preview surface)", () => {
     expect(m.message).toMatch(/sfap_api/);
   });
 
+  test("server compile 422 with compatibility risks explains local/org compiler skew", () => {
+    const m = mapPreviewError(
+      400,
+      {
+        message:
+          "422 Unprocessable Entity from POST https://compiler.invalid/afscript/v2/parseandcompile",
+      },
+      {
+        phase: "start",
+        surface: "agent_file",
+        agentFile: "/tmp/Capability.agent",
+        publishFeatureRisks: [
+          {
+            code: "runtime_org_compiler_compatibility",
+            message: "config.runtime may not be accepted by the target org compiler.",
+            evidence: ["config.runtime"],
+          },
+        ],
+      },
+    );
+    expect(m.matched).toBe("org-compiler-feature-skew");
+    expect(m.message).toMatch(/local compiler/i);
+    expect(m.message).toMatch(/target org/i);
+    expect(m.message).toContain("config.runtime");
+    expect(m.message).not.toContain("compiler.invalid");
+  });
+
   test("unknown errors pass through verbatim with matched=null", () => {
     const m = mapPreviewError(
       500,

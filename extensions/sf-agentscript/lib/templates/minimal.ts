@@ -1,11 +1,12 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /**
- * Bare-minimum `.agent` scaffold — only system block. Useful when the LLM
- * wants to author the rest by hand.
+ * Minimal executable `.agent` scaffold: one start agent and one deterministically
+ * entered subagent. It avoids deprecated topic blocks and gives the generated
+ * subagent real reasoning guidance instead of an empty routing node.
  *
  * agent_type follows the same Issue 1 rule as agentforce-default: explicit
- * `AgentforceEmployeeAgent` by default, `AgentforceServiceAgent` + user
- * when `job_spec.agent_user` is supplied. See ./agent-type.ts.
+ * `AgentforceEmployeeAgent` by default, `AgentforceServiceAgent` + user when
+ * `job_spec.agent_user` is supplied. See ./agent-type.ts.
  */
 
 import { chooseAgentTypeFromSpec } from "./agent-type.ts";
@@ -13,10 +14,7 @@ import type { AgentJobSpec } from "../create.ts";
 
 export function generateMinimal(bundleName: string, jobSpec?: AgentJobSpec): string {
   const description = jobSpec?.description ?? "You are a helpful agent.";
-  // Escape `\` first, then `"`, so a literal backslash in the bundle name
-  // can't sneak past the quote-escape pass and break the agent-script string.
-  const safeName = bundleName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const topicName = bundleName.toLowerCase().replace(/[^a-z0-9_]/g, "_") || "main";
+  const safeName = escapeString(bundleName);
   const { agent_type, default_agent_user } = chooseAgentTypeFromSpec(jobSpec);
   const lines = [
     "config:",
@@ -26,23 +24,39 @@ export function generateMinimal(bundleName: string, jobSpec?: AgentJobSpec): str
   ];
   lines.push("");
   if (default_agent_user) {
-    // Escape `\` first, then `"`, so a literal backslash in the username
-    // can't sneak past the quote-escape pass and break the agent-script string.
-    const safeUser = default_agent_user.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    lines.push("access:", `    default_agent_user: "${safeUser}"`, "");
+    lines.push("access:", `    default_agent_user: "${escapeString(default_agent_user)}"`, "");
   }
+  lines.push("system:", "    instructions: |");
+  appendTemplateLines(lines, description, 8);
   lines.push(
-    "system:",
-    "    instructions: |",
-    `        ${description}`,
     "",
-    `topic ${topicName}:`,
-    '    description: "Primary topic."',
+    "subagent primary:",
+    '    description: "Primary responsibility for this agent."',
+    "    reasoning:",
+    "        instructions: ->",
+  );
+  appendProcedureLines(lines, description, 12);
+  lines.push(
     "",
     "start_agent main:",
     `    description: "Entry point for ${safeName}."`,
-    `    transition to @topic.${topicName}`,
+    "    before_reasoning:",
+    "        transition to @subagent.primary",
     "",
   );
   return lines.join("\n");
+}
+
+function appendTemplateLines(lines: string[], value: string, spaces: number): void {
+  const indent = " ".repeat(spaces);
+  for (const line of value.split("\n")) lines.push(`${indent}${line}`);
+}
+
+function appendProcedureLines(lines: string[], value: string, spaces: number): void {
+  const indent = " ".repeat(spaces);
+  for (const line of value.split("\n")) lines.push(`${indent}| ${line}`);
+}
+
+function escapeString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }

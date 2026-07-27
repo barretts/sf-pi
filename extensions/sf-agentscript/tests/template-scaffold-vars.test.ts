@@ -46,6 +46,42 @@ describe("agentscript_authoring create scaffolds emit explicit agent_type (Issue
     expect(svc).toMatch(/access:\n\s+default_agent_user:\s*"svc@example\.com"/);
   });
 
+  test("templates use subagents instead of deprecated topics", () => {
+    const minimal = generateMinimal("Tiny_Bot", { description: "Answer basic questions." });
+    expect(minimal).toContain("subagent primary:");
+    expect(minimal).toContain("transition to @subagent.primary");
+    expect(minimal).not.toMatch(/^topic /m);
+
+    const rich = generateAgentforceDefault("Order_Bot", {
+      description: "Help with orders.",
+      subagents: [
+        { name: "shipping", description: "Handle shipping questions." },
+        { name: "returns", description: "Handle return questions." },
+      ],
+    });
+    expect(rich).toContain("subagent shipping:");
+    expect(rich).toContain("subagent returns:");
+    expect(rich).toContain("route_to_shipping: @utils.transition to @subagent.shipping");
+    expect(rich).toContain("route_to_returns: @utils.transition to @subagent.returns");
+    expect(rich).toContain("| Handle shipping questions.");
+    expect(rich).toContain("| Handle return questions.");
+    expect(rich).not.toMatch(/^topic /m);
+  });
+
+  test("subagents is canonical while topics remains a legacy alias", () => {
+    const legacy = generateAgentforceDefault("Legacy", {
+      topics: [{ name: "billing", description: "Handle billing." }],
+    });
+    expect(legacy).toContain("subagent billing:");
+
+    const canonical = generateAgentforceDefault("Canonical", {
+      subagents: [{ name: "orders", description: "Handle orders." }],
+      topics: [{ name: "ignored", description: "Legacy input." }],
+    });
+    expect(canonical).toContain("subagent orders:");
+    expect(canonical).not.toContain("subagent ignored:");
+  });
+
   test("both forms compile clean and the Service form does not report a missing default agent user", async () => {
     const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
     const { tmpdir } = await import("node:os");

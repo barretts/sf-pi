@@ -183,7 +183,11 @@ function formatSendBody(
   }
 
   const toolActivity = digest.tool_activity;
-  if (toolActivity?.enabled?.length || toolActivity?.called?.length) {
+  if (
+    toolActivity?.enabled?.length ||
+    toolActivity?.called?.length ||
+    toolActivity?.related_agents?.length
+  ) {
     lines.push("");
     lines.push(sectionTitle("🛠", "Tool Activity", ansi, dim));
     const enabledTools = unique(toolActivity.enabled?.flatMap((item) => item.tools) ?? []);
@@ -191,19 +195,35 @@ function formatSendBody(
       lines.push(sectionRow("🧰", "enabled", formatList(enabledTools, 6), theme));
     }
     const called = toolActivity.called ?? [];
-    lines.push(
-      sectionRow(
-        "🛠",
-        "called",
-        called.length
-          ? formatList(
-              called.map((call) => call.name),
-              6,
-            )
-          : "none",
-        theme,
-      ),
-    );
+    const relatedAgents = toolActivity.related_agents ?? [];
+    if (called.length > 0 || relatedAgents.length === 0) {
+      lines.push(
+        sectionRow(
+          "🛠",
+          "called",
+          called.length
+            ? formatList(
+                called.map((call) => call.name),
+                6,
+              )
+            : "none",
+          theme,
+        ),
+      );
+    }
+    if (relatedAgents.length > 0) {
+      lines.push(
+        sectionRow(
+          "🤝",
+          "related agents",
+          formatList(
+            relatedAgents.map((call) => call.name ?? call.api_name ?? "connected agent"),
+            6,
+          ),
+          theme,
+        ),
+      );
+    }
   }
 
   if (toolActivity?.called?.length) {
@@ -271,6 +291,9 @@ function formatSendBody(
     `${ok(`${stats.llm_calls} LLM call${stats.llm_calls === 1 ? "" : "s"}`)}`,
     stats.function_calls > 0
       ? `${ok(`${stats.function_calls} action${stats.function_calls === 1 ? "" : "s"}`)}`
+      : null,
+    stats.related_agent_calls > 0
+      ? `${ok(`${stats.related_agent_calls} agent call${stats.related_agent_calls === 1 ? "" : "s"}`)}`
       : null,
     stats.vars_updated > 0
       ? `${ok(`${stats.vars_updated} var update${stats.vars_updated === 1 ? "" : "s"}`)}${

@@ -107,6 +107,7 @@ function fixtureDigest(): TraceDigest {
       vars_updated: 1,
       topic_changes: 1,
       function_calls: 1,
+      related_agent_calls: 0,
       errors: 0,
     },
     summary_line: "Triage → AccountSecurity · 2 LLM calls · 1.4s · 1 fn call",
@@ -240,6 +241,29 @@ describe("previewSendMarkdown", () => {
     expect(md).toMatch(/1 transition/);
   });
 
+  it("renders connected-agent invocations separately from function calls", () => {
+    const digest = fixtureDigest();
+    digest.tool_activity = {
+      enabled: [{ step: 2, agent: "main", tools: ["ask_helper"] }],
+      related_agents: [
+        {
+          step: 3,
+          name: "SF Pi Smoke Helper",
+          api_name: "smoke_helper",
+          latency_ms: 1371,
+          delegation_type: "SYNC",
+          response_preview: "SF PI HELPER OK",
+        },
+      ],
+    };
+    digest.stats.function_calls = 0;
+    digest.stats.related_agent_calls = 1;
+    const md = previewSendMarkdown(digest, { ok: true });
+    expect(md).toMatch(/related agent/i);
+    expect(md).toMatch(/SF Pi Smoke Helper/);
+    expect(md).toMatch(/1 agent call/);
+  });
+
   it("includes the trace_file pointer", () => {
     const md = previewSendMarkdown(fixtureDigest(), { ok: true });
     expect(md).toMatch(/trace_file/);
@@ -280,6 +304,7 @@ describe("previewSendMarkdown", () => {
         vars_updated: 0,
         topic_changes: 0,
         function_calls: 0,
+        related_agent_calls: 0,
         errors: 0,
       },
       summary_line: "Welcome · 0 LLM calls · 0.2s · no fn calls",

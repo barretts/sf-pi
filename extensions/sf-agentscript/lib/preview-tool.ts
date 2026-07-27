@@ -399,6 +399,7 @@ async function actionStart(
       },
     );
   }
+  const featureProfile = await analysis.getFeatureProfile();
 
   try {
     const authPhase = timings?.phase("agent_api_auth");
@@ -418,6 +419,7 @@ async function actionStart(
       timings,
       signal,
       skipLocalValidation: true,
+      publishFeatureRisks: featureProfile?.publish_risks,
       // (agentFilePath above is also persisted to metadata.json by
       //  startPreview — used by `end` to suggest the next publish command.)
     });

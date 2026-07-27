@@ -55,6 +55,7 @@ export interface DigestStats {
   vars_updated: number;
   topic_changes: number;
   function_calls: number;
+  related_agent_calls: number;
   errors: number;
 }
 
@@ -99,9 +100,20 @@ export interface ActionCallDigest {
   has_output?: boolean;
 }
 
+export interface RelatedAgentCallDigest {
+  step: number;
+  name?: string;
+  api_name?: string;
+  session_id?: string;
+  latency_ms?: number;
+  delegation_type?: string;
+  response_preview?: string;
+}
+
 export interface ToolActivityDigest {
   enabled?: ToolEnabledDigest[];
   called?: ActionCallDigest[];
+  related_agents?: RelatedAgentCallDigest[];
 }
 
 export interface TraceFindingDigest {
@@ -227,6 +239,34 @@ function extractFunctionStep(step: StepLike): Partial<DigestRow> {
     fn: fn?.name,
     args_preview: argText && argText !== "{}" ? argText : undefined,
     has_output: fn?.output !== undefined && fn?.output !== null,
+  };
+}
+
+function relatedAgentResponse(step: StepLike): string | undefined {
+  const nested = Array.isArray(step.steps) ? (step.steps as StepLike[]) : [];
+  const response = nested.find((item) => item.type === "PlannerResponseStep");
+  return clip(asString(response?.message), MAX_HINT_CHARS);
+}
+
+function extractRelatedAgentStep(step: StepLike): Partial<DigestRow> {
+  return {
+    agent: asString(step.relatedAgentName),
+    api_name: asString(step.relatedAgentApiName),
+    delegation_type: asString(step.delegationType),
+    execution_ms: asNumber(step.executionLatency),
+    response_preview: relatedAgentResponse(step),
+  };
+}
+
+function relatedAgentCallDigest(step: StepLike, stepIndex: number): RelatedAgentCallDigest {
+  return {
+    step: stepIndex,
+    name: asString(step.relatedAgentName),
+    api_name: asString(step.relatedAgentApiName),
+    session_id: asString(step.relatedAgentSessionId),
+    latency_ms: asNumber(step.executionLatency),
+    delegation_type: asString(step.delegationType),
+    response_preview: relatedAgentResponse(step),
   };
 }
 
@@ -426,6 +466,7 @@ const EXTRACTORS: Record<string, (step: StepLike) => Partial<DigestRow>> = {
   LLMExecutionStep: extractLLMStep,
   FunctionStep: extractFunctionStep,
   FunctionCallStep: extractFunctionStep,
+  RelatedAgentStep: extractRelatedAgentStep,
   EnabledToolsStep: extractEnabledTools,
   VariableUpdateStep: extractVariableUpdate,
   TransitionStep: extractTransitionStep,
@@ -489,6 +530,7 @@ export function summarizeTrace(trace: unknown, opts: SummarizeOptions = {}): Tra
   let varsUpdated = 0;
   let topicChanges = 0;
   let functionCalls = 0;
+  let relatedAgentCalls = 0;
   let prevTopic: string | undefined;
   let lastTopic: string | undefined = t.topic;
   let stateVariables: Record<string, unknown> | undefined;
@@ -496,6 +538,7 @@ export function summarizeTrace(trace: unknown, opts: SummarizeOptions = {}): Tra
   const routePath: RouteTransitionDigest[] = [];
   const toolsEnabled: ToolEnabledDigest[] = [];
   const actionsCalled: ActionCallDigest[] = [];
+  const relatedAgents: RelatedAgentCallDigest[] = [];
 
   for (let i = 0; i < stepsRaw.length; i++) {
     const step = stepsRaw[i] ?? {};
@@ -557,6 +600,9 @@ export function summarizeTrace(trace: unknown, opts: SummarizeOptions = {}): Tra
       functionCalls++;
       const call = actionCallDigest(step, i);
       if (call) actionsCalled.push(call);
+    } else if (type === "RelatedAgentStep") {
+      relatedAgentCalls++;
+      relatedAgents.push(relatedAgentCallDigest(step, i));
     }
 
     // Error harvesting — runtime steps surface errors in a few shapes.
@@ -581,6 +627,7 @@ export function summarizeTrace(trace: unknown, opts: SummarizeOptions = {}): Tra
     vars_updated: varsUpdated,
     topic_changes: topicChanges,
     function_calls: functionCalls,
+    related_agent_calls: relatedAgentCalls,
     errors: errors.length,
   };
 
@@ -589,13 +636,15 @@ export function summarizeTrace(trace: unknown, opts: SummarizeOptions = {}): Tra
     toTopic: lastTopic,
     llmCalls,
     functionCalls,
+    relatedAgentCalls,
     totalMs: opts.latencyMs ?? totalMs,
   });
   const toolActivity: ToolActivityDigest | undefined =
-    toolsEnabled.length > 0 || actionsCalled.length > 0
+    toolsEnabled.length > 0 || actionsCalled.length > 0 || relatedAgents.length > 0
       ? {
           ...(toolsEnabled.length > 0 ? { enabled: toolsEnabled } : {}),
           ...(actionsCalled.length > 0 ? { called: actionsCalled } : {}),
+          ...(relatedAgents.length > 0 ? { related_agents: relatedAgents } : {}),
         }
       : undefined;
   const diagnostics = buildTraceFindings({ timeline, errors, toolActivity });
@@ -637,7 +686,8 @@ function buildTraceFindings(input: {
   }
   const enabledCount =
     input.toolActivity?.enabled?.reduce((sum, item) => sum + item.tools.length, 0) ?? 0;
-  const calledCount = input.toolActivity?.called?.length ?? 0;
+  const calledCount =
+    (input.toolActivity?.called?.length ?? 0) + (input.toolActivity?.related_agents?.length ?? 0);
   if (enabledCount > 0 && calledCount === 0) {
     findings.push({
       severity: "info",
@@ -765,6 +815,7 @@ export function summarizeLastExecution(
     vars_updated: 0,
     topic_changes: 0,
     function_calls: lastExec?.invokedActions?.length ?? 0,
+    related_agent_calls: 0,
     errors: errors.length,
   };
 
@@ -773,6 +824,7 @@ export function summarizeLastExecution(
     toTopic: lastExec?.topic,
     llmCalls,
     functionCalls: stats.function_calls,
+    relatedAgentCalls: 0,
     totalMs: typeof lastExec?.latency === "number" ? lastExec.latency : 0,
   });
 
@@ -808,6 +860,7 @@ function formatSummaryLine(p: {
   toTopic?: string;
   llmCalls: number;
   functionCalls: number;
+  relatedAgentCalls: number;
   totalMs: number;
 }): string {
   const parts: string[] = [];
@@ -818,11 +871,13 @@ function formatSummaryLine(p: {
   }
   parts.push(`${p.llmCalls} LLM call${p.llmCalls === 1 ? "" : "s"}`);
   if (p.totalMs > 0) parts.push(`${(p.totalMs / 1000).toFixed(1)}s`);
-  parts.push(
-    p.functionCalls > 0
-      ? `${p.functionCalls} fn call${p.functionCalls === 1 ? "" : "s"}`
-      : "no fn calls",
-  );
+  if (p.functionCalls > 0) {
+    parts.push(`${p.functionCalls} fn call${p.functionCalls === 1 ? "" : "s"}`);
+  }
+  if (p.relatedAgentCalls > 0) {
+    parts.push(`${p.relatedAgentCalls} agent call${p.relatedAgentCalls === 1 ? "" : "s"}`);
+  }
+  if (p.functionCalls === 0 && p.relatedAgentCalls === 0) parts.push("no tool calls");
   return parts.join(" · ");
 }
 
@@ -955,6 +1010,7 @@ export function summarizeProductionResponse(
     vars_updated: 0,
     topic_changes: 0,
     function_calls: functionCalls,
+    related_agent_calls: 0,
     errors: errors.length,
   };
 

@@ -39,7 +39,7 @@ import {
   type ResolveAgentVersionResult,
 } from "./resolve-agent-version.ts";
 import { boundedRestRequest, boundedSoqlQuery } from "../bounded-salesforce-transport.ts";
-import { mapPreviewError } from "./error-map.ts";
+import { mapPreviewError, type PreviewErrorContext } from "./error-map.ts";
 import {
   applyPreviewContextPatch,
   mergeContextVariables,
@@ -132,6 +132,8 @@ export interface PreviewStartOptions {
   signal?: AbortSignal;
   /** True when caller already performed an equivalent local compile/check. */
   skipLocalValidation?: boolean;
+  /** Source-derived risks used to explain target-org server compiler rejection. */
+  publishFeatureRisks?: PreviewErrorContext["publishFeatureRisks"];
 }
 
 export interface PreviewStartResult {
@@ -309,9 +311,14 @@ export async function startPreview(opts: PreviewStartOptions): Promise<PreviewSt
     if (isSfapRoutingFailure(compileResp)) {
       throw new Error(sfap404Message({ phase: "compile" }));
     }
-    throw new Error(
-      `Server compile failed (HTTP ${compileResp.status}): ${JSON.stringify(compileResp.body).slice(0, 600)}`,
-    );
+    const mapped = mapPreviewError(compileResp.status, compileResp.body, {
+      phase: "start",
+      surface: "agent_file",
+      agentName: opts.agentName,
+      agentFile: opts.agentFilePath,
+      publishFeatureRisks: opts.publishFeatureRisks,
+    });
+    throw new Error(mapped.message);
   }
   const agentJson = compileResp.body.compiledArtifact;
   if (!agentJson) {

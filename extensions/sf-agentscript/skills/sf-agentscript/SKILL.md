@@ -26,7 +26,7 @@ Use this skill whenever the user is editing `.agent` files, debugging an Agentfo
 
 Rules:
 
-- `verb="create"` omits `mode` and requires `bundle_name`.
+- `verb="create"` omits `mode` and requires `bundle_name`. Both templates generate subagents, not deprecated topics: `minimal` deterministically enters one primary subagent; `agentforce-default` exposes planner-selectable transition actions for `job_spec.subagents`. `job_spec.topics` is a legacy alias and loses when both fields are supplied.
 - `verb="compile"` defaults `mode` to `check`; `mode="format"` writes canonical SDK formatting.
 - `verb="inspect"` defaults `mode` to `structure`; modes: `structure`, `context_profile`, `find_references`, `definition`, `check_targets`, `review`, `runtime_smoke`.
 - `verb="mutate"` requires `mode`; modes: `set_field`, `rename`, `insert`, `delete`, `apply_quick_fix`.
@@ -89,7 +89,7 @@ Use `inspect/context_profile` before previewing or publishing voice, messaging, 
 
 Use `inspect/find_references` before mutating a symbol. Use `inspect/definition` when you only need the declaration.
 
-Use `inspect/check_targets` before publish when action or connected-agent targets must resolve in the org. Requires `target_org`; schemes without a proven resolver remain explicitly unverifiable.
+Use `inspect/check_targets` before publish when action or connected-agent targets must resolve in the org. Requires `target_org`; schemes without a proven resolver remain explicitly unverifiable. Connected-agent existence and runtime readiness are separate: an existing target without an Active version warns and provides an activation hint without blocking parent publication.
 
 Use `inspect/review` before publish or after behavioral changes. It is deterministic: no hidden model call, no numeric score. Readiness is `ready`, `ready_with_warnings`, `blocked`, or `partial`. Pass `target_org` to include read-only org checks: action-target resolution, Service Agent user readiness, and surface readiness probes such as Agentforce settings, phone number, voice/messaging channel, ServiceChannel, published voice planner, routing-flow, and fallback-queue checks for channel-linked agents. Pass `output_path` to write a Markdown report.
 
@@ -124,7 +124,7 @@ After a single preview session is active on the branch, `send` and `end` may omi
 
 Use `context_variables` to seed deterministic session state for preview or per-turn sends.
 
-Preview send output uses two surfaces: the human renderer shows a rich Preview Trace Report (turn summary, route path, state changes, key state, tool activity, action I/O appendix, aligned planner timeline, diagnostics, stats, and drill pointers), while `content[0].text` stays compact for LLM context efficiency. Use `details.digest` for structured signals and `agentscript_preview trace` with the returned `plan_id` when the full raw trace is needed.
+Preview send output uses two surfaces: the human renderer shows a rich Preview Trace Report (turn summary, route path, state changes, key state, function activity, connected-agent invocations, action I/O appendix, aligned planner timeline, diagnostics, stats, and drill pointers), while `content[0].text` stays compact for LLM context efficiency. `RelatedAgentStep` counts as a connected-agent invocation, not a function call. Use `details.digest` for structured signals and `agentscript_preview trace` with the returned `plan_id` when the full raw trace is needed.
 
 ## Eval
 

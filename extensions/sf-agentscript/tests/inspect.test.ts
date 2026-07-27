@@ -371,6 +371,14 @@ describe("inspectFile", () => {
       }),
     ]);
     expect(result.stats?.connected_subagents).toBe(1);
+
+    const profile = buildFeatureProfile(result);
+    expect(profile.publish_risks.map((risk) => risk.code)).toEqual(
+      expect.arrayContaining([
+        "runtime_org_compiler_compatibility",
+        "file_upload_org_compiler_compatibility",
+      ]),
+    );
   });
 
   test("agent_type is surfaced on components.config (not components.system)", async () => {

@@ -30,6 +30,9 @@ import { loadAgentforceSDK } from "./sdk.ts";
 export interface AgentJobSpec {
   description?: string;
   agent_user?: string;
+  /** Canonical generated responsibility list. Each entry becomes a subagent. */
+  subagents?: Array<{ name: string; description?: string }>;
+  /** Legacy alias retained for compatibility. `subagents` wins when both are supplied. */
   topics?: Array<{ name: string; description?: string }>;
   variables?: Array<{
     name: string;

@@ -41,6 +41,12 @@ export interface PublishDetails {
       /** Human-readable metadata type label (e.g. "Flow", "ApexClass"). */
       metadata_label?: string;
     }>;
+    runtime_unready_targets?: Array<{
+      name: string;
+      target: string;
+      ref_name: string;
+      detail: string;
+    }>;
     skipped?: string;
   };
 }
@@ -216,6 +222,17 @@ function formatPublishBody(
     lines.push(
       `  ${dim("deploy with")} ${code("sf project deploy start -m Flow:<X> -m ApexClass:<Y>")}`,
     );
+  }
+
+  const runtimeUnready = details.preflight?.runtime_unready_targets ?? [];
+  if (runtimeUnready.length > 0) {
+    lines.push("");
+    lines.push(
+      `  ${fg("warning", "⚠")}  ${bold(`${runtimeUnready.length} connected agent target(s) not runtime-ready`)}`,
+    );
+    for (const target of runtimeUnready.slice(0, 6)) {
+      lines.push(`     ${fg("warning", "•")} ${code(target.name)}  ${dim(target.detail)}`);
+    }
   }
 
   if (details.studio_url) {

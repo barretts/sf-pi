@@ -77,9 +77,16 @@ const Params = Type.Object({
       {
         description: Type.Optional(Type.String()),
         agent_user: Type.Optional(Type.String()),
+        subagents: Type.Optional(
+          Type.Array(
+            Type.Object({ name: Type.String(), description: Type.Optional(Type.String()) }),
+            { description: "Canonical generated responsibilities; each entry becomes a subagent." },
+          ),
+        ),
         topics: Type.Optional(
           Type.Array(
             Type.Object({ name: Type.String(), description: Type.Optional(Type.String()) }),
+            { description: "Legacy alias for subagents. Ignored when subagents is supplied." },
           ),
         ),
         variables: Type.Optional(

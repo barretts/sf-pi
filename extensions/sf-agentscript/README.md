@@ -26,7 +26,7 @@ multi-turn evals, and publish/activation workflows. Salesforce calls use
 
 Rules:
 
-- `verb="create"` omits `mode` and requires `bundle_name`.
+- `verb="create"` omits `mode` and requires `bundle_name`. Generated templates use subagents rather than deprecated topic blocks: `minimal` deterministically enters one primary subagent, while `agentforce-default` exposes one planner-selectable transition per requested responsibility. Use `job_spec.subagents`; `job_spec.topics` remains a legacy alias and is ignored when `subagents` is supplied.
 - `verb="compile"` defaults `mode` to `check`; `mode="format"` writes canonical SDK formatting.
 - `verb="inspect"` defaults `mode` to `structure`; modes include `context_profile`, `find_references`, `definition`, `check_targets`, and `review`.
 - `verb="mutate"` requires `mode`; modes include `set_field`, `rename`, `insert`, `delete`, and `apply_quick_fix`.
@@ -36,6 +36,7 @@ Rules:
 - `agent_file` may be omitted only when exactly one current `.agent` file exists on the active Pi branch. Ambiguity is refused with structured candidates.
 - Explicit compile/check preserves every upstream diagnostic severity. `clean=true` means no severity-1 errors; warnings, information, and hints remain visible without blocking preview or publish guards. Automatic compile-on-save feedback is intentionally limited to errors and warnings.
 - `inspect/structure` is a stable workflow projection, not raw compiler AST. It includes connected-agent topology, skills, runtime/file-upload settings, and recommended-prompt settings needed for planning, review, and preflight.
+- `inspect/check_targets` reports target existence separately from connected-agent runtime readiness. An existing connected agent without an Active version produces a non-blocking warning and activation hint rather than being mislabeled as missing.
 
 ## Branch-Durable Tool State
 
@@ -55,7 +56,7 @@ Auto-resolution validates referenced disk artifacts before use and proceeds only
 
 - compile blockers and warnings
 - structural/readiness findings that can be proven from the parsed file
-- publish-risk signals from the feature profile
+- publish-risk signals from the feature profile, including non-blocking warnings when locally compile-valid `runtime` or `file_upload` configuration may be ahead of the target org's server compiler
 - read-only action-target checks when `target_org` is provided
 - read-only surface readiness checks, such as Agentforce settings, phone number, voice/messaging channel, ServiceChannel, published voice planner, routing-flow, and fallback-queue probes for channel-linked agents when `target_org` is provided
 - Service Agent user readiness checks for `access.default_agent_user` license/user/system permission-set wiring when `target_org` is provided
@@ -68,7 +69,7 @@ Use `agentscript_authoring { "verb": "inspect", "mode": "runtime_smoke", "target
 
 `agentscript_preview action="send"` separates human readability from model context efficiency:
 
-- The TUI/report surface renders a rich Preview Trace Report with turn summary, route path, state changes, key state snapshot, tool activity, action I/O appendix, aligned planner timeline, diagnostics, stats, and drill pointers.
+- The TUI/report surface renders a rich Preview Trace Report with turn summary, route path, state changes, key state snapshot, tool activity, connected-agent invocations, action I/O appendix, aligned planner timeline, diagnostics, stats, and drill pointers.
 - The LLM-facing text remains compact: a response, short summary, counts, and pointers. Structured details live in `details.digest`; raw prompts, full state, and full action payloads stay in persisted trace artifacts.
 - Internal planner variable spam is hidden from the human timeline by default, while user-visible state changes show previous → new previews when available.
 - Action input/output previews are screenshot-friendly and bounded/redacted; use `agentscript_preview trace` with the returned `plan_id` for the full raw trace.
@@ -370,6 +371,7 @@ Salesforce auth is resolved through `@salesforce/core` `Connection` using the sa
 ## Troubleshooting
 
 - **Agent Script SDK unavailable:** run `/sf-agentscript doctor` to inspect the official SDK package resolution.
+- **Preview server compile returns HTTP 400 with downstream 422:** the installed local compiler can recognize newer Agent Script fields before the target org's server compiler rollout accepts them. Run `inspect/structure` to review source-based compatibility risks; currently `config.runtime` and `config.file_upload` require live target-org validation.
 - **Preview session not found:** confirm `target_org` matches the org used at preview start, or start a fresh preview session.
 - **Eval run appears stuck:** inspect `.pi/state/sf-agentscript/runs/<run_id>/status.json` for the current phase. Pass `batch_timeout_ms` for shorter local probes.
 - **Eval trace fetch returns null:** eval-created sessions may be closed by the service before live trace fetch succeeds; synthesized traces and failure records remain in the run directory.

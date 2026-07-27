@@ -395,6 +395,7 @@ async function actionPublish(
         : `  • AiAuthoringBundle deploy succeeded: ${ab.full_name} (target=${ab.target}, ${ab.created ? "created" : "updated"})`
       : `  • AiAuthoringBundle deploy skipped/not reported`;
     const missing = result.preflight?.missing_action_targets ?? [];
+    const runtimeUnready = result.preflight?.runtime_unready_targets ?? [];
     const preflightLines: string[] = [];
     for (const risk of featureProfile?.publish_risks ?? []) {
       preflightLines.push(`  ⚠️ ${risk.message}`);
@@ -411,6 +412,14 @@ async function actionPublish(
       }
       if (missing.length > 4) {
         preflightLines.push(`     …and ${missing.length - 4} more in details.preflight`);
+      }
+    }
+    if (runtimeUnready.length > 0) {
+      preflightLines.push(
+        `  ⚠️ ${runtimeUnready.length} connected agent target(s) exist but are not runtime-ready:`,
+      );
+      for (const target of runtimeUnready.slice(0, 4)) {
+        preflightLines.push(`     • ${target.name} → ${target.ref_name} — ${target.detail}`);
       }
     }
     return toolOk(

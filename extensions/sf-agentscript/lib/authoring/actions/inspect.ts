@@ -287,14 +287,31 @@ async function actionCheckTargets(
   const result = timings
     ? await timings.time("action_target_preflight", () => checkActionTargets(conn, targets))
     : await checkActionTargets(conn, targets);
+  const runtimeNotReady = result.targets.filter(
+    (target) => target.runtime_readiness === "not_ready",
+  );
   const summaryLines = [
-    result.ok
-      ? `✓ All ${result.total} action target(s) resolved in org`
-      : `⚠ ${result.missing}/${result.total} action target(s) missing in org`,
+    !result.ok
+      ? `⚠ ${result.missing}/${result.total} action target(s) missing in org`
+      : runtimeNotReady.length > 0
+        ? `⚠ All ${result.total} action target(s) exist; ${runtimeNotReady.length} connected agent target(s) are not runtime-ready`
+        : `✓ All ${result.total} action target(s) resolved in org`,
   ];
   for (const t of result.targets.slice(0, 8)) {
-    const flag = t.status === "ok" ? "✓" : t.status === "missing" ? "✗" : "?";
-    const detail = t.status === "ok" ? "" : ` — ${t.detail ?? "not verified"}`;
+    const flag =
+      t.status === "missing"
+        ? "✗"
+        : t.status === "unverifiable"
+          ? "?"
+          : t.runtime_readiness === "not_ready"
+            ? "⚠"
+            : "✓";
+    const detail =
+      t.status === "ok"
+        ? t.runtime_detail
+          ? ` — ${t.runtime_detail}`
+          : ""
+        : ` — ${t.detail ?? "not verified"}`;
     summaryLines.push(`  ${flag} ${t.name} → ${t.target}${detail}`);
   }
   if (result.targets.length > 8)

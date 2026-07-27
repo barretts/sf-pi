@@ -165,6 +165,7 @@ describe("evalFailureMarkdown", () => {
               vars_updated: 0,
               topic_changes: 0,
               function_calls: 0,
+              related_agent_calls: 0,
               errors: 0,
             },
             summary_line: "x",

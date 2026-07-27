@@ -37,6 +37,7 @@ const STEP_STYLES: Record<string, StepStyle> = {
   UpdateTopicStep: { glyph: "📌", color: "mdHeading", label: "Topic" },
   FunctionStep: { glyph: "🛠", color: "toolTitle" },
   FunctionCallStep: { glyph: "🛠", color: "toolTitle", label: "Function" },
+  RelatedAgentStep: { glyph: "🤝", color: "toolTitle", label: "Related agent" },
   VariableUpdateStep: { glyph: "📦", color: "mdCode", label: "Variable" },
   EnabledToolsStep: { glyph: "🧰", color: "mdListBullet", label: "Tools enabled" },
   NodeEntryStateStep: { glyph: "🟦", color: "mdListBullet", label: "Node entry" },
@@ -171,6 +172,17 @@ export function rowDetail(row: DigestRow, theme?: Theme): string {
       const fn = typeof row.fn === "string" ? row.fn : "(unknown)";
       const args = typeof row.args_preview === "string" ? row.args_preview : "";
       return args ? `${code(fn)} ${dim(args)}` : code(fn);
+    }
+    case "RelatedAgentStep": {
+      const name =
+        typeof row.agent === "string"
+          ? row.agent
+          : typeof row.api_name === "string"
+            ? row.api_name
+            : "connected agent";
+      const latency = typeof row.execution_ms === "number" ? dim(fmtMs(row.execution_ms)) : "";
+      const delegation = typeof row.delegation_type === "string" ? dim(row.delegation_type) : "";
+      return [accent(name), delegation, latency].filter(Boolean).join(" · ");
     }
     case "VariableUpdateStep": {
       const name = typeof row.var === "string" ? row.var : "(unknown)";

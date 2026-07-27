@@ -28,27 +28,27 @@ shape so adding a new scheme is one file change, not a code-path edit.
 Counted occurrences across the canonical repo (`compiler/test/fixtures`,
 `compiler/src/nodes/*`, agentforce dialect schemas):
 
-| Scheme                                             |  Count | Resolves to                         | Tooling/Data API                                             |
-| -------------------------------------------------- | -----: | ----------------------------------- | ------------------------------------------------------------ |
-| `flow://`                                          |   1687 | Flow / ProcessBuilder               | data: `FlowDefinitionView.ApiName`                           |
-| `apex://`                                          |    231 | ApexClass with `@InvocableMethod`   | tooling: `ApexClass.Name`                                    |
-| `standardInvocableAction://`                       |    171 | Built-in Salesforce action          | n/a — always available                                       |
-| `agentforce://`                                    |     52 | Connected Agent (sub-agent)         | data: `BotDefinition.DeveloperName`                          |
-| `externalService://`                               |     53 | External Service registration       | tooling: `ExternalServiceRegistration.DeveloperName`         |
-| `model://`                                         |     46 | Foundation / AI Model               | data: `GenAiFunction` referring to a model                   |
-| `ext://`                                           |     37 | (test stub — placeholder)           | not pre-flighted                                             |
-| `mcp://`                                           |     18 | MCP server                          | external — not pre-flighted today                            |
-| `llm://`                                           |     16 | (test stub)                         | not pre-flighted                                             |
-| `generatePromptResponse://`                        |      3 | Prompt Template                     | tooling: `GenAiPromptTemplate.DeveloperName`                 |
-| `apexRest://`                                      |      1 | Apex REST class                     | tooling: `ApexClass.Name` (SOQL adds `@RestResource` filter) |
-| `integrationProcedureAction://`                    |      1 | OmniStudio IntegrationProcedure     | data: `vlocity_cmt__OmniProcess__c` (industry pkg)           |
-| `quickAction://`                                   |      1 | QuickAction                         | tooling: `QuickActionDefinition.DeveloperName`               |
-| `retriever://`                                     |      1 | Data Cloud Retriever                | data: Data 360 metadata                                      |
-| `slack://`                                         |      1 | Slack action                        | external — not pre-flighted                                  |
-| `serviceCatalog://`, `createCatalogItemRequest://` | 1 each | Service Catalog                     | tooling: `CatalogItem.MasterLabel`                           |
-| `cdpMlPrediction://`                               |      1 | Customer Data Platform ML           | data: Data 360                                               |
-| `byon://`                                          |      2 | Bring-your-own-network              | external — not pre-flighted                                  |
-| `placeholder://`                                   |     10 | **stub — compiler emits a warning** | always blocks publish (compiler-level)                       |
+| Scheme                                             |  Count | Resolves to                         | Tooling/Data API                                                    |
+| -------------------------------------------------- | -----: | ----------------------------------- | ------------------------------------------------------------------- |
+| `flow://`                                          |   1687 | Flow / ProcessBuilder               | data: `FlowDefinitionView.ApiName`                                  |
+| `apex://`                                          |    231 | ApexClass with `@InvocableMethod`   | tooling: `ApexClass.Name`                                           |
+| `standardInvocableAction://`                       |    171 | Built-in Salesforce action          | n/a — always available                                              |
+| `agent://`, `agentforce://`                        |     52 | Connected Agent (sub-agent)         | data: `BotDefinition.DeveloperName` + Active `BotVersion` readiness |
+| `externalService://`                               |     53 | External Service registration       | tooling: `ExternalServiceRegistration.DeveloperName`                |
+| `model://`                                         |     46 | Foundation / AI Model               | data: `GenAiFunction` referring to a model                          |
+| `ext://`                                           |     37 | (test stub — placeholder)           | not pre-flighted                                                    |
+| `mcp://`                                           |     18 | MCP server                          | external — not pre-flighted today                                   |
+| `llm://`                                           |     16 | (test stub)                         | not pre-flighted                                                    |
+| `generatePromptResponse://`                        |      3 | Prompt Template                     | tooling: `GenAiPromptTemplate.DeveloperName`                        |
+| `apexRest://`                                      |      1 | Apex REST class                     | tooling: `ApexClass.Name` (SOQL adds `@RestResource` filter)        |
+| `integrationProcedureAction://`                    |      1 | OmniStudio IntegrationProcedure     | data: `vlocity_cmt__OmniProcess__c` (industry pkg)                  |
+| `quickAction://`                                   |      1 | QuickAction                         | tooling: `QuickActionDefinition.DeveloperName`                      |
+| `retriever://`                                     |      1 | Data Cloud Retriever                | data: Data 360 metadata                                             |
+| `slack://`                                         |      1 | Slack action                        | external — not pre-flighted                                         |
+| `serviceCatalog://`, `createCatalogItemRequest://` | 1 each | Service Catalog                     | tooling: `CatalogItem.MasterLabel`                                  |
+| `cdpMlPrediction://`                               |      1 | Customer Data Platform ML           | data: Data 360                                                      |
+| `byon://`                                          |      2 | Bring-your-own-network              | external — not pre-flighted                                         |
+| `placeholder://`                                   |     10 | **stub — compiler emits a warning** | always blocks publish (compiler-level)                              |
 
 ### Categorization
 
@@ -283,18 +283,20 @@ _Resolved as of 2026-05-11._
 
 ### Resolvers shipped
 
-| Resolver                  | Schemes                                                                       | Endpoint | sObject + name field                                |
-| ------------------------- | ----------------------------------------------------------------------------- | -------- | --------------------------------------------------- |
-| `flowResolver`            | `flow`                                                                        | data API | `FlowDefinitionView.ApiName`                        |
-| `apexResolver`            | `apex`, `apexRest`                                                            | tooling  | `ApexClass.Name`                                    |
-| `agentforceResolver`      | `agentforce`                                                                  | data API | `BotDefinition.DeveloperName`                       |
-| `externalServiceResolver` | `externalService`                                                             | tooling  | `ExternalServiceRegistration.DeveloperName`         |
-| `promptTemplateResolver`  | `generatePromptResponse`                                                      | tooling  | `Prompt.DeveloperName`                              |
-| `quickActionResolver`     | `quickAction`                                                                 | tooling  | `QuickActionDefinition.DeveloperName`               |
-| `alwaysAvailableResolver` | `standardInvocableAction`, `http`, `https`, `mcp`, `mcpTool`, `slack`, `byon` | n/a      | always returns `Set(allNames)`                      |
-| `placeholderResolver`     | `placeholder`                                                                 | n/a      | always returns empty Set (matches compiler warning) |
+| Resolver                  | Schemes                                                                       | Endpoint | sObject + name field                                                                     |
+| ------------------------- | ----------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------- |
+| `flowResolver`            | `flow`                                                                        | data API | `FlowDefinitionView.ApiName`                                                             |
+| `apexResolver`            | `apex`, `apexRest`                                                            | tooling  | `ApexClass.Name`                                                                         |
+| `agentforceResolver`      | `agent`, `agentforce`                                                         | data API | `BotDefinition.DeveloperName`; Active `BotVersion` is a separate runtime-readiness facet |
+| `externalServiceResolver` | `externalService`                                                             | tooling  | `ExternalServiceRegistration.DeveloperName`                                              |
+| `promptTemplateResolver`  | `generatePromptResponse`                                                      | tooling  | `Prompt.DeveloperName`                                                                   |
+| `quickActionResolver`     | `quickAction`                                                                 | tooling  | `QuickActionDefinition.DeveloperName`                                                    |
+| `alwaysAvailableResolver` | `standardInvocableAction`, `http`, `https`, `mcp`, `mcpTool`, `slack`, `byon` | n/a      | always returns `Set(allNames)`                                                           |
+| `placeholderResolver`     | `placeholder`                                                                 | n/a      | always returns empty Set (matches compiler warning)                                      |
 
 Unknown schemes → `unverifiable` (no resolver registered, publish proceeds).
+
+Connected-agent target existence and runtime readiness are intentionally separate. A matching `BotDefinition` is `status=ok`; an Active `BotVersion` yields `runtime_readiness=ready`. An existing agent without an Active version yields `runtime_readiness=not_ready`, warns with an activation hint, and does not block parent-agent publication.
 
 ### Live verification
 
