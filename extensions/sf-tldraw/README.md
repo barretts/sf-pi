@@ -17,7 +17,9 @@ Extension loads
   ├─ registers /sf-tldraw and tldraw_canvas
   ├─ performs no live API or process work during module load
   └─ session_start publishes local detection, then schedules a bounded
-     post-first-paint loopback verification without awaiting it
+     post-first-paint loopback verification without awaiting it; successful
+     observations publish idle/ready state, while optional background failures
+     return SF Welcome to its healthy Available baseline
 
 Explicit tool/command action
   ├─ rereads tldraw's per-launch port + bearer token
@@ -31,16 +33,16 @@ Explicit tool/command action
 
 ## Behavior Matrix
 
-| Event/Action        | Condition                                             | Result                                                                                              |
-| ------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Extension load      | Always                                                | Registers `/sf-tldraw` and `tldraw_canvas`; performs no live runtime work.                          |
-| `session_start`     | Local server config exists                            | Publishes `detected` immediately, then asynchronously republishes live readiness after first paint. |
-| `/sf-tldraw`        | Interactive, no arguments                             | Opens the extension in SF Pi Manager.                                                               |
-| `/sf-tldraw status` | Explicit invocation                                   | Probes the Canvas API and publishes live readiness.                                                 |
-| Salesforce render   | Valid grounded spec and open document                 | Reconciles managed shapes, checks readiness, and captures evidence.                                 |
-| Salesforce render   | Any validation, lint, geometry, or screenshot failure | Returns a blocker and does not report completion.                                                   |
-| Update              | `render_mode="preserve"`                              | Keeps existing managed-group positions and all user annotations.                                    |
-| Relayout/replace    | Explicit request                                      | Moves or rebuilds only extension-managed shapes.                                                    |
+| Event/Action        | Condition                                             | Result                                                                                                                                 |
+| ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Extension load      | Always                                                | Registers `/sf-tldraw` and `tldraw_canvas`; performs no live runtime work.                                                             |
+| `session_start`     | Local server config exists                            | Publishes `detected`, then asynchronously publishes idle/ready state; failed optional probes return to the idle availability baseline. |
+| `/sf-tldraw`        | Interactive, no arguments                             | Opens the extension in SF Pi Manager.                                                                                                  |
+| `/sf-tldraw status` | Explicit invocation                                   | Probes the Canvas API and publishes live readiness or an actionable fault.                                                             |
+| Salesforce render   | Valid grounded spec and open document                 | Reconciles managed shapes, checks readiness, and captures evidence.                                                                    |
+| Salesforce render   | Any validation, lint, geometry, or screenshot failure | Returns a blocker and does not report completion.                                                                                      |
+| Update              | `render_mode="preserve"`                              | Keeps existing managed-group positions and all user annotations.                                                                       |
+| Relayout/replace    | Explicit request                                      | Moves or rebuilds only extension-managed shapes.                                                                                       |
 
 ## Canvas API Boundary
 

@@ -264,7 +264,9 @@ export interface SplashData {
   slackConnected: boolean;
   slackVisible?: boolean;
   slackStatus?: SlackStatusSnapshot | null;
-  /** Passive local tldraw runtime status published by sf-tldraw. */
+  /** Whether the bundled sf-tldraw extension is enabled for this project. */
+  tldrawEnabled?: boolean;
+  /** Passive local Canvas runtime status published by sf-tldraw. */
   tldrawVisible?: boolean;
   tldrawStatus?: TldrawStatusSnapshot | null;
   /** Current monthly spend in USD. Prefers the gateway's live value, falls back

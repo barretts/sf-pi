@@ -165,7 +165,7 @@ export function registerTldrawCanvasTool(pi: ExtensionAPI): void {
       try {
         if (input.action === "status") {
           const status = await client.status(signal);
-          setTldrawStatus(status);
+          setTldrawStatus({ ...status, origin: "interaction" });
           return ok(input.action, formatStatus(status), { status });
         }
         if (input.action === "cheatsheet") {
@@ -178,7 +178,7 @@ export function registerTldrawCanvasTool(pi: ExtensionAPI): void {
         if (input.action === "documents") {
           const documents = await client.documents(signal);
           const status = await client.status(signal);
-          setTldrawStatus(status);
+          setTldrawStatus({ ...status, origin: "interaction" });
           return ok(input.action, formatDocuments(documents), {
             documents,
             capabilities: status.capabilities,

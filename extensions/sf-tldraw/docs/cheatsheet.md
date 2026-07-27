@@ -5,7 +5,7 @@ Load this reference only for tldraw work. Explicit Mermaid or text requests take
 ## Recommended flow
 
 1. `status`
-2. `documents` when more than one board may be open
+2. `documents` when more than one tldraw document may be open
 3. Gather facts with the owning SF Pi capability:
    - official reference: `sf_docs`
    - org schema/relationships: `sf_soql` describe/relationships

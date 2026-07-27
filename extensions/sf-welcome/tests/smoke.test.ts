@@ -249,7 +249,7 @@ describe("sf-welcome", () => {
     expect(partialGrant).not.toContain("Limited");
   });
 
-  it("renders passive tldraw status only after the producer publishes it", async () => {
+  it("renders layered SF tldraw availability and Canvas runtime states", async () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const baseData = {
       modelName: "Claude Sonnet 4",
@@ -260,34 +260,71 @@ describe("sf-welcome", () => {
       slackConnected: false,
       monthlyCost: 0,
       monthlyBudget: 3000,
+      tldrawVisible: true,
     };
+    const render = (overrides: Record<string, unknown>) =>
+      new SfWelcomeOverlay({ ...baseData, ...overrides }).render(100).join("\n");
+    const tldrawLine = (rendered: string) =>
+      rendered.split("\n").find((line) => stripAnsi(line).includes("SF tldraw")) ?? "";
 
-    const hidden = stripAnsi(new SfWelcomeOverlay(baseData).render(100).join("\n"));
-    expect(hidden).not.toContain("tldraw");
+    const disabled = tldrawLine(render({ tldrawEnabled: false, tldrawStatus: { kind: "hidden" } }));
+    expect(stripAnsi(disabled)).toContain("Disabled");
+    expect(disabled).toContain("\x1b[38;5;245mDisabled");
 
-    const verifying = stripAnsi(
-      new SfWelcomeOverlay({
-        ...baseData,
-        tldrawVisible: true,
-        tldrawStatus: { kind: "detected" },
-      })
-        .render(100)
-        .join("\n"),
+    const available = tldrawLine(render({ tldrawEnabled: true, tldrawStatus: { kind: "hidden" } }));
+    expect(stripAnsi(available)).toContain("✓ Available");
+
+    const verifying = tldrawLine(
+      render({ tldrawEnabled: true, tldrawStatus: { kind: "detected" } }),
     );
-    expect(verifying).toContain("Verifying…");
-    expect(verifying).not.toContain("not verified");
+    expect(stripAnsi(verifying)).toContain("○ Verifying canvas…");
 
-    const ready = stripAnsi(
-      new SfWelcomeOverlay({
-        ...baseData,
-        tldrawVisible: true,
+    const idle = tldrawLine(
+      render({ tldrawEnabled: true, tldrawStatus: { kind: "no-open-document" } }),
+    );
+    expect(stripAnsi(idle)).toContain("Canvas idle · no document open");
+    expect(stripAnsi(idle)).not.toContain("!");
+
+    const ready = tldrawLine(
+      render({
+        tldrawEnabled: true,
         tldrawStatus: { kind: "ready", openDocuments: 2 },
-      })
-        .render(100)
-        .join("\n"),
+      }),
     );
-    expect(ready).toContain("tldraw");
-    expect(ready).toContain("Canvas ready · 2 boards");
+    expect(stripAnsi(ready)).toContain("✓ Canvas ready · 2 documents");
+
+    const notRunning = tldrawLine(
+      render({ tldrawEnabled: true, tldrawStatus: { kind: "not-running" } }),
+    );
+    expect(stripAnsi(notRunning)).toContain("○ Canvas not running");
+    expect(stripAnsi(notRunning)).not.toContain("!");
+
+    const passiveFault = tldrawLine(
+      render({
+        tldrawEnabled: true,
+        tldrawStatus: { kind: "stale-config", origin: "startup-probe" },
+      }),
+    );
+    expect(stripAnsi(passiveFault)).toContain("✓ Available");
+    expect(stripAnsi(passiveFault)).not.toContain("Restart needed");
+
+    const stale = tldrawLine(
+      render({
+        tldrawEnabled: true,
+        tldrawStatus: { kind: "stale-config", origin: "interaction" },
+      }),
+    );
+    expect(stripAnsi(stale)).toContain("! Restart needed");
+
+    const authError = tldrawLine(
+      render({ tldrawEnabled: true, tldrawStatus: { kind: "auth-error" } }),
+    );
+    expect(stripAnsi(authError)).toContain("✗ Auth error");
+
+    const incompatible = tldrawLine(
+      render({ tldrawEnabled: true, tldrawStatus: { kind: "incompatible" } }),
+    );
+    expect(stripAnsi(incompatible)).toContain("✗ Incompatible runtime");
   });
 
   it("renders gateway status from probe state instead of provider name", async () => {

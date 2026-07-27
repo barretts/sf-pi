@@ -88,6 +88,7 @@ export async function renderSalesforceDiagram(
   try {
     const capabilities = await client.capabilities(context.signal);
     if (!capabilities.execute || !capabilities.screenshot) {
+      setTldrawStatus({ kind: "incompatible", origin: "interaction" });
       return {
         ok: false,
         reason: "incompatible_runtime",
@@ -100,6 +101,7 @@ export async function renderSalesforceDiagram(
     const document = await client.resolveDocument(request.documentId, context.signal);
     setTldrawStatus({
       kind: "ready",
+      origin: "interaction",
       port: client.readServerConfig().port,
       openDocuments: openDocuments.length,
       focusedDocumentName: document.name,
@@ -172,6 +174,7 @@ export async function renderSalesforceDiagram(
   } catch (error) {
     if (error instanceof TldrawRuntimeError) {
       setTldrawStatus({
+        origin: "interaction",
         kind:
           error.code === "not_running"
             ? "not-running"

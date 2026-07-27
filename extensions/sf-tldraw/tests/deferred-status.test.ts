@@ -65,8 +65,65 @@ describe("sf-tldraw deferred Welcome verification", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(store.getTldrawStatus()).toMatchObject({
       kind: "ready",
+      origin: "startup-probe",
       openDocuments: 1,
       focusedDocumentName: "Board",
+    });
+
+    await handlers.get("session_shutdown")?.();
+  });
+
+  it("preserves startup faults without overwriting a newer interaction", async () => {
+    vi.useFakeTimers();
+    tempDir = mkdtempSync(path.join(tmpdir(), "sf-tldraw-deferred-failure-"));
+    const configPath = path.join(tempDir, "server.json");
+    writeFileSync(configPath, JSON.stringify({ port: 7236, token: "test-token" }));
+    process.env.TLDRAW_SERVER_CONFIG = configPath;
+
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError("Canvas runtime is unavailable");
+    }) as unknown as typeof fetch;
+    vi.stubGlobal("fetch", fetchMock);
+    vi.resetModules();
+
+    const store = await import("../../../lib/common/tldraw-status/store.ts");
+    store.__resetTldrawStatusStoreForTests();
+    const handlers = new Map<string, Listener>();
+    const mod = await import("../index.ts");
+    mod.default({
+      on: vi.fn((event: string, handler: Listener) => handlers.set(event, handler)),
+      registerTool: vi.fn(),
+      registerCommand: vi.fn(),
+      events: { on: vi.fn() },
+    } as never);
+
+    await handlers.get("session_start")?.({}, { signal: new AbortController().signal });
+    expect(store.getTldrawStatus()).toMatchObject({ kind: "detected" });
+
+    await vi.advanceTimersByTimeAsync(750);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(store.getTldrawStatus()).toMatchObject({
+      kind: "stale-config",
+      origin: "startup-probe",
+    });
+
+    await handlers.get("session_start")?.({}, { signal: new AbortController().signal });
+    expect(store.getTldrawStatus()).toMatchObject({
+      kind: "detected",
+      origin: "startup-probe",
+    });
+    store.setTldrawStatus({ kind: "auth-error", origin: "interaction" });
+
+    await vi.advanceTimersByTimeAsync(750);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.getTldrawStatus()).toMatchObject({
+      kind: "auth-error",
+      origin: "interaction",
     });
 
     await handlers.get("session_shutdown")?.();

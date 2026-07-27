@@ -357,26 +357,39 @@ function formatSlackStatusValue(data: SplashData, mode: GlyphMode): string {
 }
 
 function formatTldrawStatusValue(data: SplashData): string {
+  if (data.tldrawEnabled === false) return MUTED("Disabled");
+
   const status = data.tldrawStatus;
-  if (!status) return MUTED("Not checked");
+  const startupFault =
+    status?.origin === "startup-probe" &&
+    (status.kind === "not-running" ||
+      status.kind === "stale-config" ||
+      status.kind === "auth-error" ||
+      status.kind === "incompatible");
+  if (!status || status.kind === "hidden" || startupFault) {
+    return `${SF_GREEN("✓")} ${SF_GREEN("Available")}`;
+  }
+
   switch (status.kind) {
-    case "ready":
-      return `${SF_GREEN("✓")} ${SF_GREEN(`Canvas ready${status.openDocuments ? ` · ${status.openDocuments} board${status.openDocuments === 1 ? "" : "s"}` : ""}`)}`;
     case "detected":
-      return `${SF_CYAN("○")} ${SF_CYAN("Verifying…")}`;
+      return `${SF_CYAN("○")} ${SF_CYAN("Verifying canvas…")}`;
+    case "ready": {
+      const count = status.openDocuments;
+      const suffix = count ? ` · ${count} document${count === 1 ? "" : "s"}` : "";
+      return `${SF_GREEN("✓")} ${SF_GREEN(`Canvas ready${suffix}`)}`;
+    }
     case "no-open-document":
-      return `${SF_ORANGE("!")} ${SF_ORANGE("Open a board")}`;
+      return MUTED("Canvas idle · no document open");
     case "not-running":
-      return `${SF_ORANGE("○")} ${SF_ORANGE("Not running")}`;
-    case "auth-error":
-      return `${SF_RED("✗")} ${SF_RED("Auth error")}`;
+      return `${MUTED("○")} ${MUTED("Canvas not running")}`;
     case "stale-config":
       return `${SF_ORANGE("!")} ${SF_ORANGE("Restart needed")}`;
+    case "auth-error":
+      return `${SF_RED("✗")} ${SF_RED("Auth error")}`;
     case "incompatible":
       return `${SF_RED("✗")} ${SF_RED("Incompatible runtime")}`;
-    case "hidden":
     default:
-      return MUTED("Not checked");
+      return `${SF_GREEN("✓")} ${SF_GREEN("Available")}`;
   }
 }
 
@@ -940,7 +953,7 @@ function buildLeftColumn(
     lines.push(formatGlyphInfoRow("slack", mode, "Slack", formatSlackStatusValue(data, mode)));
   }
   if (data.tldrawVisible) {
-    lines.push(formatGlyphInfoRow("tldraw", mode, "tldraw", formatTldrawStatusValue(data)));
+    lines.push(formatGlyphInfoRow("tldraw", mode, "SF tldraw", formatTldrawStatusValue(data)));
   }
 
   // LLM Gateway status is optional and only appears when the bundled gateway

@@ -256,6 +256,18 @@ _Avoid_: billing truth, key identity guarantee, unavailable-first footer
 A presentation-layer decision that chooses a **Last-Known Usable Status** plus **Last-Known Status Indicator** for compact surfaces while preserving the raw **Current Probe Status** for diagnostics. It should be centralized in helper functions rather than embedded ad hoc in renderers.
 _Avoid_: store rewrite, hidden probe failure, duplicated fallback logic
 
+**Layered Extension Readiness Row**:
+An SF Welcome status row that reports a bundled extension's lifecycle state first and, when enabled, reports its extension-owned runtime readiness. Enablement never implies runtime readiness.
+_Avoid_: installed status, enabled means ready, hidden disabled integration
+
+**On-Demand Capability Availability**:
+The state where an enabled SF Pi capability can be invoked even though its optional external runtime is idle or absent. Availability is a healthy baseline and is weaker than runtime readiness.
+_Avoid_: installed, runtime ready, external process running, setup incomplete
+
+**Runtime Readiness Fault**:
+An enabled extension state that proves corrective action is required, such as broken configuration, failed authentication, or incompatible runtime behavior. Ordinary absence, including an optional runtime not running or having no open document, is not a fault.
+_Avoid_: every non-ready state, optional runtime absent, no open document
+
 **Browser Runtime Readiness**:
 The SF Browser status of the external browser automation runtime based on cached or explicit checks. It describes whether the runtime appears installed and usable enough to attempt browser work; it is not proof that a browser session has launched or that a Salesforce page is reachable.
 _Avoid_: browser ready, Salesforce UI ready, CDP proof, startup browser launch
@@ -499,6 +511,10 @@ _Avoid_: resolved alias, target pane alias
 **Fresh Lane Alias**:
 A suffixed Herdr pane alias for a **Fresh Ephemeral Lane**, chosen from a **Base Lane Alias** plus a short unique suffix that has not already been used in the session. For example, `apex_tests_k7f3` is a fresh alias derived from `apex_tests`.
 _Avoid_: stable ephemeral alias, reused alias, recycled numeric suffix, persisted counter
+
+**tldraw Document**:
+An open tldraw runtime document that can contain one or more pages and serve as a diagram render target.
+_Avoid_: board, canvas document, page
 
 **Salesforce Diagram Routing**:
 The renderer choice for Salesforce diagram requests. A ready SF tldraw profile is the default, explicit format requests such as Mermaid or text take precedence, and an unavailable canvas is reported before offering a fallback.

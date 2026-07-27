@@ -30,7 +30,11 @@ import {
 } from "../../lib/common/manager-deep-link.ts";
 import { requirePiVersion } from "../../lib/common/pi-compat.ts";
 import { withSafeCommandHandler } from "../../lib/common/safe-command-handler.ts";
-import { clearTldrawStatus, setTldrawStatus } from "../../lib/common/tldraw-status/store.ts";
+import {
+  clearTldrawStatus,
+  getTldrawStatus,
+  setTldrawStatus,
+} from "../../lib/common/tldraw-status/store.ts";
 import { SF_TLDRAW_ACTIONS, renderHelp } from "./lib/command-surface.ts";
 import { hasTldrawServerConfig, TldrawRuntimeClient } from "./lib/runtime-client.ts";
 import { effectiveSettingsText, registerTldrawCanvasTool } from "./lib/tldraw_canvas-tool.ts";
@@ -57,6 +61,7 @@ export default function sfTldraw(pi: ExtensionAPI): void {
 
     setTldrawStatus({
       kind: "detected",
+      origin: "startup-probe",
       message: "Local tldraw server configuration detected; live verification is pending.",
     });
 
@@ -68,12 +73,18 @@ export default function sfTldraw(pi: ExtensionAPI): void {
       void client
         .status(ctx.signal)
         .then((status) => {
-          if (generation === statusProbeGeneration) setTldrawStatus(status);
+          if (generation !== statusProbeGeneration) return;
+          // Never let a deferred startup result overwrite a newer explicit
+          // command/tool observation from the current session.
+          if (getTldrawStatus().origin === "interaction") return;
+          setTldrawStatus({ ...status, origin: "startup-probe" });
         })
         .catch(() => {
           if (generation !== statusProbeGeneration) return;
+          if (getTldrawStatus().origin === "interaction") return;
           setTldrawStatus({
             kind: "stale-config",
+            origin: "startup-probe",
             message: "Deferred tldraw Canvas API verification failed. Run /sf-tldraw status.",
           });
         });
@@ -144,7 +155,7 @@ async function handleCommand(
   if (action === "status") {
     const client = new TldrawRuntimeClient();
     const status = await client.status(ctx.signal);
-    setTldrawStatus(status);
+    setTldrawStatus({ ...status, origin: "interaction" });
     const body = [
       `Runtime: ${status.kind}`,
       `Open documents: ${status.openDocuments ?? 0}`,

@@ -12,6 +12,7 @@ export type TldrawStatusKind =
 
 export interface TldrawStatusSnapshot {
   kind: TldrawStatusKind;
+  origin?: "startup-probe" | "interaction";
   port?: number;
   openDocuments?: number;
   focusedDocumentName?: string;

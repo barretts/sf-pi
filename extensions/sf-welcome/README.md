@@ -96,11 +96,15 @@ session_shutdown
 
 7. **Optional integration rows stay quiet** — Slack and LLM Gateway rows are
    hidden unless their bundled extensions are enabled and have meaningful live
-   status. Optional local tools such as Hunk, Code Analyzer, and Native Auto
-   Update render with calm optional labels when absent or off, and become
-   warning-colored only when an enabled or installed setup is degraded. This
-   keeps installs from seeing unavailable or unconfigured integrations as
-   startup noise.
+   status. SF tldraw uses a **Layered Extension Readiness Row**: disabled renders
+   as muted `Disabled`; enabled with no active Canvas observation renders as
+   green `Available`; a detected runtime can progress through verifying, idle,
+   and ready states. Failed background probes return to `Available`, while
+   explicit status or diagram actions may publish actionable faults. Optional
+   local tools such as Hunk, Code Analyzer, and Native Auto Update render with
+   calm optional labels when absent or off, and become warning-colored only
+   when an enabled or installed setup is degraded. This keeps installs from
+   seeing unavailable or unconfigured integrations as startup noise.
 
 8. **Background loading** — CLI status, release freshness, font readiness,
    Hunk code-review readiness, Homebrew status, SF Browser `agent-browser`

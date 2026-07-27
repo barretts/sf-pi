@@ -285,10 +285,6 @@ function shouldShowSlackStatus(cwd: string): boolean {
   return status.kind !== "hidden" && status.kind !== "not-configured";
 }
 
-function shouldShowTldrawStatus(cwd: string): boolean {
-  return isSfPiExtensionEnabled(cwd, "sf-tldraw") && getTldrawStatus().kind !== "hidden";
-}
-
 function shouldShowGatewayStatus(cwd: string, modelName: string, providerName: string): boolean {
   if (!isSfPiExtensionEnabled(cwd, "sf-llm-gateway-internal")) return false;
   const activeGateway =
@@ -364,6 +360,7 @@ export function collectInitialSplashData(
   const gatewayBudget = gatewayUsage?.maxBudget;
   const slackStatus = getSlackStatus();
   const tldrawStatus = getTldrawStatus();
+  const tldrawEnabled = cwd ? isSfPiExtensionEnabled(cwd, "sf-tldraw") : undefined;
 
   return {
     modelName,
@@ -374,7 +371,8 @@ export function collectInitialSplashData(
     slackConnected: false,
     slackVisible: false,
     slackStatus,
-    tldrawVisible: false,
+    tldrawEnabled,
+    tldrawVisible: tldrawEnabled !== undefined,
     tldrawStatus,
     monthlyCost: gatewayUsage?.spend ?? 0,
     monthlyBudget: gatewayUsage
@@ -441,7 +439,7 @@ export function collectSplashData(
   const slackStatus = getSlackStatus();
   const slackVisible = shouldShowSlackStatus(cwd);
   const tldrawStatus = getTldrawStatus();
-  const tldrawVisible = shouldShowTldrawStatus(cwd);
+  const tldrawEnabled = isSfPiExtensionEnabled(cwd, "sf-tldraw");
   const gatewayVisible = shouldShowGatewayStatus(cwd, modelName, providerName);
 
   // Announcements are resolved synchronously from bundled + cached remote
@@ -486,7 +484,8 @@ export function collectSplashData(
     slackConnected: checkSlackConnection(cwd),
     slackVisible,
     slackStatus,
-    tldrawVisible,
+    tldrawEnabled,
+    tldrawVisible: true,
     tldrawStatus,
     monthlyCost: usage.monthlyCost,
     monthlyBudget: usage.monthlyBudget,

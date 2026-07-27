@@ -63,6 +63,8 @@ describe("collectSplashData cwd threading", () => {
       expect(data.modelName).toBe("TestModel");
       expect(data.providerName).toBe("test-provider");
       expect(data.monthlyBudget).toBe(3000);
+      expect(data.tldrawEnabled).toBe(true);
+      expect(data.tldrawVisible).toBe(true);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

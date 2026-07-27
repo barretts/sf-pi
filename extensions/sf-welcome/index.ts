@@ -713,7 +713,8 @@ export default function sfWelcome(pi: ExtensionAPI) {
     unsubscribeTldrawStore?.();
     unsubscribeTldrawStore = subscribeTldrawStatus((status) => {
       if (runId !== startupRunId || !isActiveSession(ctx, generation)) return;
-      data.tldrawVisible = isSfPiExtensionEnabled(ctx.cwd, "sf-tldraw") && status.kind !== "hidden";
+      data.tldrawEnabled = isSfPiExtensionEnabled(ctx.cwd, "sf-tldraw");
+      data.tldrawVisible = true;
       data.tldrawStatus = status;
       scheduleSplashRepaint(ctx, generation);
     });
@@ -1008,7 +1009,7 @@ export default function sfWelcome(pi: ExtensionAPI) {
       ? (data.gatewayStatus?.kind ?? "not checked")
       : "hidden";
     const slackStatus = data.slackVisible ? (data.slackStatus?.kind ?? "not checked") : "hidden";
-    const tldrawStatus = data.tldrawVisible ? (data.tldrawStatus?.kind ?? "not checked") : "hidden";
+    const tldrawStatus = formatPlainTldrawStatus(data);
     const nodeCertStatus = data.nodeCert?.kind ?? "not checked";
     const nodeRuntimeStatus = data.nodeRuntime
       ? `${data.nodeRuntime.version} (${data.nodeRuntime.kind}, requires >=${data.nodeRuntime.requiredVersion})`
@@ -1043,7 +1044,7 @@ export default function sfWelcome(pi: ExtensionAPI) {
       ...monthlyUsageLines,
       `Gateway: ${gatewayStatus}`,
       `Slack: ${slackStatus}`,
-      `tldraw: ${tldrawStatus}`,
+      `SF tldraw: ${tldrawStatus}`,
       `Node.js: ${nodeRuntimeStatus}`,
       `Herdr (Multiplexer): ${herdrRuntimeStatus}`,
       `Fonts: ${fontRuntimeStatus}`,
@@ -1063,6 +1064,29 @@ export default function sfWelcome(pi: ExtensionAPI) {
       "Recent Sessions:",
       ...data.recentSessions.map((s) => `  • ${s.name} (${s.timeAgo})`),
     ].join("\n");
+  }
+
+  function formatPlainTldrawStatus(data: SplashData): string {
+    if (data.tldrawEnabled === false) return "disabled";
+
+    const status = data.tldrawStatus;
+    const startupFault =
+      status?.origin === "startup-probe" &&
+      (status.kind === "not-running" ||
+        status.kind === "stale-config" ||
+        status.kind === "auth-error" ||
+        status.kind === "incompatible");
+    if (!status || status.kind === "hidden" || startupFault) return "available";
+    if (status.kind === "detected") return "verifying canvas";
+    if (status.kind === "ready") {
+      const count = status.openDocuments;
+      return count ? `canvas ready · ${count} document${count === 1 ? "" : "s"}` : "canvas ready";
+    }
+    if (status.kind === "no-open-document") return "canvas idle · no document open";
+    if (status.kind === "not-running") return "canvas not running";
+    if (status.kind === "stale-config") return "restart needed";
+    if (status.kind === "auth-error") return "auth error";
+    return "incompatible runtime";
   }
 
   function formatPlainBrowserRuntimeStatus(status: SplashData["browserRuntime"]): string {
