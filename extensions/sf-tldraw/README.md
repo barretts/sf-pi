@@ -187,7 +187,7 @@ extensions/sf-tldraw/
 Focused tests cover:
 
 - cache-only startup availability with no deferred loopback probe
-- strict Spec v2 structure, grounding, provenance, and render-privacy validation
+- strict Spec v2-only provider schema, grounding, provenance, and render-privacy validation
 - deterministic graph/lane layout
 - preference inheritance and clearing
 - bearer-authenticated endpoint contracts and redaction
@@ -209,7 +209,7 @@ SF_TLDRAW_SEQUENCE_MATRIX=1 npx vitest run extensions/sf-tldraw/tests/sequence-m
 
 The matrix runs serially, validates every managed shape, captures full and thumbnail evidence, and writes private `index.json`, `report.html`, and `report.md` artifacts under `tldraw-artifacts/sequence-matrix/`. A case is ready only when label backings mask every intersecting lifeline or activation bar in the verified z-order.
 
-A normalized external Data Model Gallery corpus can be replayed without committing Salesforce/Lucidchart source material. The manifest is a JSON array of `{ index?, slug, category, title, file, maxRouteObstructions?, maxRouteCrossings?, maxSharedCorridors? }`. Every `file` must resolve inside the manifest directory, and slugs must match `[a-z0-9][a-z0-9-]{0,79}`. The stable case identity is `index-slug`, so the same public model title can legitimately recur in different product categories. Reuse one existing page for large corpora so the desktop document's page cap does not affect the run. Pin the expected count/hash for release qualification:
+A normalized external Data Model Gallery corpus can be replayed without committing Salesforce/Lucidchart source material. The manifest is a JSON array of `{ index?, slug, category, title, file }`. Every `file` must resolve inside the manifest directory, and slugs must match `[a-z0-9][a-z0-9-]{0,79}`. The stable case identity is `index-slug`, so the same public model title can legitimately recur in different product categories. Reuse one existing page for large corpora so the desktop document's page cap does not affect the run. Pin the expected count/hash for release qualification:
 
 ```bash
 SF_TLDRAW_DATA_MODEL_GALLERY_MANIFEST=/path/to/spec-manifest.json \
@@ -219,7 +219,7 @@ SF_TLDRAW_DATA_MODEL_GALLERY_EXPECTED_HASH=<sha256> \
 npx vitest run extensions/sf-tldraw/tests/data-model-gallery-matrix.live.test.ts
 ```
 
-The run validates and compiles every case deterministically, renders serially, requires zero lints and marker overlaps, captures each full/thumbnail artifact, and writes a private index plus Markdown report under `tldraw-artifacts/data-model-gallery-matrix/`.
+The run validates and compiles every case deterministically, renders serially, requires zero lints and marker overlaps, captures each full/thumbnail artifact, and writes a private index plus Markdown report under `tldraw-artifacts/data-model-gallery-matrix/`. When the corpus hash matches the checked-in qualified baseline, every model also enforces its pinned maximum route-obstruction, independent-crossing, and shared-corridor counts; lower counts are accepted as improvements.
 
 ## Troubleshooting
 

@@ -37,9 +37,13 @@ describe("tldraw_canvas family tool", () => {
     expect(schema).not.toContain('"script_workspace"');
     expect(schema).not.toContain('"screenshot"');
     expect(schema).toContain('"2.0"');
+    expect(schema).not.toContain('"1.0"');
     expect(schema).toContain('"additionalProperties":false');
-    expect(schema).toContain('"product_mark"');
-    expect(schema).toContain('"layout_mode"');
+    expect(schema).not.toContain('"product_mark"');
+    expect(schema).not.toContain('"layout_mode"');
+    expect(schema).not.toContain('"source_position"');
+    expect(schema).not.toContain('"from_anchor"');
+    expect(schema).not.toContain('"to_anchor"');
     expect(schema).toContain('"name"');
 
     const legacyV1 = {
@@ -76,7 +80,7 @@ describe("tldraw_canvas family tool", () => {
         action: "render_salesforce_data_model",
         spec: legacyV1,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(Check(DataModelSpecSchema, { ...legacyV1, spec_version: "2.0" })).toBe(false);
     expect(schema).toContain('"card_fill"');
     expect(schema).toContain('"transparent"');

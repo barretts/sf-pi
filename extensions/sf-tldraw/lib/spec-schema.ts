@@ -221,92 +221,11 @@ export const SequenceSpecSchema = Type.Object(
   { additionalProperties: false },
 );
 
-const LegacySourcePositionSchema = Type.Object(
-  { x: Type.Number(), y: Type.Number(), w: Type.Number(), h: Type.Number() },
-  { additionalProperties: false },
-);
-const LegacyAnchorSchema = Type.Object(
-  {
-    side: StringEnum(["left", "right", "top", "bottom"] as const),
-    fraction: Type.Number(),
-  },
-  { additionalProperties: false },
-);
-const LegacyProductMark = StringEnum([
-  "salesforce_platform",
-  "sales_cloud",
-  "service_cloud",
-  "experience_cloud",
-  "marketing_cloud",
-  "commerce_cloud",
-  "data_360",
-  "agentforce",
-  "mulesoft",
-  "tableau",
-  "slack",
-] as const);
-const LegacyBaseSpec = { spec_version: Type.Literal("1.0"), ...BaseSpecFields };
-const LegacyDataModelObjectSchema = Type.Object(
-  {
-    ...DataModelObjectSchema.properties,
-    source_position: Type.Optional(LegacySourcePositionSchema),
-  },
-  { additionalProperties: false },
-);
-const LegacyDataModelRelationshipSchema = Type.Object(
-  {
-    ...DataModelRelationshipSchema.properties,
-    from_anchor: Type.Optional(LegacyAnchorSchema),
-    to_anchor: Type.Optional(LegacyAnchorSchema),
-  },
-  { additionalProperties: false },
-);
-const LegacyDataModelSpecSchema = Type.Object(
-  {
-    ...LegacyBaseSpec,
-    family: Type.Literal("data_model"),
-    layout_mode: Type.Optional(StringEnum(["auto", "source"] as const)),
-    objects: Type.Array(LegacyDataModelObjectSchema, { minItems: 1 }),
-    relationships: Type.Array(LegacyDataModelRelationshipSchema),
-  },
-  { additionalProperties: false },
-);
-const LegacyArchitectureSystemSchema = Type.Object(
-  { ...ArchitectureSystemSchema.properties, product_mark: Type.Optional(LegacyProductMark) },
-  { additionalProperties: false },
-);
-const LegacyArchitectureSpecSchema = Type.Object(
-  {
-    ...LegacyBaseSpec,
-    family: Type.Literal("architecture"),
-    systems: Type.Array(LegacyArchitectureSystemSchema, { minItems: 1 }),
-    connections: Type.Array(ArchitectureConnectionSchema, { minItems: 1 }),
-  },
-  { additionalProperties: false },
-);
-const LegacySequenceParticipantSchema = Type.Object(
-  { ...SequenceParticipantSchema.properties, product_mark: Type.Optional(LegacyProductMark) },
-  { additionalProperties: false },
-);
-const LegacySequenceSpecSchema = Type.Object(
-  {
-    ...LegacyBaseSpec,
-    family: Type.Literal("sequence"),
-    participants: Type.Array(LegacySequenceParticipantSchema, { minItems: 1 }),
-    interactions: Type.Array(SequenceInteractionSchema, { minItems: 1 }),
-    activations: Type.Optional(Type.Array(SequenceActivationSchema)),
-  },
-  { additionalProperties: false },
-);
-
-/** Provider input accepts strict legacy v1 only so execute() can return migration guidance. */
+/** Provider input advertises only the three supported Salesforce Diagram Spec v2 families. */
 export const SalesforceDiagramSpecSchema = Type.Union([
   DataModelSpecSchema,
   ArchitectureSpecSchema,
   SequenceSpecSchema,
-  LegacyDataModelSpecSchema,
-  LegacyArchitectureSpecSchema,
-  LegacySequenceSpecSchema,
 ]);
 
 export type DiagramSource = Static<typeof DiagramSourceSchema>;

@@ -28,6 +28,10 @@ const expectedCount = optionalPositiveInteger(
 );
 const expectedHash = process.env.SF_TLDRAW_DATA_MODEL_GALLERY_EXPECTED_HASH?.trim();
 const SAFE_SLUG = /^[a-z0-9][a-z0-9-]{0,79}$/;
+const SAFE_KEY = /^\d{3}-[a-z0-9][a-z0-9-]{0,79}$/;
+const warningBudgetBaseline = loadWarningBudgetBaseline(
+  path.join(import.meta.dirname, "fixtures", "data-model-gallery-warning-budgets.json"),
+);
 
 interface ExternalManifestItem {
   index?: number;
@@ -35,9 +39,20 @@ interface ExternalManifestItem {
   category: string;
   title: string;
   file: string;
-  maxRouteObstructions?: number;
-  maxRouteCrossings?: number;
-  maxSharedCorridors?: number;
+}
+
+interface GalleryWarningBudget {
+  key: string;
+  maxRouteObstructions: number;
+  maxRouteCrossings: number;
+  maxSharedCorridors: number;
+}
+
+interface GalleryWarningBudgetBaseline {
+  schemaVersion: 1;
+  corpusHash: string;
+  expectedCount: number;
+  cases: GalleryWarningBudget[];
 }
 
 interface GalleryCase extends ExternalManifestItem {
@@ -57,12 +72,17 @@ interface GalleryRow {
   durationMs?: number;
   message?: string;
   readiness?: RenderReadiness;
+  warningBudget?: GalleryWarningBudget;
   artifact?: RenderArtifact;
   thumbnail?: string;
 }
 
 const cases = manifestPath ? loadCases(manifestPath) : [];
 const corpusHash = sha256(JSON.stringify(cases.map((item) => item.spec)));
+const warningBudgetByKey = new Map(
+  warningBudgetBaseline.cases.map((budget) => [budget.key, budget]),
+);
+const usesPinnedWarningBudgets = corpusHash === warningBudgetBaseline.corpusHash;
 const rows: GalleryRow[] = cases.map((item) => ({
   key: item.key,
   slug: item.slug,
@@ -72,6 +92,7 @@ const rows: GalleryRow[] = cases.map((item) => ({
   objectCount: item.spec.objects.length,
   relationshipCount: item.spec.relationships.length,
   status: "pending",
+  warningBudget: usesPinnedWarningBudgets ? warningBudgetByKey.get(item.key) : undefined,
 }));
 
 let client: TldrawRuntimeClient | undefined;
@@ -92,6 +113,19 @@ describe.sequential("sf-tldraw Data Model Gallery matrix", () => {
     }
   });
 
+  it("keeps the checked-in Gallery warning baseline complete and unique", () => {
+    expect(warningBudgetBaseline.cases).toHaveLength(warningBudgetBaseline.expectedCount);
+    expect(new Set(warningBudgetBaseline.cases.map((budget) => budget.key)).size).toBe(
+      warningBudgetBaseline.expectedCount,
+    );
+  });
+
+  it("does not treat an omitted warning metric as zero", () => {
+    expect(() => requiredMetricLength(undefined, "route crossings")).toThrow(
+      /metric must be present/i,
+    );
+  });
+
   liveIt(
     "keeps every supplied Gallery spec valid and deterministic",
     () => {
@@ -100,6 +134,12 @@ describe.sequential("sf-tldraw Data Model Gallery matrix", () => {
         expect(new Set(cases.map((item) => item.key)).size).toBe(cases.length);
         if (expectedCount !== undefined) expect(cases.length).toBe(expectedCount);
         if (expectedHash) expect(corpusHash).toBe(expectedHash);
+        if (usesPinnedWarningBudgets) {
+          expect(cases).toHaveLength(warningBudgetBaseline.expectedCount);
+          expect(cases.map((item) => item.key)).toEqual(
+            warningBudgetBaseline.cases.map((budget) => budget.key),
+          );
+        }
         if (cases.length > 30)
           expect(sharedPageName, "large corpora must reuse one page").toBeTruthy();
         for (const item of cases) {
@@ -169,19 +209,31 @@ describe.sequential("sf-tldraw Data Model Gallery matrix", () => {
           expect(outcome.result.pageName, item.key).toBe(row.pageName);
           expect(outcome.result.readiness, item.key).toMatchObject({ ready: true, lintCount: 0 });
           expect(outcome.result.readiness.markerOverlapChecks, item.key).toEqual([]);
+          const routeObstructions = requiredMetricLength(
+            outcome.result.readiness.routeChecks,
+            `${item.key} route obstructions`,
+          );
+          const routeCrossings = requiredMetricLength(
+            outcome.result.readiness.routeCrossingChecks,
+            `${item.key} route crossings`,
+          );
+          const sharedCorridors = requiredMetricLength(
+            outcome.result.readiness.sharedCorridorChecks,
+            `${item.key} shared corridors`,
+          );
           expectWithinBudget(
-            outcome.result.readiness.routeChecks?.length ?? 0,
-            item.maxRouteObstructions,
+            routeObstructions,
+            row.warningBudget?.maxRouteObstructions,
             `${item.key} route obstructions`,
           );
           expectWithinBudget(
-            outcome.result.readiness.routeCrossingChecks?.length ?? 0,
-            item.maxRouteCrossings,
+            routeCrossings,
+            row.warningBudget?.maxRouteCrossings,
             `${item.key} route crossings`,
           );
           expectWithinBudget(
-            outcome.result.readiness.sharedCorridorChecks?.length ?? 0,
-            item.maxSharedCorridors,
+            sharedCorridors,
+            row.warningBudget?.maxSharedCorridors,
             `${item.key} shared corridors`,
           );
           row.status = "passed";
@@ -228,7 +280,7 @@ describe.sequential("sf-tldraw Data Model Gallery matrix", () => {
     }, {});
     writePrivate(
       indexPath,
-      `${JSON.stringify({ schemaVersion: 1, createdAt: new Date().toISOString(), corpusHash, expectedCount, expectedHash, qualification, manifestPath, documentId, sharedPageName, totals, cases: rows }, null, 2)}\n`,
+      `${JSON.stringify({ schemaVersion: 1, createdAt: new Date().toISOString(), corpusHash, expectedCount, expectedHash, qualification, warningBudgetBaseline: usesPinnedWarningBudgets ? { schemaVersion: warningBudgetBaseline.schemaVersion, corpusHash: warningBudgetBaseline.corpusHash, expectedCount: warningBudgetBaseline.expectedCount } : undefined, manifestPath, documentId, sharedPageName, totals, cases: rows }, null, 2)}\n`,
     );
     writePrivate(
       reportPath,
@@ -239,11 +291,11 @@ describe.sequential("sf-tldraw Data Model Gallery matrix", () => {
         `- Qualification: \`${JSON.stringify(qualification)}\``,
         `- Totals: \`${JSON.stringify(totals)}\``,
         "",
-        "| # | Model | Objects | Relationships | Obstructions | Crossings | Shared | Status | Evidence |",
+        "| # | Model | Objects | Relationships | Obstructions / max | Crossings / max | Shared / max | Status | Evidence |",
         "|---:|---|---:|---:|---:|---:|---:|---|---|",
         ...rows.map(
           (row, index) =>
-            `| ${index + 1} | ${row.title} | ${row.objectCount} | ${row.relationshipCount} | ${row.readiness?.routeChecks?.length ?? "-"} | ${row.readiness?.routeCrossingChecks?.length ?? "-"} | ${row.readiness?.sharedCorridorChecks?.length ?? "-"} | ${row.status} | ${row.thumbnail ? `[thumbnail](${row.thumbnail})` : (row.message ?? "none")} |`,
+            `| ${index + 1} | ${row.title} | ${row.objectCount} | ${row.relationshipCount} | ${formatMetric(row.readiness?.routeChecks?.length, row.warningBudget?.maxRouteObstructions)} | ${formatMetric(row.readiness?.routeCrossingChecks?.length, row.warningBudget?.maxRouteCrossings)} | ${formatMetric(row.readiness?.sharedCorridorChecks?.length, row.warningBudget?.maxSharedCorridors)} | ${row.status} | ${row.thumbnail ? `[thumbnail](${row.thumbnail})` : (row.message ?? "none")} |`,
         ),
         "",
       ].join("\n"),
@@ -253,6 +305,51 @@ describe.sequential("sf-tldraw Data Model Gallery matrix", () => {
   });
 });
 
+function loadWarningBudgetBaseline(filePath: string): GalleryWarningBudgetBaseline {
+  const parsed = JSON.parse(readFileSync(filePath, "utf8")) as unknown;
+  if (
+    !isRecord(parsed) ||
+    parsed.schemaVersion !== 1 ||
+    typeof parsed.corpusHash !== "string" ||
+    !/^[a-f0-9]{64}$/.test(parsed.corpusHash) ||
+    !Number.isInteger(parsed.expectedCount) ||
+    Number(parsed.expectedCount) <= 0 ||
+    !Array.isArray(parsed.cases) ||
+    parsed.cases.length !== parsed.expectedCount
+  ) {
+    throw new Error("Invalid checked-in Gallery warning budget baseline.");
+  }
+  const keys = new Set<string>();
+  const budgets = parsed.cases.map((value) => {
+    if (!isRecord(value) || typeof value.key !== "string" || !SAFE_KEY.test(value.key)) {
+      throw new Error("Invalid Gallery warning budget key.");
+    }
+    if (keys.has(value.key)) throw new Error(`Duplicate Gallery warning budget '${value.key}'.`);
+    keys.add(value.key);
+    for (const name of [
+      "maxRouteObstructions",
+      "maxRouteCrossings",
+      "maxSharedCorridors",
+    ] as const) {
+      if (!Number.isInteger(value[name]) || Number(value[name]) < 0) {
+        throw new Error(`Invalid ${name} for Gallery warning budget '${value.key}'.`);
+      }
+    }
+    return {
+      key: value.key,
+      maxRouteObstructions: Number(value.maxRouteObstructions),
+      maxRouteCrossings: Number(value.maxRouteCrossings),
+      maxSharedCorridors: Number(value.maxSharedCorridors),
+    };
+  });
+  return {
+    schemaVersion: 1,
+    corpusHash: parsed.corpusHash,
+    expectedCount: Number(parsed.expectedCount),
+    cases: budgets,
+  };
+}
+
 function loadCases(filePath: string): GalleryCase[] {
   const resolvedManifest = realpathSync(filePath);
   const manifest = JSON.parse(readFileSync(resolvedManifest, "utf8")) as ExternalManifestItem[];
@@ -261,15 +358,6 @@ function loadCases(filePath: string): GalleryCase[] {
     if (!SAFE_SLUG.test(item.slug)) throw new Error(`Unsafe Gallery slug '${item.slug}'.`);
     if (item.index !== undefined && (!Number.isInteger(item.index) || item.index <= 0)) {
       throw new Error(`Invalid Gallery index '${String(item.index)}'.`);
-    }
-    for (const [name, budget] of [
-      ["maxRouteObstructions", item.maxRouteObstructions],
-      ["maxRouteCrossings", item.maxRouteCrossings],
-      ["maxSharedCorridors", item.maxSharedCorridors],
-    ] as const) {
-      if (budget !== undefined && (!Number.isInteger(budget) || budget < 0)) {
-        throw new Error(`Invalid ${name} for '${item.slug}'.`);
-      }
     }
     const key = `${String(item.index ?? position + 1).padStart(3, "0")}-${item.slug}`;
     const candidatePath = path.isAbsolute(item.file)
@@ -302,8 +390,22 @@ function optionalPositiveInteger(value: string | undefined): number | undefined 
   return parsed;
 }
 
+function requiredMetricLength(value: unknown, label: string): number {
+  expect(Array.isArray(value), `${label} metric must be present`).toBe(true);
+  return (value as unknown[]).length;
+}
+
 function expectWithinBudget(actual: number, budget: number | undefined, label: string): void {
   if (budget !== undefined) expect(actual, label).toBeLessThanOrEqual(budget);
+}
+
+function formatMetric(actual: number | undefined, maximum: number | undefined): string {
+  if (actual === undefined) return "-";
+  return maximum === undefined ? String(actual) : `${actual} / ${maximum}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 function sha256(value: string): string {
