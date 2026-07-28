@@ -8,6 +8,7 @@ import {
   preferenceSourceLabel,
   readEffectiveTldrawPreferences,
   readScopedTldrawPreferences,
+  TLDRAW_PREFERENCE_DESCRIPTORS,
   writeTldrawPreference,
 } from "./settings.ts";
 import type { SettingsScope, TldrawPreferenceKey, TldrawPreferences } from "./types.ts";
@@ -16,46 +17,7 @@ const INHERIT = "__inherit__";
 const DEFAULT = "__default__";
 type DraftValue = TldrawPreferences[TldrawPreferenceKey] | typeof INHERIT | typeof DEFAULT;
 
-interface Row {
-  key: TldrawPreferenceKey;
-  label: string;
-  description: string;
-  values: Array<TldrawPreferences[TldrawPreferenceKey]>;
-}
-
-const ROWS: Row[] = [
-  {
-    key: "cardinalityDetail",
-    label: "Cardinality detail",
-    description: "Simplified bar/crow-foot or full physical optionality.",
-    values: ["simplified", "full"],
-  },
-  {
-    key: "cardFill",
-    label: "Card fill",
-    description: "Transparent keeps white object cards; family tints them by object family.",
-    values: ["transparent", "family"],
-  },
-  {
-    key: "ldvThreshold",
-    label: "LDV threshold",
-    description: "Minimum observed row count that receives an LDV pill.",
-    values: ["1M", "2M", "5M", "10M"],
-  },
-  {
-    key: "recordTypeMode",
-    label: "Record types",
-    description:
-      "Off by default; auto shows meaningful multiplicity; always shows supplied values.",
-    values: ["off", "auto", "always"],
-  },
-  {
-    key: "interactionMode",
-    label: "Sequence interaction",
-    description: "Static is deterministic; step-through is source-gated and never autoplays.",
-    values: ["static", "step_through"],
-  },
-];
+const ROWS = TLDRAW_PREFERENCE_DESCRIPTORS;
 
 class SfTldrawConfigPanel implements Focusable {
   focused = false;
@@ -88,7 +50,7 @@ class SfTldrawConfigPanel implements Focusable {
     const effective = readEffectiveTldrawPreferences(this.cwd);
     const lines = [
       ` ${t.fg("accent", t.bold("🎨 SF tldraw Settings"))}`,
-      ` ${t.fg("dim", "Five scalar presentation choices only. Diagram grammar, icons, palette, and fonts stay deterministic.")}`,
+      ` ${t.fg("dim", "Four scalar presentation choices only. Diagram grammar, icons, palette, and fonts stay deterministic.")}`,
       "",
       ` ${t.fg("muted", "Scope:")} ${t.fg("text", this.scope)}`,
       "",
@@ -119,13 +81,9 @@ class SfTldrawConfigPanel implements Focusable {
   private readDraft(): Record<TldrawPreferenceKey, DraftValue> {
     const scoped = readScopedTldrawPreferences(this.cwd, this.scope);
     const sentinel = this.scope === "project" ? INHERIT : DEFAULT;
-    return {
-      cardinalityDetail: scoped.cardinalityDetail ?? sentinel,
-      cardFill: scoped.cardFill ?? sentinel,
-      ldvThreshold: scoped.ldvThreshold ?? sentinel,
-      recordTypeMode: scoped.recordTypeMode ?? sentinel,
-      interactionMode: scoped.interactionMode ?? sentinel,
-    };
+    const draft = {} as Record<TldrawPreferenceKey, DraftValue>;
+    for (const row of ROWS) draft[row.key] = scoped[row.key] ?? sentinel;
+    return draft;
   }
 
   private move(delta: -1 | 1): void {
@@ -137,7 +95,10 @@ class SfTldrawConfigPanel implements Focusable {
     const row = ROWS[this.cursor];
     if (!row) return;
     const sentinel = this.scope === "project" ? INHERIT : DEFAULT;
-    const values: DraftValue[] = [sentinel, ...row.values];
+    const values: DraftValue[] = [
+      sentinel,
+      ...(row.values as readonly TldrawPreferences[TldrawPreferenceKey][]),
+    ];
     const index = Math.max(0, values.indexOf(this.draft[row.key]));
     const next = values[(index + delta + values.length) % values.length];
     if (next !== undefined) this.draft[row.key] = next;

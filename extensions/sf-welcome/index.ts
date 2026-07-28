@@ -1070,14 +1070,7 @@ export default function sfWelcome(pi: ExtensionAPI) {
     if (data.tldrawEnabled === false) return "disabled";
 
     const status = data.tldrawStatus;
-    const startupFault =
-      status?.origin === "startup-probe" &&
-      (status.kind === "not-running" ||
-        status.kind === "stale-config" ||
-        status.kind === "auth-error" ||
-        status.kind === "incompatible");
-    if (!status || status.kind === "hidden" || startupFault) return "available";
-    if (status.kind === "detected") return "verifying canvas";
+    if (!status || status.kind === "hidden" || status.kind === "available") return "available";
     if (status.kind === "ready") {
       const count = status.openDocuments;
       return count ? `canvas ready · ${count} document${count === 1 ? "" : "s"}` : "canvas ready";

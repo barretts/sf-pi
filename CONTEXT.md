@@ -584,6 +584,22 @@ _Avoid_: resolved alias, target pane alias
 A suffixed Herdr pane alias for a **Fresh Ephemeral Lane**, chosen from a **Base Lane Alias** plus a short unique suffix that has not already been used in the session. For example, `apex_tests_k7f3` is a fresh alias derived from `apex_tests`.
 _Avoid_: stable ephemeral alias, reused alias, recycled numeric suffix, persisted counter
 
+**tldraw Runtime Floor**:
+The minimum tldraw offline release contract that SF tldraw intentionally supports. Runtimes below the floor are incompatible rather than partially supported through legacy fallbacks.
+_Avoid_: best-effort compatibility, optional create support, legacy runtime mode
+
+**tldraw Runtime Contract Proof**:
+Evidence that the local tldraw runtime satisfies the **tldraw Runtime Floor**. Machine-readable capability metadata is preferred; an app-owned contract description is an explicit temporary proof source when capability metadata is unavailable.
+_Avoid_: assumed latest version, OS-specific install check, failed-route guess
+
+**Upstream tldraw Skill Ownership**:
+The tldraw offline app is the canonical publisher and updater of the `tldraw-offline` Pi skill. SF Pi verifies the app-managed installation and provides recovery guidance but never bundles, copies, or overwrites a competing skill.
+_Avoid_: vendored skill copy, SF Pi skill fork, startup skill rewrite, same-name collision
+
+**tldraw Skill Readiness**:
+Read-only evidence that the app-managed `tldraw-offline` skill is installed for Pi and aligned with the installed tldraw app. Missing or stale skill wiring is actionable setup guidance, not proof that Salesforce rendering itself is unavailable.
+_Avoid_: bundled skill version, render blocker, silent generic-action fallback
+
 **tldraw Document**:
 An open tldraw runtime document that can contain one or more pages and serve as a diagram render target.
 _Avoid_: board, canvas document, page
@@ -600,6 +616,14 @@ _Avoid_: template, rendering mode, universal Salesforce diagram
 The explicit evidence mode of a Salesforce diagram. Reference grounding uses official Salesforce documentation for a generic model; Org grounding uses a named live org and records its identity and observation time.
 _Avoid_: inferred mode, hidden org lookup, generic diagram presented as org truth
 
+**Diagram Evidence Reference**:
+A declared source id attached to a semantic diagram element and preserved as inspectable provenance. It records where a claim came from but does not mean the renderer independently verified that claim.
+_Avoid_: verified fact, signed evidence, decorative citation, diagram-level source only
+
+**Diagram Render Privacy**:
+The rule that every user-visible diagram string excludes authentication material, Salesforce org ids, usernames or email addresses, instance URLs, and authentication URLs. Execution provenance can route a render without becoming canvas text or a persisted render artifact.
+_Avoid_: display-label-only filtering, caller-trusted text, redaction after rendering
+
 **Salesforce Diagram Spec**:
 A normalized, evidence-bearing description of one Salesforce diagram: its **Salesforce Diagram Family**, **Diagram Grounding**, purpose, nodes, relationships or interactions, and optional observations. It carries meaning and provenance without canvas coordinates or renderer-specific styling.
 _Avoid_: tldraw shape JSON, Mermaid source, layout instructions, raw org describe response
@@ -613,7 +637,7 @@ A Data Model node with a pale object-family fill, a prominent high-contrast **Sa
 _Avoid_: `API` prefix, inline observation row, default record-type pill, muted icon, field dump, color-only object type
 
 **Salesforce System Card**:
-A System/Solution Architecture node with a neutral card, an approved **Salesforce Product Mark** or semantic icon, a clear name, one concise responsibility, and small ownership or boundary badges.
+A System/Solution Architecture node with a neutral card, a sourced **Salesforce Diagram Icon**, a clear name, one concise responsibility, and small ownership or boundary badges.
 _Avoid_: product-colored tile, capability list, marketing card, unlabeled logo
 
 **Salesforce Relationship Connector**:
@@ -623,10 +647,6 @@ _Avoid_: detached marker, line through marker, 1/N text, unnecessary elbow, infe
 **Architecture Connector**:
 A labeled System/Solution Architecture edge using one of three meanings: solid directional flow, dashed asynchronous or batch flow, or thin undirected dependency. Separate directional interactions remain separate edges.
 _Avoid_: unlabeled arrow, bidirectional shorthand, decorative line, connector catalog
-
-**Step-Through Presentation**:
-An optional Interaction/Sequence presentation with Previous, Next, and Reset controls that animates only the selected transition. Static presentation remains the default and autoplay is excluded.
-_Avoid_: autoplay, continuous animation, mandatory controls, stateful diagram family
 
 **Profile-Managed Diagram Element**:
 A diagram element derived from a **Salesforce Diagram Spec** with stable semantic identity. Profile updates may refresh its content while preserving human placement, and never claim ownership of user-created annotations.
@@ -655,10 +675,6 @@ _Avoid_: Salesforce LDV fact, performance failure, universal platform cutoff
 **Salesforce Diagram Icon**:
 A redundant visual cue tied to a node’s Salesforce identity and always paired with a visible label. An org-selected object identity takes precedence over a generic category fallback.
 _Avoid_: emoji, inferred custom-object icon, icon-only node, decorative product mark
-
-**Salesforce Product Mark**:
-An official, unmodified Salesforce product logo used only to identify the actual product represented by a diagram node, with visible text and source provenance. It is never the diagram’s dominant branding and falls back cleanly when no approved asset is available.
-_Avoid_: scraped logo, recolored mark, community logo, SF Pi branding
 
 ## Example dialogue
 

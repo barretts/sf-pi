@@ -42,8 +42,53 @@ describe("sf-tldraw extension", () => {
     ).toEqual(["status", "documents", "cheatsheet", "help"]);
   });
 
-  it("keeps session_start cache-only before the deferred verification window", async () => {
-    vi.useFakeTimers();
+  it("uses one shared observation for the status command", async () => {
+    vi.resetModules();
+    const runtime = await import("../lib/runtime-client.ts");
+    const surface = await import("../lib/runtime-surface.ts");
+    const observation = {
+      status: {
+        kind: "no-open-document" as const,
+        openDocuments: 0,
+        capabilities: {
+          apiContract: "canvas-api-v1.12" as const,
+          contractProof: "readme" as const,
+          nativeDocumentCreation: true as const,
+          documents: true as const,
+          search: true as const,
+          execute: true as const,
+          screenshot: true as const,
+        },
+        skillReadiness: { kind: "ready" as const, managed: true, message: "ready" },
+      },
+      documents: [],
+    };
+    const observe = vi
+      .spyOn(runtime.TldrawRuntimeClient.prototype, "observe")
+      .mockResolvedValue(observation);
+    const consoleInfo = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const registerCommand = vi.fn();
+    const mod = await import("../index.ts");
+    mod.default({
+      on: vi.fn(),
+      registerTool: vi.fn(),
+      registerCommand,
+      events: { on: vi.fn() },
+    } as never);
+    const command = registerCommand.mock.calls.find(([name]) => name === "sf-tldraw")?.[1];
+    await command.handler("status", {
+      cwd: process.cwd(),
+      hasUI: false,
+      ui: { notify: vi.fn() },
+    });
+    expect(observe).toHaveBeenCalledOnce();
+    expect(consoleInfo).toHaveBeenCalledWith(
+      expect.stringContaining(surface.formatTldrawRuntimeStatus(observation.status)),
+    );
+    vi.restoreAllMocks();
+  });
+
+  it("keeps session_start cache-only with no deferred verification", async () => {
     vi.resetModules();
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -59,6 +104,5 @@ describe("sf-tldraw extension", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     await handlers.get("session_shutdown")?.();
     vi.unstubAllGlobals();
-    vi.useRealTimers();
   });
 });

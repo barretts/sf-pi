@@ -92,42 +92,46 @@ describe.sequential("sf-tldraw Data Model Gallery matrix", () => {
     }
   });
 
-  liveIt("keeps every supplied Gallery spec valid and deterministic", () => {
-    try {
-      expect(cases.length).toBeGreaterThan(0);
-      expect(new Set(cases.map((item) => item.key)).size).toBe(cases.length);
-      if (expectedCount !== undefined) expect(cases.length).toBe(expectedCount);
-      if (expectedHash) expect(corpusHash).toBe(expectedHash);
-      if (cases.length > 30)
-        expect(sharedPageName, "large corpora must reuse one page").toBeTruthy();
-      for (const item of cases) {
-        const row = requiredRow(item.key);
-        try {
-          const validation = validateDiagramSpec(item.spec, "data_model");
-          expect(validation.errors, item.key).toEqual([]);
-          const options = {
-            renderMode: "replace" as const,
-            pageName: sharedPageName || `Gallery Matrix — ${item.key}`.slice(0, 64),
-            preferences: { ...DEFAULT_TLDRAW_PREFERENCES, cardinalityDetail: "full" as const },
-          };
-          expect(compileProfile(item.spec, options), item.key).toEqual(
-            compileProfile(structuredClone(item.spec), options),
-          );
-        } catch (error) {
-          row.status = "invalid";
-          row.message = error instanceof Error ? error.message : String(error);
-          throw error;
+  liveIt(
+    "keeps every supplied Gallery spec valid and deterministic",
+    () => {
+      try {
+        expect(cases.length).toBeGreaterThan(0);
+        expect(new Set(cases.map((item) => item.key)).size).toBe(cases.length);
+        if (expectedCount !== undefined) expect(cases.length).toBe(expectedCount);
+        if (expectedHash) expect(corpusHash).toBe(expectedHash);
+        if (cases.length > 30)
+          expect(sharedPageName, "large corpora must reuse one page").toBeTruthy();
+        for (const item of cases) {
+          const row = requiredRow(item.key);
+          try {
+            const validation = validateDiagramSpec(item.spec, "data_model");
+            expect(validation.errors, item.key).toEqual([]);
+            const options = {
+              renderMode: "replace" as const,
+              pageName: sharedPageName || `Gallery Matrix — ${item.key}`.slice(0, 64),
+              preferences: { ...DEFAULT_TLDRAW_PREFERENCES, cardinalityDetail: "full" as const },
+            };
+            expect(compileProfile(item.spec, options), item.key).toEqual(
+              compileProfile(structuredClone(item.spec), options),
+            );
+          } catch (error) {
+            row.status = "invalid";
+            row.message = error instanceof Error ? error.message : String(error);
+            throw error;
+          }
         }
+        qualification = { status: "passed" };
+      } catch (error) {
+        qualification = {
+          status: "failed",
+          message: error instanceof Error ? error.message : String(error),
+        };
+        throw error;
       }
-      qualification = { status: "passed" };
-    } catch (error) {
-      qualification = {
-        status: "failed",
-        message: error instanceof Error ? error.message : String(error),
-      };
-      throw error;
-    }
-  });
+    },
+    Math.max(10_000, cases.length * 500),
+  );
 
   for (const item of cases) {
     liveIt(

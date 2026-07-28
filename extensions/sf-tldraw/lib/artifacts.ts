@@ -17,21 +17,16 @@ interface RenderReport {
   family: SalesforceDiagramSpec["family"];
   title: string;
   groundingMode: "reference" | "org";
+  evidence: {
+    sources: Array<{ id: string; label: string; kind: string }>;
+    elements: Array<{ collection: string; id: string; evidence: string[] }>;
+  };
   nodeCount: number;
   connectionCount: number;
   documentId: string;
   pageId: string;
   pageName: string;
   readiness: CanvasExecutionResult["readiness"];
-}
-
-interface ScreenshotReport {
-  createdAt: string;
-  documentId: string;
-  pageName: string;
-  captureMode: "canvas" | "window";
-  width: number;
-  height: number;
 }
 
 export function createRunId(): string {
@@ -48,7 +43,7 @@ export function persistRenderArtifact(options: {
   const store = createStateStore<RenderReport>({
     namespace: `tldraw-artifacts/runs/${safeSegment(options.runId)}`,
     filename: "report.json",
-    schemaVersion: 1,
+    schemaVersion: 2,
     defaults: {} as RenderReport,
     mode: 0o600,
   });
@@ -66,6 +61,7 @@ export function persistRenderArtifact(options: {
     family: options.spec.family,
     title: options.spec.title,
     groundingMode: options.spec.grounding.mode,
+    evidence: evidenceMap(options.spec),
     nodeCount: counts.nodes,
     connectionCount: counts.edges,
     documentId: options.result.documentId,
@@ -73,7 +69,7 @@ export function persistRenderArtifact(options: {
     pageName: options.result.pageName,
     readiness: options.result.readiness,
   });
-  verifyPersistedReport(store.path, createdAt, "Render report");
+  verifyPersistedReport(store.path, createdAt, "Render report", 2);
   const screenshotPath = copyValidatedScreenshot(options.screenshot, directory, "render-full");
   const thumbnailPath = copyValidatedScreenshot(options.thumbnail, directory, "render-thumbnail");
   return {
@@ -85,37 +81,57 @@ export function persistRenderArtifact(options: {
   };
 }
 
-export function persistStandaloneScreenshot(options: {
-  documentId: string;
-  screenshot: RuntimeScreenshot;
-}): { runId: string; directory: string; reportPath: string; screenshotPath: string } {
-  const runId = createRunId();
-  const store = createStateStore<ScreenshotReport>({
-    namespace: `tldraw-artifacts/screenshots/${safeSegment(runId)}`,
-    filename: "report.json",
-    schemaVersion: 1,
-    defaults: {} as ScreenshotReport,
-    mode: 0o600,
-  });
-  const directory = path.dirname(store.path);
-  secureDirectory(directory);
-  const screenshot = validateRuntimeScreenshot(options.screenshot);
-  const createdAt = new Date().toISOString();
-  store.write({
-    createdAt,
-    documentId: options.documentId,
-    pageName: screenshot.pageName,
-    captureMode: screenshot.captureMode,
-    width: screenshot.width,
-    height: screenshot.height,
-  });
-  verifyPersistedReport(store.path, createdAt, "Screenshot report");
-  return {
-    runId,
-    directory,
-    reportPath: store.path,
-    screenshotPath: copyValidatedScreenshot(screenshot, directory, "capture"),
-  };
+function evidenceMap(spec: SalesforceDiagramSpec): RenderReport["evidence"] {
+  const sources = spec.grounding.sources.map((source) => ({
+    id: source.id,
+    label: source.label,
+    kind: source.kind,
+  }));
+  const elements =
+    spec.family === "data_model"
+      ? [
+          ...spec.objects.map((item) => ({
+            collection: "objects",
+            id: item.id,
+            evidence: [...item.evidence],
+          })),
+          ...spec.relationships.map((item) => ({
+            collection: "relationships",
+            id: item.id,
+            evidence: [...item.evidence],
+          })),
+        ]
+      : spec.family === "architecture"
+        ? [
+            ...spec.systems.map((item) => ({
+              collection: "systems",
+              id: item.id,
+              evidence: [...item.evidence],
+            })),
+            ...spec.connections.map((item) => ({
+              collection: "connections",
+              id: item.id,
+              evidence: [...item.evidence],
+            })),
+          ]
+        : [
+            ...spec.participants.map((item) => ({
+              collection: "participants",
+              id: item.id,
+              evidence: [...item.evidence],
+            })),
+            ...spec.interactions.map((item) => ({
+              collection: "interactions",
+              id: item.id,
+              evidence: [...item.evidence],
+            })),
+            ...(spec.activations ?? []).map((item) => ({
+              collection: "activations",
+              id: item.id,
+              evidence: [...item.evidence],
+            })),
+          ];
+  return { sources, elements };
 }
 
 function copyValidatedScreenshot(
@@ -136,14 +152,19 @@ function secureDirectory(directory: string): void {
   chmodSync(directory, 0o700);
 }
 
-function verifyPersistedReport(filePath: string, createdAt: string, label: string): void {
+function verifyPersistedReport(
+  filePath: string,
+  createdAt: string,
+  label: string,
+  schemaVersion: number,
+): void {
   try {
     if (!lstatSync(filePath).isFile()) throw new Error("not a regular file");
     const envelope = JSON.parse(readFileSync(filePath, "utf8")) as {
       schemaVersion?: number;
       state?: { createdAt?: string };
     };
-    if (envelope.schemaVersion !== 1 || envelope.state?.createdAt !== createdAt) {
+    if (envelope.schemaVersion !== schemaVersion || envelope.state?.createdAt !== createdAt) {
       throw new Error("stale or invalid report");
     }
   } catch {

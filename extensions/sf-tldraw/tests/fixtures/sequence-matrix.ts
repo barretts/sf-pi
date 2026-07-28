@@ -858,7 +858,7 @@ export const SEQUENCE_MATRIX: SequenceMatrixCase[] = FLOW_DEFS.map((flow) => {
     slug: flow.slug,
     category: flow.category,
     spec: {
-      spec_version: "1.0",
+      spec_version: "2.0",
       family: "sequence",
       title: flow.title,
       scope: `Reference-grounded ${flow.category.toUpperCase()} interactions used to verify the deterministic sequence profile.`,

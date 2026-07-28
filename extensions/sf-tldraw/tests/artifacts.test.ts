@@ -41,12 +41,51 @@ describe("sf-tldraw artifacts", () => {
     }
   });
 
-  it("persists validated screenshots with private file permissions", async () => {
+  it("persists inspectable element-to-source provenance without target org", async () => {
     vi.resetModules();
-    const { persistStandaloneScreenshot } = await import("../lib/artifacts.ts");
-    const artifact = persistStandaloneScreenshot({
-      documentId: "doc-1",
+    const { persistRenderArtifact } = await import("../lib/artifacts.ts");
+    const spec = JSON.parse(
+      readFileSync(path.join(import.meta.dirname, "fixtures", "data-model.json"), "utf8"),
+    );
+    spec.grounding = {
+      mode: "org",
+      as_of: "2026-07-27T12:00:00Z",
+      display_label: "Authenticated sandbox",
+      target_org: "private-alias",
+      sources: [{ id: "schema", label: "Object describe", kind: "org_describe" }],
+    };
+    for (const object of spec.objects) object.evidence = ["schema"];
+    for (const relationship of spec.relationships) relationship.evidence = ["schema"];
+    const artifact = persistRenderArtifact({
+      runId: "evidence-run",
+      spec,
+      result: {
+        documentId: "doc-1",
+        pageId: "page-1",
+        pageName: "Page",
+        family: "data_model",
+        createdShapes: 1,
+        updatedShapes: 0,
+        deletedShapes: 0,
+        readiness: {
+          ready: true,
+          blockers: [],
+          warnings: [],
+          lintCount: 0,
+          markerChecks: [],
+          bindingChecks: [],
+          sequenceGeometryChecks: [],
+          typographyChecks: [],
+        },
+      },
       screenshot: {
+        filePath: source,
+        width: 100,
+        height: 80,
+        pageName: "Page",
+        captureMode: "canvas",
+      },
+      thumbnail: {
         filePath: source,
         width: 100,
         height: 80,
@@ -57,23 +96,19 @@ describe("sf-tldraw artifacts", () => {
     expect(statSync(artifact.screenshotPath).mode & 0o777).toBe(0o600);
     expect(statSync(artifact.reportPath).mode & 0o777).toBe(0o600);
     expect(statSync(artifact.directory).mode & 0o777).toBe(0o700);
-  });
-
-  it("uses validated image magic instead of a misleading source suffix", async () => {
-    writeFileSync(source, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-    vi.resetModules();
-    const { persistStandaloneScreenshot } = await import("../lib/artifacts.ts");
-    const artifact = persistStandaloneScreenshot({
-      documentId: "doc-1",
-      screenshot: {
-        filePath: source,
-        width: 100,
-        height: 80,
-        pageName: "Page",
-        captureMode: "canvas",
-      },
+    const report = readFileSync(artifact.reportPath, "utf8");
+    const envelope = JSON.parse(report);
+    expect(envelope.schemaVersion).toBe(2);
+    const parsed = envelope.state;
+    expect(parsed.evidence.sources).toEqual([
+      { id: "schema", label: "Object describe", kind: "org_describe" },
+    ]);
+    expect(parsed.evidence.elements).toContainEqual({
+      collection: "objects",
+      id: "account",
+      evidence: ["schema"],
     });
-    expect(path.extname(artifact.screenshotPath)).toBe(".png");
+    expect(report).not.toContain("private-alias");
   });
 
   it("fails closed when a stale report target prevents a verified write", async () => {
@@ -130,24 +165,5 @@ describe("sf-tldraw artifacts", () => {
         },
       }),
     ).toThrow(/could not be persisted and verified/i);
-  });
-
-  it("refuses unvalidated screenshot sources", async () => {
-    vi.resetModules();
-    const { persistStandaloneScreenshot } = await import("../lib/artifacts.ts");
-    const outside = path.join(tempAgentDir, "outside.jpg");
-    writeFileSync(outside, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
-    expect(() =>
-      persistStandaloneScreenshot({
-        documentId: "doc-1",
-        screenshot: {
-          filePath: outside,
-          width: 100,
-          height: 80,
-          pageName: "Page",
-          captureMode: "canvas",
-        },
-      }),
-    ).toThrow(/failed local file validation/i);
   });
 });

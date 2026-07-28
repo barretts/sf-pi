@@ -679,9 +679,10 @@ Jump to an extension's Troubleshooting section to see the full fix. This index i
 
 - The tool says no tldraw document is open
 - Status reports a stale server configuration
+- Status says the tldraw-offline Pi skill is missing, stale, or unmanaged
 - A render says the document may have reached its page limit
 - A render is blocked by readiness checks
-- A requested product mark uses a semantic icon
+- A v1 spec or removed presentation field is rejected
 
 **[SF Guardrail](./extensions/sf-guardrail/#troubleshooting)**
 

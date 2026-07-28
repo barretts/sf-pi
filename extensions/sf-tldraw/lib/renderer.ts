@@ -5,7 +5,7 @@ import { buildCanvasProgram } from "./canvas-program.ts";
 import { createRunId, persistRenderArtifact } from "./artifacts.ts";
 import { compileProfile } from "./profiles.ts";
 import { readEffectiveTldrawPreferences } from "./settings.ts";
-import { validateDiagramSpec } from "./spec-validation.ts";
+import { validateDiagramSpec, validateRenderedText } from "./spec-validation.ts";
 import { TldrawRuntimeClient, TldrawRuntimeError } from "./runtime-client.ts";
 import { sanitizeRuntimeText } from "./redaction.ts";
 import type {
@@ -66,23 +66,24 @@ export async function renderSalesforceDiagram(
     };
   }
 
+  const pageNameErrors = validateRenderedText(request.pageName, "page_name");
+  if (pageNameErrors.length > 0) {
+    return {
+      ok: false,
+      reason: "invalid_page_name",
+      message: formatValidationErrors(pageNameErrors),
+      validation: { errors: pageNameErrors, warnings: validation.warnings },
+      recoverVia: { action: actionForFamily(request.family), fix: "Use a public-safe page name." },
+    };
+  }
+
   const effective = readEffectiveTldrawPreferences(context.cwd);
   const preferences: TldrawPreferences = {
     cardinalityDetail: request.preferences?.cardinalityDetail ?? effective.cardinalityDetail,
     cardFill: request.preferences?.cardFill ?? effective.cardFill,
     ldvThreshold: request.preferences?.ldvThreshold ?? effective.ldvThreshold,
     recordTypeMode: request.preferences?.recordTypeMode ?? effective.recordTypeMode,
-    interactionMode: request.preferences?.interactionMode ?? effective.interactionMode,
   };
-  if (request.family === "sequence" && preferences.interactionMode === "step_through") {
-    return {
-      ok: false,
-      reason: "step_through_unavailable",
-      message:
-        "Manual step-through is source-gated until sf-tldraw can compose controls without overwriting an existing document script. Use interaction_mode='static'.",
-      recoverVia: { interaction_mode: "static" },
-    };
-  }
   const client = context.client ?? new TldrawRuntimeClient();
 
   try {
@@ -98,7 +99,11 @@ export async function renderSalesforceDiagram(
       };
     }
     const openDocuments = await client.documents(context.signal);
-    const document = await client.resolveDocument(request.documentId, context.signal);
+    const document = await client.resolveDocument(
+      request.documentId,
+      context.signal,
+      openDocuments,
+    );
     setTldrawStatus({
       kind: "ready",
       origin: "interaction",
@@ -222,8 +227,8 @@ function actionForFamily(family: DiagramFamily): string {
 function recoveryFor(code: TldrawRuntimeError["code"]): Record<string, unknown> {
   if (code === "no_open_document" || code === "not_found") {
     return {
-      action: "documents",
-      instruction: "Open or create a board in tldraw offline, then retry with its document_id.",
+      action: "create_document",
+      instruction: "Create a tldraw document, then retry with its document_id.",
     };
   }
   if (code === "not_running" || code === "stale_config") {

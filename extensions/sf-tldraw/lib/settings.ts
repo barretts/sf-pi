@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** Five inherited, non-secret sf-tldraw preferences stored in Pi settings. */
+/** Four inherited, non-secret sf-tldraw preferences stored in Pi settings. */
 import {
   globalSettingsPath,
   projectSettingsPath,
@@ -18,10 +18,46 @@ export const DEFAULT_TLDRAW_PREFERENCES: TldrawPreferences = {
   cardFill: "transparent",
   ldvThreshold: "2M",
   recordTypeMode: "off",
-  interactionMode: "static",
 };
 
-const KEYS = Object.keys(DEFAULT_TLDRAW_PREFERENCES) as TldrawPreferenceKey[];
+export interface TldrawPreferenceDescriptor {
+  key: TldrawPreferenceKey;
+  label: string;
+  description: string;
+  values: readonly string[];
+}
+
+export const TLDRAW_PREFERENCE_DESCRIPTORS: readonly TldrawPreferenceDescriptor[] = [
+  {
+    key: "cardinalityDetail",
+    label: "Cardinality detail",
+    description: "Simplified bar/crow-foot or full physical optionality.",
+    values: ["simplified", "full"],
+  },
+  {
+    key: "cardFill",
+    label: "Card fill",
+    description: "Transparent keeps white object cards; family tints them by object family.",
+    values: ["transparent", "family"],
+  },
+  {
+    key: "ldvThreshold",
+    label: "LDV threshold",
+    description: "Minimum observed row count that receives an LDV pill.",
+    values: ["1M", "2M", "5M", "10M"],
+  },
+  {
+    key: "recordTypeMode",
+    label: "Record types",
+    description:
+      "Off by default; auto shows meaningful multiplicity; always shows supplied values.",
+    values: ["off", "auto", "always"],
+  },
+];
+
+const KEYS = TLDRAW_PREFERENCE_DESCRIPTORS.map(
+  (descriptor) => descriptor.key,
+) as TldrawPreferenceKey[];
 
 export function readScopedTldrawPreferences(
   cwd: string,
@@ -102,21 +138,17 @@ function readNested(settings: Record<string, unknown>): unknown {
 function sanitize(value: unknown): Partial<TldrawPreferences> {
   const input = object(value);
   const result: Partial<TldrawPreferences> = {};
-  if (input.cardinalityDetail === "simplified" || input.cardinalityDetail === "full")
-    result.cardinalityDetail = input.cardinalityDetail;
-  if (input.cardFill === "transparent" || input.cardFill === "family")
-    result.cardFill = input.cardFill;
-  if (["1M", "2M", "5M", "10M"].includes(String(input.ldvThreshold)))
-    result.ldvThreshold = input.ldvThreshold as TldrawPreferences["ldvThreshold"];
-  if (["off", "auto", "always"].includes(String(input.recordTypeMode)))
-    result.recordTypeMode = input.recordTypeMode as TldrawPreferences["recordTypeMode"];
-  if (input.interactionMode === "static" || input.interactionMode === "step_through")
-    result.interactionMode = input.interactionMode;
+  for (const descriptor of TLDRAW_PREFERENCE_DESCRIPTORS) {
+    const candidate = input[descriptor.key];
+    if (typeof candidate === "string" && descriptor.values.includes(candidate)) {
+      setValue(result, descriptor.key, candidate as TldrawPreferences[TldrawPreferenceKey]);
+    }
+  }
   return result;
 }
 
 function setValue(
-  target: TldrawPreferences,
+  target: Partial<TldrawPreferences>,
   key: TldrawPreferenceKey,
   value: TldrawPreferences[TldrawPreferenceKey],
 ): void {

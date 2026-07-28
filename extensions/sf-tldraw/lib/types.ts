@@ -1,200 +1,52 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Shared contracts for the sf-tldraw family tool and deterministic renderers. */
 
+import type {
+  ArchitectureConnection,
+  DataModelEntityKind,
+  DataModelRelationship,
+  DiagramFamily,
+  EndpointCardinality,
+  ObjectFamily,
+  SalesforceDiagramSpec,
+  SequenceInteraction,
+} from "./spec-schema.ts";
+
 export type TldrawAction =
   | "status"
   | "documents"
-  | "search"
-  | "execute"
-  | "screenshot"
-  | "script_workspace"
-  | "script_status"
+  | "create_document"
   | "cheatsheet"
   | "render_salesforce_data_model"
   | "render_salesforce_architecture"
   | "render_salesforce_sequence";
 
-export type DiagramFamily = "data_model" | "architecture" | "sequence";
+export type {
+  ArchitectureConnection,
+  ArchitectureSpec,
+  ArchitectureSystem,
+  DataModelEntityKind,
+  DataModelObject,
+  DataModelRelationship,
+  DataModelSpec,
+  DiagramFamily,
+  DiagramGrounding,
+  DiagramIcon,
+  DiagramSource,
+  EndpointCardinality,
+  IconCategory,
+  ObjectFamily,
+  OrgGrounding,
+  ReferenceGrounding,
+  SalesforceDiagramSpec,
+  SequenceActivation,
+  SequenceInteraction,
+  SequenceParticipant,
+  SequenceSpec,
+} from "./spec-schema.ts";
+
 export type RenderMode = "preserve" | "relayout" | "replace";
 export type OutputMode = "summary" | "inline" | "file_only";
-export type IconCategory = "standard" | "custom" | "utility" | "action" | "doctype";
-
-export interface DiagramSource {
-  id: string;
-  label: string;
-  url?: string;
-  kind: "official_doc" | "org_describe" | "org_query" | "user_provided";
-}
-
-export interface ReferenceGrounding {
-  mode: "reference";
-  as_of: string;
-  sources: DiagramSource[];
-}
-
-export interface OrgGrounding {
-  mode: "org";
-  as_of: string;
-  /** Human-safe label rendered on the canvas. Do not put usernames or instance URLs here. */
-  display_label: string;
-  /** Execution alias retained in memory only and never rendered or persisted in evidence. */
-  target_org?: string;
-  sources: DiagramSource[];
-}
-
-export type DiagramGrounding = ReferenceGrounding | OrgGrounding;
-
-export interface BaseDiagramSpec {
-  spec_version: "1.0";
-  family: DiagramFamily;
-  title: string;
-  scope: string;
-  purpose?: string;
-  grounding: DiagramGrounding;
-}
-
-export interface DiagramIcon {
-  category: IconCategory;
-  name: string;
-  /** Optional explicit tile color. Presentation-only, not a Salesforce fact. */
-  color?: string;
-}
-
-export type ObjectFamily = "standard" | "custom" | "external" | "special";
-export type DataModelEntityKind = "object" | "record_type" | "conceptual" | "external";
-export type EndpointCardinality = "one" | "many" | "zero_or_one" | "zero_or_many";
-
-export interface DataModelSourcePosition {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-export interface DataModelObject {
-  id: string;
-  label: string;
-  /** Optional when an authoritative reference does not publish a physical API name. */
-  api_name?: string;
-  family: ObjectFamily;
-  /** Official Gallery implementation semantics, expressed by the card border style. */
-  entity_kind?: DataModelEntityKind;
-  /** Optional evidence-backed source geometry used only when layout_mode='source'. */
-  source_position?: DataModelSourcePosition;
-  icon?: DiagramIcon;
-  key_fields?: string[];
-  observations?: {
-    row_count?: { value: number; exact?: boolean };
-    owd?: string;
-    record_types?: string[];
-  };
-  evidence: string[];
-}
-
-export interface DataModelRelationshipAnchor {
-  side: "left" | "right" | "top" | "bottom";
-  fraction: number;
-}
-
-export interface DataModelRelationship {
-  id: string;
-  from: string;
-  to: string;
-  type: "lookup" | "master_detail";
-  from_cardinality: EndpointCardinality;
-  to_cardinality: EndpointCardinality;
-  field_api_name?: string;
-  /** Optional evidenced source terminals used with source layout. */
-  from_anchor?: DataModelRelationshipAnchor;
-  to_anchor?: DataModelRelationshipAnchor;
-  /** Directional relationship-end phrases from an authoritative ERD. */
-  from_label?: string;
-  to_label?: string;
-  evidence: string[];
-}
-
-export interface DataModelSpec extends BaseDiagramSpec {
-  family: "data_model";
-  /** Source mode preserves an official reference's relative grouping on first render. */
-  layout_mode?: "auto" | "source";
-  objects: DataModelObject[];
-  relationships: DataModelRelationship[];
-}
-
-export interface ArchitectureSystem {
-  id: string;
-  label: string;
-  kind: "salesforce" | "external" | "user" | "data_store" | "integration";
-  responsibility: string;
-  boundary?: string;
-  icon?: DiagramIcon;
-  product_mark?: ProductMarkKey;
-  evidence: string[];
-}
-
-export interface ArchitectureConnection {
-  id: string;
-  from: string;
-  to: string;
-  label: string;
-  meaning: "directional" | "async_or_batch" | "dependency";
-  evidence: string[];
-}
-
-export interface ArchitectureSpec extends BaseDiagramSpec {
-  family: "architecture";
-  systems: ArchitectureSystem[];
-  connections: ArchitectureConnection[];
-}
-
-export interface SequenceParticipant {
-  id: string;
-  label: string;
-  kind: "salesforce" | "external" | "user" | "data_store" | "integration";
-  icon?: DiagramIcon;
-  product_mark?: ProductMarkKey;
-  evidence: string[];
-}
-
-export interface SequenceInteraction {
-  id: string;
-  step: number;
-  from: string;
-  to: string;
-  label: string;
-  kind: "request" | "response" | "async" | "event";
-  evidence: string[];
-}
-
-export interface SequenceActivation {
-  id: string;
-  participant: string;
-  start_step: number;
-  end_step: number;
-  evidence: string[];
-}
-
-export interface SequenceSpec extends BaseDiagramSpec {
-  family: "sequence";
-  participants: SequenceParticipant[];
-  interactions: SequenceInteraction[];
-  activations?: SequenceActivation[];
-}
-
-export type SalesforceDiagramSpec = DataModelSpec | ArchitectureSpec | SequenceSpec;
-
-export type ProductMarkKey =
-  | "salesforce_platform"
-  | "sales_cloud"
-  | "service_cloud"
-  | "experience_cloud"
-  | "marketing_cloud"
-  | "commerce_cloud"
-  | "data_360"
-  | "agentforce"
-  | "mulesoft"
-  | "tableau"
-  | "slack";
 
 export interface TldrawPreferences {
   cardinalityDetail: "simplified" | "full";
@@ -202,7 +54,6 @@ export interface TldrawPreferences {
   cardFill: "transparent" | "family";
   ldvThreshold: "1M" | "2M" | "5M" | "10M";
   recordTypeMode: "off" | "auto" | "always";
-  interactionMode: "static" | "step_through";
 }
 
 export type TldrawPreferenceKey = keyof TldrawPreferences;
@@ -230,21 +81,35 @@ export interface TldrawDocumentSummary {
   focusOrder?: number;
 }
 
+export interface TldrawCreatedDocument {
+  id: string;
+  documentId: string;
+  name: string;
+  windowId: number;
+}
+
 export interface RuntimeCapabilities {
-  apiContract: "canvas-api-v1" | "unknown";
-  capabilityEndpoint: boolean;
-  nativeDocumentCreation: boolean;
-  documents: boolean;
-  search: boolean;
-  execute: boolean;
-  screenshot: boolean;
-  scriptWorkspace: boolean;
-  scriptStatus: boolean;
+  apiContract: "canvas-api-v1.12";
+  contractProof: "readme";
+  nativeDocumentCreation: true;
+  documents: true;
+  search: true;
+  execute: true;
+  screenshot: true;
+}
+
+export type TldrawSkillReadinessKind = "ready" | "missing" | "unmanaged" | "stale" | "unknown";
+
+export interface TldrawSkillReadiness {
+  kind: TldrawSkillReadinessKind;
+  managed: boolean;
+  manifestVersion?: string;
+  message: string;
 }
 
 export type TldrawStatusKind =
   | "hidden"
-  | "detected"
+  | "available"
   | "ready"
   | "no-open-document"
   | "not-running"
@@ -258,8 +123,14 @@ export interface TldrawRuntimeStatus {
   openDocuments?: number;
   focusedDocumentName?: string;
   capabilities?: RuntimeCapabilities;
+  skillReadiness?: TldrawSkillReadiness;
   message?: string;
   updatedAt?: string;
+}
+
+export interface TldrawRuntimeObservation {
+  status: TldrawRuntimeStatus;
+  documents: TldrawDocumentSummary[];
 }
 
 export interface RuntimeScreenshot {
@@ -333,8 +204,6 @@ export interface CanvasEdgePayload {
   /** Data-model only. Drives connector color and dash instead of an LK/MD label box. */
   relationshipType?: DataModelRelationship["type"];
   fieldApiName?: string;
-  fromAnchor?: DataModelRelationshipAnchor;
-  toAnchor?: DataModelRelationshipAnchor;
   fromLabel?: string;
   toLabel?: string;
   fromCardinality?: EndpointCardinality;

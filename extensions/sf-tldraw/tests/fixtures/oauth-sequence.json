@@ -1,5 +1,5 @@
 {
-  "spec_version": "1.0",
+  "spec_version": "2.0",
   "family": "sequence",
   "title": "OAuth authorization code with PKCE",
   "scope": "Browser authorization, code exchange, API access, and token refresh through a Salesforce external client app.",

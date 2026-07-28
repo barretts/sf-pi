@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** SLDS icon loading and source-gated product-mark metadata. */
+/** SLDS icon loading and deterministic cardinality-marker assets. */
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -11,7 +11,6 @@ import type {
   IconCategory,
   EndpointCardinality,
   ObjectFamily,
-  ProductMarkKey,
   SalesforceDiagramSpec,
 } from "./types.ts";
 
@@ -56,47 +55,6 @@ function loadSldsIconColors(): Map<string, string> {
   sldsIconColors = colors;
   return colors;
 }
-
-export const PRODUCT_MARK_REGISTRY: Record<
-  ProductMarkKey,
-  { label: string; sourceUrl: string; assetPath?: string }
-> = {
-  salesforce_platform: {
-    label: "Salesforce Platform",
-    sourceUrl: "https://www.salesforce.com/news/stories/salesforce-brand-central/",
-  },
-  sales_cloud: {
-    label: "Sales Cloud",
-    sourceUrl: "https://www.salesforce.com/news/stories/salesforce-brand-central/",
-  },
-  service_cloud: {
-    label: "Service Cloud",
-    sourceUrl: "https://www.salesforce.com/news/stories/salesforce-brand-central/",
-  },
-  experience_cloud: {
-    label: "Experience Cloud",
-    sourceUrl: "https://www.salesforce.com/news/stories/salesforce-brand-central/",
-  },
-  marketing_cloud: {
-    label: "Marketing Cloud",
-    sourceUrl: "https://www.salesforce.com/news/stories/salesforce-brand-central/",
-  },
-  commerce_cloud: {
-    label: "Commerce Cloud",
-    sourceUrl: "https://www.salesforce.com/news/stories/salesforce-brand-central/",
-  },
-  data_360: {
-    label: "Data 360",
-    sourceUrl: "https://www.salesforce.com/news/stories/salesforce-brand-central/",
-  },
-  agentforce: {
-    label: "Agentforce",
-    sourceUrl: "https://www.salesforce.com/news/stories/salesforce-brand-central/",
-  },
-  mulesoft: { label: "MuleSoft", sourceUrl: "https://www.mulesoft.com/brand" },
-  tableau: { label: "Tableau", sourceUrl: "https://www.tableau.com/about/media-download-center" },
-  slack: { label: "Slack", sourceUrl: "https://slack.com/media-kit" },
-};
 
 /** Last-resort tile colors when SLDS has no icon-specific color for a visual. */
 const FAMILY_COLORS: Record<ObjectFamily, string> = {
@@ -213,13 +171,6 @@ export function resolveVisualAssets(
       (spec.family === "data_model"
         ? (inferredDataModelIcon(node as DataModelObject) ?? FALLBACK_ICONS[family])
         : systemFallback);
-    if ("product_mark" in node && node.product_mark) {
-      const registry = PRODUCT_MARK_REGISTRY[node.product_mark];
-      if (!registry?.assetPath)
-        warnings.push(
-          `${registry?.label ?? node.product_mark}: approved product-mark asset is not bundled; using the explicit semantic SLDS icon fallback.`,
-        );
-    }
     let resolved = readIcon(icon);
     if (!resolved) {
       const fallback = spec.family === "data_model" ? FALLBACK_ICONS[family] : systemFallback;

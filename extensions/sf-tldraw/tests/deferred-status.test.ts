@@ -6,14 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 type Listener = (...args: unknown[]) => void;
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
-describe("sf-tldraw deferred Welcome verification", () => {
+describe("sf-tldraw on-demand availability", () => {
   let tempDir: string | undefined;
   const originalConfig = process.env.TLDRAW_SERVER_CONFIG;
 
@@ -26,20 +19,14 @@ describe("sf-tldraw deferred Welcome verification", () => {
     tempDir = undefined;
   });
 
-  it("transitions the shared status from detected to ready after first paint", async () => {
+  it("publishes config presence without a loopback request or deferred timer", async () => {
     vi.useFakeTimers();
-    tempDir = mkdtempSync(path.join(tmpdir(), "sf-tldraw-deferred-"));
+    tempDir = mkdtempSync(path.join(tmpdir(), "sf-tldraw-availability-"));
     const configPath = path.join(tempDir, "server.json");
     writeFileSync(configPath, JSON.stringify({ port: 7236, token: "test-token" }));
     process.env.TLDRAW_SERVER_CONFIG = configPath;
 
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.endsWith("/api/capabilities")) return json({ error: "Not found" }, 404);
-      return json({
-        success: true,
-        result: [{ id: "doc-1", name: "Board", shapeCount: 4, focusOrder: 0 }],
-      });
-    }) as unknown as typeof fetch;
+    const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     vi.resetModules();
 
@@ -54,36 +41,23 @@ describe("sf-tldraw deferred Welcome verification", () => {
       events: { on: vi.fn() },
     } as never);
 
-    await handlers.get("session_start")?.({}, { signal: new AbortController().signal });
-    expect(store.getTldrawStatus()).toMatchObject({ kind: "detected" });
+    await handlers.get("session_start")?.({}, {});
+    expect(store.getTldrawStatus()).toMatchObject({
+      kind: "available",
+      origin: "availability",
+    });
     expect(fetchMock).not.toHaveBeenCalled();
 
-    await vi.advanceTimersByTimeAsync(750);
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(store.getTldrawStatus()).toMatchObject({
-      kind: "ready",
-      origin: "startup-probe",
-      openDocuments: 1,
-      focusedDocumentName: "Board",
-    });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fetchMock).not.toHaveBeenCalled();
 
     await handlers.get("session_shutdown")?.();
+    expect(store.getTldrawStatus()).toMatchObject({ kind: "hidden" });
   });
 
-  it("preserves startup faults without overwriting a newer interaction", async () => {
-    vi.useFakeTimers();
-    tempDir = mkdtempSync(path.join(tmpdir(), "sf-tldraw-deferred-failure-"));
-    const configPath = path.join(tempDir, "server.json");
-    writeFileSync(configPath, JSON.stringify({ port: 7236, token: "test-token" }));
-    process.env.TLDRAW_SERVER_CONFIG = configPath;
-
-    const fetchMock = vi.fn(async () => {
-      throw new TypeError("Canvas runtime is unavailable");
-    }) as unknown as typeof fetch;
-    vi.stubGlobal("fetch", fetchMock);
+  it("stays hidden when no local server configuration exists", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "sf-tldraw-unavailable-"));
+    process.env.TLDRAW_SERVER_CONFIG = path.join(tempDir, "missing.json");
     vi.resetModules();
 
     const store = await import("../../../lib/common/tldraw-status/store.ts");
@@ -97,35 +71,7 @@ describe("sf-tldraw deferred Welcome verification", () => {
       events: { on: vi.fn() },
     } as never);
 
-    await handlers.get("session_start")?.({}, { signal: new AbortController().signal });
-    expect(store.getTldrawStatus()).toMatchObject({ kind: "detected" });
-
-    await vi.advanceTimersByTimeAsync(750);
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(fetchMock).toHaveBeenCalled();
-    expect(store.getTldrawStatus()).toMatchObject({
-      kind: "stale-config",
-      origin: "startup-probe",
-    });
-
-    await handlers.get("session_start")?.({}, { signal: new AbortController().signal });
-    expect(store.getTldrawStatus()).toMatchObject({
-      kind: "detected",
-      origin: "startup-probe",
-    });
-    store.setTldrawStatus({ kind: "auth-error", origin: "interaction" });
-
-    await vi.advanceTimersByTimeAsync(750);
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(store.getTldrawStatus()).toMatchObject({
-      kind: "auth-error",
-      origin: "interaction",
-    });
-
-    await handlers.get("session_shutdown")?.();
+    await handlers.get("session_start")?.({}, {});
+    expect(store.getTldrawStatus()).toMatchObject({ kind: "hidden" });
   });
 });

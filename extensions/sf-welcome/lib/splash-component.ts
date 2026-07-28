@@ -360,19 +360,11 @@ function formatTldrawStatusValue(data: SplashData): string {
   if (data.tldrawEnabled === false) return MUTED("Disabled");
 
   const status = data.tldrawStatus;
-  const startupFault =
-    status?.origin === "startup-probe" &&
-    (status.kind === "not-running" ||
-      status.kind === "stale-config" ||
-      status.kind === "auth-error" ||
-      status.kind === "incompatible");
-  if (!status || status.kind === "hidden" || startupFault) {
+  if (!status || status.kind === "hidden" || status.kind === "available") {
     return `${SF_GREEN("✓")} ${SF_GREEN("Available")}`;
   }
 
   switch (status.kind) {
-    case "detected":
-      return `${SF_CYAN("○")} ${SF_CYAN("Verifying canvas…")}`;
     case "ready": {
       const count = status.openDocuments;
       const suffix = count ? ` · ${count} document${count === 1 ? "" : "s"}` : "";

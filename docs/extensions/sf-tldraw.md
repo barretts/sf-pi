@@ -48,13 +48,15 @@ You can also manage this extension from the SF Pi home base:
 
 ## Safety notes
 
-- Never infers or fabricates Salesforce schema, relationship, count, sharing, record-type, icon, or product facts; normalized specs carry explicit evidence ids.
-- Uses the loopback Canvas API only. Missing native document creation never falls back to OS automation, browser automation, or direct `.tldraw` archive generation.
+- Never infers or fabricates Salesforce schema, relationship, count, sharing, record-type, icon, or product facts; strict Spec v2 elements carry inspectable source provenance.
+- Rejects unknown Spec v2 fields and sensitive rendered text; execution-only target_org is neither rendered nor persisted.
+- Requires the tldraw offline v1.12 Canvas API contract. Document creation uses only the native non-overwriting route and never falls back to OS automation, browser automation, or direct `.tldraw` archive generation.
+- Treats the tldraw app as the sole owner of the `tldraw-offline` Pi skill; readiness checks are read-only and SF Pi never bundles or overwrites a duplicate skill.
 - Default updates preserve human positioning and annotations; relayout and replacement must be explicit and only profile-managed shapes can be removed.
 - A Salesforce render is not reported complete until spec validation, zero canvas lints, connector-terminal checks, typography checks, and screenshot capture pass.
 - Reads the per-launch bearer token for each request, never prints or persists it, and redacts runtime error details.
-- Raw editor execution and document-workspace creation require an interactive user confirmation; model-supplied acknowledgement alone is insufficient.
-- Screenshot sources must be regular JPEG/PNG files inside tldraw's dedicated temporary capture directory before private 0600 artifact copies are exposed.
+- Generic canvas search, raw execution, standalone screenshots, and document scripts are not exposed by SF tldraw; the upstream app-managed skill owns those workflows.
+- Screenshot sources used by Salesforce renders must be regular JPEG/PNG files inside tldraw's dedicated temporary capture directory before private 0600 artifact copies are exposed.
 
 ## Exact reference
 

@@ -1,14 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Deterministic Dagre graph layout and fixed sequence lanes. */
 import dagre from "@dagrejs/dagre";
-import type {
-  ArchitectureSpec,
-  DataModelObject,
-  DataModelSourcePosition,
-  DataModelSpec,
-  PositionedNode,
-  SequenceSpec,
-} from "./types.ts";
+import type { ArchitectureSpec, DataModelSpec, PositionedNode, SequenceSpec } from "./types.ts";
 
 const GRAPH_TOP = 330;
 const GRAPH_LEFT = 100;
@@ -98,16 +91,27 @@ function facingSides(
   return null;
 }
 
+/** Runtime routing evaluates this vertical-first alternative after the facing plan. */
+function alternateSides(
+  from: PositionedNode,
+  to: PositionedNode,
+): { from: CardSide; to: CardSide } | null {
+  if (to.y >= from.y + from.h + SIDE_GAP) return { from: "bottom", to: "top" };
+  if (from.y >= to.y + to.h + SIDE_GAP) return { from: "top", to: "bottom" };
+  if (to.x >= from.x + from.w + SIDE_GAP) return { from: "right", to: "left" };
+  if (from.x >= to.x + to.w + SIDE_GAP) return { from: "left", to: "right" };
+  return null;
+}
+
 type DataModelCandidate = GraphCandidate & { rankSep: number; nodeSep: number };
 
-type SourcePositionedObject = DataModelObject & { source_position: DataModelSourcePosition };
 type LayoutQuality = readonly [number, number, number, number, number, number];
 
 const DATA_MODEL_CANDIDATES: DataModelCandidate[] = [
-  { rankdir: "LR", ranker: "network-simplex", rankSep: 240, nodeSep: 90 },
-  { rankdir: "TB", ranker: "network-simplex", rankSep: 240, nodeSep: 90 },
-  { rankdir: "LR", ranker: "tight-tree", rankSep: 240, nodeSep: 90 },
-  { rankdir: "TB", ranker: "tight-tree", rankSep: 240, nodeSep: 90 },
+  { rankdir: "LR", ranker: "network-simplex", rankSep: 240, nodeSep: 110 },
+  { rankdir: "TB", ranker: "network-simplex", rankSep: 240, nodeSep: 110 },
+  { rankdir: "LR", ranker: "tight-tree", rankSep: 240, nodeSep: 110 },
+  { rankdir: "TB", ranker: "tight-tree", rankSep: 240, nodeSep: 110 },
   { rankdir: "LR", ranker: "network-simplex", rankSep: 320, nodeSep: 120 },
   { rankdir: "TB", ranker: "network-simplex", rankSep: 320, nodeSep: 120 },
   { rankdir: "LR", ranker: "tight-tree", rankSep: 320, nodeSep: 120 },
@@ -120,7 +124,6 @@ const DATA_MODEL_CANDIDATES: DataModelCandidate[] = [
 
 export function layoutDataModel(spec: DataModelSpec): PositionedNode[] {
   const content = dataModelContentSizes(spec);
-  if (spec.layout_mode === "source") return layoutDataModelFromSource(spec, content);
 
   // Each orientation and spacing strategy gets its own bounded convergence loop.
   // Recounting after every relayout prevents a hub from growing for left/right traffic
@@ -155,76 +158,6 @@ function dataModelContentSizes(spec: DataModelSpec): Map<string, { w: number; h:
   );
 }
 
-/** Preserve the relative geometry of an evidenced reference poster on first render. */
-function layoutDataModelFromSource(
-  spec: DataModelSpec,
-  content: Map<string, { w: number; h: number }>,
-): PositionedNode[] {
-  const positioned = spec.objects.filter(
-    (object): object is SourcePositionedObject => object.source_position !== undefined,
-  );
-  if (positioned.length !== spec.objects.length) {
-    throw new Error("Source layout requires source_position for every data-model object.");
-  }
-  const minCenterX = Math.min(
-    ...positioned.map((object) => object.source_position.x + object.source_position.w / 2),
-  );
-  const minCenterY = Math.min(
-    ...positioned.map((object) => object.source_position.y + object.source_position.h / 2),
-  );
-  let scale = 1.12;
-  for (const object of positioned) {
-    const source = object.source_position;
-    const needed = requiredMapValue(content, object.id, "data-model content size");
-    scale = Math.max(scale, needed.w / source.w, needed.h / source.h);
-  }
-  const baseSizes = new Map(
-    positioned.map((object) => {
-      const source = object.source_position;
-      const needed = requiredMapValue(content, object.id, "data-model content size");
-      return [
-        object.id,
-        {
-          w: Math.round(Math.max(needed.w, source.w * scale)),
-          h: Math.round(Math.max(needed.h, source.h * scale)),
-        },
-      ];
-    }),
-  );
-  const create = (spread: number, sizes: Map<string, { w: number; h: number }>): PositionedNode[] =>
-    positioned.map((object) => {
-      const source = object.source_position;
-      const size = requiredMapValue(sizes, object.id, "source-layout card size");
-      // Gallery markers are visually smaller than our editable vector terminals. Expand
-      // centre spacing independently from card dimensions so hubs can grow without
-      // inflating every unrelated card on the poster.
-      const positionScale = scale * 1.28 * spread;
-      return {
-        id: object.id,
-        x: Math.round(
-          (source.x + source.w / 2 - minCenterX) * positionScale - size.w / 2 + GRAPH_LEFT,
-        ),
-        y: Math.round(
-          (source.y + source.h / 2 - minCenterY) * positionScale - size.h / 2 + GRAPH_TOP,
-        ),
-        ...size,
-      };
-    });
-  let nodes = create(1, baseSizes);
-  const finalSizes = growHubCards(spec, nodes, baseSizes) ?? baseSizes;
-  let spread = 1;
-  nodes = create(spread, finalSizes);
-  for (let pass = 0; pass < 16 && nodesOverlap(nodes, 20); pass++) {
-    spread *= 1.15;
-    nodes = create(spread, finalSizes);
-  }
-  if (nodesOverlap(nodes, 1)) {
-    throw new Error("Source layout could not separate expanded data-model cards.");
-  }
-  normalizeToMargin(nodes);
-  return nodes;
-}
-
 /**
  * Second pass: measure how many connectors each card side will carry at the first-pass
  * positions, then grow the card so every terminal gets its own anchor slot.
@@ -243,11 +176,23 @@ function growHubCards(
     const from = boxes.get(relationship.from);
     const to = boxes.get(relationship.to);
     if (!from || !to) continue;
-    const automatic = relationship.from === relationship.to ? null : facingSides(from, to);
-    const fromSide = relationship.from_anchor?.side ?? automatic?.from ?? "right";
-    const toSide = relationship.to_anchor?.side ?? automatic?.to ?? "right";
-    if (fromCounts) fromCounts[fromSide] += 1;
-    if (toCounts) toCounts[toSide] += 1;
+    const candidates =
+      relationship.from === relationship.to
+        ? [
+            { from: "left" as const, to: "left" as const },
+            { from: "right" as const, to: "right" as const },
+          ]
+        : [facingSides(from, to), alternateSides(from, to)].filter(
+            (candidate, index, all): candidate is { from: CardSide; to: CardSide } =>
+              candidate !== null &&
+              all.findIndex(
+                (other) => other?.from === candidate.from && other?.to === candidate.to,
+              ) === index,
+          );
+    for (const candidate of candidates) {
+      if (fromCounts) fromCounts[candidate.from] += 1;
+      if (toCounts) toCounts[candidate.to] += 1;
+    }
   }
   const grown = new Map<string, { w: number; h: number }>();
   let changed = false;
@@ -359,21 +304,6 @@ function weakComponents(nodeIds: string[], edges: Array<{ from: string; to: stri
   return components;
 }
 
-function nodesOverlap(nodes: PositionedNode[], gap: number): boolean {
-  for (let left = 0; left < nodes.length; left++) {
-    const a = nodes[left];
-    if (!a) continue;
-    for (let right = left + 1; right < nodes.length; right++) {
-      const b = nodes[right];
-      if (!b) continue;
-      const overlapX = Math.min(a.x + a.w + gap, b.x + b.w + gap) - Math.max(a.x, b.x);
-      const overlapY = Math.min(a.y + a.h + gap, b.y + b.h + gap) - Math.max(a.y, b.y);
-      if (overlapX > 0 && overlapY > 0) return true;
-    }
-  }
-  return false;
-}
-
 function nodeBounds(nodes: PositionedNode[]): {
   minX: number;
   minY: number;
@@ -408,7 +338,7 @@ export function layoutSequence(spec: SequenceSpec): PositionedNode[] {
         : SEQUENCE_LANE_GAPS.compact;
   let x = GRAPH_LEFT;
   return spec.participants.map((participant) => {
-    const visualAllowance = participant.icon || participant.product_mark ? 90 : 0;
+    const visualAllowance = participant.icon ? 90 : 0;
     const width = Math.max(
       SEQUENCE_MIN_CARD_WIDTH,
       Math.min(SEQUENCE_MAX_CARD_WIDTH, 88 + participant.label.length * 8 + visualAllowance),
@@ -671,12 +601,6 @@ function layoutGraphWith(
   });
   normalizeToMargin(positions);
   return positions;
-}
-
-function requiredMapValue<K, V>(map: Map<K, V>, key: K, label: string): V {
-  const value = map.get(key);
-  if (value === undefined) throw new Error(`Missing ${label} for '${String(key)}'.`);
-  return value;
 }
 
 function normalizeToMargin(nodes: PositionedNode[]): void {

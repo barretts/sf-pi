@@ -35,7 +35,6 @@ describe("sf-tldraw settings", () => {
       cardFill: "transparent",
       ldvThreshold: "2M",
       recordTypeMode: "off",
-      interactionMode: "static",
     });
     settings.writeTldrawPreference(cwd, "global", "cardFill", "family");
     settings.writeTldrawPreference(cwd, "global", "ldvThreshold", "5M");
@@ -53,14 +52,71 @@ describe("sf-tldraw settings", () => {
     });
   });
 
+  it("preserves the custom settings page with four descriptor-backed rows", async () => {
+    const { createConfigPanel } = await import("../lib/config-panel.ts");
+    const theme = {
+      fg: (_color: string, value: string) => value,
+      bold: (value: string) => value,
+    };
+    const done = vi.fn();
+    const panel = createConfigPanel(theme as never, cwd, "global", done) as unknown as {
+      render(width: number): string[];
+    };
+    const rendered = panel.render(120).join("\n");
+    expect(rendered).toContain("🎨 SF tldraw Settings");
+    expect(rendered).toContain("Four scalar presentation choices only");
+    expect(rendered).toContain("Cardinality detail");
+    expect(rendered).toContain("Card fill");
+    expect(rendered).toContain("LDV threshold");
+    expect(rendered).toContain("Record types");
+    expect(rendered).not.toContain("Sequence interaction");
+    expect(rendered).toContain("↑/↓ move · ←/→ change · S/Enter save · Esc back");
+  });
+
+  it("preserves keyboard navigation, save, scoped clearing, and Escape", async () => {
+    const { createConfigPanel } = await import("../lib/config-panel.ts");
+    const theme = {
+      fg: (_color: string, value: string) => value,
+      bold: (value: string) => value,
+    };
+    const done = vi.fn();
+    const panel = createConfigPanel(theme as never, cwd, "global", done) as unknown as {
+      handleInput(data: string): void;
+      render(width: number): string[];
+    };
+
+    panel.handleInput(" ");
+    panel.handleInput("\x1b[B");
+    panel.handleInput(" ");
+    panel.handleInput("s");
+    expect(settings.readScopedTldrawPreferences(cwd, "global")).toMatchObject({
+      cardinalityDetail: "simplified",
+      cardFill: "transparent",
+    });
+    expect(panel.render(120).join("\n")).toContain("Saved SF tldraw settings.");
+
+    settings.writeTldrawPreference(cwd, "global", "cardinalityDetail", "full");
+    const clearPanel = createConfigPanel(theme as never, cwd, "global", done) as unknown as {
+      handleInput(data: string): void;
+    };
+    clearPanel.handleInput(" ");
+    clearPanel.handleInput("\r");
+    expect(settings.readScopedTldrawPreferences(cwd, "global")).not.toHaveProperty(
+      "cardinalityDetail",
+    );
+
+    panel.handleInput("\x1b");
+    expect(done).toHaveBeenCalledWith(undefined);
+  });
+
   it("clears only the selected scoped field", () => {
     settings.writeTldrawPreference(cwd, "global", "ldvThreshold", "10M");
     settings.writeTldrawPreference(cwd, "project", "ldvThreshold", "1M");
-    settings.writeTldrawPreference(cwd, "project", "interactionMode", "step_through");
+    settings.writeTldrawPreference(cwd, "project", "cardFill", "family");
     settings.clearTldrawPreference(cwd, "project", "ldvThreshold");
     expect(settings.readEffectiveTldrawPreferences(cwd)).toMatchObject({
       ldvThreshold: "10M",
-      interactionMode: "step_through",
+      cardFill: "family",
     });
   });
 
@@ -75,6 +131,7 @@ describe("sf-tldraw settings", () => {
             cardFill: "pattern",
             ldvThreshold: "999M",
             recordTypeMode: "sometimes",
+            interactionMode: "step_through",
           },
         },
       }),
@@ -84,5 +141,8 @@ describe("sf-tldraw settings", () => {
       ldvThreshold: "2M",
       recordTypeMode: "off",
     });
+    expect(settings.readScopedTldrawPreferences(cwd, "project")).not.toHaveProperty(
+      "interactionMode",
+    );
   });
 });

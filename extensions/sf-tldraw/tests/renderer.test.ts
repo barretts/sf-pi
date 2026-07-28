@@ -27,25 +27,29 @@ describe("sf-tldraw renderer evidence gate", () => {
     rmSync(cwd, { recursive: true, force: true });
   });
 
-  it("refuses step-through rather than silently returning a static sequence", async () => {
+  it("rejects sensitive page names before contacting the runtime", async () => {
     vi.resetModules();
     const spec = JSON.parse(
-      readFileSync(path.join(import.meta.dirname, "fixtures", "sequence.json"), "utf8"),
+      readFileSync(path.join(import.meta.dirname, "fixtures", "data-model.json"), "utf8"),
     );
     const { renderSalesforceDiagram } = await import("../lib/renderer.ts");
-    const outcome = await renderSalesforceDiagram(
-      {
-        family: "sequence",
-        spec,
-        preferences: { interactionMode: "step_through" },
-      },
-      { cwd },
-    );
-    expect(outcome).toMatchObject({
-      ok: false,
-      reason: "step_through_unavailable",
-      recoverVia: { interaction_mode: "static" },
-    });
+    for (const pageName of ["owner@example.test", "Basic YWJjZGVmZ2hpamts"]) {
+      const outcome = await renderSalesforceDiagram(
+        {
+          family: "data_model",
+          spec,
+          pageName,
+        },
+        { cwd },
+      );
+      expect(outcome).toMatchObject({
+        ok: false,
+        reason: "invalid_page_name",
+        validation: {
+          errors: [expect.objectContaining({ code: "private_rendered_value", path: "page_name" })],
+        },
+      });
+    }
   });
 
   it("rejects screenshot evidence captured from a different page", async () => {

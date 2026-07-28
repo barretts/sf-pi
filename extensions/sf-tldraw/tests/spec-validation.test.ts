@@ -46,6 +46,154 @@ describe("Salesforce Diagram Spec validation", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("rejects v1 with stable regenerate-and-retry guidance", () => {
+    const spec = mutable(dataModelFixture());
+    spec.spec_version = "1.0";
+    spec.layout_mode = "source";
+    mutable((spec.objects as object[])[0]!).source_position = { x: 0, y: 0, w: 320, h: 180 };
+    mutable((spec.relationships as object[])[0]!).from_anchor = {
+      side: "right",
+      fraction: 0.25,
+    };
+    mutable((spec.relationships as object[])[0]!).to_anchor = {
+      side: "left",
+      fraction: 0.75,
+    };
+    const result = validateDiagramSpec(spec, "data_model");
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: "invalid_spec_version",
+        path: "spec_version",
+        message: expect.stringMatching(/regenerate.*retry/i),
+      }),
+    );
+  });
+
+  it("rejects unknown fields with path-specific diagnostics", () => {
+    const spec = dataModelFixture();
+    mutable(spec.objects[0]!).apiName = "Account";
+    expect(validateDiagramSpec(spec, "data_model").errors).toContainEqual(
+      expect.objectContaining({ code: "unknown_field", path: "objects[0].apiName" }),
+    );
+  });
+
+  it.each([
+    {
+      name: "title email",
+      family: "data_model" as const,
+      build: () => {
+        const spec = dataModelFixture();
+        spec.title = "owner@example.test";
+        return spec;
+      },
+      path: "title",
+    },
+    {
+      name: "source instance URL",
+      family: "data_model" as const,
+      build: () => {
+        const spec = dataModelFixture();
+        spec.grounding.sources[0]!.label = "https://example.my.salesforce.com";
+        return spec;
+      },
+      path: "grounding.sources[0].label",
+    },
+    {
+      name: "object org id",
+      family: "data_model" as const,
+      build: () => {
+        const spec = dataModelFixture();
+        spec.objects[0]!.label = "00D000000000000AAA";
+        return spec;
+      },
+      path: "objects[0].label",
+    },
+    {
+      name: "relationship username",
+      family: "data_model" as const,
+      build: () => {
+        const spec = dataModelFixture();
+        spec.relationships[0]!.from_label = "username: admin";
+        return spec;
+      },
+      path: "relationships[0].from_label",
+    },
+    {
+      name: "architecture auth URL",
+      family: "architecture" as const,
+      build: () => {
+        const spec = architectureFixture();
+        spec.systems[0]!.responsibility = "Uses https://login.salesforce.com";
+        return spec;
+      },
+      path: "systems[0].responsibility",
+    },
+    {
+      name: "sequence bearer material",
+      family: "sequence" as const,
+      build: () => {
+        const spec = sequenceFixture();
+        spec.interactions[0]!.label = "Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature";
+        return spec;
+      },
+      path: "interactions[0].label",
+    },
+    {
+      name: "client secret assignment",
+      family: "data_model" as const,
+      build: () => {
+        const spec = dataModelFixture();
+        spec.scope = "client_secret=<redacted>";
+        return spec;
+      },
+      path: "scope",
+    },
+    {
+      name: "Basic authorization material",
+      family: "architecture" as const,
+      build: () => {
+        const spec = architectureFixture();
+        spec.systems[0]!.boundary = "Authorization: Basic YWJjZGVmZ2hpamts";
+        return spec;
+      },
+      path: "systems[0].boundary",
+    },
+    {
+      name: "bare Basic authorization material",
+      family: "architecture" as const,
+      build: () => {
+        const spec = architectureFixture();
+        spec.connections[0]!.label = "Basic YWJjZGVmZ2hpamts";
+        return spec;
+      },
+      path: "connections[0].label",
+    },
+    {
+      name: "scheme-less login host",
+      family: "sequence" as const,
+      build: () => {
+        const spec = sequenceFixture();
+        spec.participants[0]!.label = "login.salesforce.com";
+        return spec;
+      },
+      path: "participants[0].label",
+    },
+  ])("rejects private rendered text in $name", ({ family, build, path }) => {
+    expect(validateDiagramSpec(build(), family).errors).toContainEqual(
+      expect.objectContaining({ code: "private_rendered_value", path }),
+    );
+  });
+
+  it("allows OAuth concept labels without credential material", () => {
+    const spec = sequenceFixture();
+    spec.title = "OAuth JWT bearer server-to-server flow";
+    spec.grounding.sources[0]!.label = "JWT bearer flow";
+    spec.interactions[0]!.label = "Request a new access token";
+    spec.interactions[1]!.label = "Return the refresh token";
+    spec.interactions[2]!.label = "Negotiate Basic authentication";
+    expect(validateDiagramSpec(spec, "sequence").errors).toEqual([]);
+  });
+
   it("rejects family/action mismatches", () => {
     const result = validateDiagramSpec(fixture("data-model"), "architecture");
     expect(result.errors.map((error) => error.code)).toContain("family_action_mismatch");
@@ -73,6 +221,45 @@ describe("Salesforce Diagram Spec validation", () => {
     expect(result.errors.map((error) => error.code)).toContain("reference_requires_salesforce_url");
   });
 
+  it("preserves semantic diagnostic codes and paths across structural validation", () => {
+    const invalidMode = dataModelFixture();
+    mutable(invalidMode.grounding).mode = "invalid";
+    expect(validateDiagramSpec(invalidMode, "data_model").errors).toEqual([
+      expect.objectContaining({ code: "invalid_grounding_mode", path: "grounding.mode" }),
+    ]);
+
+    const invalidSourceKind = dataModelFixture();
+    mutable(invalidSourceKind.grounding.sources[0]!).kind = "mystery";
+    expect(validateDiagramSpec(invalidSourceKind, "data_model").errors).toContainEqual(
+      expect.objectContaining({
+        code: "reference_requires_official_source",
+        path: "grounding.sources[0].kind",
+      }),
+    );
+
+    const invalidItems = dataModelFixture();
+    (invalidItems.grounding.sources as unknown[])[0] = null;
+    (invalidItems.objects as unknown[])[0] = null;
+    const itemErrors = validateDiagramSpec(invalidItems, "data_model").errors;
+    expect(itemErrors).toContainEqual(
+      expect.objectContaining({ code: "invalid_source", path: "grounding.sources[0]" }),
+    );
+    expect(itemErrors).toContainEqual(
+      expect.objectContaining({ code: "invalid_object", path: "objects[0]" }),
+    );
+
+    const invalidRowCount = dataModelFixture();
+    mutable(invalidRowCount.objects[0]!).observations = {
+      row_count: { value: -1 },
+    };
+    expect(validateDiagramSpec(invalidRowCount, "data_model").errors).toContainEqual(
+      expect.objectContaining({
+        code: "invalid_row_count",
+        path: "objects[0].observations.row_count",
+      }),
+    );
+  });
+
   it("rejects private identity/auth fields while allowing target_org execution provenance", () => {
     const spec = sequenceFixture();
     spec.grounding = {
@@ -92,7 +279,7 @@ describe("Salesforce Diagram Spec validation", () => {
 
   it("requires an explicit org alias and live org evidence for org grounding", () => {
     const spec = sequenceFixture();
-    spec.grounding = {
+    mutable(spec).grounding = {
       mode: "org",
       as_of: "2026-07-25T12:00:00Z",
       display_label: "Authenticated sandbox",
@@ -114,7 +301,7 @@ describe("Salesforce Diagram Spec validation", () => {
     mutable(firstSystem).product_mark = "unapproved_mark";
     const result = validateDiagramSpec(spec, "architecture");
     expect(result.errors.map((error) => error.code)).toEqual(
-      expect.arrayContaining(["invalid_system_kind", "invalid_product_mark"]),
+      expect.arrayContaining(["invalid_system_kind", "unknown_field"]),
     );
 
     const data = dataModelFixture();
@@ -210,27 +397,19 @@ describe("Salesforce Diagram Spec validation", () => {
     expect(validateDiagramSpec(spec, "data_model").ok).toBe(true);
   });
 
-  it("validates complete source layouts and precise relationship anchors", () => {
+  it("rejects removed source geometry and product-mark fields as unknown", () => {
     const spec = dataModelFixture();
-    spec.layout_mode = "source";
-    for (const [index, object] of spec.objects.entries()) {
-      object.source_position = { x: index * 400, y: index * 200, w: 320, h: 180 };
-    }
-    const relationship = spec.relationships[0];
-    if (!relationship) throw new Error("Expected a relationship fixture.");
-    relationship.from_anchor = { side: "right", fraction: 0.25 };
-    relationship.to_anchor = { side: "left", fraction: 0.75 };
-    expect(validateDiagramSpec(spec, "data_model").ok).toBe(true);
-
-    delete spec.objects[0]!.source_position;
-    relationship.from_anchor.fraction = 1.5;
-    delete relationship.to_anchor;
-    const invalid = validateDiagramSpec(spec, "data_model");
-    expect(invalid.errors.map((error) => error.code)).toEqual(
+    mutable(spec).layout_mode = "source";
+    mutable(spec.objects[0]!).source_position = { x: 0, y: 0, w: 320, h: 180 };
+    mutable(spec.relationships[0]!).from_anchor = { side: "right", fraction: 0.25 };
+    const result = validateDiagramSpec(spec, "data_model");
+    expect(
+      result.errors.filter((error) => error.code === "unknown_field").map((error) => error.path),
+    ).toEqual(
       expect.arrayContaining([
-        "source_position_required",
-        "invalid_relationship_anchor",
-        "relationship_anchor_pair_required",
+        "layout_mode",
+        "objects[0].source_position",
+        "relationships[0].from_anchor",
       ]),
     );
   });

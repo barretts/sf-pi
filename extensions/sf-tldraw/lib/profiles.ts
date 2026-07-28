@@ -72,8 +72,6 @@ function compileDataModel(spec: DataModelSpec, options: CompileOptions): CanvasP
       label: "",
       relationshipType: relationship.type,
       fieldApiName: relationship.field_api_name,
-      fromAnchor: relationship.from_anchor,
-      toAnchor: relationship.to_anchor,
       fromLabel: relationship.from_label,
       toLabel: relationship.to_label,
       fromCardinality: relationship.from_cardinality,
@@ -130,8 +128,7 @@ function compileSequence(spec: SequenceSpec, options: CompileOptions): CanvasPro
   const visuals = resolveVisualAssets(spec, options.preferences.cardinalityDetail);
   const layout = new Map(layoutSequence(spec).map((node) => [node.id, node]));
   const nodes: CanvasNodePayload[] = spec.participants.map((participant) => {
-    const hasExplicitVisual = Boolean(participant.icon || participant.product_mark);
-    const visual = hasExplicitVisual
+    const visual = participant.icon
       ? requiredMapValue(visuals.nodeAssets, participant.id, "visual asset")
       : undefined;
     return {
@@ -165,11 +162,6 @@ function compileSequence(spec: SequenceSpec, options: CompileOptions): CanvasPro
   );
   const assets = visuals.assets.filter((asset) => usedAssets.has(asset.id));
   const warnings = [...(options.warnings ?? []), ...visuals.warnings];
-  if (options.preferences.interactionMode === "step_through") {
-    warnings.push(
-      "Manual step-through requires a document script and is not installed over an existing script; this render remains static.",
-    );
-  }
   const payload = basePayload(spec, options, assets, nodes, interactions, warnings);
   payload.sequenceInteractions = interactions;
   payload.sequenceActivations = activations;

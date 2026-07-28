@@ -7,7 +7,7 @@
  *   Event/Trigger            | Result
  *   -------------------------|----------------------------------------------------------
  *   extension load           | Register `tldraw_canvas` and `/sf-tldraw`; no live probe
- *   session_start            | Cache-first detection, then bounded deferred loopback verification
+ *   session_start            | Cache-only local availability; no loopback verification
  *   /sf-tldraw (no args)     | Open the SF Pi Manager detail page when UI is available
  *   /sf-tldraw status        | Explicitly probe runtime and capability readiness
  *   render tool actions      | Validate, render, lint, verify terminals, capture evidence
@@ -30,13 +30,10 @@ import {
 } from "../../lib/common/manager-deep-link.ts";
 import { requirePiVersion } from "../../lib/common/pi-compat.ts";
 import { withSafeCommandHandler } from "../../lib/common/safe-command-handler.ts";
-import {
-  clearTldrawStatus,
-  getTldrawStatus,
-  setTldrawStatus,
-} from "../../lib/common/tldraw-status/store.ts";
+import { clearTldrawStatus, setTldrawStatus } from "../../lib/common/tldraw-status/store.ts";
 import { SF_TLDRAW_ACTIONS, renderHelp } from "./lib/command-surface.ts";
 import { hasTldrawServerConfig, TldrawRuntimeClient } from "./lib/runtime-client.ts";
+import { formatTldrawDocuments, formatTldrawRuntimeStatus } from "./lib/runtime-surface.ts";
 import { effectiveSettingsText, registerTldrawCanvasTool } from "./lib/tldraw_canvas-tool.ts";
 
 const COMMAND_NAME = "sf-tldraw";
@@ -46,57 +43,18 @@ export default function sfTldraw(pi: ExtensionAPI): void {
 
   registerTldrawCanvasTool(pi);
 
-  let deferredStatusTimer: ReturnType<typeof setTimeout> | null = null;
-  let statusProbeGeneration = 0;
-
-  pi.on("session_start", async (_event, ctx) => {
-    const generation = ++statusProbeGeneration;
-    if (deferredStatusTimer) clearTimeout(deferredStatusTimer);
-    deferredStatusTimer = null;
-
+  pi.on("session_start", async () => {
     if (!hasTldrawServerConfig()) {
       clearTldrawStatus();
       return;
     }
-
     setTldrawStatus({
-      kind: "detected",
-      origin: "startup-probe",
-      message: "Local tldraw server configuration detected; live verification is pending.",
+      kind: "available",
+      origin: "availability",
+      message: "Local tldraw server configuration detected. Verify readiness on demand.",
     });
-
-    // First paint stays cache-only. The bounded loopback probe starts later
-    // without being awaited, then publishes into the shared Welcome store.
-    deferredStatusTimer = setTimeout(() => {
-      deferredStatusTimer = null;
-      const client = new TldrawRuntimeClient({ timeoutMs: 3_000 });
-      void client
-        .status(ctx.signal)
-        .then((status) => {
-          if (generation !== statusProbeGeneration) return;
-          // Never let a deferred startup result overwrite a newer explicit
-          // command/tool observation from the current session.
-          if (getTldrawStatus().origin === "interaction") return;
-          setTldrawStatus({ ...status, origin: "startup-probe" });
-        })
-        .catch(() => {
-          if (generation !== statusProbeGeneration) return;
-          if (getTldrawStatus().origin === "interaction") return;
-          setTldrawStatus({
-            kind: "stale-config",
-            origin: "startup-probe",
-            message: "Deferred tldraw Canvas API verification failed. Run /sf-tldraw status.",
-          });
-        });
-    }, 750);
-    deferredStatusTimer.unref?.();
   });
-  pi.on("session_shutdown", async () => {
-    statusProbeGeneration += 1;
-    if (deferredStatusTimer) clearTimeout(deferredStatusTimer);
-    deferredStatusTimer = null;
-    clearTldrawStatus();
-  });
+  pi.on("session_shutdown", async () => clearTldrawStatus());
 
   pi.registerCommand(COMMAND_NAME, {
     description: "Local tldraw Salesforce diagram status, settings, and reference",
@@ -154,43 +112,26 @@ async function handleCommand(
   }
   if (action === "status") {
     const client = new TldrawRuntimeClient();
-    const status = await client.status(ctx.signal);
-    setTldrawStatus({ ...status, origin: "interaction" });
-    const body = [
-      `Runtime: ${status.kind}`,
-      `Open documents: ${status.openDocuments ?? 0}`,
-      `Focused document: ${status.focusedDocumentName ?? "none"}`,
-      `Native document creation: ${status.capabilities?.nativeDocumentCreation ? "available" : "unavailable"}`,
-      status.message ?? "",
-      "",
-      effectiveSettingsText(ctx.cwd),
-    ]
-      .filter(Boolean)
-      .join("\n");
+    const observation = await client.observe(ctx.signal);
+    setTldrawStatus({ ...observation.status, origin: "interaction" });
+    const body = `${formatTldrawRuntimeStatus(observation.status)}\n\n${effectiveSettingsText(ctx.cwd)}`;
     return emit(
       ctx,
       "SF tldraw status",
       body,
-      status.kind === "ready" ? "success" : "warning",
+      observation.status.kind === "ready" ? "success" : "warning",
       fromPanel,
     );
   }
   if (action === "documents") {
     const client = new TldrawRuntimeClient();
-    const documents = await client.documents(ctx.signal);
-    const body = documents.length
-      ? [
-          "Open tldraw documents:",
-          ...documents.map(
-            (doc) => `- ${doc.name ?? "Untitled"} · ${doc.id} · ${doc.shapeCount ?? "?"} shapes`,
-          ),
-        ].join("\n")
-      : "No tldraw documents are open.";
+    const observation = await client.observe(ctx.signal);
+    setTldrawStatus({ ...observation.status, origin: "interaction" });
     return emit(
       ctx,
       "Open tldraw documents",
-      body,
-      documents.length ? "info" : "warning",
+      formatTldrawDocuments(observation.documents),
+      observation.documents.length ? "info" : "warning",
       fromPanel,
     );
   }

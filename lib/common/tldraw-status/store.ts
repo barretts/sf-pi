@@ -2,7 +2,7 @@
 /** Render-safe, in-process status bridge from sf-tldraw to passive UI consumers. */
 export type TldrawStatusKind =
   | "hidden"
-  | "detected"
+  | "available"
   | "ready"
   | "no-open-document"
   | "not-running"
@@ -12,10 +12,16 @@ export type TldrawStatusKind =
 
 export interface TldrawStatusSnapshot {
   kind: TldrawStatusKind;
-  origin?: "startup-probe" | "interaction";
+  origin?: "availability" | "interaction";
   port?: number;
   openDocuments?: number;
   focusedDocumentName?: string;
+  skillReadiness?: {
+    kind: "ready" | "missing" | "unmanaged" | "stale" | "unknown";
+    managed: boolean;
+    manifestVersion?: string;
+    message: string;
+  };
   message?: string;
   updatedAt?: string;
 }

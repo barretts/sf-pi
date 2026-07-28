@@ -43,11 +43,12 @@ export function renderHelp(): string {
     "- `/sf-tldraw cheatsheet` — show the lazy tool/spec reference.",
     "",
     "Agent tool:",
-    "- `tldraw_canvas` provides status, document/search/execute/screenshot/script actions and three Salesforce render profiles.",
+    "- `tldraw_canvas` provides v1.12 status, document discovery/creation, and three Salesforce render profiles.",
     "",
     "Runtime boundary:",
-    "- The current Canvas API renders into already-open documents and can create pages within them.",
-    "- Native document creation is not available in tldraw offline 1.11.0.",
+    "- tldraw offline v1.12 is required.",
+    "- Use the separate create_document tool action when no document is open; render actions never create files implicitly.",
+    "- Generic canvas editing and document scripts use the upstream `tldraw-offline` Pi skill.",
     "- sf-tldraw never falls back to OS automation or direct `.tldraw` archive generation.",
   ].join("\n");
 }

@@ -179,55 +179,49 @@ describe("deterministic Salesforce profiles", () => {
     }
   });
 
-  it("preserves evidenced source geometry on the first render", () => {
-    const spec = fixture("data-model");
-    if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
-    spec.layout_mode = "source";
-    for (const [index, object] of spec.objects.entries()) {
-      object.source_position = {
-        x: (index % 3) * 500,
-        y: Math.floor(index / 3) * 360,
-        w: 300,
-        h: 180,
-      };
-    }
-    const first = layoutDataModel(spec);
-    const second = layoutDataModel(structuredClone(spec));
-    expect(second).toEqual(first);
-    expect(first.find((node) => node.id === spec.objects[1]?.id)?.x).toBeGreaterThan(
-      first.find((node) => node.id === spec.objects[0]?.id)?.x ?? 0,
-    );
-  });
-
-  it("grows source-layout hubs along declared terminal sides", () => {
+  it("reserves additional side capacity for dense automatic-route hubs", () => {
     const spec = fixture("data-model");
     if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
     const hub = structuredClone(spec.objects[0]);
     if (!hub) throw new Error("Expected a fixture hub.");
     hub.id = "hub";
-    hub.source_position = { x: 800, y: 800, w: 300, h: 180 };
     const leaves = Array.from({ length: 10 }, (_, index) => ({
       ...structuredClone(hub),
-      id: `source-leaf-${index}`,
-      label: `Source Leaf ${index}`,
-      api_name: `SourceLeaf${index}`,
-      source_position: { x: index * 420, y: 0, w: 300, h: 180 },
+      id: `alternate-leaf-${index}`,
+      label: `Alternate Leaf ${index}`,
+      api_name: `AlternateLeaf${index}`,
     }));
-    spec.layout_mode = "source";
     spec.objects = [hub, ...leaves];
     spec.relationships = leaves.map((leaf, index) => ({
-      id: `source-edge-${index}`,
+      id: `alternate-edge-${index}`,
       from: hub.id,
       to: leaf.id,
       type: "lookup" as const,
       from_cardinality: "one" as const,
       to_cardinality: "many" as const,
-      from_anchor: { side: "top" as const, fraction: 0.08 + index * 0.08 },
-      to_anchor: { side: "bottom" as const, fraction: 0.5 },
       evidence: [...hub.evidence],
     }));
     const positionedHub = layoutDataModel(spec).find((node) => node.id === hub.id);
-    expect(positionedHub?.w).toBeGreaterThanOrEqual(600);
+    expect(Math.max(positionedHub?.w ?? 0, positionedHub?.h ?? 0)).toBeGreaterThan(330);
+  });
+
+  it("reserves both exterior sides for recursive relationship terminals", () => {
+    const spec = fixture("data-model");
+    if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
+    const node = structuredClone(spec.objects[0]);
+    if (!node) throw new Error("Expected a fixture object.");
+    spec.objects = [node];
+    spec.relationships = Array.from({ length: 2 }, (_, index) => ({
+      id: `self-${index}`,
+      from: node.id,
+      to: node.id,
+      type: "lookup" as const,
+      from_cardinality: "one" as const,
+      to_cardinality: "many" as const,
+      evidence: [...node.evidence],
+    }));
+    const positioned = layoutDataModel(spec)[0];
+    expect(positioned?.h).toBeGreaterThanOrEqual(200);
   });
 
   it("carries relationship kind and optional end semantics on the connector", () => {
@@ -237,8 +231,6 @@ describe("deterministic Salesforce profiles", () => {
     if (!relationship) throw new Error("Expected at least one relationship.");
     relationship.type = "master_detail";
     relationship.field_api_name = "AccountId";
-    relationship.from_anchor = { side: "right", fraction: 0.3 };
-    relationship.to_anchor = { side: "left", fraction: 0.7 };
     relationship.from_label = "child of";
     relationship.to_label = "parent of";
     const payload = compileProfile(spec, {
@@ -250,8 +242,6 @@ describe("deterministic Salesforce profiles", () => {
     expect(edge?.relationshipType).toBe("master_detail");
     expect(edge).toMatchObject({
       fieldApiName: "AccountId",
-      fromAnchor: { side: "right", fraction: 0.3 },
-      toAnchor: { side: "left", fraction: 0.7 },
       fromLabel: "child of",
       toLabel: "parent of",
     });

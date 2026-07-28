@@ -274,10 +274,13 @@ describe("sf-welcome", () => {
     const available = tldrawLine(render({ tldrawEnabled: true, tldrawStatus: { kind: "hidden" } }));
     expect(stripAnsi(available)).toContain("✓ Available");
 
-    const verifying = tldrawLine(
-      render({ tldrawEnabled: true, tldrawStatus: { kind: "detected" } }),
+    const detectedConfig = tldrawLine(
+      render({
+        tldrawEnabled: true,
+        tldrawStatus: { kind: "available", origin: "availability" },
+      }),
     );
-    expect(stripAnsi(verifying)).toContain("○ Verifying canvas…");
+    expect(stripAnsi(detectedConfig)).toContain("✓ Available");
 
     const idle = tldrawLine(
       render({ tldrawEnabled: true, tldrawStatus: { kind: "no-open-document" } }),
@@ -298,15 +301,6 @@ describe("sf-welcome", () => {
     );
     expect(stripAnsi(notRunning)).toContain("○ Canvas not running");
     expect(stripAnsi(notRunning)).not.toContain("!");
-
-    const passiveFault = tldrawLine(
-      render({
-        tldrawEnabled: true,
-        tldrawStatus: { kind: "stale-config", origin: "startup-probe" },
-      }),
-    );
-    expect(stripAnsi(passiveFault)).toContain("✓ Available");
-    expect(stripAnsi(passiveFault)).not.toContain("Restart needed");
 
     const stale = tldrawLine(
       render({

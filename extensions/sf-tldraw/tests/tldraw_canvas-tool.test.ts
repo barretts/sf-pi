@@ -1,9 +1,19 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { describe, expect, it, vi } from "vitest";
-import { registerTldrawCanvasTool } from "../lib/tldraw_canvas-tool.ts";
+import { Check } from "typebox/value";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { TldrawRuntimeClient } from "../lib/runtime-client.ts";
+import { formatTldrawRuntimeStatus } from "../lib/runtime-surface.ts";
+import { DataModelSpecSchema } from "../lib/spec-schema.ts";
+import {
+  formatRenderSuccess,
+  registerTldrawCanvasTool,
+  renderSuccessContent,
+} from "../lib/tldraw_canvas-tool.ts";
 
 describe("tldraw_canvas family tool", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   function registeredTool() {
     const registerTool = vi.fn();
     registerTldrawCanvasTool({ registerTool } as unknown as ExtensionAPI);
@@ -19,12 +29,187 @@ describe("tldraw_canvas family tool", () => {
     expect(tool.promptGuidelines.join("\n")).toMatch(/OS automation/i);
   });
 
-  it("exposes the data-model card-fill override", () => {
+  it("exposes explicit document creation, strict Spec v2, and card-fill override", () => {
     const tool = registeredTool();
     const schema = JSON.stringify(tool.parameters);
+    expect(schema).toContain('"create_document"');
+    expect(schema).not.toContain('"execute"');
+    expect(schema).not.toContain('"script_workspace"');
+    expect(schema).not.toContain('"screenshot"');
+    expect(schema).toContain('"2.0"');
+    expect(schema).toContain('"additionalProperties":false');
+    expect(schema).toContain('"product_mark"');
+    expect(schema).toContain('"layout_mode"');
+    expect(schema).toContain('"name"');
+
+    const legacyV1 = {
+      spec_version: "1.0",
+      family: "data_model",
+      title: "Legacy model",
+      scope: "Migration-only provider input.",
+      grounding: {
+        mode: "reference",
+        as_of: "2026-07-27",
+        sources: [
+          {
+            id: "source",
+            label: "Salesforce reference",
+            url: "https://developer.salesforce.com/docs/platform/data-models/guide/service-cloud-overview.html",
+            kind: "official_doc",
+          },
+        ],
+      },
+      layout_mode: "source",
+      objects: [
+        {
+          id: "account",
+          label: "Account",
+          family: "standard",
+          source_position: { x: 0, y: 0, w: 320, h: 180 },
+          evidence: ["source"],
+        },
+      ],
+      relationships: [],
+    };
+    expect(
+      Check(tool.parameters, {
+        action: "render_salesforce_data_model",
+        spec: legacyV1,
+      }),
+    ).toBe(true);
+    expect(Check(DataModelSpecSchema, { ...legacyV1, spec_version: "2.0" })).toBe(false);
     expect(schema).toContain('"card_fill"');
     expect(schema).toContain('"transparent"');
     expect(schema).toContain('"family"');
+  });
+
+  it("uses the shared runtime observation and formatter for status", async () => {
+    const observation = {
+      status: {
+        kind: "ready" as const,
+        openDocuments: 1,
+        focusedDocumentName: "Support Model.tldraw",
+        capabilities: {
+          apiContract: "canvas-api-v1.12" as const,
+          contractProof: "readme" as const,
+          nativeDocumentCreation: true as const,
+          documents: true as const,
+          search: true as const,
+          execute: true as const,
+          screenshot: true as const,
+        },
+        skillReadiness: { kind: "ready" as const, managed: true, message: "ready" },
+      },
+      documents: [{ id: "doc-1", name: "Support Model.tldraw" }],
+    };
+    const observe = vi
+      .spyOn(TldrawRuntimeClient.prototype, "observe")
+      .mockResolvedValue(observation);
+    const tool = registeredTool();
+    const result = await tool.execute("id", { action: "status" }, undefined, undefined, {
+      cwd: process.cwd(),
+    });
+    expect(observe).toHaveBeenCalledOnce();
+    expect(result.content).toEqual([
+      { type: "text", text: formatTldrawRuntimeStatus(observation.status) },
+    ]);
+  });
+
+  it("creates a document without an extra acknowledgement and returns its id", async () => {
+    vi.spyOn(TldrawRuntimeClient.prototype, "createDocument").mockResolvedValue({
+      id: "doc-created",
+      documentId: "document-created",
+      name: "Support Model.tldraw",
+      windowId: 3,
+    });
+    vi.spyOn(TldrawRuntimeClient.prototype, "skillReadiness").mockReturnValue({
+      kind: "ready",
+      managed: true,
+      manifestVersion: "1.12.0",
+      message: "ready",
+    });
+    const tool = registeredTool();
+    const result = await tool.execute(
+      "id",
+      { action: "create_document", name: "Support Model" },
+      undefined,
+      undefined,
+      { cwd: process.cwd() },
+    );
+    expect(result.content[0].text).toContain("Document id: doc-created");
+    expect(result.details.sfTldraw).toMatchObject({
+      ok: true,
+      action: "create_document",
+      document: { id: "doc-created", name: "Support Model.tldraw" },
+    });
+  });
+
+  it("keeps summary, inline, and file-only render results distinct", () => {
+    const outcome = {
+      ok: true,
+      spec: {
+        grounding: {
+          sources: [{ id: "schema", kind: "org_describe", label: "Object describe" }],
+        },
+      },
+      result: {
+        family: "data_model",
+        documentId: "doc-1",
+        pageName: "Support Model",
+        createdShapes: 8,
+        updatedShapes: 2,
+        deletedShapes: 0,
+        readiness: {
+          lintCount: 0,
+          markerChecks: [],
+          warnings: ["One route warning"],
+          bindingChecks: [{ id: "edge-1", valid: true }],
+          sequenceGeometryChecks: [],
+          typographyChecks: [{ id: "account", apiGap: 8, formatValid: true }],
+          cardContentChecks: [{ id: "account", overflow: 0 }],
+          routeChecks: [{ id: "edge-1", obstructedBy: ["case"] }],
+          routeCrossingChecks: [],
+          sharedCorridorChecks: [],
+          markerOverlapChecks: [],
+        },
+      },
+      artifact: {
+        reportPath: "/tmp/report.json",
+        screenshotPath: "/tmp/full.jpg",
+        thumbnailPath: "/tmp/thumb.jpg",
+      },
+    };
+
+    const summary = formatRenderSuccess({ ...outcome, outputMode: "summary" } as never);
+    expect(summary).toContain("Shapes: 8 created");
+    expect(summary).not.toContain("Inline readiness details");
+
+    const inline = formatRenderSuccess({ ...outcome, outputMode: "inline" } as never);
+    expect(inline).toContain("Inline readiness details");
+    expect(inline).toContain("Route obstructions: 1");
+    expect(inline).toContain("schema · org_describe · Object describe");
+
+    const fileOnlyOutcome = { ...outcome, outputMode: "file_only" } as never;
+    const fileOnly = formatRenderSuccess(fileOnlyOutcome);
+    expect(fileOnly).toContain("Report: /tmp/report.json");
+    expect(fileOnly).not.toContain("Shapes:");
+    expect(fileOnly).not.toContain("Warnings:");
+    expect(renderSuccessContent(fileOnlyOutcome)).toEqual([{ type: "text", text: fileOnly }]);
+
+    const oversized = {
+      ...outcome,
+      outputMode: "inline",
+      result: {
+        ...outcome.result,
+        readiness: {
+          ...outcome.result.readiness,
+          warnings: Array.from({ length: 8 }, (_, index) => `${index}-${"w".repeat(2_000)}`),
+        },
+      },
+    } as never;
+    const boundedInline = formatRenderSuccess(oversized);
+    expect(boundedInline.length).toBeLessThanOrEqual(8_000);
+    expect(boundedInline).toContain("…truncated");
   });
 
   it("loads the cheatsheet lazily without contacting the runtime", async () => {
@@ -37,42 +222,5 @@ describe("tldraw_canvas family tool", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(result.content[0].text).toContain("# `tldraw_canvas` cheatsheet");
     vi.unstubAllGlobals();
-  });
-
-  it("requires explicit acknowledgement for raw canvas execution", async () => {
-    const tool = registeredTool();
-    const result = await tool.execute(
-      "id",
-      { action: "execute", document_id: "doc", script: "return true" },
-      undefined,
-      undefined,
-      { cwd: process.cwd() },
-    );
-    expect(result.details.sfTldraw).toMatchObject({
-      ok: false,
-      action: "execute",
-      reason: "acknowledgement_required",
-    });
-  });
-
-  it("fails closed without an interactive user confirmation even when the model supplies acknowledgement", async () => {
-    const tool = registeredTool();
-    const result = await tool.execute(
-      "id",
-      {
-        action: "execute",
-        document_id: "doc",
-        script: "return true",
-        acknowledge_raw_canvas: true,
-      },
-      undefined,
-      undefined,
-      { cwd: process.cwd(), hasUI: false },
-    );
-    expect(result.details.sfTldraw).toMatchObject({
-      ok: false,
-      action: "execute",
-      reason: "user_confirmation_required",
-    });
   });
 });

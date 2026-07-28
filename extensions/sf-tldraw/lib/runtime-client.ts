@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Narrow, secret-safe adapter for the loopback tldraw offline Canvas API. */
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
   closeSync,
   existsSync,
@@ -15,9 +16,12 @@ import path from "node:path";
 import type {
   RuntimeCapabilities,
   RuntimeScreenshot,
+  TldrawCreatedDocument,
   TldrawDocumentSummary,
+  TldrawRuntimeObservation,
   TldrawRuntimeStatus,
   TldrawServerConfig,
+  TldrawSkillReadiness,
 } from "./types.ts";
 import { sanitizeRuntimeText } from "./redaction.ts";
 
@@ -28,6 +32,8 @@ export type TldrawRuntimeErrorCode =
   | "not_found"
   | "no_open_document"
   | "unsupported"
+  | "invalid_request"
+  | "conflict"
   | "timeout"
   | "execution_failed"
   | "invalid_response";
@@ -46,6 +52,7 @@ export class TldrawRuntimeError extends Error {
 interface ClientOptions {
   fetchImpl?: typeof fetch;
   serverConfigPath?: string;
+  agentDir?: string;
   timeoutMs?: number;
 }
 
@@ -55,16 +62,26 @@ interface ApiEnvelope<T> {
   error?: string;
 }
 
-const LEGACY_CAPABILITIES: RuntimeCapabilities = {
-  apiContract: "canvas-api-v1",
-  capabilityEndpoint: false,
-  nativeDocumentCreation: false,
+const CREATE_DOCUMENT_TIMEOUT_MS = 60_000;
+const TLDRAW_SKILL_MARKER = "<!-- installed-by:tldraw-desktop-agent-skills -->";
+const TLDRAW_SKILL_RELATIVE_PATH = path.join("skills", "tldraw-offline", "SKILL.md");
+const REQUIRED_V112_CONTRACT_MARKERS = [
+  "`POST /api/search`",
+  "`POST /api/docs/create`",
+  "`POST /api/doc/:id/exec`",
+  "api.getScreenshot",
+  "helpers.createArrowBetweenShapes",
+  "helpers.getLints",
+] as const;
+
+const V112_CAPABILITIES: RuntimeCapabilities = {
+  apiContract: "canvas-api-v1.12",
+  contractProof: "readme",
+  nativeDocumentCreation: true,
   documents: true,
   search: true,
   execute: true,
   screenshot: true,
-  scriptWorkspace: true,
-  scriptStatus: true,
 };
 
 export function defaultTldrawServerConfigPath(): string {
@@ -87,11 +104,14 @@ export function hasTldrawServerConfig(filePath = defaultTldrawServerConfigPath()
 export class TldrawRuntimeClient {
   private readonly fetchImpl: typeof fetch;
   private readonly serverConfigPath: string;
+  private readonly agentDir: string;
   private readonly timeoutMs: number;
+  private verifiedCapabilities: RuntimeCapabilities | undefined;
 
   constructor(options: ClientOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.serverConfigPath = options.serverConfigPath ?? defaultTldrawServerConfigPath();
+    this.agentDir = options.agentDir ?? getAgentDir();
     this.timeoutMs = options.timeoutMs ?? 15_000;
   }
 
@@ -126,14 +146,22 @@ export class TldrawRuntimeClient {
   }
 
   async status(signal?: AbortSignal): Promise<TldrawRuntimeStatus> {
+    return (await this.observe(signal)).status;
+  }
+
+  async observe(signal?: AbortSignal): Promise<TldrawRuntimeObservation> {
     let config: TldrawServerConfig;
     try {
       config = this.readServerConfig();
     } catch (error) {
       if (error instanceof TldrawRuntimeError)
         return {
-          kind: error.code === "not_running" ? "not-running" : "stale-config",
-          message: error.message,
+          status: {
+            kind: error.code === "not_running" ? "not-running" : "stale-config",
+            skillReadiness: this.skillReadiness(),
+            message: error.message,
+          },
+          documents: [],
         };
       throw error;
     }
@@ -143,17 +171,19 @@ export class TldrawRuntimeClient {
       const documents = await this.documents(signal);
       const focused = documents.find((document) => document.focusOrder === 0) ?? documents[0];
       return {
-        kind: documents.length > 0 ? "ready" : "no-open-document",
-        port: config.port,
-        openDocuments: documents.length,
-        focusedDocumentName: focused?.name,
-        capabilities,
-        message:
-          documents.length > 0
-            ? capabilities.nativeDocumentCreation
-              ? "Canvas API ready."
-              : "Canvas API ready for open documents; native document creation is unavailable."
-            : "Canvas API is reachable, but no document is open.",
+        status: {
+          kind: documents.length > 0 ? "ready" : "no-open-document",
+          port: config.port,
+          openDocuments: documents.length,
+          focusedDocumentName: focused?.name,
+          capabilities,
+          skillReadiness: this.skillReadiness(),
+          message:
+            documents.length > 0
+              ? "Canvas API v1.12 contract ready."
+              : "Canvas API v1.12 contract is ready, but no document is open.",
+        },
+        documents,
       };
     } catch (error) {
       if (error instanceof TldrawRuntimeError) {
@@ -163,37 +193,119 @@ export class TldrawRuntimeClient {
             : error.code === "unsupported"
               ? "incompatible"
               : "stale-config";
-        return { kind, port: config.port, message: error.message };
+        return {
+          status: {
+            kind,
+            port: config.port,
+            skillReadiness: this.skillReadiness(),
+            message: error.message,
+          },
+          documents: [],
+        };
       }
       throw error;
     }
   }
 
   async capabilities(signal?: AbortSignal): Promise<RuntimeCapabilities> {
+    if (this.verifiedCapabilities) return { ...this.verifiedCapabilities };
+    let readme: string;
     try {
-      const response = await this.request<Record<string, unknown>>(
-        "GET",
-        "/api/capabilities",
-        undefined,
-        signal,
-        false,
-      );
-      return {
-        apiContract: "unknown",
-        capabilityEndpoint: true,
-        nativeDocumentCreation:
-          response.nativeDocumentCreation === true || response.createDocument === true,
-        documents: response.documents === true,
-        search: response.search === true,
-        execute: response.execute === true,
-        screenshot: response.screenshot === true,
-        scriptWorkspace: response.scriptWorkspace === true,
-        scriptStatus: response.scriptStatus === true,
-      };
+      readme = await this.requestText("GET", "/readme", signal);
     } catch (error) {
-      if (error instanceof TldrawRuntimeError && error.code === "not_found")
-        return { ...LEGACY_CAPABILITIES };
+      if (error instanceof TldrawRuntimeError && error.code === "not_found") {
+        throw new TldrawRuntimeError(
+          "unsupported",
+          "The local tldraw runtime does not expose the required Canvas API v1.12 contract. Update tldraw offline and retry.",
+          error.status,
+        );
+      }
       throw error;
+    }
+    const missing = REQUIRED_V112_CONTRACT_MARKERS.filter((marker) => !readme.includes(marker));
+    if (missing.length > 0) {
+      throw new TldrawRuntimeError(
+        "unsupported",
+        "The local tldraw runtime does not satisfy the required Canvas API v1.12 contract. Update tldraw offline and retry.",
+      );
+    }
+    this.verifiedCapabilities = { ...V112_CAPABILITIES };
+    return { ...this.verifiedCapabilities };
+  }
+
+  skillReadiness(): TldrawSkillReadiness {
+    const skillPath = path.join(this.agentDir, TLDRAW_SKILL_RELATIVE_PATH);
+    if (!existsSync(skillPath)) {
+      return {
+        kind: "missing",
+        managed: false,
+        message:
+          "The app-managed tldraw-offline Pi skill is missing. In tldraw offline, choose Develop → Install Agent Skills.",
+      };
+    }
+
+    let skillContent: string;
+    try {
+      skillContent = readFileSync(skillPath, "utf8");
+    } catch {
+      return {
+        kind: "unknown",
+        managed: false,
+        message:
+          "The tldraw-offline Pi skill could not be inspected. In tldraw offline, choose Develop → Install Agent Skills to repair it.",
+      };
+    }
+    if (!skillContent.includes(TLDRAW_SKILL_MARKER)) {
+      return {
+        kind: "unmanaged",
+        managed: false,
+        message:
+          "The discovered tldraw-offline Pi skill is not app-managed. Review the conflict, then use Develop → Install Agent Skills if the app-owned copy should win.",
+      };
+    }
+
+    const manifestPath = path.join(path.dirname(this.serverConfigPath), "agent-skills.json");
+    if (!existsSync(manifestPath)) {
+      return {
+        kind: "unknown",
+        managed: true,
+        message:
+          "The app-managed tldraw-offline Pi skill is present, but its install manifest is unavailable. Re-run Develop → Install Agent Skills to establish freshness evidence.",
+      };
+    }
+    try {
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+        appVersion?: unknown;
+        files?: unknown;
+      };
+      const manifestVersion =
+        typeof manifest.appVersion === "string" ? manifest.appVersion : undefined;
+      const files = Array.isArray(manifest.files)
+        ? manifest.files.filter((value): value is string => typeof value === "string")
+        : [];
+      const recordsPiSkill = files.some((value) => samePath(value, skillPath));
+      if (!manifestVersion || !isAtLeastVersion(manifestVersion, 1, 12) || !recordsPiSkill) {
+        return {
+          kind: "stale",
+          managed: true,
+          manifestVersion,
+          message:
+            "The app-managed tldraw-offline Pi skill is stale or not recorded for this Pi agent directory. In tldraw offline, choose Develop → Install Agent Skills.",
+        };
+      }
+      return {
+        kind: "ready",
+        managed: true,
+        manifestVersion,
+        message: `App-managed tldraw-offline Pi skill ready (installed by tldraw ${manifestVersion}).`,
+      };
+    } catch {
+      return {
+        kind: "unknown",
+        managed: true,
+        message:
+          "The app-managed tldraw-offline Pi skill is present, but its install manifest is invalid. Re-run Develop → Install Agent Skills to repair it.",
+      };
     }
   }
 
@@ -207,8 +319,9 @@ export class TldrawRuntimeClient {
   async resolveDocument(
     documentId: string | undefined,
     signal?: AbortSignal,
+    observedDocuments?: TldrawDocumentSummary[],
   ): Promise<TldrawDocumentSummary> {
-    const documents = await this.documents(signal);
+    const documents = observedDocuments ?? (await this.documents(signal));
     if (documentId) {
       const exact = documents.find((document) => document.id === documentId);
       if (!exact)
@@ -227,27 +340,9 @@ export class TldrawRuntimeClient {
     return focused;
   }
 
-  async search(query: string, signal?: AbortSignal): Promise<Array<Record<string, unknown>>> {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return [];
-    const encoded = JSON.stringify(needle);
-    const code = [
-      `const needle=${encoded};`,
-      "const docs=await api.getDocs();",
-      "const matches=[];",
-      "for(const doc of docs){",
-      " const docText=JSON.stringify({name:doc.name,pageName:doc.pageName}).toLowerCase();",
-      " if(docText.includes(needle)) matches.push({kind:'document',documentId:doc.id,name:doc.name,pageName:doc.pageName});",
-      " const page=await api.getShapes(doc.id);",
-      " for(const shape of page?.shapes ?? []){const text=JSON.stringify(shape.props ?? {}).toLowerCase(); if(text.includes(needle)) matches.push({kind:'shape',documentId:doc.id,shapeId:shape.id,shapeType:shape.type});}",
-      "}",
-      "return matches.slice(0,100)",
-    ].join("");
-    return this.searchCode<Array<Record<string, unknown>>>(code, signal);
-  }
-
   async execute<T>(documentId: string, script: string, signal?: AbortSignal): Promise<T> {
     if (!script.trim()) throw new TldrawRuntimeError("execution_failed", "Canvas script is empty.");
+    await this.capabilities(signal);
     return this.request<T>(
       "POST",
       `/api/doc/${documentPathId(documentId)}/exec`,
@@ -271,44 +366,43 @@ export class TldrawRuntimeClient {
     return validateRuntimeScreenshot(screenshot);
   }
 
-  async scriptWorkspace(
-    documentId: string,
-    signal?: AbortSignal,
-  ): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(
+  async createDocument(name: string, signal?: AbortSignal): Promise<TldrawCreatedDocument> {
+    const safeName = validateDocumentName(name);
+    await this.capabilities(signal);
+    const created = await this.request<Record<string, unknown>>(
       "POST",
-      `/api/doc/${documentPathId(documentId)}/script-workspace`,
-      "return true",
+      "/api/docs/create",
+      JSON.stringify({ name: safeName }),
       signal,
       true,
+      "application/json",
+      CREATE_DOCUMENT_TIMEOUT_MS,
     );
-  }
-
-  async scriptStatus(documentId: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(
-      "GET",
-      `/api/doc/${documentPathId(documentId)}/script-status`,
-      undefined,
-      signal,
-      true,
-    );
-  }
-
-  async createDocument(): Promise<never> {
-    const capabilities = await this.capabilities();
-    if (!capabilities.nativeDocumentCreation) {
+    if (
+      typeof created.id !== "string" ||
+      !created.id ||
+      typeof created.documentId !== "string" ||
+      !created.documentId ||
+      typeof created.name !== "string" ||
+      !created.name ||
+      typeof created.windowId !== "number" ||
+      !Number.isFinite(created.windowId)
+    ) {
       throw new TldrawRuntimeError(
-        "unsupported",
-        "This tldraw runtime does not expose native document creation. Open a blank board manually; OS automation and direct .tldraw generation are intentionally not used.",
+        "invalid_response",
+        "tldraw created a document but returned incomplete document metadata.",
       );
     }
-    throw new TldrawRuntimeError(
-      "unsupported",
-      "Native document creation was advertised but this sf-tldraw build does not recognize the operation contract. Upgrade sf-tldraw before using it.",
-    );
+    return {
+      id: created.id,
+      documentId: created.documentId,
+      name: created.name,
+      windowId: created.windowId,
+    };
   }
 
   private async searchCode<T>(code: string, signal?: AbortSignal): Promise<T> {
+    await this.capabilities(signal);
     return this.request<T>(
       "POST",
       "/api/search",
@@ -319,6 +413,16 @@ export class TldrawRuntimeClient {
     );
   }
 
+  private async requestText(
+    method: "GET" | "POST",
+    pathname: string,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const { response, text } = await this.transport(method, pathname, undefined, signal);
+    if (!response.ok) throw runtimeHttpError(parseJson(text), response.status);
+    return text;
+  }
+
   private async request<T>(
     method: "GET" | "POST",
     pathname: string,
@@ -326,10 +430,46 @@ export class TldrawRuntimeClient {
     signal: AbortSignal | undefined,
     unwrapEnvelope: boolean,
     contentType = "text/plain",
+    timeoutMs = this.timeoutMs,
   ): Promise<T> {
+    const { response, text } = await this.transport(
+      method,
+      pathname,
+      body,
+      signal,
+      contentType,
+      timeoutMs,
+    );
+    const parsed = parseJson(text);
+    if (!response.ok) throw runtimeHttpError(parsed, response.status);
+    if (!unwrapEnvelope) return parsed as T;
+    const envelope = parsed as ApiEnvelope<T>;
+    if (envelope.success === false)
+      throw new TldrawRuntimeError(
+        "execution_failed",
+        safeRuntimeMessage(envelope, response.status),
+        response.status,
+      );
+    if (!("result" in envelope))
+      throw new TldrawRuntimeError(
+        "invalid_response",
+        "tldraw returned a response without a result.",
+        response.status,
+      );
+    return envelope.result as T;
+  }
+
+  private async transport(
+    method: "GET" | "POST",
+    pathname: string,
+    body: string | undefined,
+    signal: AbortSignal | undefined,
+    contentType = "text/plain",
+    timeoutMs = this.timeoutMs,
+  ): Promise<{ response: Response; text: string }> {
     const config = this.readServerConfig();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(new Error("timeout")), this.timeoutMs);
+    const timer = setTimeout(() => controller.abort(new Error("timeout")), timeoutMs);
     const onAbort = () => controller.abort(signal?.reason);
     signal?.addEventListener("abort", onAbort, { once: true });
     try {
@@ -342,31 +482,7 @@ export class TldrawRuntimeClient {
         body,
         signal: controller.signal,
       });
-      const text = await response.text();
-      const parsed = parseJson(text);
-      if (!response.ok) {
-        const message = safeRuntimeMessage(parsed, response.status);
-        if (response.status === 401 || response.status === 403)
-          throw new TldrawRuntimeError("auth_error", message, response.status);
-        if (response.status === 404)
-          throw new TldrawRuntimeError("not_found", message, response.status);
-        throw new TldrawRuntimeError("execution_failed", message, response.status);
-      }
-      if (!unwrapEnvelope) return parsed as T;
-      const envelope = parsed as ApiEnvelope<T>;
-      if (envelope.success === false)
-        throw new TldrawRuntimeError(
-          "execution_failed",
-          safeRuntimeMessage(envelope, response.status),
-          response.status,
-        );
-      if (!("result" in envelope))
-        throw new TldrawRuntimeError(
-          "invalid_response",
-          "tldraw returned a response without a result.",
-          response.status,
-        );
-      return envelope.result as T;
+      return { response, text: await response.text() };
     } catch (error) {
       if (error instanceof TldrawRuntimeError) throw error;
       if (controller.signal.aborted)
@@ -380,6 +496,52 @@ export class TldrawRuntimeClient {
       signal?.removeEventListener("abort", onAbort);
     }
   }
+}
+
+function runtimeHttpError(payload: unknown, status: number): TldrawRuntimeError {
+  const message = safeRuntimeMessage(payload, status);
+  if (status === 400) return new TldrawRuntimeError("invalid_request", message, status);
+  if (status === 401 || status === 403)
+    return new TldrawRuntimeError("auth_error", message, status);
+  if (status === 404) return new TldrawRuntimeError("not_found", message, status);
+  if (status === 409) return new TldrawRuntimeError("conflict", message, status);
+  return new TldrawRuntimeError("execution_failed", message, status);
+}
+
+function validateDocumentName(value: string): string {
+  const name = value.trim();
+  if (
+    name.length < 1 ||
+    name.length > 120 ||
+    name === "." ||
+    name === ".." ||
+    name.includes("/") ||
+    name.includes("\\") ||
+    name.includes("\0") ||
+    name.toLowerCase().endsWith(".tldr") ||
+    (/\.[^.]+$/.test(name) && !name.toLowerCase().endsWith(".tldraw"))
+  ) {
+    throw new TldrawRuntimeError(
+      "invalid_request",
+      "Document name must be a plain file name up to 120 characters with no path separators and either no extension or the .tldraw extension.",
+    );
+  }
+  return name;
+}
+
+function isAtLeastVersion(value: string, requiredMajor: number, requiredMinor: number): boolean {
+  const match = value.match(/^(\d+)\.(\d+)(?:\.|$)/);
+  if (!match) return false;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  return major > requiredMajor || (major === requiredMajor && minor >= requiredMinor);
+}
+
+function samePath(left: string, right: string): boolean {
+  const normalize = (value: string) => path.resolve(value).replaceAll("\\", "/");
+  const a = normalize(left);
+  const b = normalize(right);
+  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
 function parseJson(text: string): unknown {
@@ -466,5 +628,3 @@ function documentPathId(value: string): string {
   // colons changes the lookup key and produces a false Document-not-found.
   return safe;
 }
-
-export { LEGACY_CAPABILITIES };

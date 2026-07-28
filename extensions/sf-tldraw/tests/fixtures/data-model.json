@@ -1,5 +1,5 @@
 {
-  "spec_version": "1.0",
+  "spec_version": "2.0",
   "family": "data_model",
   "title": "Reference support data model",
   "scope": "Core support records with declared lookup relationships.",
