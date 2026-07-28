@@ -14,7 +14,7 @@ import type {
   TldrawPreferences,
 } from "./types.ts";
 import { markerAssetKey, resolveVisualAssets, type MarkerTone } from "./assets.ts";
-import { layoutArchitecture, layoutDataModel, layoutSequence } from "./layout.ts";
+import { DATA_MODEL_TOP, layoutArchitecture, layoutDataModel, layoutSequence } from "./layout.ts";
 
 export function compileProfile(
   spec: SalesforceDiagramSpec,
@@ -32,7 +32,11 @@ export function compileProfile(
 
 function compileDataModel(spec: DataModelSpec, options: CompileOptions): CanvasProgramPayload {
   const visuals = resolveVisualAssets(spec, options.preferences.cardinalityDetail);
-  const layout = new Map(layoutDataModel(spec).map((node) => [node.id, node]));
+  const top =
+    options.preferences.legendRelationships === "show"
+      ? DATA_MODEL_TOP.relationshipLegend
+      : DATA_MODEL_TOP.titleOnly;
+  const layout = new Map(layoutDataModel(spec, top).map((node) => [node.id, node]));
   const threshold = Number(options.preferences.ldvThreshold.replace("M", "")) * 1_000_000;
   const nodes: CanvasNodePayload[] = spec.objects.map((object) => {
     const position = requiredMapValue(layout, object.id, "layout");

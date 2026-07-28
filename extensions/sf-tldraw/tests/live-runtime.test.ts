@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { DATA_MODEL_TOP } from "../lib/layout.ts";
 import { renderSalesforceDiagram } from "../lib/renderer.ts";
 import { TldrawRuntimeClient } from "../lib/runtime-client.ts";
 
@@ -201,6 +202,26 @@ return{x:bounds.x,y:bounds.y,titleCount:shapes.filter(shape=>shape.meta?.sfTldra
           `const page=editor.getPages().find(page=>page.name==='SF tldraw Legend Toggle Smoke');editor.setCurrentPage(page.id);return editor.getCurrentPageShapes().filter(shape=>String(shape.meta?.sfTldraw?.role??'').startsWith('relationship-legend-')).length`,
         ),
       ).toBe(6);
+
+      const compactPageName = "SF tldraw Legend Hidden Layout Smoke";
+      const compact = await renderSalesforceDiagram(
+        {
+          family: "data_model",
+          spec,
+          pageName: compactPageName,
+          mode: "replace",
+          outputMode: "file_only",
+          preferences: { legendRelationships: "hide" },
+        },
+        { cwd: process.cwd(), client },
+      );
+      if (compact.ok === false) throw new Error(compact.message);
+      expect(
+        await client.execute<{ minCardY: number; relationshipLegendCount: number }>(
+          document.id,
+          `const page=editor.getPages().find(page=>page.name==='SF tldraw Legend Hidden Layout Smoke');editor.setCurrentPage(page.id);const shapes=editor.getCurrentPageShapes();return{minCardY:Math.min(...shapes.filter(shape=>shape.meta?.sfTldraw?.role==='card').map(shape=>editor.getShapePageBounds(shape.id).y)),relationshipLegendCount:shapes.filter(shape=>String(shape.meta?.sfTldraw?.role??'').startsWith('relationship-legend-')).length}`,
+        ),
+      ).toEqual({ minCardY: DATA_MODEL_TOP.titleOnly, relationshipLegendCount: 0 });
     },
     60_000,
   );

@@ -3,7 +3,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildCanvasProgram } from "../lib/canvas-program.ts";
-import { DATA_MODEL_CARD, dataModelCardSize, layoutDataModel } from "../lib/layout.ts";
+import {
+  DATA_MODEL_CARD,
+  DATA_MODEL_TOP,
+  dataModelCardSize,
+  layoutDataModel,
+} from "../lib/layout.ts";
 import { compileProfile } from "../lib/profiles.ts";
 import { DEFAULT_TLDRAW_PREFERENCES } from "../lib/settings.ts";
 import type { SalesforceDiagramSpec } from "../lib/types.ts";
@@ -305,6 +310,14 @@ describe("deterministic Salesforce profiles", () => {
       preferences: DEFAULT_TLDRAW_PREFERENCES,
     });
     expect(payload.preferences.legendRelationships).toBe("show");
+    expect(Math.min(...payload.nodes.map((node) => node.y))).toBe(
+      DATA_MODEL_TOP.relationshipLegend,
+    );
+    const hidden = compileProfile(fixture("data-model"), {
+      renderMode: "relayout",
+      preferences: { ...DEFAULT_TLDRAW_PREFERENCES, legendRelationships: "hide" },
+    });
+    expect(Math.min(...hidden.nodes.map((node) => node.y))).toBe(DATA_MODEL_TOP.titleOnly);
     const program = buildCanvasProgram(payload);
     expect(program).toContain("payload.preferences.legendRelationships==='show'");
     expect(program).toContain("RELATIONSHIPS");

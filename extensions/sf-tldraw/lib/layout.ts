@@ -5,6 +5,10 @@ import type { ArchitectureSpec, DataModelSpec, PositionedNode, SequenceSpec } fr
 
 const GRAPH_TOP = 330;
 const GRAPH_LEFT = 100;
+export const DATA_MODEL_TOP = {
+  relationshipLegend: GRAPH_TOP,
+  titleOnly: 180,
+} as const;
 const SEQUENCE_TOP = 290;
 const SEQUENCE_CARD_HEIGHT = 96;
 const SEQUENCE_MIN_CARD_WIDTH = 260;
@@ -122,7 +126,10 @@ const DATA_MODEL_CANDIDATES: DataModelCandidate[] = [
   { rankdir: "TB", ranker: "tight-tree", rankSep: 400, nodeSep: 150 },
 ];
 
-export function layoutDataModel(spec: DataModelSpec): PositionedNode[] {
+export function layoutDataModel(
+  spec: DataModelSpec,
+  top: number = DATA_MODEL_TOP.relationshipLegend,
+): PositionedNode[] {
   const content = dataModelContentSizes(spec);
 
   // Each orientation and spacing strategy gets its own bounded convergence loop.
@@ -142,7 +149,9 @@ export function layoutDataModel(spec: DataModelSpec): PositionedNode[] {
     if (!best || qualityIsBetter(score, best.score)) best = { nodes, score };
   }
   if (!best) throw new Error("No data-model layout candidate produced a result.");
-  return best.nodes;
+  const minY = Math.min(...best.nodes.map((node) => node.y));
+  const offset = top - minY;
+  return offset === 0 ? best.nodes : best.nodes.map((node) => ({ ...node, y: node.y + offset }));
 }
 
 function dataModelContentSizes(spec: DataModelSpec): Map<string, { w: number; h: number }> {

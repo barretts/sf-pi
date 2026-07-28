@@ -18,6 +18,8 @@ The extension-owned settings page keeps its current visual and interaction exper
 
 - Raise the **tldraw Runtime Floor** to v1.12 and remove legacy route fallbacks.
 - Establish temporary **tldraw Runtime Contract Proof** from required markers in the app-owned `/readme` contract. Replace this proof when upstream provides machine-readable version or capability metadata.
+  - Re-evaluated against tldraw offline v1.12 after modernization: the per-launch server configuration has no app/API version or capability map; the documented Canvas API object exposes no version, capabilities, health, or manifest member; and the app-managed skill manifest's `appVersion` attests installation state rather than the running process. `/readme` marker proof therefore remains the least-weak advertised runtime evidence.
+  - Preferred upstream replacement: per-launch metadata or an advertised authenticated capability response containing `appVersion`, `canvasApiVersion`, and stable named capabilities for document discovery/creation, execution, screenshot capture, and required helpers.
 - Follow **Upstream tldraw Skill Ownership**:
   - Never add `tldraw-offline` to SF Pi's packaged `pi.skills` resources.
   - Never copy, extract, rewrite, or overwrite the app-managed skill.
@@ -52,7 +54,7 @@ The extension-owned settings page keeps its current visual and interaction exper
   - Card fill
   - LDV threshold
   - Record-type presentation
-- A post-modernization profile follow-up adds the fifth inherited **Legend — Relationships** `show | hide` preference. Data Model canvases keep scope and grounding in artifacts while rendering only the title plus the separately managed stacked relationship-type key when enabled.
+- A post-modernization profile follow-up adds the fifth inherited **Legend — Relationships** `show | hide` preference. Data Model canvases keep scope and grounding in artifacts while rendering only the title plus the separately managed stacked relationship-type key when enabled. Hide preserves human positions, while new/replace/relayout renders reclaim the key's vertical band.
 - Keep all three render output modes and make their contracts distinct:
   - `summary`: compact text, thumbnail, and artifact references
   - `inline`: summary plus bounded validation/readiness details, warnings, route metrics, and evidence-source summary

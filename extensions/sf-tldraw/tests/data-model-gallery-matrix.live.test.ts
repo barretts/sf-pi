@@ -27,6 +27,9 @@ const expectedCount = optionalPositiveInteger(
   process.env.SF_TLDRAW_DATA_MODEL_GALLERY_EXPECTED_COUNT,
 );
 const expectedHash = process.env.SF_TLDRAW_DATA_MODEL_GALLERY_EXPECTED_HASH?.trim();
+const legendRelationships = optionalLegendRelationships(
+  process.env.SF_TLDRAW_DATA_MODEL_GALLERY_LEGEND_RELATIONSHIPS,
+);
 const SAFE_SLUG = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const SAFE_KEY = /^\d{3}-[a-z0-9][a-z0-9-]{0,79}$/;
 const warningBudgetBaseline = loadWarningBudgetBaseline(
@@ -150,7 +153,11 @@ describe.sequential("sf-tldraw Data Model Gallery matrix", () => {
             const options = {
               renderMode: "replace" as const,
               pageName: sharedPageName || `Gallery Matrix — ${item.key}`.slice(0, 64),
-              preferences: { ...DEFAULT_TLDRAW_PREFERENCES, cardinalityDetail: "full" as const },
+              preferences: {
+                ...DEFAULT_TLDRAW_PREFERENCES,
+                cardinalityDetail: "full" as const,
+                ...(legendRelationships ? { legendRelationships } : {}),
+              },
             };
             expect(compileProfile(item.spec, options), item.key).toEqual(
               compileProfile(structuredClone(item.spec), options),
@@ -192,7 +199,11 @@ describe.sequential("sf-tldraw Data Model Gallery matrix", () => {
             pageName: row.pageName,
             mode: "replace",
             outputMode: "file_only",
-            preferences: { cardinalityDetail: "full", cardFill: "transparent" },
+            preferences: {
+              cardinalityDetail: "full",
+              cardFill: "transparent",
+              ...(legendRelationships ? { legendRelationships } : {}),
+            },
           },
           { cwd: process.cwd(), client },
         );
@@ -280,7 +291,7 @@ describe.sequential("sf-tldraw Data Model Gallery matrix", () => {
     }, {});
     writePrivate(
       indexPath,
-      `${JSON.stringify({ schemaVersion: 1, createdAt: new Date().toISOString(), corpusHash, expectedCount, expectedHash, qualification, warningBudgetBaseline: usesPinnedWarningBudgets ? { schemaVersion: warningBudgetBaseline.schemaVersion, corpusHash: warningBudgetBaseline.corpusHash, expectedCount: warningBudgetBaseline.expectedCount } : undefined, manifestPath, documentId, sharedPageName, totals, cases: rows }, null, 2)}\n`,
+      `${JSON.stringify({ schemaVersion: 1, createdAt: new Date().toISOString(), corpusHash, expectedCount, expectedHash, qualification, legendRelationships: legendRelationships ?? "show", warningBudgetBaseline: usesPinnedWarningBudgets ? { schemaVersion: warningBudgetBaseline.schemaVersion, corpusHash: warningBudgetBaseline.corpusHash, expectedCount: warningBudgetBaseline.expectedCount } : undefined, manifestPath, documentId, sharedPageName, totals, cases: rows }, null, 2)}\n`,
     );
     writePrivate(
       reportPath,
@@ -289,6 +300,7 @@ describe.sequential("sf-tldraw Data Model Gallery matrix", () => {
         "",
         `- Corpus: \`${corpusHash}\``,
         `- Qualification: \`${JSON.stringify(qualification)}\``,
+        `- Relationships legend: \`${legendRelationships ?? "show"}\``,
         `- Totals: \`${JSON.stringify(totals)}\``,
         "",
         "| # | Model | Objects | Relationships | Obstructions / max | Crossings / max | Shared / max | Status | Evidence |",
@@ -379,6 +391,12 @@ function requiredRow(key: string): GalleryRow {
   const row = rows.find((item) => item.key === key);
   if (!row) throw new Error(`Missing Gallery matrix row '${key}'.`);
   return row;
+}
+
+function optionalLegendRelationships(value: string | undefined): "show" | "hide" | undefined {
+  if (!value) return undefined;
+  if (value === "show" || value === "hide") return value;
+  throw new Error(`Expected show or hide, received '${value}'.`);
 }
 
 function optionalPositiveInteger(value: string | undefined): number | undefined {

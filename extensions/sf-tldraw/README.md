@@ -95,7 +95,7 @@ Every strict Spec v2 declares `grounding.mode` as `reference` or `org`. Referenc
 - Parallel connectors and terminals are ordered geometrically rather than by relationship id
 - Recursive relationships use explicit exterior three-segment loops with two distinct card ports
 - Only the title renders as full-width Data Model header text; scope, grounding, source, and as-of remain in the artifact report, while the prose legend is replaced by the visual Relationships key
-- Optional separate stacked **Relationships** key with actual black dotted Lookup and red solid Master-Detail samples
+- Optional separate stacked **Relationships** key with actual black dotted Lookup and red solid Master-Detail samples; hidden new/relayout renders use a compact title-only top margin
 - No relationship-end names or field API names on the canvas; cardinality markers and connector styling carry the relationship semantics
 - Vector cardinality markers in the relationship's own tone, attached to actual clipped arrow terminals; marker overlap is a readiness blocker
 - Object cards re-fronted after connectors exist, because tldraw keeps a bound arrow above the shapes it binds to
@@ -135,7 +135,7 @@ Only five scalar presentation choices are configurable:
 - record-type mode: `off`, `auto`, or `always`
 - **Legend — Relationships**: `show` (default) or `hide`
 
-Each field resolves project → global → default. Project **Inherit global** and global **Use default** delete that scoped field. The extension-owned settings page preserves its existing visual and keyboard interaction style while sharing descriptor-backed setting semantics internally. Open it in SF Pi Manager to configure these defaults, or use per-render overrides such as `card_fill="transparent" | "family"` and `legend_relationships="show" | "hide"`.
+Each field resolves project → global → default. Project **Inherit global** and global **Use default** delete that scoped field. The extension-owned settings page preserves its existing visual and keyboard interaction style while sharing descriptor-backed setting semantics internally. Open it in SF Pi Manager to configure these defaults, or use per-render overrides such as `card_fill="transparent" | "family"` and `legend_relationships="show" | "hide"`. Hiding the key never moves preserved cards; new, replace, and relayout renders reclaim its vertical band.
 
 ## File Structure
 
@@ -221,6 +221,8 @@ SF_TLDRAW_DATA_MODEL_GALLERY_EXPECTED_COUNT=230 \
 SF_TLDRAW_DATA_MODEL_GALLERY_EXPECTED_HASH=<sha256> \
 npx vitest run extensions/sf-tldraw/tests/data-model-gallery-matrix.live.test.ts
 ```
+
+Set `SF_TLDRAW_DATA_MODEL_GALLERY_LEGEND_RELATIONSHIPS=hide` to qualify the compact title-only layout; omitted means the default `show` mode.
 
 The run validates and compiles every case deterministically, renders serially, requires zero lints and marker overlaps, captures each full/thumbnail artifact, and writes a private index plus Markdown report under `tldraw-artifacts/data-model-gallery-matrix/`. When the corpus hash matches the checked-in qualified baseline, every model also enforces its pinned maximum route-obstruction, independent-crossing, and shared-corridor counts; lower counts are accepted as improvements.
 
