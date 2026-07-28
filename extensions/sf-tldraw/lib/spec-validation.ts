@@ -304,7 +304,8 @@ function validateGrounding(spec: SalesforceDiagramSpec, errors: ValidationFindin
     });
   }
   for (let index = 0; index < spec.grounding.sources.length; index++) {
-    const source = spec.grounding.sources[index]!;
+    const source = spec.grounding.sources[index];
+    if (!source) continue;
     const path = `grounding.sources[${index}]`;
     if (sourceIds.has(source.id)) {
       errors.push({
@@ -502,8 +503,9 @@ function validateSequence(
       left.end - right.end,
   );
   for (let index = 1; index < ranges.length; index++) {
-    const previous = ranges[index - 1]!;
-    const current = ranges[index]!;
+    const previous = ranges[index - 1];
+    const current = ranges[index];
+    if (!previous || !current) continue;
     if (current.participant === previous.participant && current.start <= previous.end) {
       errors.push({
         code: "overlapping_activation",
