@@ -55,7 +55,7 @@ Screenshots use `api.getScreenshot()` inside `/api/search`. Generic canvas searc
 
 Until tldraw exposes machine-readable version or capability metadata, `sf-tldraw` proves the v1.12 contract from required markers in the app-owned `/readme`. Older or incomplete runtimes are incompatible. `create_document` is a separate visible tool action that accepts only a file name, saves through tldraw's Documents-directory default, and returns the new document id; render actions never create a file implicitly. SF tldraw deliberately refuses to use OS automation or direct `.tldraw` generation.
 
-Source screenshots are accepted only as regular JPEG/PNG files inside tldraw's dedicated temporary capture directory. Private artifact directories use mode `0700`; reports and copied images use `0600`. A failed validation or copy blocks render success.
+Source screenshots are accepted only as regular JPEG/PNG files inside tldraw's dedicated temporary capture directory. Files are opened without following symbolic links, validated and read through one descriptor, then written as exclusive `0600` artifact snapshots to avoid check/use races. Private artifact directories use mode `0700`. A failed validation or copy blocks render success.
 
 The `tldraw-offline` Pi skill remains app-owned. Explicit status checks verify the app-managed marker and install manifest when available, but SF Pi never packages, copies, or rewrites a competing skill. Missing or stale wiring points users to **Develop → Install Agent Skills** in tldraw offline and does not block Salesforce rendering.
 

@@ -3,7 +3,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, constants as fsConstants, fstatSync, openSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { setTldrawStatus } from "../../../lib/common/tldraw-status/store.ts";
 import { renderSalesforceDiagram } from "./renderer.ts";
@@ -319,15 +319,22 @@ export function formatRenderSuccess(outcome: RenderSuccessOutcome): string {
 }
 
 function imageContent(filePath: string): { type: "image"; data: string; mimeType: string } | null {
+  let descriptor: number | undefined;
   try {
-    if (statSync(filePath).size > 1_500_000) return null;
+    descriptor = openSync(filePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+    const metadata = fstatSync(descriptor);
+    if (!metadata.isFile() || metadata.size > 1_500_000) return null;
+    const bytes = readFileSync(descriptor);
+    if (bytes.length !== metadata.size) return null;
     return {
       type: "image",
-      data: readFileSync(filePath).toString("base64"),
+      data: bytes.toString("base64"),
       mimeType: filePath.endsWith(".png") ? "image/png" : "image/jpeg",
     };
   } catch {
     return null;
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
   }
 }
 

@@ -3,8 +3,9 @@
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
   closeSync,
+  constants as fsConstants,
   existsSync,
-  lstatSync,
+  fstatSync,
   openSync,
   readFileSync,
   readSync,
@@ -560,6 +561,73 @@ function safeRuntimeMessage(payload: unknown, status: number): string {
 }
 
 export function validateRuntimeScreenshot(value: unknown): RuntimeScreenshot {
+  return inspectRuntimeScreenshotFile(value, false).screenshot;
+}
+
+export function readValidatedRuntimeScreenshot(value: unknown): {
+  screenshot: RuntimeScreenshot;
+  bytes: Buffer;
+} {
+  const inspected = inspectRuntimeScreenshotFile(value, true);
+  if (!inspected.bytes) throw new Error("validated screenshot bytes were not read");
+  return { screenshot: inspected.screenshot, bytes: inspected.bytes };
+}
+
+function inspectRuntimeScreenshotFile(
+  value: unknown,
+  includeBytes: boolean,
+): { screenshot: RuntimeScreenshot; bytes?: Buffer } {
+  const screenshot = screenshotMetadata(value);
+  let descriptor: number | undefined;
+  try {
+    const allowedRoot = realpathSync(path.join(os.tmpdir(), "tldraw-canvas-api"));
+    const requestedPath = path.resolve(screenshot.filePath);
+    const source = realpathSync(requestedPath);
+    if (source !== allowedRoot && !source.startsWith(`${allowedRoot}${path.sep}`)) {
+      throw new Error("outside capture directory");
+    }
+
+    const noFollow = fsConstants.O_NOFOLLOW ?? 0;
+    descriptor = openSync(requestedPath, fsConstants.O_RDONLY | noFollow);
+    const opened = fstatSync(descriptor);
+    const current = statSync(source);
+    if (
+      !opened.isFile() ||
+      opened.dev !== current.dev ||
+      opened.ino !== current.ino ||
+      opened.size < 4 ||
+      opened.size > 50_000_000
+    ) {
+      throw new Error("invalid regular file");
+    }
+
+    const bytes = includeBytes ? readFileSync(descriptor) : undefined;
+    const header = bytes?.subarray(0, 8) ?? Buffer.alloc(8);
+    if (!bytes) readSync(descriptor, header, 0, header.length, 0);
+    const afterRead = fstatSync(descriptor);
+    if (afterRead.size !== opened.size || afterRead.mtimeMs !== opened.mtimeMs) {
+      throw new Error("screenshot changed while it was read");
+    }
+    if (bytes && bytes.length !== opened.size) throw new Error("incomplete screenshot read");
+
+    const jpeg = header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff;
+    const png = header.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    if (!jpeg && !png) throw new Error("unsupported image type");
+    return {
+      screenshot: { ...screenshot, filePath: source, format: png ? "png" : "jpeg" },
+      ...(bytes ? { bytes } : {}),
+    };
+  } catch {
+    throw new TldrawRuntimeError(
+      "invalid_response",
+      "tldraw screenshot evidence failed local file validation.",
+    );
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
+function screenshotMetadata(value: unknown): RuntimeScreenshot {
   if (!value || typeof value !== "object") {
     throw new TldrawRuntimeError(
       "invalid_response",
@@ -583,36 +651,7 @@ export function validateRuntimeScreenshot(value: unknown): RuntimeScreenshot {
       "tldraw returned incomplete screenshot metadata.",
     );
   }
-  let source: string;
-  let format: "png" | "jpeg";
-  try {
-    const metadata = lstatSync(screenshot.filePath);
-    if (metadata.isSymbolicLink() || !metadata.isFile()) throw new Error("not a regular file");
-    source = realpathSync(screenshot.filePath);
-    const allowedRoot = realpathSync(path.join(os.tmpdir(), "tldraw-canvas-api"));
-    if (source !== allowedRoot && !source.startsWith(`${allowedRoot}${path.sep}`)) {
-      throw new Error("outside capture directory");
-    }
-    const size = statSync(source).size;
-    if (size < 4 || size > 50_000_000) throw new Error("invalid size");
-    const header = Buffer.alloc(8);
-    const descriptor = openSync(source, "r");
-    try {
-      readSync(descriptor, header, 0, header.length, 0);
-    } finally {
-      closeSync(descriptor);
-    }
-    const jpeg = header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff;
-    const png = header.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-    if (!jpeg && !png) throw new Error("unsupported image type");
-    format = png ? "png" : "jpeg";
-  } catch {
-    throw new TldrawRuntimeError(
-      "invalid_response",
-      "tldraw screenshot evidence failed local file validation.",
-    );
-  }
-  return { ...(screenshot as RuntimeScreenshot), filePath: source, format };
+  return screenshot as RuntimeScreenshot;
 }
 
 function safeLabel(value: string): string {

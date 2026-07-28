@@ -1,13 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,23 +14,21 @@ vi.mock("@earendil-works/pi-coding-agent", async () => {
 });
 
 describe("sf-tldraw artifacts", () => {
+  let captureDir: string;
   let source: string;
 
   beforeEach(() => {
     tempAgentDir = mkdtempSync(path.join(tmpdir(), "sf-tldraw-artifacts-"));
     const root = path.join(tmpdir(), "tldraw-canvas-api");
     mkdirSync(root, { recursive: true });
-    source = path.join(root, `artifact-${process.pid}-${Date.now()}.jpg`);
-    writeFileSync(source, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    captureDir = mkdtempSync(path.join(root, "sf-tldraw-artifacts-"));
+    source = path.join(captureDir, "artifact.jpg");
+    writeFileSync(source, Buffer.from([0xff, 0xd8, 0xff, 0xd9]), { mode: 0o600 });
   });
 
   afterEach(() => {
     rmSync(tempAgentDir, { recursive: true, force: true });
-    try {
-      unlinkSync(source);
-    } catch {
-      // Already removed.
-    }
+    rmSync(captureDir, { recursive: true, force: true });
   });
 
   it("persists inspectable element-to-source provenance without target org", async () => {

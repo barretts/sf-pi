@@ -1,10 +1,19 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Sanitized render evidence under the global SF Pi state directory. */
-import { chmodSync, copyFileSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  constants as fsConstants,
+  fstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createStateStore } from "../../../lib/common/state-store.ts";
-import { validateRuntimeScreenshot } from "./runtime-client.ts";
+import { readValidatedRuntimeScreenshot } from "./runtime-client.ts";
 import type {
   CanvasExecutionResult,
   RenderArtifact,
@@ -148,11 +157,10 @@ function copyValidatedScreenshot(
   directory: string,
   basename: string,
 ): string {
-  const validated = validateRuntimeScreenshot(screenshot);
-  const extension = validated.format === "png" ? ".png" : ".jpg";
+  const validated = readValidatedRuntimeScreenshot(screenshot);
+  const extension = validated.screenshot.format === "png" ? ".png" : ".jpg";
   const destination = path.join(directory, `${basename}${extension}`);
-  copyFileSync(validated.filePath, destination);
-  chmodSync(destination, 0o600);
+  writeFileSync(destination, validated.bytes, { flag: "wx", mode: 0o600 });
   return destination;
 }
 
@@ -167,9 +175,11 @@ function verifyPersistedReport(
   label: string,
   schemaVersion: number,
 ): void {
+  let descriptor: number | undefined;
   try {
-    if (!lstatSync(filePath).isFile()) throw new Error("not a regular file");
-    const envelope = JSON.parse(readFileSync(filePath, "utf8")) as {
+    descriptor = openSync(filePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+    if (!fstatSync(descriptor).isFile()) throw new Error("not a regular file");
+    const envelope = JSON.parse(readFileSync(descriptor, "utf8")) as {
       schemaVersion?: number;
       state?: { createdAt?: string };
     };
@@ -178,6 +188,8 @@ function verifyPersistedReport(
     }
   } catch {
     throw new Error(`${label} could not be persisted and verified.`);
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
   }
 }
 

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,6 +23,7 @@ const V112_README = [
 
 describe("TldrawRuntimeClient", () => {
   let dir: string;
+  let captureDir: string;
   let configPath: string;
   let screenshotPath: string;
 
@@ -32,17 +33,14 @@ describe("TldrawRuntimeClient", () => {
     writeFileSync(configPath, JSON.stringify({ port: 7236, token: "unit-test-token", pid: 123 }));
     const captureRoot = path.join(tmpdir(), "tldraw-canvas-api");
     mkdirSync(captureRoot, { recursive: true });
-    screenshotPath = path.join(captureRoot, `sf-tldraw-test-${process.pid}-${Date.now()}.jpg`);
-    writeFileSync(screenshotPath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    captureDir = mkdtempSync(path.join(captureRoot, "sf-tldraw-runtime-"));
+    screenshotPath = path.join(captureDir, "screenshot.jpg");
+    writeFileSync(screenshotPath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]), { mode: 0o600 });
   });
 
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
-    try {
-      unlinkSync(screenshotPath);
-    } catch {
-      // Already cleaned up.
-    }
+    rmSync(captureDir, { recursive: true, force: true });
   });
 
   it("requires and reports the installed v1.12 route contract", async () => {
@@ -193,6 +191,29 @@ describe("TldrawRuntimeClient", () => {
         success: true,
         result: {
           filePath: outside,
+          width: 100,
+          height: 100,
+          pageName: "Page",
+          captureMode: "canvas",
+        },
+      });
+    }) as unknown as typeof fetch;
+    const client = new TldrawRuntimeClient({ fetchImpl, serverConfigPath: configPath });
+    await expect(client.screenshot("doc-1")).rejects.toMatchObject({
+      code: "invalid_response",
+      message: expect.stringMatching(/failed local file validation/i),
+    });
+  });
+
+  it("rejects symbolic-link screenshot files even when their target is inside the capture directory", async () => {
+    const link = path.join(captureDir, "screenshot-link.jpg");
+    symlinkSync(screenshotPath, link);
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/readme")) return new Response(V112_README);
+      return json({
+        success: true,
+        result: {
+          filePath: link,
           width: 100,
           height: 100,
           pageName: "Page",
