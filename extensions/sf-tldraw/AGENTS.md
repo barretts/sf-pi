@@ -17,7 +17,7 @@ Read [`README.md`](./README.md) and [`docs/cheatsheet.md`](./docs/cheatsheet.md)
 | Family-to-canvas compilation                             | `lib/profiles.ts`                        |
 | Fixed tldraw editor program and readiness checks         | `lib/canvas-program.ts`                  |
 | Render orchestration and evidence                        | `lib/renderer.ts`, `lib/artifacts.ts`    |
-| Four inherited preferences                               | `lib/settings.ts`, `lib/config-panel.ts` |
+| Five inherited preferences                               | `lib/settings.ts`, `lib/config-panel.ts` |
 
 ## Invariants
 
@@ -36,6 +36,7 @@ Read [`README.md`](./README.md) and [`docs/cheatsheet.md`](./docs/cheatsheet.md)
 - Cross-lane message labels require measured borderless backings and verified z-order above intersecting lifelines or activation bars.
 - Cardinality placement must use clipped `getArrowInfo()` terminals and verify the local marker anchor through `getShapePageTransform(marker).applyToPoint(...)`.
 - Data Model relationships render no endpoint or field-name text. Lookup connectors are black medium dotted; master-detail connectors are red medium solid; cardinality stays on the endpoint markers.
+- Data Model canvases render only title header text plus the separately managed stacked Relationships key when **Legend — Relationships** is `show`; scope and grounding remain artifact-only.
 - Recursive data-model relationships require an exterior route with distinct card ports; never accept a centre-bound self arrow.
 - A successful render requires zero actionable tldraw lints, marker distance at most one canvas unit, and no overlapping marker bounds.
 - Verify that requested page creation succeeded before rendering; never fall through to whichever page was already active.

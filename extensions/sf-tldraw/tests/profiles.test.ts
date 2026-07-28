@@ -299,6 +299,20 @@ describe("deterministic Salesforce profiles", () => {
     expect(program).toContain("payload.preferences.cardFill==='family'");
   });
 
+  it("renders a configurable stacked Relationships legend outside the Data Model title", () => {
+    const payload = compileProfile(fixture("data-model"), {
+      renderMode: "preserve",
+      preferences: DEFAULT_TLDRAW_PREFERENCES,
+    });
+    expect(payload.preferences.legendRelationships).toBe("show");
+    const program = buildCanvasProgram(payload);
+    expect(program).toContain("payload.preferences.legendRelationships==='show'");
+    expect(program).toContain("RELATIONSHIPS");
+    expect(program).toContain("Lookup Relationship");
+    expect(program).toContain("Master-Detail Relationship");
+    expect(program).toContain("friendless-arrow");
+  });
+
   it("keeps record types hidden by default", () => {
     const spec = fixture("data-model");
     if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");

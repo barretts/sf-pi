@@ -47,6 +47,7 @@ describe("sf-tldraw artifacts", () => {
     const spec = JSON.parse(
       readFileSync(path.join(import.meta.dirname, "fixtures", "data-model.json"), "utf8"),
     );
+    spec.purpose = "Review the public-safe support object structure.";
     spec.grounding = {
       mode: "org",
       as_of: "2026-07-27T12:00:00Z",
@@ -100,6 +101,14 @@ describe("sf-tldraw artifacts", () => {
     const envelope = JSON.parse(report);
     expect(envelope.schemaVersion).toBe(2);
     const parsed = envelope.state;
+    expect(parsed).toMatchObject({
+      title: "Reference support data model",
+      scope: "Core support records with declared lookup relationships.",
+      purpose: "Review the public-safe support object structure.",
+      groundingMode: "org",
+      groundingAsOf: "2026-07-27T12:00:00Z",
+      groundingDisplayLabel: "Authenticated sandbox",
+    });
     expect(parsed.evidence.sources).toEqual([
       { id: "schema", label: "Object describe", kind: "org_describe" },
     ]);

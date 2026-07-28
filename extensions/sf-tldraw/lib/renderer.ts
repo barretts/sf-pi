@@ -83,6 +83,7 @@ export async function renderSalesforceDiagram(
     cardFill: request.preferences?.cardFill ?? effective.cardFill,
     ldvThreshold: request.preferences?.ldvThreshold ?? effective.ldvThreshold,
     recordTypeMode: request.preferences?.recordTypeMode ?? effective.recordTypeMode,
+    legendRelationships: request.preferences?.legendRelationships ?? effective.legendRelationships,
   };
   const client = context.client ?? new TldrawRuntimeClient();
 

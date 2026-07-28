@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** Manager Settings panel for the four sf-tldraw presentation preferences. */
+/** Manager Settings panel for the five sf-tldraw presentation preferences. */
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { type Focusable, matchesKey, visibleWidth } from "@earendil-works/pi-tui";
 import type { ConfigPanelFactory, ConfigPanelResult } from "../../../catalog/registry.ts";
@@ -50,7 +50,7 @@ class SfTldrawConfigPanel implements Focusable {
     const effective = readEffectiveTldrawPreferences(this.cwd);
     const lines = [
       ` ${t.fg("accent", t.bold("🎨 SF tldraw Settings"))}`,
-      ` ${t.fg("dim", "Four scalar presentation choices only. Diagram grammar, icons, palette, and fonts stay deterministic.")}`,
+      ` ${t.fg("dim", "Five scalar presentation choices only. Diagram grammar, icons, palette, and fonts stay deterministic.")}`,
       "",
       ` ${t.fg("muted", "Scope:")} ${t.fg("text", this.scope)}`,
       "",

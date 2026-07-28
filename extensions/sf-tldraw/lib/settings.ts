@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** Four inherited, non-secret sf-tldraw preferences stored in Pi settings. */
+/** Five inherited, non-secret sf-tldraw preferences stored in Pi settings. */
 import {
   globalSettingsPath,
   projectSettingsPath,
@@ -18,6 +18,7 @@ export const DEFAULT_TLDRAW_PREFERENCES: TldrawPreferences = {
   cardFill: "transparent",
   ldvThreshold: "2M",
   recordTypeMode: "off",
+  legendRelationships: "show",
 };
 
 export interface TldrawPreferenceDescriptor {
@@ -52,6 +53,12 @@ export const TLDRAW_PREFERENCE_DESCRIPTORS: readonly TldrawPreferenceDescriptor[
     description:
       "Off by default; auto shows meaningful multiplicity; always shows supplied values.",
     values: ["off", "auto", "always"],
+  },
+  {
+    key: "legendRelationships",
+    label: "Legend — Relationships",
+    description: "Show or hide the separate Data Model relationship-type key.",
+    values: ["show", "hide"],
   },
 ];
 

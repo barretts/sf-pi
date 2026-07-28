@@ -54,6 +54,7 @@ export interface TldrawPreferences {
   cardFill: "transparent" | "family";
   ldvThreshold: "1M" | "2M" | "5M" | "10M";
   recordTypeMode: "off" | "auto" | "always";
+  legendRelationships: "show" | "hide";
 }
 
 export type TldrawPreferenceKey = keyof TldrawPreferences;

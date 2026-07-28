@@ -72,6 +72,12 @@ const Params = Type.Object(
     ),
     ldv_threshold: Type.Optional(StringEnum(["1M", "2M", "5M", "10M"] as const)),
     record_type_mode: Type.Optional(StringEnum(["off", "auto", "always"] as const)),
+    legend_relationships: Type.Optional(
+      StringEnum(["show", "hide"] as const, {
+        description:
+          "Show or hide the separate stacked Relationships legend on Data Model diagrams.",
+      }),
+    ),
     output_mode: Type.Optional(
       StringEnum(["summary", "inline", "file_only"] as const, {
         description:
@@ -96,6 +102,7 @@ type Input = {
   card_fill?: TldrawPreferences["cardFill"];
   ldv_threshold?: TldrawPreferences["ldvThreshold"];
   record_type_mode?: TldrawPreferences["recordTypeMode"];
+  legend_relationships?: TldrawPreferences["legendRelationships"];
   output_mode?: OutputMode;
 };
 
@@ -187,6 +194,9 @@ export function registerTldrawCanvasTool(pi: ExtensionAPI): void {
                 ...(input.card_fill ? { cardFill: input.card_fill } : {}),
                 ...(input.ldv_threshold ? { ldvThreshold: input.ldv_threshold } : {}),
                 ...(input.record_type_mode ? { recordTypeMode: input.record_type_mode } : {}),
+                ...(input.legend_relationships
+                  ? { legendRelationships: input.legend_relationships }
+                  : {}),
               },
             },
             { cwd: ctx.cwd, signal, client },
@@ -370,5 +380,6 @@ export function effectiveSettingsText(cwd: string): string {
     `Card fill: ${settings.cardFill}`,
     `LDV threshold: ${settings.ldvThreshold}`,
     `Record types: ${settings.recordTypeMode}`,
+    `Relationship legend: ${settings.legendRelationships}`,
   ].join(" · ");
 }

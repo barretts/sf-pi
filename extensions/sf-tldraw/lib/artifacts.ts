@@ -16,7 +16,11 @@ interface RenderReport {
   createdAt: string;
   family: SalesforceDiagramSpec["family"];
   title: string;
+  scope: string;
+  purpose?: string;
   groundingMode: "reference" | "org";
+  groundingAsOf: string;
+  groundingDisplayLabel?: string;
   evidence: {
     sources: Array<{ id: string; label: string; kind: string }>;
     elements: Array<{ collection: string; id: string; evidence: string[] }>;
@@ -60,7 +64,12 @@ export function persistRenderArtifact(options: {
     createdAt,
     family: options.spec.family,
     title: options.spec.title,
+    scope: options.spec.scope,
+    purpose: options.spec.purpose,
     groundingMode: options.spec.grounding.mode,
+    groundingAsOf: options.spec.grounding.as_of,
+    groundingDisplayLabel:
+      options.spec.grounding.mode === "org" ? options.spec.grounding.display_label : undefined,
     evidence: evidenceMap(options.spec),
     nodeCount: counts.nodes,
     connectionCount: counts.edges,

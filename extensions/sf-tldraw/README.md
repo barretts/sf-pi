@@ -94,6 +94,8 @@ Every strict Spec v2 declares `grounding.mode` as `reference` or `org`. Referenc
 - Spec v2 always uses deterministic automatic layout; source positions and endpoint anchors are rejected
 - Parallel connectors and terminals are ordered geometrically rather than by relationship id
 - Recursive relationships use explicit exterior three-segment loops with two distinct card ports
+- Only the title renders as full-width Data Model header text; scope, grounding, source, and as-of remain in the artifact report, while the prose legend is replaced by the visual Relationships key
+- Optional separate stacked **Relationships** key with actual black dotted Lookup and red solid Master-Detail samples
 - No relationship-end names or field API names on the canvas; cardinality markers and connector styling carry the relationship semantics
 - Vector cardinality markers in the relationship's own tone, attached to actual clipped arrow terminals; marker overlap is a readiness blocker
 - Object cards re-fronted after connectors exist, because tldraw keeps a bound arrow above the shapes it binds to
@@ -125,14 +127,15 @@ A single page accepts at most eight participants and 18 interactions, with reada
 
 ## Settings
 
-Only four scalar presentation choices are configurable:
+Only five scalar presentation choices are configurable:
 
 - cardinality detail: `simplified` or `full`
 - card fill: `transparent` (default white/transparent-style card) or `family` (family tint)
 - LDV threshold: `1M`, `2M`, `5M`, or `10M`
 - record-type mode: `off`, `auto`, or `always`
+- **Legend — Relationships**: `show` (default) or `hide`
 
-Each field resolves project → global → default. Project **Inherit global** and global **Use default** delete that scoped field. The extension-owned settings page preserves its existing visual and keyboard interaction style while sharing descriptor-backed setting semantics internally. Open it in SF Pi Manager to toggle card fill, or override one render with `card_fill="transparent" | "family"`.
+Each field resolves project → global → default. Project **Inherit global** and global **Use default** delete that scoped field. The extension-owned settings page preserves its existing visual and keyboard interaction style while sharing descriptor-backed setting semantics internally. Open it in SF Pi Manager to configure these defaults, or use per-render overrides such as `card_fill="transparent" | "family"` and `legend_relationships="show" | "hide"`.
 
 ## File Structure
 

@@ -29,7 +29,7 @@ describe("tldraw_canvas family tool", () => {
     expect(tool.promptGuidelines.join("\n")).toMatch(/OS automation/i);
   });
 
-  it("exposes explicit document creation, strict Spec v2, and card-fill override", () => {
+  it("exposes explicit document creation, strict Spec v2, and presentation overrides", () => {
     const tool = registeredTool();
     const schema = JSON.stringify(tool.parameters);
     expect(schema).toContain('"create_document"');
@@ -85,6 +85,9 @@ describe("tldraw_canvas family tool", () => {
     expect(schema).toContain('"card_fill"');
     expect(schema).toContain('"transparent"');
     expect(schema).toContain('"family"');
+    expect(schema).toContain('"legend_relationships"');
+    expect(schema).toContain('"show"');
+    expect(schema).toContain('"hide"');
   });
 
   it("uses the shared runtime observation and formatter for status", async () => {

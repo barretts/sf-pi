@@ -52,6 +52,7 @@ The extension-owned settings page keeps its current visual and interaction exper
   - Card fill
   - LDV threshold
   - Record-type presentation
+- A post-modernization profile follow-up adds the fifth inherited **Legend — Relationships** `show | hide` preference. Data Model canvases keep scope and grounding in artifacts while rendering only the title plus the separately managed stacked relationship-type key when enabled.
 - Keep all three render output modes and make their contracts distinct:
   - `summary`: compact text, thumbnail, and artifact references
   - `inline`: summary plus bounded validation/readiness details, warnings, route metrics, and evidence-source summary

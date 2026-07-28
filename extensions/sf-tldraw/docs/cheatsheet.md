@@ -88,6 +88,8 @@ Every rendered string rejects authentication material, Salesforce org ids, usern
 
 Cardinality values are `one`, `many`, `zero_or_one`, and `zero_or_many`. Do not infer optionality. Relationship types are `lookup` and `master_detail`. Data Model connectors render without relationship-end or field-name text: lookup is black medium dotted, master-detail is red medium solid, and the endpoint markers carry cardinality.
 
+Data Model canvases show only the title as full-width header text. Scope and grounding remain in the report. The separate stacked **Relationships** key shows both visual line samples by default; configure **Legend — Relationships** or pass `legend_relationships="show" | "hide"` for one render.
+
 Optional sourced observations include `row_count`, `owd`, and `record_types`. Spec v2 always uses deterministic automatic layout; source positions and endpoint anchors are not accepted.
 
 ## System/Solution Architecture
