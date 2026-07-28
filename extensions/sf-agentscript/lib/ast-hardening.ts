@@ -66,12 +66,14 @@ class SfPiHardeningPass implements LintPass {
         const action = asNode(rawAction);
         const target = scalarString(action.target);
         if (!target) continue;
+        const targetNode =
+          action.target && typeof action.target === "object" ? asNode(action.target) : action;
         const separator = target.indexOf("://");
         const scheme = separator > 0 ? target.slice(0, separator) : "";
         const refName = separator > 0 ? target.slice(separator + 3) : "";
         if (SALESFORCE_ID_RE.test(refName)) {
           addDiagnostic(
-            asNode(action.target) ?? action,
+            targetNode,
             "target-ref-looks-like-id",
             `Action target '${target}' looks like a Salesforce record id. Use a stable API name.`,
             2,
@@ -80,7 +82,7 @@ class SfPiHardeningPass implements LintPass {
         }
         if (scheme === "apex" && refName.includes(".")) {
           addDiagnostic(
-            asNode(action.target) ?? action,
+            targetNode,
             "apex-target-method-suffix",
             "apex:// targets must reference the invocable class API name, not Class.method.",
             2,

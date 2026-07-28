@@ -1,5 +1,16 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  constants as fsConstants,
+  fstatSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -85,9 +96,18 @@ describe("sf-tldraw artifacts", () => {
       },
     });
     expect(statSync(artifact.screenshotPath).mode & 0o777).toBe(0o600);
-    expect(statSync(artifact.reportPath).mode & 0o777).toBe(0o600);
     expect(statSync(artifact.directory).mode & 0o777).toBe(0o700);
-    const report = readFileSync(artifact.reportPath, "utf8");
+    const reportDescriptor = openSync(
+      artifact.reportPath,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0),
+    );
+    let report: string;
+    try {
+      expect(fstatSync(reportDescriptor).mode & 0o777).toBe(0o600);
+      report = readFileSync(reportDescriptor, "utf8");
+    } finally {
+      closeSync(reportDescriptor);
+    }
     const envelope = JSON.parse(report);
     expect(envelope.schemaVersion).toBe(2);
     const parsed = envelope.state;
