@@ -89,12 +89,12 @@ Every strict Spec v2 declares `grounding.mode` as `reference` or `org`. Referenc
 - Content-fitted base card size, followed by a measured height/width grow pass so text always stays inside its card
 - Bounded convergence passes: high-connection hubs elongate after every relayout until the final sides retain distinct terminal slots
 - Optional, sourced LDV and OWD pills at fixed anchors
-- Relationship kind carried by the connector itself: grey dotted lookup, red solid master-detail. No repeated `LK`/`MD` label boxes
+- Relationship kind carried by the connector itself: black medium dotted lookup, red medium solid master-detail. No repeated `LK`/`MD` label boxes
 - Orthogonal (elbow) connectors use deterministic facing and alternate side plans scored by card obstructions, independent-edge crossings, shared corridors, and length
 - Spec v2 always uses deterministic automatic layout; source positions and endpoint anchors are rejected
 - Parallel connectors and terminals are ordered geometrically rather than by relationship id
 - Recursive relationships use explicit exterior three-segment loops with two distinct card ports
-- Optional relationship-end names and field API names render on opaque borderless backings
+- No relationship-end names or field API names on the canvas; cardinality markers and connector styling carry the relationship semantics
 - Vector cardinality markers in the relationship's own tone, attached to actual clipped arrow terminals; marker overlap is a readiness blocker
 - Object cards re-fronted after connectors exist, because tldraw keeps a bound arrow above the shapes it binds to
 - No record-type display by default

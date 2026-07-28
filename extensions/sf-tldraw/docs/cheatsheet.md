@@ -79,7 +79,6 @@ Every rendered string rejects authentication material, Salesforce org ids, usern
         "type": "lookup",
         "from_cardinality": "one",
         "to_cardinality": "many",
-        "field_api_name": "AccountId",
         "evidence": ["support-model"]
       }
     ]
@@ -87,7 +86,7 @@ Every rendered string rejects authentication material, Salesforce org ids, usern
 }
 ```
 
-Cardinality values are `one`, `many`, `zero_or_one`, and `zero_or_many`. Do not infer optionality. Relationship types are `lookup` and `master_detail`.
+Cardinality values are `one`, `many`, `zero_or_one`, and `zero_or_many`. Do not infer optionality. Relationship types are `lookup` and `master_detail`. Data Model connectors render without relationship-end or field-name text: lookup is black medium dotted, master-detail is red medium solid, and the endpoint markers carry cardinality.
 
 Optional sourced observations include `row_count`, `owd`, and `record_types`. Spec v2 always uses deterministic automatic layout; source positions and endpoint anchors are not accepted.
 

@@ -35,6 +35,7 @@ Read [`README.md`](./README.md) and [`docs/cheatsheet.md`](./docs/cheatsheet.md)
 - Sequence activation intervals must be explicit, evidenced spec elements; never infer processing duration from adjacent messages.
 - Cross-lane message labels require measured borderless backings and verified z-order above intersecting lifelines or activation bars.
 - Cardinality placement must use clipped `getArrowInfo()` terminals and verify the local marker anchor through `getShapePageTransform(marker).applyToPoint(...)`.
+- Data Model relationships render no endpoint or field-name text. Lookup connectors are black medium dotted; master-detail connectors are red medium solid; cardinality stays on the endpoint markers.
 - Recursive data-model relationships require an exterior route with distinct card ports; never accept a centre-bound self arrow.
 - A successful render requires zero actionable tldraw lints, marker distance at most one canvas unit, and no overlapping marker bounds.
 - Verify that requested page creation succeeded before rendering; never fall through to whichever page was already active.

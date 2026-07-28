@@ -27,6 +27,11 @@ describe("sf-tldraw live runtime", () => {
             "utf8",
           ),
         );
+        if (testCase.family === "data_model") {
+          spec.relationships[0].field_api_name = "AccountId";
+          spec.relationships[0].from_label = "submitted by";
+          spec.relationships[0].to_label = "reviewed by";
+        }
         const outcome = await renderSalesforceDiagram(
           {
             family: testCase.family,
@@ -52,6 +57,32 @@ describe("sf-tldraw live runtime", () => {
         if (testCase.family === "sequence") {
           expect(
             outcome.result.readiness.sequenceGeometryChecks.every((check) => check.delta <= 1),
+          ).toBe(true);
+        }
+        if (testCase.family === "data_model") {
+          const client = new TldrawRuntimeClient();
+          const document = await client.resolveDocument(undefined);
+          const connectorState = await client.execute<{
+            relationshipTextCount: number;
+            lookupStyles: Array<{ color: string; dash: string; size: string }>;
+          }>(
+            document.id,
+            `
+const page=editor.getPages().find(page=>page.name==='${testCase.page}')
+editor.setCurrentPage(page.id)
+const shapes=editor.getCurrentPageShapes()
+return{
+ relationshipTextCount:shapes.filter(shape=>['from-label','to-label','field-label'].includes(shape.meta?.sfTldraw?.role)).length,
+ lookupStyles:shapes.filter(shape=>shape.type==='arrow'&&shape.meta?.sfRelationshipType==='lookup').map(shape=>({color:shape.props.color,dash:shape.props.dash,size:shape.props.size}))
+}
+`,
+          );
+          expect(connectorState.relationshipTextCount).toBe(0);
+          expect(connectorState.lookupStyles.length).toBeGreaterThan(0);
+          expect(
+            connectorState.lookupStyles.every(
+              (style) => style.color === "black" && style.dash === "dotted" && style.size === "m",
+            ),
           ).toBe(true);
         }
         expect(outcome.artifact.screenshotPath).toBeTruthy();
@@ -149,6 +180,12 @@ const caseBounds=editor.getShapePageBounds(caseCard.id),commentBounds=editor.get
 helpers.translateShapes([commentGroup.id],caseBounds.x-commentBounds.x,caseBounds.maxY+180-commentBounds.y)
 const annotationId=createShapeId('sf-tldraw-live-user-annotation')
 if(!editor.getShape(annotationId))editor.createShape({id:annotationId,type:'note',x:80,y:920,props:{richText:toRichText('User annotation — preserve me')}})
+for(const role of ['from-label','to-label','field-label']){
+ const id=createShapeId('sf-tldraw-live-legacy-'+role)
+ if(!editor.getShape(id))editor.createShape({id,type:'text',x:120,y:1040,props:{richText:toRichText(role)},meta:{sfTldraw:{managed:true,schemaVersion:1,family:'data_model',key:'edge:account-contacts:'+role,semanticId:'account-contacts',role}}})
+ const backgroundRole=role+'-background',backgroundId=createShapeId('sf-tldraw-live-legacy-'+role+'-bg')
+ if(!editor.getShape(backgroundId))editor.createShape({id:backgroundId,type:'geo',x:110,y:1030,props:{geo:'rectangle',w:140,h:40,fill:'solid',color:'white',richText:toRichText('')},meta:{sfTldraw:{managed:true,schemaVersion:1,family:'data_model',key:'edge:account-contacts:'+role+'-bg',semanticId:'account-contacts',role:backgroundRole}}})
+}
 const bounds=editor.getShapePageBounds(card.id)
 return{x:bounds.x,y:bounds.y,annotationId}
 `,
@@ -192,6 +229,7 @@ return{x:bounds.x,y:bounds.y,annotationId}
         y: number;
         annotationExists: boolean;
         addedChildrenGrouped: boolean;
+        legacyRelationshipTextCount: number;
       }>(
         document.id,
         `
@@ -202,7 +240,7 @@ const group=shapes.find(shape=>shape.meta?.sfTldraw?.role==='group'&&shape.meta?
 const card=shapes.find(shape=>shape.meta?.sfTldraw?.role==='card'&&shape.meta?.sfTldraw?.semanticId==='account')
 const added=shapes.filter(shape=>shape.meta?.sfTldraw?.semanticId==='account'&&(shape.meta?.sfTldraw?.role==='keys'||shape.meta?.sfTldraw?.role==='observation'))
 const bounds=editor.getShapePageBounds(card.id)
-return{x:bounds.x,y:bounds.y,annotationExists:!!editor.getShape('${moved.annotationId}'),addedChildrenGrouped:added.length===3&&added.every(shape=>shape.parentId===group.id)}
+return{x:bounds.x,y:bounds.y,annotationExists:!!editor.getShape('${moved.annotationId}'),addedChildrenGrouped:added.length===3&&added.every(shape=>shape.parentId===group.id),legacyRelationshipTextCount:shapes.filter(shape=>['from-label','to-label','field-label','from-label-background','to-label-background','field-label-background'].includes(shape.meta?.sfTldraw?.role)).length}
 `,
       );
       expect(verified).toMatchObject({
@@ -210,6 +248,7 @@ return{x:bounds.x,y:bounds.y,annotationExists:!!editor.getShape('${moved.annotat
         y: moved.y,
         annotationExists: true,
         addedChildrenGrouped: true,
+        legacyRelationshipTextCount: 0,
       });
 
       delete spec.objects[0].key_fields;

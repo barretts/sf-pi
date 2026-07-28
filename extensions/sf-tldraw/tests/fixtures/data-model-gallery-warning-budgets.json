@@ -647,7 +647,7 @@
     },
     {
       "key": "108-industries-collections-and-recovery-data-mode",
-      "maxRouteObstructions": 0,
+      "maxRouteObstructions": 1,
       "maxRouteCrossings": 1,
       "maxSharedCorridors": 1
     },

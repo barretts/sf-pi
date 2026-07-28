@@ -122,7 +122,8 @@ function inferredDataModelIcon(node: DataModelObject): DiagramIcon | undefined {
 export type MarkerTone = "neutral" | "master_detail";
 
 const MARKER_TONE_STROKES: Record<MarkerTone, string> = {
-  neutral: "#444444",
+  // Matches the tldraw 'black' arrow stroke used by lookup relationships.
+  neutral: "#1D1D1D",
   // Matches the tldraw 'red' arrow stroke so a master-detail line and its
   // terminals read as one continuous mark.
   master_detail: "#E03131",

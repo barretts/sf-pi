@@ -1148,7 +1148,7 @@
     "entry": "extensions/sf-tldraw/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 4503
+    "srcLoc": 4493
   },
   {
     "id": "sf-welcome",

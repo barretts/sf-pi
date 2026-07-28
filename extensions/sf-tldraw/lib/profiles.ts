@@ -61,8 +61,8 @@ function compileDataModel(spec: DataModelSpec, options: CompileOptions): CanvasP
       observations,
     };
   });
-  // Relationship kind is carried by connector color and dash (grey dotted lookup,
-  // red solid master-detail) instead of a repeated LK/MD label box per connector.
+  // Relationship kind and cardinality are carried by connector styling and markers.
+  // Semantic endpoint and field names remain accepted by Spec v2 but never render.
   const edges: CanvasEdgePayload[] = spec.relationships.map((relationship) => {
     const tone: MarkerTone = relationship.type === "master_detail" ? "master_detail" : "neutral";
     return {
@@ -71,9 +71,6 @@ function compileDataModel(spec: DataModelSpec, options: CompileOptions): CanvasP
       to: relationship.to,
       label: "",
       relationshipType: relationship.type,
-      fieldApiName: relationship.field_api_name,
-      fromLabel: relationship.from_label,
-      toLabel: relationship.to_label,
       fromCardinality: relationship.from_cardinality,
       toCardinality: relationship.to_cardinality,
       fromMarkerAssetId: visuals.markerAssets.get(

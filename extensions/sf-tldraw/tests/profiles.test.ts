@@ -87,6 +87,8 @@ describe("deterministic Salesforce profiles", () => {
     expect(payload.edges.find((edge) => edge.id === "contact-cases")?.toMarkerAssetId).toBe(
       optional?.id,
     );
+    const neutralMarkerSvg = Buffer.from(optional?.src.split(",")[1] ?? "", "base64").toString();
+    expect(neutralMarkerSvg).toContain('stroke="#1D1D1D"');
     // Master-detail terminals get their own red-toned marker assets.
     expect(
       payload.assets.some((asset) => asset.name === "cardinality-many-master_detail.svg"),
@@ -224,7 +226,7 @@ describe("deterministic Salesforce profiles", () => {
     expect(positioned?.h).toBeGreaterThanOrEqual(200);
   });
 
-  it("carries relationship kind and optional end semantics on the connector", () => {
+  it("carries relationship kind but omits connector text from the canvas payload", () => {
     const spec = fixture("data-model");
     if (spec.family !== "data_model") throw new Error("Expected data-model fixture.");
     const relationship = spec.relationships[0];
@@ -240,11 +242,9 @@ describe("deterministic Salesforce profiles", () => {
     const edge = payload.edges.find((item) => item.id === relationship.id);
     expect(edge?.label).toBe("");
     expect(edge?.relationshipType).toBe("master_detail");
-    expect(edge).toMatchObject({
-      fieldApiName: "AccountId",
-      fromLabel: "child of",
-      toLabel: "parent of",
-    });
+    expect(edge).not.toHaveProperty("fieldApiName");
+    expect(edge).not.toHaveProperty("fromLabel");
+    expect(edge).not.toHaveProperty("toLabel");
     const neutral = payload.assets.find(
       (asset) => asset.name === "cardinality-many-neutral.svg",
     )?.id;
@@ -276,7 +276,12 @@ describe("deterministic Salesforce profiles", () => {
     );
     expect(program).toContain("const arrowKind=FAMILY==='data_model'?'elbow':'arc'");
     expect(program).toContain("isMasterDetail?'solid':'dotted'");
-    expect(program).toContain("isMasterDetail?'red':'grey'");
+    expect(program).toContain("isMasterDetail?'red':'black'");
+    expect(program).toContain("FAMILY==='data_model'||FAMILY==='sequence'?'m':'s'");
+    expect(program).not.toContain("ensureEdgeLabel");
+    expect(program).not.toContain("from-label");
+    expect(program).not.toContain("to-label");
+    expect(program).not.toContain("field-label");
     // Cards must be re-fronted after connectors exist, or bound arrows paint over them.
     expect(program).toContain("editor.bringToFront(groupIds)");
     // Precise side anchors keep the elbow corridor out of unrelated card interiors.

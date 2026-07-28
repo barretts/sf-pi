@@ -203,9 +203,6 @@ export interface CanvasEdgePayload {
   meaning?: ArchitectureConnection["meaning"] | SequenceInteraction["kind"];
   /** Data-model only. Drives connector color and dash instead of an LK/MD label box. */
   relationshipType?: DataModelRelationship["type"];
-  fieldApiName?: string;
-  fromLabel?: string;
-  toLabel?: string;
   fromCardinality?: EndpointCardinality;
   toCardinality?: EndpointCardinality;
   fromMarkerAssetId?: string;
