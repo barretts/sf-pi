@@ -28,6 +28,62 @@ function ctx(): ExtensionContext {
 }
 
 describe("agentscript_authoring inspect/review", () => {
+  test("blocks review on High native quality findings while compile stays valid", async () => {
+    const agentFile = path.join(workDir, "cycle.agent");
+    await writeFile(
+      agentFile,
+      [
+        "system:",
+        '    instructions: "Help"',
+        "    messages:",
+        '        welcome: "Hi"',
+        '        error: "Error"',
+        "config:",
+        '    agent_name: "Cycle"',
+        '    agent_type: "AgentforceEmployeeAgent"',
+        "start_agent main:",
+        '    description: "Main"',
+        "    before_reasoning:",
+        "        transition to @subagent.a",
+        "subagent a:",
+        '    description: "A"',
+        "    before_reasoning:",
+        "        transition to @subagent.b",
+        "subagent b:",
+        '    description: "B"',
+        "    before_reasoning:",
+        "        transition to @subagent.a",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await captureAuthoringTool().execute(
+      "call-quality",
+      { verb: "inspect", mode: "review", agent_file: agentFile },
+      undefined,
+      undefined,
+      ctx(),
+    );
+    const details = result.details as {
+      readiness?: string;
+      findings?: Array<{ id: string; category: string; message: string }>;
+      quality?: { status: string };
+    };
+    expect(details.quality?.status).toBe("findings");
+    expect(details.readiness).toBe("blocked");
+    expect(details.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: expect.stringContaining("unconditional-transition-cycle"),
+          category: "quality",
+        }),
+      ]),
+    );
+    expect(
+      details.findings?.find((finding) => finding.category === "quality")?.message,
+    ).not.toMatch(/^Endless Transition Loop: Endless Transition Loop:/);
+  });
+
   test("blocks files missing the system prompt block", async () => {
     const agentFile = path.join(workDir, "minimal.agent");
     await writeFile(

@@ -36,7 +36,7 @@ _Salesforce LLM Gateway provider with model discovery_
 
 ### [SF Agent Script](./extensions/sf-agentscript)
 
-_Single-plugin lifecycle for `.agent` files: in-process compile-on-save diagnostics, an LLM-callable compile tool, multi-turn eval/regression testing against the Salesforce Evaluation API, and a placeholder for the future Agent Script LSP._
+_Single-plugin lifecycle for `.agent` files: official-SDK compile diagnostics, native configurable quality analysis, preview/eval regression, and publish/activation workflows._
 
 - Default: **on**
 - Commands: `/sf-agentscript`

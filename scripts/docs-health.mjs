@@ -48,6 +48,13 @@ const DELEGATED_EVENT_ATTESTATIONS = new Map([
       events: new Set(["tool_result", "agent_settled"]),
     },
   ],
+  [
+    "sf-agentscript",
+    {
+      test: "tests/catalog-event-attestation.test.ts",
+      events: new Set(["agent_settled"]),
+    },
+  ],
 ]);
 
 const PUBLIC_SAFETY_PATTERNS = [

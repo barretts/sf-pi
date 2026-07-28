@@ -9,6 +9,7 @@ export type InspectMode =
   | "find_references"
   | "definition"
   | "check_targets"
+  | "quality"
   | "review"
   | "runtime_smoke";
 export type MutateMode = "set_field" | "rename" | "insert" | "delete" | "apply_quick_fix";
@@ -116,6 +117,14 @@ export const AUTHORING_ACTION_SPECS: Record<string, AuthoringActionSpec> = {
     verb: "inspect",
     mode: "check_targets",
     required: ["target_org"],
+    inferable: ["agent_file"],
+    writes: false,
+  },
+  "inspect.quality": {
+    key: "inspect.quality",
+    verb: "inspect",
+    mode: "quality",
+    required: [],
     inferable: ["agent_file"],
     writes: false,
   },

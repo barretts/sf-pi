@@ -36,6 +36,10 @@ import {
 import { inspectFile } from "./inspect.ts";
 import { mapAgentApiError } from "./errors/agent-api-error-map.ts";
 import { buildFeatureProfile, type AgentFeatureProfile } from "./feature-profile.ts";
+import {
+  evaluateQualityPublicationGate,
+  sessionQualityOverrideLedger,
+} from "./quality/publication-gate.ts";
 import { sfap404Message } from "./errors/sfap-404.ts";
 import { checkBundleVsBotDivergence } from "./lifecycle-divergence.ts";
 import {
@@ -101,6 +105,12 @@ const Params = Type.Object({
         "For action='provision_agent_user'. Default true (preview the plan, no mutations). Pass false to actually create the user / assign PSs / deploy custom PS.",
     }),
   ),
+  acknowledge_quality_risk: Type.Optional(
+    Type.Boolean({
+      description:
+        "For action='publish'. Approve the newly reported High quality rule IDs (or quality-analysis-failed) for this bundle and current session. Default false.",
+    }),
+  ),
   username_override: Type.Optional(
     Type.String({
       description:
@@ -124,6 +134,7 @@ interface ParamsAny {
   activate?: boolean;
   version?: number;
   dry_run?: boolean;
+  acknowledge_quality_risk?: boolean;
   username_override?: string;
 }
 
@@ -163,7 +174,7 @@ export function registerLifecycleTool(pi: ExtensionAPI): void {
     renderResult: renderLifecycleResult,
     promptSnippet: "Ship a .agent file to the org and toggle version activation.",
     promptGuidelines: [
-      "action='publish' — pass agent_file (the .agent path). Auto-detects new-agent vs new-version. Set activate=true to chain publish+activate in one call. Service Agents get a free agent_user_status preflight — a missing user / PS aborts with a clean recover_via, no SFAP round-trip.",
+      "action='publish' — pass agent_file (the .agent path). Auto-detects new-agent vs new-version. Native quality runs before any org call. New High rule IDs pause publication; after showing the evidence, pass acknowledge_quality_risk=true to approve those IDs for this bundle and current session. Set activate=true to chain publish+activate.",
       "action='activate' / 'deactivate' — pass agent_api_name; omit version for the latest. Idempotent: a no-op when already in the requested state.",
       "action='list_versions' — returns every BotVersion (id, number, status, dates). Use to discover which version is Active before previewing or running eval.",
       "action='agent_user_status' — cheap read-only check (~2 SOQL hits) that a Service Agent's user wiring is ready before publish. Returns status: ready/not_ready/n/a; not_ready surfaces a stable 'reason' code so the LLM can chain the right fix verb.",
@@ -311,6 +322,54 @@ async function actionPublish(
   }
 
   const agentApiName = input.agent_api_name ?? path.basename(filePath, ".agent");
+  const quality = timings
+    ? await timings.time("quality_analysis", () => analysis.getQuality())
+    : await analysis.getQuality();
+  const qualityGate = evaluateQualityPublicationGate(
+    agentApiName,
+    quality,
+    sessionQualityOverrideLedger(),
+    input.acknowledge_quality_risk === true,
+  );
+  if (!qualityGate.proceed) {
+    const highFindings = quality.findings.filter((finding) => finding.severity === "high");
+    const lines = [
+      `Agent Script quality paused publish for ${agentApiName}.`,
+      ...qualityGate.newRiskIds.map((riskId) => {
+        const finding = highFindings.find((candidate) => candidate.rule_id === riskId);
+        return finding
+          ? `  • ${finding.rule_name} (${riskId}) at L${finding.line}: ${finding.message}`
+          : `  • ${riskId}: ${quality.failure_reason ?? "quality analysis did not complete"}`;
+      }),
+      "Review the evidence, then retry with acknowledge_quality_risk=true to approve these risk classes for this bundle and current session.",
+    ];
+    return toolError(
+      lines.join("\n"),
+      undefined,
+      {
+        tool: LIFECYCLE_TOOL_NAME,
+        params: {
+          action: "publish",
+          agent_file: filePath,
+          ...(input.target_org ? { target_org: input.target_org } : {}),
+          ...(input.agent_api_name ? { agent_api_name: input.agent_api_name } : {}),
+          ...(input.activate !== undefined ? { activate: input.activate } : {}),
+          acknowledge_quality_risk: true,
+        },
+      },
+      {
+        action: "publish.quality_gate",
+        quality_gate: {
+          file: filePath,
+          agent_api_name: agentApiName,
+          risk_ids: qualityGate.riskIds,
+          new_risk_ids: qualityGate.newRiskIds,
+          quality,
+        },
+      },
+    );
+  }
+
   let featureProfile: AgentFeatureProfile | undefined;
   try {
     const inspect = timings

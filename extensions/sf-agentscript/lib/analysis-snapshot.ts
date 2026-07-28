@@ -13,6 +13,8 @@ import { readFile, stat } from "node:fs/promises";
 import { buildFeatureProfile, type AgentFeatureProfile } from "./feature-profile.ts";
 import { checkAgentScriptSource } from "./diagnostics.ts";
 import { inspectSource, type InspectResult } from "./inspect.ts";
+import { runAgentScriptQuality } from "./quality/engine.ts";
+import type { AgentScriptQualityResult } from "./quality/types.ts";
 import type { AgentScriptCheckResult } from "./types.ts";
 
 const MAX_ANALYSIS_SNAPSHOTS = 20;
@@ -28,6 +30,7 @@ export interface AgentScriptAnalysisSnapshot {
   fileKey: AgentScriptAnalysisFileKey;
   getCompile: () => Promise<AgentScriptCheckResult>;
   getInspect: () => Promise<InspectResult>;
+  getQuality: () => Promise<AgentScriptQualityResult>;
   getFeatureProfile: () => Promise<AgentFeatureProfile | undefined>;
 }
 
@@ -52,6 +55,7 @@ export async function getAgentScriptAnalysis(
   const source = await readFile(filePath, "utf8");
   let compilePromise: Promise<AgentScriptCheckResult> | undefined;
   let inspectPromise: Promise<InspectResult> | undefined;
+  let qualityPromise: Promise<AgentScriptQualityResult> | undefined;
   let featureProfilePromise: Promise<AgentFeatureProfile | undefined> | undefined;
 
   const snapshot: AgentScriptAnalysisSnapshot = {
@@ -64,6 +68,10 @@ export async function getAgentScriptAnalysis(
     getInspect() {
       inspectPromise ??= inspectSource(source);
       return inspectPromise;
+    },
+    getQuality() {
+      qualityPromise ??= runAgentScriptQuality(source);
+      return qualityPromise;
     },
     async getFeatureProfile() {
       featureProfilePromise ??= (async () => {

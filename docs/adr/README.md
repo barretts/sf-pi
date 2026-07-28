@@ -92,3 +92,5 @@ or accidentally contradicted in extension READMEs.
 - [0087: Shared Secure Credential Prompt Policy](./0087-secure-native-credential-prompt-prerequisite.md)
 - [0088: Pi 0.82.0 Runtime Floor](./0088-pi-082-runtime-floor.md)
 - [0089: SF tldraw uses deterministic Salesforce diagram profiles](./0089-sf-tldraw-uses-deterministic-salesforce-diagram-profiles.md)
+- [0091: Agent Script Quality Analysis Is Native, AST-Grounded, and Separate from Compilation](./0091-agentscript-native-quality-analysis.md)
+- [0092: Agent Script Quality Rule Settings Are Global-Only and Sparse](./0092-agentscript-quality-rule-settings-are-global-only.md)

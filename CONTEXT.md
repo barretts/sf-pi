@@ -284,6 +284,50 @@ _Avoid_: Apex IDE, code generator, debugger suite
 The agentic Apex development cycle coordinated by an **Apex Lifecycle Extension**: plan the change, edit files, diagnose locally, observe runtime behavior, run targeted tests, and repeat until verified.
 _Avoid_: test runner only, log viewer only
 
+**Agent Script Quality Rule**:
+A static-analysis rule over compiler-valid Agent Script that identifies a deterministic defect, configured policy breach, maintainability problem, or advisory risk without redefining **Agent Script Compile Validity**. An **Agent Script Hardening Diagnostic** is the narrow proven-failure subset.
+_Avoid_: compiler diagnostic, generic lint rule, compile error, behavioral test result
+
+**Agent Script Quality Pass**:
+A source-versioned, single-agent-file evaluation of **Agent Script Quality Rules** after the agent settles or during explicit review. Edit-time feedback remains limited to compilation and **Agent Script Hardening Diagnostics**; multiple changed files are evaluated independently rather than becoming a project-wide quality claim.
+_Avoid_: compile-on-save lint dump, per-keystroke graph scan, project-wide quality claim, behavioral evaluation, hidden background scan
+
+**Agent Script Universal Quality Rule**:
+An **Agent Script Quality Rule** whose meaning does not depend on organization-specific action names, sensitive-resource policy, target allowlists, or threshold choices. The first quality release contains only these rules plus report-only metrics; configurable organization policy is a later boundary.
+_Avoid_: inferred security policy, customer convention, target-name heuristic, configurable v1 rule
+
+**Agent Script Quality Rule Setting**:
+A global-only On/Off preference for one canonical **Agent Script Quality Rule**, stored sparsely under `sfPi.agentScript.quality.rules`. Disabled rules do not report, repair, compute metrics, or gate publication; every **Agent Script Quality Result** discloses effective coverage, and project settings cannot override the preference.
+_Avoid_: project rule override, master quality switch, hidden disabled rule, duplicate rule config store
+
+**Agent Script Quality Result**:
+The outcome of an **Agent Script Quality Pass**, containing `clean`, `findings`, `partial`, or `failed` status plus severity counts, source findings, and metrics. It has no numeric quality score and does not redefine **Agent Script Compile Validity**.
+_Avoid_: quality score, compile status, deployment readiness, raw diagnostic list
+
+**Agent Script Quality Repair Loop**:
+A progress-gated agent follow-up for High and Moderate findings from an agent-settled **Agent Script Quality Pass**. It stops when the relevant source is not edited, the finding signature repeats, quality becomes clean, analysis fails, or the user interrupts; Low, Info, and metrics remain human-only evidence.
+_Avoid_: unbounded retry, clean-result follow-up, metric-driven rewrite, hidden repair
+
+**Agent Script Quality Suppression**:
+A `# sf-agentscript-ignore-next-line <rule-id>: <reason>` source annotation that suppresses one next-line Moderate, Low, or Info **Agent Script Quality Rule** finding. It cannot suppress High hardening findings or metrics, and malformed or unused suppressions remain visible evidence.
+_Avoid_: blanket disable, High-rule bypass, project ignore file, reasonless suppression
+
+**Agent Script Quality Publication Gate**:
+The local-file lifecycle boundary that pauses publication when an **Agent Script Quality Result** contains a High deterministic finding while preserving **Agent Script Compile Validity**. It can proceed through an explicit **Agent Script Quality Publication Override**, and it does not reanalyze an already published version whose source identity is not proven by the local file.
+_Avoid_: compiler error, every-warning blocker, activation gate, org compiler rejection, silent bypass
+
+**Agent Script Quality Publication Override**:
+A user-approved, session-scoped exception for one agent bundle and the specific High **Agent Script Quality Rule** IDs already reviewed, or for the separately disclosed `quality-analysis-failed` condition. Repeated publication within that envelope can proceed during the session; a newly appearing High rule requires another approval, and no override persists to project or global settings.
+_Avoid_: blanket session bypass, persistent ignore setting, agent-selected first-attempt override, hidden approval, failed-means-clean
+
+**Agent Script Procedure**:
+One executable logic region whose paths can be analyzed independently, such as reasoning instructions, before/after reasoning, connected-agent after-response logic, or custom subagent lifecycle logic. Prompt text, action declarations, and an entire subagent are not procedures.
+_Avoid_: subagent, prompt block, whole Agent Script file, action definition
+
+**Agent Script Cyclomatic Complexity**:
+The per-**Agent Script Procedure** count of one entry path plus each `IfStatement`, `TernaryExpression`, and short-circuit `and`/`or` expression. Subagent/file aggregates are orientation-only, and thresholds remain advisory until a representative corpus establishes a baseline.
+_Avoid_: cyclometric complexity, whole-file complexity gate, prompt complexity, tool count, transition count
+
 **Agent Script Hardening Diagnostic**:
 An SF Pi-owned deterministic diagnostic for a proven Salesforce publish or runtime failure that the official Agent Script toolchain does not cover. It is removed or narrowed when upstream owns or contradicts the behavior.
 _Avoid_: generic language rule, duplicate upstream diagnostic, competing compiler policy, speculative warning
@@ -295,6 +339,14 @@ _Avoid_: diagnostic-free validity, clean-with-notices status, hidden warning, hi
 **Agent Script Structural Projection**:
 A compact, stable, agent-facing summary of workflow topology and review/preflight facts derived from the official Agent Script AST. It excludes compiler-internal nodes, CST wrappers, cycles, and parser-specific implementation detail.
 _Avoid_: raw AST, CST dump, compiler mirror, universal feature inventory
+
+**Agent Script Flow Projection**:
+An SF Pi-owned, source-versioned graph derived only from the official Agent Script AST that distinguishes one-way transitions, returning subagent delegations, and connected-agent invocations with their conditions and source ranges. **Agent Script Quality Rules** consume it for graph facts without introducing another parser or language model.
+_Avoid_: raw reference graph, visual diagram, copied upstream extractor, inferred runtime trace
+
+**Agent Script Cycle Finding**:
+An **Agent Script Quality Rule** result whose confidence follows edge semantics: an unconditional one-way transition cycle is a deterministic defect, while conditional transition and returning-delegation cycles are advisory risks. A connected-agent cycle with unavailable source remains unverifiable rather than inferred broken.
+_Avoid_: every graph cycle is an error, infinite-loop claim, connected-agent guess
 
 **Agent Script Target Preflight**:
 A read-only org existence check for a compiler-valid target using one authoritative product-specific lookup. Targets without a proven lookup remain explicitly unverifiable rather than being guessed present or missing.
@@ -683,6 +735,12 @@ Agent: "I will run an **LWC Component Inspection** as part of the **LWC Lifecycl
 
 Dev: "Run the related LWC test, but don't start a watcher."
 Agent: "I will run a bounded **Local LWC Test Run** for the smallest useful test scope. It can execute the local LWC Jest runner, but it will not call Salesforce CLI, install dependencies, or start watch mode."
+
+Dev: "Check this Agent Script before I publish it."
+Agent: "I will run an **Agent Script Quality Pass** over the compiler-valid source. The **Agent Script Quality Result** will separate High, Moderate, Low, and Info findings from per-**Agent Script Procedure** metrics such as **Agent Script Cyclomatic Complexity**."
+
+Dev: "The quality pass found a High transition loop, but I need to publish this test version anyway."
+Agent: "The **Agent Script Quality Publication Gate** will pause and show the exact rule evidence. If you approve an **Agent Script Quality Publication Override**, it applies only to this bundle and those reviewed High rule IDs for the current session."
 
 Dev: "Run `data360_observe stdm.find_sessions` and show me what happened."
 Agent: "That created a **Data 360 Run**. I will return a **Data 360 Run Digest** in context, render a **Data 360 Result Card** for the human, and save the raw SQL/JSON as **Data 360 Artifacts**."

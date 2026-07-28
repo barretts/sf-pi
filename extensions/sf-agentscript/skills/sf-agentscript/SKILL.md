@@ -11,7 +11,7 @@ Use this skill whenever the user is editing `.agent` files, debugging an Agentfo
 
 | Tool                    | Use it for                                                                                                                                                                                   |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agentscript_authoring` | Create bundles, compile/check or format `.agent` files, inspect structure/references/targets, run deterministic review, and mutate source. Uses `verb` + `mode`.                             |
+| `agentscript_authoring` | Create bundles, compile/check or format `.agent` files, inspect structure/references/targets/native quality, run deterministic review, and mutate source. Uses `verb` + `mode`.              |
 | `agentscript_preview`   | Start/send/end live preview sessions, fetch planner traces, bulk-end sessions, clean stale preview artifacts, render rich human Preview Trace Reports, and return compact LLM trace digests. |
 | `agentscript_eval`      | Generate starter eval specs, run regression suites, drill into failures, synthesize trace artifacts, fetch explicit live traces, and resolve active/latest version ids.                      |
 | `agentscript_lifecycle` | Publish, activate/deactivate, list versions, and diagnose/provision Service Agent users.                                                                                                     |
@@ -28,7 +28,7 @@ Rules:
 
 - `verb="create"` omits `mode` and requires `bundle_name`. Both templates generate subagents, not deprecated topics, and include required welcome/error system messages: `minimal` deterministically enters one primary subagent; `agentforce-default` exposes planner-selectable transition actions for `job_spec.subagents`. `job_spec.topics` is a legacy alias and loses when both fields are supplied.
 - `verb="compile"` defaults `mode` to `check`; `mode="format"` writes canonical SDK formatting.
-- `verb="inspect"` defaults `mode` to `structure`; modes: `structure`, `context_profile`, `find_references`, `definition`, `check_targets`, `review`, `runtime_smoke`.
+- `verb="inspect"` defaults `mode` to `structure`; modes: `structure`, `context_profile`, `find_references`, `definition`, `check_targets`, `quality`, `review`, `runtime_smoke`.
 - `verb="mutate"` requires `mode`; modes: `set_field`, `rename`, `insert`, `delete`, `apply_quick_fix`.
 - Use `agent_file`, not a generic path field.
 - `agent_file` may be omitted only when exactly one current `.agent` file exists on the active Pi branch. Ambiguity is refused with candidates.
@@ -91,7 +91,9 @@ Use `inspect/find_references` before mutating a symbol. Use `inspect/definition`
 
 Use `inspect/check_targets` before publish when action or connected-agent targets must resolve in the org. Requires `target_org`; schemes without a proven resolver remain explicitly unverifiable. Connected-agent existence and runtime readiness are separate: an existing target without an Active version warns and provides an activation hint without blocking parent publication. Local project sources are traversed cycle-safely to depth five; transitive gaps warn, while direct targets retain existing blocker semantics.
 
-Use `inspect/review` before publish or after behavioral changes. It is deterministic: no hidden model call, no numeric score. Readiness is `ready`, `ready_with_warnings`, `blocked`, or `partial`. Pass `target_org` to include read-only org checks: action-target resolution, Service Agent user readiness, and surface readiness probes such as Agentforce settings, phone number, voice/messaging channel, ServiceChannel, published voice planner, routing-flow, and fallback-queue checks for channel-linked agents. Locally valid `runtime`, `file_upload`, and experimental `collect` usage remain non-blocking org-compiler compatibility risks until live server compile succeeds. Pass `output_path` to write a Markdown report.
+Use `inspect/quality` to run the global enabled native quality catalog for one `.agent` file. It returns High/Moderate/Low/Info findings, rule coverage, suppressions, and report-only cyclomatic complexity. Global per-rule toggles live under SF Pi Manager → SF Agent Script → Settings → Quality Rules. Disabled rules do not report, repair, compute metrics, or gate publication.
+
+Use `inspect/review` before publish or after behavioral changes. It composes compile and quality with optional org checks and remains deterministic: no hidden model call, no numeric score. Readiness is `ready`, `ready_with_warnings`, `blocked`, or `partial`. Pass `target_org` to include read-only org checks: action-target resolution, Service Agent user readiness, and surface readiness probes such as Agentforce settings, phone number, voice/messaging channel, ServiceChannel, published voice planner, routing-flow, and fallback-queue checks for channel-linked agents. Locally valid `runtime`, `file_upload`, and experimental `collect` usage remain non-blocking org-compiler compatibility risks until live server compile succeeds. Pass `output_path` to write a Markdown report.
 
 Use `inspect/runtime_smoke` only after a test call or message. It is read-only and diagnoses recent VoiceCall, AgentWork, and MessagingSession records; it does not place calls, send messages, or replace preview/eval.
 
@@ -142,7 +144,7 @@ Use `get_failure` after large runs. If exactly one failed completed run exists o
 
 ## Lifecycle
 
-Use `publish` to ship a new agent/version. Set `activate=true` only when you intend to immediately serve the new version.
+Use `publish` to ship a new agent/version. Native quality runs before org calls. New enabled High rule IDs or a quality-analysis failure pause publication and return evidence; retry with `acknowledge_quality_risk=true` only after user approval. Approval is session-scoped to the bundle and reviewed risk IDs. Set `activate=true` only when you intend to immediately serve the new version.
 
 Use `agent_user_status`, `diagnose_agent_user`, and `provision_agent_user` for Service Agent user wiring. Provision defaults to `dry_run=true`; pass `dry_run=false` only after reviewing the plan. Live provisioning deploys a synthesized Permission Set for Apex action access with bounded Metadata API start/poll timeouts so stalled deploys return diagnostics instead of waiting on SDR's long default poll window.
 

@@ -48,7 +48,8 @@ You can also manage this extension from the SF Pi home base:
 
 ## Safety notes
 
-- Compile-on-save stays silent on unsupported files and on failed write/edit results.
+- Compile-on-save stays silent on unsupported files and on failed write/edit results; only enabled edit-time High hardening rules join that feedback.
+- Global per-rule quality toggles dynamically control reporting, repair, metrics, and local-file publication gating without a reload.
 - Eval, trace, preview, and lifecycle calls reuse @salesforce/core / SF CLI auth context; timeout-sensitive HTTP may use bounded native fetch and never logs or persists tokens.
 - Local-first: compile and validate run via official @sf-agentscript packages before any network call.
 - Eval runs synthesize trace artifacts from inline Evaluation API data by default; explicit trace fetches are idempotent GETs.
@@ -67,7 +68,7 @@ You can also manage this extension from the SF Pi home base:
 - **Commands:** `/sf-agentscript`
 - **LLM tools:** `agentscript_authoring`, `agentscript_preview`, `agentscript_eval`, `agentscript_lifecycle`
 - **Providers:** _none_
-- **Events/hooks:** `session_start`, `session_shutdown`, `tool_result`
+- **Events/hooks:** `session_start`, `session_shutdown`, `tool_result`, `agent_settled`
 
 </details>
 

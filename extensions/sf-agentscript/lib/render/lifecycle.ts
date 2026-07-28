@@ -7,8 +7,10 @@
  * activate / deactivate: single-line status flip.
  */
 
-import { Text } from "@earendil-works/pi-tui";
+import { Text, type Component } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
+import { createQualityCardComponent, qualityCardData } from "../quality/presentation.ts";
+import type { AgentScriptQualityResult } from "../quality/types.ts";
 import { padRightVisible, visibleWidth } from "./shared.ts";
 
 interface AuthoringBundleResult {
@@ -116,9 +118,32 @@ export function renderLifecycleResult(
   result: { details?: unknown; content?: unknown[] },
   opts: { isPartial?: boolean; expanded?: boolean },
   theme: Theme,
-): Text {
+): Component {
   if (opts.isPartial) return new Text(theme.fg("warning", "🚀 lifecycle · running…"), 0, 0);
   const details = (result.details ?? {}) as Record<string, unknown>;
+  const qualityGate = details.quality_gate as
+    | {
+        file?: string;
+        agent_api_name?: string;
+        risk_ids?: string[];
+        quality?: AgentScriptQualityResult;
+      }
+    | undefined;
+  if (qualityGate?.quality) {
+    return createQualityCardComponent(
+      qualityCardData(
+        qualityGate.file ?? qualityGate.agent_api_name ?? "Agent.agent",
+        qualityGate.quality,
+        {
+          state: "blocked",
+          message: `Approval required for: ${(qualityGate.risk_ids ?? []).join(", ")}`,
+        },
+      ),
+      opts.expanded ?? false,
+      theme,
+      false,
+    );
+  }
   if (details.ok === false) {
     return new Text(
       theme.fg("error", `✗ ${getFirstText(result.content) || "lifecycle call failed"}`),

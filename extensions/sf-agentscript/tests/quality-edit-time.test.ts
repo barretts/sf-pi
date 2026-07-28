@@ -1,0 +1,42 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+import { describe, expect, it } from "vitest";
+import { checkAgentScriptSource, isAgentScriptCompileValid } from "../lib/diagnostics.ts";
+
+describe("Agent Script edit-time quality hardening", () => {
+  it("surfaces enabled edit-time High rules without changing compile validity", async () => {
+    const result = await checkAgentScriptSource(`system:
+    instructions: "Help"
+    messages:
+        welcome: "Hi"
+        error: "Error"
+config:
+    agent_name: "Edit_Time"
+    agent_type: "AgentforceEmployeeAgent"
+start_agent main:
+    description: "Main"
+    actions:
+        lookup:
+            description: "Lookup"
+            inputs:
+                query: string
+            outputs:
+                result: string
+            target: "flow://Lookup"
+    reasoning:
+        instructions: ->
+            run @actions.lookup
+                with query = ...
+`);
+    expect(result.ok).toBe(true);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "slot-filling-in-deterministic-action",
+          severity: 2,
+          source: "sf-agentscript-quality",
+        }),
+      ]),
+    );
+    expect(isAgentScriptCompileValid(result.diagnostics)).toBe(true);
+  });
+});

@@ -19,7 +19,7 @@
  * Generated files in catalog/registry.ts and catalog/index.json are excluded
  * because the generator rewrites them.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import path from "node:path";
 
@@ -89,7 +89,7 @@ function addHeader(content) {
   return `${HEADER}\n${content}`;
 }
 
-const files = listFiles().filter(shouldProcess);
+const files = listFiles().filter((file) => shouldProcess(file) && existsSync(file));
 const missing = [];
 let changed = 0;
 

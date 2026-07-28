@@ -11,7 +11,7 @@ multi-turn evals, and publish/activation workflows. Salesforce calls use
 
 | Tool                    | What it owns                                                                                                                                                                                                                                            |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agentscript_authoring` | Local `.agent` authoring: create bundles, compile/check or format, inspect structure/references/targets, deterministic readiness review, and structural mutations. Uses `verb` + `mode`.                                                                |
+| `agentscript_authoring` | Local `.agent` authoring: create bundles, compile/check or format, inspect structure/references/targets/native quality, deterministic readiness review, and structural mutations. Uses `verb` + `mode`.                                                 |
 | `agentscript_preview`   | Live-org preview: start/send/end sessions, fetch traces, bulk end sessions, and clean stale preview artifacts. Send renders a rich human Preview Trace Report while keeping the LLM payload compact through a structured digest and raw-trace pointers. |
 | `agentscript_eval`      | Regression workflow: generate starter specs, run evals, drill into failures, synthesize trace artifacts, fetch explicit live traces, and resolve active/latest BotVersion ids.                                                                          |
 | `agentscript_lifecycle` | Publish/activation workflow: publish versions, activate/deactivate, list versions, and diagnose/provision Service Agent users.                                                                                                                          |
@@ -28,7 +28,7 @@ Rules:
 
 - `verb="create"` omits `mode` and requires `bundle_name`. Generated templates use subagents rather than deprecated topic blocks: `minimal` deterministically enters one primary subagent, while `agentforce-default` exposes one planner-selectable transition per requested responsibility. Both include required welcome/error system messages so create → review is ready by construction. Use `job_spec.subagents`; `job_spec.topics` remains a legacy alias and is ignored when `subagents` is supplied.
 - `verb="compile"` defaults `mode` to `check`; `mode="format"` writes canonical SDK formatting.
-- `verb="inspect"` defaults `mode` to `structure`; modes include `context_profile`, `find_references`, `definition`, `check_targets`, and `review`.
+- `verb="inspect"` defaults `mode` to `structure`; modes include `context_profile`, `find_references`, `definition`, `check_targets`, `quality`, and `review`.
 - `verb="mutate"` requires `mode`; modes include `set_field`, `rename`, `insert`, `delete`, and `apply_quick_fix`.
   - `set_field` is a structured scalar field update/upsert for existing top-level Agentforce schema components. It supports first-level scalar fields on singular blocks (for example `config`, `access`, `system`, `model_config`, `knowledge`) and named entries (for example `start_agent.main`, `subagent.billing`, `connection.messaging`, `variables.customer_id`, `actions.lookup`). It does not create missing blocks or nested paths.
   - `rename` is reference-safe for declarable symbols (`@subagent.X`, `@topic.X`, `@actions.X`, `@variables.X`) and accepts legacy component paths.
@@ -50,11 +50,24 @@ Branch state stores only lightweight pointers such as file paths, session ids, r
 
 Auto-resolution validates referenced disk artifacts before use and proceeds only when exactly one candidate exists.
 
+## Native quality analysis
+
+`agentscript_authoring { "verb": "inspect", "mode": "quality" }` runs the global enabled 18-rule quality catalog for one `.agent` file. It returns High/Moderate/Low/Info findings, exact rule coverage, suppression evidence, and report-only per-procedure cyclomatic complexity. The same result is composed into review and local-file publication preflight.
+
+Quality settings are global-only. **SF Pi Manager → SF Agent Script → Settings → Quality Rules** shows one On/Off row per rule. All v1 rules default On; future experimental rules default Off. Disabled rules do not execute, report findings, steer repair, compute metrics, or gate publication.
+
+Human and LLM output use separate channels. Deferred results persist as theme-aware, expandable quality cards through `appendEntry`; those cards never enter LLM context. New High/Moderate signatures send a hidden `sf-agentscript-quality-repair` custom message containing compact JSON, while clean, Low, Info, and metric-only results remain human-only. Cards distinguish passed, issues, repairing, fixed, stopped, partial, failed, and publication-blocked states.
+
+High findings pause publication without changing compile validity and render as a blocked quality card. After reviewing the evidence, the user can retry with `acknowledge_quality_risk=true`; the approval applies only to that bundle, current session, and reviewed High rule IDs.
+
+See [`QUALITY_RULES.md`](./QUALITY_RULES.md) for the stable catalog and lifecycle contract.
+
 ## Deterministic review
 
 `agentscript_authoring { "verb": "inspect", "mode": "review" }` runs a deterministic v1 readiness review. It reports:
 
 - compile blockers and warnings
+- native quality findings and coverage
 - structural/readiness findings that can be proven from the parsed file
 - publish-risk signals from the feature profile, including non-blocking warnings when locally compile-valid `runtime`, `file_upload`, or experimental `collect` behavior may be ahead of the target org's server compiler
 - read-only action-target checks when `target_org` is provided
@@ -94,14 +107,15 @@ create/compile/inspect/mutate  ──▶  preview  ──▶  eval  ──▶  l
 
 ## Behavior Matrix
 
-| Trigger                                 | Result                                                                  |
-| --------------------------------------- | ----------------------------------------------------------------------- |
-| `session_start` / `session_shutdown`    | Reset assist state and cached Salesforce connections.                   |
-| `tool_result` after `.agent` write/edit | Run compile-on-save diagnostics and append compact feedback.            |
-| `agentscript_authoring`                 | Create, compile, inspect, review, and mutate local Agent Script source. |
-| `agentscript_preview`                   | Start/send/end preview sessions and persist traces/transcripts.         |
-| `agentscript_eval`                      | Generate/run regression specs and persist failure/trace artifacts.      |
-| `agentscript_lifecycle`                 | Publish, activate, list versions, and manage Service Agent users.       |
+| Trigger                                 | Result                                                                |
+| --------------------------------------- | --------------------------------------------------------------------- |
+| `session_start` / `session_shutdown`    | Reset assist state and cached Salesforce connections.                 |
+| `tool_result` after `.agent` write/edit | Run compile-on-save diagnostics and enabled edit-time High hardening. |
+| `agent_settled`                         | Run enabled global quality rules for changed `.agent` files.          |
+| `agentscript_authoring`                 | Create, compile, inspect quality/review, and mutate local source.     |
+| `agentscript_preview`                   | Start/send/end preview sessions and persist traces/transcripts.       |
+| `agentscript_eval`                      | Generate/run regression specs and persist failure/trace artifacts.    |
+| `agentscript_lifecycle`                 | Publish, activate, list versions, and manage Service Agent users.     |
 
 ## Settings
 
@@ -110,8 +124,10 @@ SF Agent Script has a Manager Settings page for low-risk tool defaults stored un
 - **Preview mock mode** (`previewMockMode`) — default for `agentscript_preview` `start` when `mock_mode` is omitted: `Mock` or `Live Test`.
 - **Eval trace mode** (`evalTracesMode`) — default for `agentscript_eval` `run` when `traces_mode` is omitted: `failed`, `all`, or `off`.
 - **Eval concurrency** (`evalConcurrency`) — default concurrency for `agentscript_eval` `run` when omitted: `4`, `8`, or `16`.
+- **Quality auto-run** (`quality.autoRun`) — global toggle for the deferred post-agent quality pass.
+- **Quality rules** (`quality.rules.<rule-id>`) — sparse global per-rule overrides. All 18 stable v1 rules default On.
 
-Explicit tool parameters still win for a single call.
+Quality controls are global-only; project settings cannot weaken or strengthen them. Changes are read dynamically and require no reload. Explicit tool parameters still win for a single call.
 
 ## Slash commands
 
@@ -205,6 +221,17 @@ extensions/sf-agentscript/
       resolve-agent-version.ts← implementation module
       session-store.ts      ← implementation module
       trace-digest.ts       ← implementation module
+    quality/
+      auto-scan.ts          ← implementation module
+      catalog.ts            ← implementation module
+      engine.ts             ← implementation module
+      facts.ts              ← implementation module
+      presentation.ts       ← implementation module
+      publication-gate.ts   ← implementation module
+      rules.ts              ← implementation module
+      settings.ts           ← implementation module
+      transcript.ts         ← implementation module
+      types.ts              ← implementation module
     render/
       compile.ts            ← implementation module
       eval.ts               ← implementation module
@@ -225,6 +252,7 @@ extensions/sf-agentscript/
     agentforce-document.ts  ← implementation module
     agentforce-navigation.ts← implementation module
     analysis-snapshot.ts    ← implementation module
+    ast-hardening.ts        ← implementation module
     authoring-tool.ts       ← implementation module
     bounded-salesforce-transport.ts← implementation module
     branch-state.ts         ← implementation module
@@ -243,7 +271,6 @@ extensions/sf-agentscript/
     lifecycle-divergence.ts ← implementation module
     lifecycle-tool.ts       ← implementation module
     lifecycle.ts            ← implementation module
-    local-lints.ts          ← implementation module
     manager-action-panels.ts← implementation module
     mutate.ts               ← implementation module
     mutation-policy.ts      ← implementation module
@@ -266,9 +293,11 @@ extensions/sf-agentscript/
     agent-config.test.ts    ← unit / smoke test
     agent-user-status.test.ts← unit / smoke test
     analysis-snapshot.test.ts← unit / smoke test
+    authoring-quality.test.ts← unit / smoke test
     authoring-review.test.ts← unit / smoke test
     authoring-tool.test.ts  ← unit / smoke test
     bounded-salesforce-transport.test.ts← unit / smoke test
+    catalog-event-attestation.test.ts← unit / smoke test
     code-actions.test.ts    ← unit / smoke test
     compile-summary.test.ts ← unit / smoke test
     connected-readiness-graph.test.ts← unit / smoke test
@@ -302,6 +331,7 @@ extensions/sf-agentscript/
     lifecycle-divergence.test.ts← unit / smoke test
     lifecycle-error-classification.test.ts← unit / smoke test
     lifecycle-list-versions.test.ts← unit / smoke test
+    lifecycle-quality-gate.test.ts← unit / smoke test
     lifecycle-sdr-layout.test.ts← unit / smoke test
     mutate-dry-run.test.ts  ← unit / smoke test
     mutate-emit-regression.test.ts← unit / smoke test
@@ -319,6 +349,16 @@ extensions/sf-agentscript/
     preview-session-store.test.ts← unit / smoke test
     provision-agent-user.test.ts← unit / smoke test
     publish-authoring-bundle.test.ts← unit / smoke test
+    quality-auto-scan.test.ts← unit / smoke test
+    quality-catalog.test.ts ← unit / smoke test
+    quality-config-panel.test.ts← unit / smoke test
+    quality-edit-time.test.ts← unit / smoke test
+    quality-engine.test.ts  ← unit / smoke test
+    quality-lifecycle-card.test.ts← unit / smoke test
+    quality-presentation.test.ts← unit / smoke test
+    quality-publication-gate.test.ts← unit / smoke test
+    quality-settings.test.ts← unit / smoke test
+    quality-transcript.test.ts← unit / smoke test
     queue-readiness.test.ts ← unit / smoke test
     render-compile.test.ts  ← unit / smoke test
     render-eval.test.ts     ← unit / smoke test

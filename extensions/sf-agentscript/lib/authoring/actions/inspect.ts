@@ -20,6 +20,7 @@ import { connFromAlias } from "../../../../../lib/common/sf-conn/connection.ts";
 import { checkActionTargets, checkConnectedAgentReadinessGraph } from "../../preflight.ts";
 import { diagnoseRuntimeSmoke, type RuntimeSmokeResult } from "../../preflight/runtime-smoke.ts";
 import { collectOrgReviewFindings } from "../../review/org-checks.ts";
+import type { AgentScriptQualityResult } from "../../quality/types.ts";
 import type { ReviewFinding } from "../../review/types.ts";
 import { safeResolveToolPath, toolError, toolOk, type ToolError } from "../../tool-types.ts";
 import type { TimingCollector } from "../../timings.ts";
@@ -55,6 +56,8 @@ export async function runInspectAction(
       return actionDefinition(agentFile, input.symbol as string, timings);
     case "check_targets":
       return actionCheckTargets(agentFile, input.target_org, timings);
+    case "quality":
+      return actionQuality(agentFile, timings);
     case "review":
       return actionReview(ctx, agentFile, input, timings);
     case "runtime_smoke":
@@ -365,6 +368,24 @@ async function actionCheckTargets(
   );
 }
 
+async function actionQuality(agentFile: string, timings?: TimingCollector) {
+  const analysis = await getAgentScriptAnalysis(agentFile);
+  const quality = timings
+    ? await timings.time("quality_analysis", () => analysis.getQuality())
+    : await analysis.getQuality();
+  const details = withAgentScriptBranchState(
+    {
+      ok: quality.ok,
+      action: "inspect.quality" as const,
+      agent_file: agentFile,
+      path: agentFile,
+      quality,
+    },
+    inspectEvents(agentFile, "quality"),
+  );
+  return toolOk(details, renderQualitySummary(agentFile, quality));
+}
+
 async function actionRuntimeSmoke(
   agentFile: string,
   input: AuthoringParams,
@@ -515,6 +536,43 @@ async function actionReview(
     }
   }
 
+  const quality = timings
+    ? await timings.time("quality_analysis", () => analysis.getQuality())
+    : await analysis.getQuality();
+  if (!quality.ok || quality.status === "failed") {
+    findings.push({
+      id: "quality-analysis-failed",
+      severity: "blocker",
+      category: "quality",
+      message: quality.failure_reason ?? "Agent Script quality analysis failed.",
+      recover_via: {
+        tool: "agentscript_authoring",
+        params: { verb: "inspect", mode: "quality", agent_file: agentFile },
+      },
+    });
+  } else {
+    for (const finding of quality.findings) {
+      findings.push({
+        id: `quality-${finding.rule_id}-L${finding.line}`,
+        severity:
+          finding.severity === "high"
+            ? "blocker"
+            : finding.severity === "moderate"
+              ? "warning"
+              : "info",
+        category: "quality",
+        message: finding.message.startsWith(`${finding.rule_name}:`)
+          ? finding.message
+          : `${finding.rule_name}: ${finding.message}`,
+        evidence: [
+          `L${finding.line}`,
+          ...(finding.suggestion ? [finding.suggestion] : []),
+          ...(finding.evidence ?? []).slice(0, 3),
+        ],
+      });
+    }
+  }
+
   findings.push(
     ...(timings
       ? await timings.time("source_shape_checks", () => sourceShapeFindings(agentFile))
@@ -525,6 +583,7 @@ async function actionReview(
     ? await timings.time("inspect_structure", () => analysis.getInspect())
     : await analysis.getInspect();
   const parseBlocked = inspect.ok && inspect.has_parse_errors;
+  const qualityBlocked = !quality.ok || quality.status === "failed";
   if (!inspect.ok) {
     findings.push({
       id: "inspect-unavailable",
@@ -617,13 +676,14 @@ async function actionReview(
 
   const blockers = findings.filter((f) => f.severity === "blocker").length;
   const warnings = findings.filter((f) => f.severity === "warning").length;
-  const readiness: ReviewReadiness = parseBlocked
-    ? "partial"
-    : blockers > 0
-      ? "blocked"
-      : warnings > 0
-        ? "ready_with_warnings"
-        : "ready";
+  const readiness: ReviewReadiness =
+    parseBlocked || qualityBlocked
+      ? "partial"
+      : blockers > 0
+        ? "blocked"
+        : warnings > 0
+          ? "ready_with_warnings"
+          : "ready";
 
   let outputPath: string | undefined;
   const detailsBase = {
@@ -638,6 +698,7 @@ async function actionReview(
       infos: findings.filter((f) => f.severity === "info").length,
     },
     structural_checks: parseBlocked ? "partial" : inspect.ok ? "complete" : "blocked",
+    quality,
     findings,
   };
   if (input.output_path) {
@@ -721,6 +782,24 @@ function renderStructureSummary(
     );
   }
   return lines.join("\n");
+}
+
+function renderQualitySummary(agentFile: string, quality: AgentScriptQualityResult): string {
+  const icon = quality.status === "clean" ? "✅" : quality.status === "failed" ? "❌" : "⚠️";
+  const maxComplexity = Math.max(
+    0,
+    ...quality.metrics.cyclomatic_complexity.map((metric) => metric.value),
+  );
+  return [
+    `${icon} Agent Script quality: ${quality.status}`,
+    `agent_file: ${agentFile}`,
+    `rules: ${quality.coverage.enabled_rules}/${quality.coverage.total_rules} enabled`,
+    `findings: ${quality.summary.high} High · ${quality.summary.moderate} Moderate · ${quality.summary.low} Low · ${quality.summary.info} Info`,
+    `metrics: ${quality.metrics.cyclomatic_complexity.length} procedure(s) · max cyclomatic complexity ${maxComplexity}`,
+    quality.failure_reason ? `failure: ${quality.failure_reason}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function renderRuntimeSmokeSummary(agentFile: string, smoke: RuntimeSmokeResult): string {

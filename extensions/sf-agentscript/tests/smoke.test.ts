@@ -64,6 +64,7 @@ describe("sf-agentscript", () => {
       on: vi.fn(),
       registerCommand: vi.fn(),
       registerTool: vi.fn(),
+      registerEntryRenderer: vi.fn(),
     };
     let request: SfPiManagerOpenRequest | undefined;
     events.on(SF_PI_MANAGER_OPEN_EVENT, (payload) => {
@@ -89,6 +90,7 @@ describe("sf-agentscript", () => {
       on: vi.fn(),
       registerCommand: vi.fn(),
       registerTool: vi.fn(),
+      registerEntryRenderer: vi.fn(),
     };
 
     mod.default(pi as never);

@@ -54,13 +54,6 @@ function action(name: string, extra: string[], target = "flow://DoThing"): strin
 
 const cases: ParityCase[] = [
   {
-    name: "target-backed action without outputs",
-    localCodes: ["action-missing-outputs"],
-    upstreamCodes: [],
-    classification: "sf-pi-owned",
-    source: withStart(action("lookup", [])),
-  },
-  {
     name: "Apex target with method suffix",
     localCodes: ["apex-target-method-suffix"],
     upstreamCodes: [],
@@ -123,36 +116,9 @@ const cases: ParityCase[] = [
     ),
   },
   {
-    name: "invalid connection messaging route config",
-    localCodes: ["connection-messaging-incomplete-route", "connection-messaging-route-name-prefix"],
-    upstreamCodes: [],
-    classification: "sf-pi-owned",
-    source: agent([
-      "system:",
-      '    instructions: "You are helpful."',
-      "",
-      "config:",
-      '    agent_name: "ServiceBot"',
-      '    agent_type: "AgentforceServiceAgent"',
-      "",
-      "access:",
-      '    default_agent_user: "service@example.com"',
-      "",
-      "connection messaging:",
-      '    outbound_route_type: "OmniChannelFlow"',
-      '    outbound_route_name: "Route_To_Agent"',
-      "",
-      "start_agent main:",
-      '    description: "Entry."',
-      "    reasoning:",
-      "        instructions: ->",
-      "            | hi",
-    ]),
-  },
-  {
     name: "@inputs reference outside action with-bindings",
     localCodes: ["inputs-out-of-scope"],
-    upstreamCodes: ["action-missing-input"],
+    upstreamCodes: ["action-missing-input", "(no-code)"],
     classification: "sf-pi-owned",
     source: withStart([
       ...action("get_status", [
@@ -161,7 +127,7 @@ const cases: ParityCase[] = [
         "            outputs:",
         "                status: string",
       ]),
-      "            set @variables.station = @inputs.station_name",
+      "                set @variables.station = @inputs.station_name",
     ]),
   },
   {
@@ -205,34 +171,6 @@ const cases: ParityCase[] = [
       "        instructions: ->",
       "            | Done.",
     ]),
-  },
-  {
-    name: "run inside after_reasoning",
-    localCodes: ["run-in-after-reasoning"],
-    upstreamCodes: [],
-    classification: "sf-pi-owned",
-    source: withStart([
-      ...action(
-        "log_turn",
-        ["            outputs:", "                logged: boolean"],
-        "flow://Log_Turn",
-      ),
-      "    after_reasoning:",
-      "        run @actions.log_turn",
-    ]),
-  },
-  {
-    name: "prompt template output without planner/display flags",
-    localCodes: ["prompt-template-output-flags"],
-    upstreamCodes: [],
-    classification: "sf-pi-owned",
-    source: withStart(
-      action(
-        "generate_reply",
-        ["            outputs:", "                promptResponse: string"],
-        "generatePromptResponse://Generate_Reply",
-      ),
-    ),
   },
   {
     name: "Employee Agent with Service-Agent-only wiring",
@@ -290,16 +228,11 @@ describe("local hardening diagnostic parity", () => {
   test("classification table covers every remaining local diagnostic code", () => {
     const covered = new Set(cases.flatMap((entry) => entry.localCodes));
     expect([...covered].sort()).toEqual([
-      "action-missing-outputs",
       "apex-target-method-suffix",
-      "connection-messaging-incomplete-route",
-      "connection-messaging-route-name-prefix",
       "employee-agent-connection-messaging",
       "employee-agent-escalate",
       "inputs-out-of-scope",
       "outputs-out-of-scope",
-      "prompt-template-output-flags",
-      "run-in-after-reasoning",
       "target-ref-looks-like-id",
     ]);
   });

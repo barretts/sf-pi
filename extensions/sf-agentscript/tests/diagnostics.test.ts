@@ -96,7 +96,7 @@ describe("checkAgentScriptFile (integration)", () => {
     expect(unusedFix?.edits[0].newText).toBe("");
   });
 
-  it("flags target-backed actions that omit outputs", async () => {
+  it("allows target-backed actions that omit optional outputs", async () => {
     const file = writeTempAgent(
       [
         "system:",
@@ -122,9 +122,7 @@ describe("checkAgentScriptFile (integration)", () => {
     );
 
     const result = await checkAgentScriptFile(file);
-    const missing = result.diagnostics.find((d) => d.code === "action-missing-outputs");
-    expect(missing, "expected action-missing-outputs diagnostic").toBeDefined();
-    expect(missing?.severity).toBe(1);
+    expect(result.diagnostics.some((d) => d.code === "action-missing-outputs")).toBe(false);
   });
 
   it("flags apex targets that include a method suffix", async () => {
@@ -338,7 +336,7 @@ describe("checkAgentScriptFile (integration)", () => {
     expect(result.diagnostics.some((d) => d.code === "numeric-action-io")).toBe(false);
   });
 
-  it("flags invalid connection messaging route config", async () => {
+  it("does not impose superseded local messaging route requirements", async () => {
     const file = writeTempAgent(
       [
         "system:",
@@ -366,8 +364,8 @@ describe("checkAgentScriptFile (integration)", () => {
 
     const result = await checkAgentScriptFile(file);
     const codes = new Set(result.diagnostics.map((d) => d.code));
-    expect(codes.has("connection-messaging-incomplete-route")).toBe(true);
-    expect(codes.has("connection-messaging-route-name-prefix")).toBe(true);
+    expect(codes.has("connection-messaging-incomplete-route")).toBe(false);
+    expect(codes.has("connection-messaging-route-name-prefix")).toBe(false);
   });
 
   it("flags @inputs references outside action with-bindings", async () => {
@@ -478,9 +476,8 @@ describe("checkAgentScriptFile (integration)", () => {
 
     const result = await checkAgentScriptFile(file);
     const outputScope = result.diagnostics.filter((d) => d.code === "outputs-out-of-scope");
-    expect(outputScope).toHaveLength(2);
-    expect(outputScope.some((d) => d.severity === 1)).toBe(true);
-    expect(outputScope.some((d) => d.severity === 2)).toBe(true);
+    expect(outputScope).toHaveLength(1);
+    expect(outputScope[0]?.severity).toBe(1);
   });
 
   it("delegates literal instruction syntax diagnostics upstream", async () => {
@@ -519,7 +516,7 @@ describe("checkAgentScriptFile (integration)", () => {
     expect(result.diagnostics.some((d) => d.code === "instruction-template-syntax")).toBe(true);
   });
 
-  it("warns on run inside after_reasoning", async () => {
+  it("allows documented action runs inside after_reasoning", async () => {
     const file = writeTempAgent(
       [
         "system:",
@@ -549,12 +546,10 @@ describe("checkAgentScriptFile (integration)", () => {
     );
 
     const result = await checkAgentScriptFile(file);
-    const runAfter = result.diagnostics.find((d) => d.code === "run-in-after-reasoning");
-    expect(runAfter, "expected run-in-after-reasoning diagnostic").toBeDefined();
-    expect(runAfter?.severity).toBe(2);
+    expect(result.diagnostics.some((d) => d.code === "run-in-after-reasoning")).toBe(false);
   });
 
-  it("warns when prompt template promptResponse lacks planner/display flags", async () => {
+  it("keeps prompt template output flags out of edit-time hardening", async () => {
     const file = writeTempAgent(
       [
         "system:",
@@ -582,9 +577,7 @@ describe("checkAgentScriptFile (integration)", () => {
     );
 
     const result = await checkAgentScriptFile(file);
-    const promptFlags = result.diagnostics.find((d) => d.code === "prompt-template-output-flags");
-    expect(promptFlags, "expected prompt-template-output-flags diagnostic").toBeDefined();
-    expect(promptFlags?.severity).toBe(2);
+    expect(result.diagnostics.some((d) => d.code === "prompt-template-output-flags")).toBe(false);
   });
 
   it("does not flag adaptive-only connection messaging config", async () => {

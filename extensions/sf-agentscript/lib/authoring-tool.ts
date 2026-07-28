@@ -11,6 +11,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { renderCompileCall, renderCompileResult } from "./render/compile.ts";
 import { renderInspectCall, renderInspectResult } from "./render/inspect.ts";
 import { renderMutateCall, renderMutateResult } from "./render/mutate.ts";
+import { createQualityCardComponent, qualityCardData } from "./quality/presentation.ts";
+import type { AgentScriptQualityResult } from "./quality/types.ts";
 import { runCompileAction } from "./authoring/actions/compile.ts";
 import { runCreateAction } from "./authoring/actions/create.ts";
 import { runInspectAction } from "./authoring/actions/inspect.ts";
@@ -44,6 +46,7 @@ const Params = Type.Object({
         Type.Literal("find_references"),
         Type.Literal("definition"),
         Type.Literal("check_targets"),
+        Type.Literal("quality"),
         Type.Literal("review"),
         Type.Literal("runtime_smoke"),
         Type.Literal("set_field"),
@@ -214,6 +217,20 @@ export function registerAuthoringTool(pi: ExtensionAPI): void {
       if (args.verb === "mutate" || String(details.action ?? "").startsWith("mutate.")) {
         return renderMutateResult(result, opts, theme);
       }
+      const action = String(details.action ?? "");
+      const quality = details.quality as AgentScriptQualityResult | undefined;
+      if (quality && action === "inspect.quality") {
+        return createQualityCardComponent(
+          qualityCardData(
+            String(details.agent_file ?? details.path ?? args.agent_file ?? "Agent.agent"),
+            quality,
+            {},
+          ),
+          opts.expanded ?? false,
+          theme,
+          false,
+        );
+      }
       return renderInspectResult(adaptInspectResult(result), opts, theme);
     },
     promptSnippet:
@@ -225,7 +242,8 @@ export function registerAuthoringTool(pi: ExtensionAPI): void {
       "compile/check preserves every upstream diagnostic severity; clean=true means no severity-1 errors. Warnings, information, and hints remain visible without blocking preview or publish guards.",
       "Preferred loop: compile/check → inspect/structure or inspect/review → mutate with dry_run for risky edits → compile/check again → preview/eval/lifecycle.",
       "Use mutate/apply_quick_fix from compile quick_fixes.apply_via. Do not use the generic edit tool when mutate supports the change.",
-      "inspect/review is deterministic v1: readiness is ready | ready_with_warnings | blocked | partial; no numeric score and no hidden LLM review. Pass output_path to write a Markdown report.",
+      "inspect/quality runs the global enabled native quality-rule catalog for one .agent file and returns status, severity findings, coverage, suppressions, and metrics. It never changes compile validity.",
+      "inspect/review composes compile, quality, and optional org checks: readiness is ready | ready_with_warnings | blocked | partial; no numeric score and no hidden LLM review. Pass output_path to write a Markdown report.",
       "inspect/runtime_smoke is explicit and read-only. Use it after a test call/message to diagnose recent VoiceCall, AgentWork, and MessagingSession records; requires target_org.",
     ],
     parameters: Params,

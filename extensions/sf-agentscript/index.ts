@@ -82,6 +82,9 @@ import {
   invalidateAgentScriptAnalysis,
 } from "./lib/analysis-snapshot.ts";
 import { clearSfapEndpointCache } from "./lib/eval/sfap.ts";
+import { resetSessionQualityOverrides } from "./lib/quality/publication-gate.ts";
+import { registerDeferredAgentScriptQuality } from "./lib/quality/auto-scan.ts";
+import { registerAgentScriptQualityTranscriptRenderer } from "./lib/quality/transcript.ts";
 
 const EXTENSION_ID = "sf-agentscript";
 const COMMAND_NAME = "sf-agentscript";
@@ -99,6 +102,8 @@ export default function sfAgentScriptExtension(pi: ExtensionAPI): void {
   registerManagerDetailActions(pi, EXTENSION_ID, buildAgentScriptManagerActions(pi, state));
   registerSessionHooks(pi, state);
   registerToolResultHook(pi, state);
+  registerAgentScriptQualityTranscriptRenderer(pi);
+  registerDeferredAgentScriptQuality(pi);
 
   // LLM-callable tools — four family surfaces for the Agent Script lifecycle.
   registerAuthoringTool(pi);
@@ -433,6 +438,7 @@ function registerSessionHooks(pi: ExtensionAPI, state: AgentScriptAssistState): 
     clearAgentApiAuthCache();
     clearAgentScriptAnalysisCache();
     clearSfapEndpointCache();
+    resetSessionQualityOverrides();
   });
   pi.on("session_shutdown", async () => {
     resetState(state);
@@ -440,6 +446,7 @@ function registerSessionHooks(pi: ExtensionAPI, state: AgentScriptAssistState): 
     clearAgentApiAuthCache();
     clearAgentScriptAnalysisCache();
     clearSfapEndpointCache();
+    resetSessionQualityOverrides();
   });
 }
 

@@ -2,7 +2,7 @@
   {
     "id": "sf-agentscript",
     "name": "SF Agent Script",
-    "description": "Single-plugin lifecycle for `.agent` files: in-process compile-on-save diagnostics, an LLM-callable compile tool, multi-turn eval/regression testing against the Salesforce Evaluation API, and a placeholder for the future Agent Script LSP.",
+    "description": "Single-plugin lifecycle for `.agent` files: official-SDK compile diagnostics, native configurable quality analysis, preview/eval regression, and publish/activation workflows.",
     "category": "agent-tool",
     "maturity": "stable",
     "defaultEnabled": true,
@@ -21,10 +21,11 @@
     "events": [
       "session_start",
       "session_shutdown",
-      "tool_result"
+      "tool_result",
+      "agent_settled"
     ],
     "docs": {
-      "summary": "Owns the entire Agent Script lifecycle: authoring assist (compile-on-save), first-class compile tool, multi-turn eval against /einstein/evaluation/v1/tests with early status artifacts and synthesized traces, and progressive-disclosure skill for the LLM.",
+      "summary": "Owns the entire Agent Script lifecycle: compile-on-save hardening, global per-rule native quality settings, deferred quality repair, structural review, preview, eval, and lifecycle publishing.",
       "primaryFiles": [
         "index.ts",
         "lib/diagnostics.ts",
@@ -35,6 +36,10 @@
         "lib/tool-types.ts",
         "lib/settings.ts",
         "lib/config-panel.ts",
+        "lib/quality/catalog.ts",
+        "lib/quality/settings.ts",
+        "lib/quality/engine.ts",
+        "lib/quality/auto-scan.ts",
         "lib/authoring-tool.ts",
         "lib/branch-state.ts",
         "lib/authoring/params.ts",
@@ -58,7 +63,8 @@
         "skills/sf-agentscript/SKILL.md"
       ],
       "safety": [
-        "Compile-on-save stays silent on unsupported files and on failed write/edit results.",
+        "Compile-on-save stays silent on unsupported files and on failed write/edit results; only enabled edit-time High hardening rules join that feedback.",
+        "Global per-rule quality toggles dynamically control reporting, repair, metrics, and local-file publication gating without a reload.",
         "Eval, trace, preview, and lifecycle calls reuse @salesforce/core / SF CLI auth context; timeout-sensitive HTTP may use bounded native fetch and never logs or persists tokens.",
         "Local-first: compile and validate run via official @sf-agentscript packages before any network call.",
         "Eval runs synthesize trace artifacts from inline Evaluation API data by default; explicit trace fetches are idempotent GETs.",
@@ -69,7 +75,7 @@
     "entry": "extensions/sf-agentscript/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 27392
+    "srcLoc": 29894
   },
   {
     "id": "sf-apex",

@@ -12,8 +12,9 @@
 import fs from "node:fs/promises";
 import { analyzeAgentScriptSource } from "./agentforce-document.ts";
 import { buildQuickFixes } from "./code-actions.ts";
-import { buildLocalDiagnostics } from "./local-lints.ts";
-import type { AgentScriptCheckResult } from "./types.ts";
+import { buildAstHardeningDiagnostics } from "./ast-hardening.ts";
+import { runAgentScriptQuality } from "./quality/engine.ts";
+import type { AgentScriptCheckResult, AgentScriptDiagnostic } from "./types.ts";
 
 // -------------------------------------------------------------------------------------------------
 // Public API
@@ -59,8 +60,27 @@ export async function checkAgentScriptSource(source: string): Promise<AgentScrip
     };
   }
 
-  const localDiagnostics = buildLocalDiagnostics(source);
-  const diagnostics = [...analysis.analysis.compileDiagnostics, ...localDiagnostics];
+  const localDiagnostics = await buildAstHardeningDiagnostics(source);
+  const quality = await runAgentScriptQuality(source, { editTimeOnly: true });
+  const qualityDiagnostics: AgentScriptDiagnostic[] = quality.findings
+    .filter((finding) => finding.severity === "high")
+    .map((finding) => ({
+      range: finding.range,
+      message: finding.message,
+      severity: 2,
+      code: finding.rule_id,
+      source: "sf-agentscript-quality",
+      data: {
+        qualitySeverity: finding.severity,
+        ruleName: finding.rule_name,
+        ...(finding.suggestion ? { suggestion: finding.suggestion } : {}),
+      },
+    }));
+  const diagnostics = [
+    ...analysis.analysis.compileDiagnostics,
+    ...localDiagnostics,
+    ...qualityDiagnostics,
+  ];
   const quickFixes = await buildQuickFixes(source, diagnostics, analysis.analysis.documentState);
 
   return {

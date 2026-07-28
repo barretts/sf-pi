@@ -10,14 +10,14 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
   {
     id: "sf-agentscript",
     name: "SF Agent Script",
-    description: "Single-plugin lifecycle for `.agent` files: in-process compile-on-save diagnostics, an LLM-callable compile tool, multi-turn eval/regression testing against the Salesforce Evaluation API, and a placeholder for the future Agent Script LSP.",
+    description: "Single-plugin lifecycle for `.agent` files: official-SDK compile diagnostics, native configurable quality analysis, preview/eval regression, and publish/activation workflows.",
     file: "extensions/sf-agentscript/index.ts",
     category: "agent-tool",
     maturity: "stable",
     defaultEnabled: true,
     commands: ["/sf-agentscript"],
     tools: ["agentscript_authoring","agentscript_preview","agentscript_eval","agentscript_lifecycle"],
-    events: ["session_start","session_shutdown","tool_result"],
+    events: ["session_start","session_shutdown","tool_result","agent_settled"],
     configurable: true,
     getConfigPanel: async () => {
       const mod = await import("../extensions/sf-agentscript/lib/config-panel.ts");
