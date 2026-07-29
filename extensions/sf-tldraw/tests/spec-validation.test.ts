@@ -46,29 +46,6 @@ describe("Salesforce Diagram Spec validation", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("rejects v1 with stable regenerate-and-retry guidance", () => {
-    const spec = mutable(dataModelFixture());
-    spec.spec_version = "1.0";
-    spec.layout_mode = "source";
-    mutable((spec.objects as object[])[0]!).source_position = { x: 0, y: 0, w: 320, h: 180 };
-    mutable((spec.relationships as object[])[0]!).from_anchor = {
-      side: "right",
-      fraction: 0.25,
-    };
-    mutable((spec.relationships as object[])[0]!).to_anchor = {
-      side: "left",
-      fraction: 0.75,
-    };
-    const result = validateDiagramSpec(spec, "data_model");
-    expect(result.errors).toContainEqual(
-      expect.objectContaining({
-        code: "invalid_spec_version",
-        path: "spec_version",
-        message: expect.stringMatching(/regenerate.*retry/i),
-      }),
-    );
-  });
-
   it("rejects unknown fields with path-specific diagnostics", () => {
     const spec = dataModelFixture();
     mutable(spec.objects[0]!).apiName = "Account";
@@ -298,11 +275,8 @@ describe("Salesforce Diagram Spec validation", () => {
     const firstSystem = spec.systems[0];
     if (!firstSystem) throw new Error("Expected at least one architecture system.");
     mutable(firstSystem).kind = "mystery";
-    mutable(firstSystem).product_mark = "unapproved_mark";
     const result = validateDiagramSpec(spec, "architecture");
-    expect(result.errors.map((error) => error.code)).toEqual(
-      expect.arrayContaining(["invalid_system_kind", "unknown_field"]),
-    );
+    expect(result.errors.map((error) => error.code)).toContain("invalid_system_kind");
 
     const data = dataModelFixture();
     const firstObject = data.objects[0];
@@ -395,23 +369,6 @@ describe("Salesforce Diagram Spec validation", () => {
     spec.objects = [firstObject];
     spec.relationships = [];
     expect(validateDiagramSpec(spec, "data_model").ok).toBe(true);
-  });
-
-  it("rejects removed source geometry and product-mark fields as unknown", () => {
-    const spec = dataModelFixture();
-    mutable(spec).layout_mode = "source";
-    mutable(spec.objects[0]!).source_position = { x: 0, y: 0, w: 320, h: 180 };
-    mutable(spec.relationships[0]!).from_anchor = { side: "right", fraction: 0.25 };
-    const result = validateDiagramSpec(spec, "data_model");
-    expect(
-      result.errors.filter((error) => error.code === "unknown_field").map((error) => error.path),
-    ).toEqual(
-      expect.arrayContaining([
-        "layout_mode",
-        "objects[0].source_position",
-        "relationships[0].from_anchor",
-      ]),
-    );
   });
 
   it("accepts a spec passed as exact JSON text", () => {

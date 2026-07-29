@@ -66,15 +66,6 @@ export function validateDiagramSpec(
   }
 
   rejectPrivateKeys(candidate, "$", errors);
-  if (candidate.spec_version !== "2.0") {
-    errors.push({
-      code: "invalid_spec_version",
-      message:
-        "spec_version must be '2.0'. Regenerate the Salesforce Diagram Spec with the current schema and retry.",
-      path: "spec_version",
-    });
-    return { ok: false, errors, warnings };
-  }
 
   if (
     isRecord(candidate.grounding) &&

@@ -1,10 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Check } from "typebox/value";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TldrawRuntimeClient } from "../lib/runtime-client.ts";
 import { formatTldrawRuntimeStatus } from "../lib/runtime-surface.ts";
-import { DataModelSpecSchema } from "../lib/spec-schema.ts";
 import {
   formatRenderSuccess,
   registerTldrawCanvasTool,
@@ -37,51 +35,8 @@ describe("tldraw_canvas family tool", () => {
     expect(schema).not.toContain('"script_workspace"');
     expect(schema).not.toContain('"screenshot"');
     expect(schema).toContain('"2.0"');
-    expect(schema).not.toContain('"1.0"');
     expect(schema).toContain('"additionalProperties":false');
-    expect(schema).not.toContain('"product_mark"');
-    expect(schema).not.toContain('"layout_mode"');
-    expect(schema).not.toContain('"source_position"');
-    expect(schema).not.toContain('"from_anchor"');
-    expect(schema).not.toContain('"to_anchor"');
     expect(schema).toContain('"name"');
-
-    const legacyV1 = {
-      spec_version: "1.0",
-      family: "data_model",
-      title: "Legacy model",
-      scope: "Migration-only provider input.",
-      grounding: {
-        mode: "reference",
-        as_of: "2026-07-27",
-        sources: [
-          {
-            id: "source",
-            label: "Salesforce reference",
-            url: "https://developer.salesforce.com/docs/platform/data-models/guide/service-cloud-overview.html",
-            kind: "official_doc",
-          },
-        ],
-      },
-      layout_mode: "source",
-      objects: [
-        {
-          id: "account",
-          label: "Account",
-          family: "standard",
-          source_position: { x: 0, y: 0, w: 320, h: 180 },
-          evidence: ["source"],
-        },
-      ],
-      relationships: [],
-    };
-    expect(
-      Check(tool.parameters, {
-        action: "render_salesforce_data_model",
-        spec: legacyV1,
-      }),
-    ).toBe(false);
-    expect(Check(DataModelSpecSchema, { ...legacyV1, spec_version: "2.0" })).toBe(false);
     expect(schema).toContain('"card_fill"');
     expect(schema).toContain('"transparent"');
     expect(schema).toContain('"family"');

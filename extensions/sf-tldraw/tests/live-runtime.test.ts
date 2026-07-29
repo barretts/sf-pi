@@ -69,7 +69,7 @@ describe("sf-tldraw live runtime", () => {
           const connectorState = await client.execute<{
             relationshipTextCount: number;
             lookupStyles: Array<{ color: string; dash: string; size: string }>;
-            legacyHeaderCount: number;
+            metadataHeaderCount: number;
             relationshipLegendCount: number;
             relationshipLegendLabels: string[];
             relationshipLegendLines: Array<{ color: string; dash: string; size: string }>;
@@ -85,7 +85,7 @@ const title=shapes.find(shape=>shape.meta?.sfTldraw?.role==='title'),legendBox=s
 return{
  relationshipTextCount:shapes.filter(shape=>['from-label','to-label','field-label'].includes(shape.meta?.sfTldraw?.role)).length,
  lookupStyles:shapes.filter(shape=>shape.type==='arrow'&&shape.meta?.sfRelationshipType==='lookup').map(shape=>({color:shape.props.color,dash:shape.props.dash,size:shape.props.size})),
- legacyHeaderCount:shapes.filter(shape=>['scope','grounding','legend'].includes(shape.meta?.sfTldraw?.role)).length,
+ metadataHeaderCount:shapes.filter(shape=>['scope','grounding','legend'].includes(shape.meta?.sfTldraw?.role)).length,
  relationshipLegendCount:relationshipLegend.length,
  relationshipLegendLabels:relationshipLegend.filter(shape=>shape.type==='text').map(shape=>helpers.richTextToPlainText(shape.props.richText)),
  relationshipLegendLines:relationshipLegend.filter(shape=>shape.type==='arrow').map(shape=>({color:shape.props.color,dash:shape.props.dash,size:shape.props.size})),
@@ -94,7 +94,7 @@ return{
 `,
           );
           expect(connectorState.relationshipTextCount).toBe(0);
-          expect(connectorState.legacyHeaderCount).toBe(0);
+          expect(connectorState.metadataHeaderCount).toBe(0);
           expect(connectorState.relationshipLegendCount).toBe(6);
           expect(connectorState.relationshipLegendLabels).toEqual([
             "RELATIONSHIPS",
@@ -168,21 +168,21 @@ return{x:bounds.x,y:bounds.y}
         y: number;
         titleCount: number;
         relationshipLegendCount: number;
-        legacyHeaderCount: number;
+        metadataHeaderCount: number;
       }>(
         document.id,
         `
 const page=editor.getPages().find(page=>page.name==='SF tldraw Legend Toggle Smoke')
 editor.setCurrentPage(page.id)
 const shapes=editor.getCurrentPageShapes(),card=shapes.find(shape=>shape.meta?.sfTldraw?.role==='card'&&shape.meta?.sfTldraw?.semanticId==='account'),bounds=editor.getShapePageBounds(card.id)
-return{x:bounds.x,y:bounds.y,titleCount:shapes.filter(shape=>shape.meta?.sfTldraw?.role==='title').length,relationshipLegendCount:shapes.filter(shape=>String(shape.meta?.sfTldraw?.role??'').startsWith('relationship-legend-')).length,legacyHeaderCount:shapes.filter(shape=>['scope','grounding','legend'].includes(shape.meta?.sfTldraw?.role)).length}
+return{x:bounds.x,y:bounds.y,titleCount:shapes.filter(shape=>shape.meta?.sfTldraw?.role==='title').length,relationshipLegendCount:shapes.filter(shape=>String(shape.meta?.sfTldraw?.role??'').startsWith('relationship-legend-')).length,metadataHeaderCount:shapes.filter(shape=>['scope','grounding','legend'].includes(shape.meta?.sfTldraw?.role)).length}
 `,
       );
       expect(hiddenState).toEqual({
         ...before,
         titleCount: 1,
         relationshipLegendCount: 0,
-        legacyHeaderCount: 0,
+        metadataHeaderCount: 0,
       });
       const restored = await renderSalesforceDiagram(
         {
@@ -314,16 +314,6 @@ const caseBounds=editor.getShapePageBounds(caseCard.id),commentBounds=editor.get
 helpers.translateShapes([commentGroup.id],caseBounds.x-commentBounds.x,caseBounds.maxY+180-commentBounds.y)
 const annotationId=createShapeId('sf-tldraw-live-user-annotation')
 if(!editor.getShape(annotationId))editor.createShape({id:annotationId,type:'note',x:80,y:920,props:{richText:toRichText('User annotation — preserve me')}})
-for(const role of ['from-label','to-label','field-label']){
- const id=createShapeId('sf-tldraw-live-legacy-'+role)
- if(!editor.getShape(id))editor.createShape({id,type:'text',x:120,y:1040,props:{richText:toRichText(role)},meta:{sfTldraw:{managed:true,schemaVersion:1,family:'data_model',key:'edge:account-contacts:'+role,semanticId:'account-contacts',role}}})
- const backgroundRole=role+'-background',backgroundId=createShapeId('sf-tldraw-live-legacy-'+role+'-bg')
- if(!editor.getShape(backgroundId))editor.createShape({id:backgroundId,type:'geo',x:110,y:1030,props:{geo:'rectangle',w:140,h:40,fill:'solid',color:'white',richText:toRichText('')},meta:{sfTldraw:{managed:true,schemaVersion:1,family:'data_model',key:'edge:account-contacts:'+role+'-bg',semanticId:'account-contacts',role:backgroundRole}}})
-}
-for(const role of ['scope','grounding','legend']){
- const id=createShapeId('sf-tldraw-live-legacy-header-'+role)
- if(!editor.getShape(id))editor.createShape({id,type:'text',x:120,y:1120,props:{richText:toRichText(role)},meta:{sfTldraw:{managed:true,schemaVersion:1,family:'data_model',key:'header:'+role,semanticId:'header',role}}})
-}
 const bounds=editor.getShapePageBounds(card.id)
 return{x:bounds.x,y:bounds.y,annotationId}
 `,
@@ -367,8 +357,6 @@ return{x:bounds.x,y:bounds.y,annotationId}
         y: number;
         annotationExists: boolean;
         addedChildrenGrouped: boolean;
-        legacyRelationshipTextCount: number;
-        legacyHeaderCount: number;
       }>(
         document.id,
         `
@@ -379,7 +367,7 @@ const group=shapes.find(shape=>shape.meta?.sfTldraw?.role==='group'&&shape.meta?
 const card=shapes.find(shape=>shape.meta?.sfTldraw?.role==='card'&&shape.meta?.sfTldraw?.semanticId==='account')
 const added=shapes.filter(shape=>shape.meta?.sfTldraw?.semanticId==='account'&&(shape.meta?.sfTldraw?.role==='keys'||shape.meta?.sfTldraw?.role==='observation'))
 const bounds=editor.getShapePageBounds(card.id)
-return{x:bounds.x,y:bounds.y,annotationExists:!!editor.getShape('${moved.annotationId}'),addedChildrenGrouped:added.length===3&&added.every(shape=>shape.parentId===group.id),legacyRelationshipTextCount:shapes.filter(shape=>['from-label','to-label','field-label','from-label-background','to-label-background','field-label-background'].includes(shape.meta?.sfTldraw?.role)).length,legacyHeaderCount:shapes.filter(shape=>['scope','grounding','legend'].includes(shape.meta?.sfTldraw?.role)).length}
+return{x:bounds.x,y:bounds.y,annotationExists:!!editor.getShape('${moved.annotationId}'),addedChildrenGrouped:added.length===3&&added.every(shape=>shape.parentId===group.id)}
 `,
       );
       expect(verified).toMatchObject({
@@ -387,8 +375,6 @@ return{x:bounds.x,y:bounds.y,annotationExists:!!editor.getShape('${moved.annotat
         y: moved.y,
         annotationExists: true,
         addedChildrenGrouped: true,
-        legacyRelationshipTextCount: 0,
-        legacyHeaderCount: 0,
       });
 
       delete spec.objects[0].key_fields;

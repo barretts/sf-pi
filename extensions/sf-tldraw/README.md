@@ -242,6 +242,3 @@ The desktop document refused a new page. Reuse an existing extension-managed pag
 
 **A render is blocked by readiness checks:**
 Inspect the returned blocker and screenshot only after correcting the spec or layout. A render with lints or detached connector decorations is intentionally not reported complete.
-
-**A v1 spec or removed presentation field is rejected:**
-Regenerate the request as strict Spec v2. Product marks, source positions, endpoint anchors, and layout mode are not accepted.

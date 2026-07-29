@@ -74,7 +74,7 @@ The extension-owned settings page keeps its current visual and interaction exper
 
 **Status: implemented and validated.**
 
-- Introduce strict `spec_version: "2.0"`. The provider schema advertises only the three v2 families; direct validation retains a stable wrong-version diagnostic plus regenerate/retry guidance. Do not add a v1 provider schema or compatibility adapter.
+- Require strict `spec_version: "2.0"` through the provider's three family schemas and structural validation.
 - Keep one provider-safe root tool object and three render action names.
 - Define `spec` as a discoverable typed union of Data Model, Architecture, and Sequence schemas; enforce action ↔ family matching at execution.
 - Set `additionalProperties: false` throughout and return path-specific unknown-field diagnostics.
@@ -99,10 +99,10 @@ The extension-owned settings page keeps its current visual and interaction exper
 
 ### P2 verification
 
-- Schema tests cover all three families, strict unknown fields, action/family mismatch, and v1 rejection.
+- Schema tests cover all three families, strict unknown fields, version enforcement, and action/family mismatch.
 - Mutation tests cover every retained semantic refinement and stable diagnostic path.
 - Privacy fixtures place sensitive-looking values in every rendered text field.
-- All checked-in specs and fixtures migrate to v2 in the same milestone.
+- All checked-in specs and fixtures use v2.
 - Compiled automatic-layout payloads remain deterministic.
 
 ## P3 — Salesforce-focused public action set
@@ -140,7 +140,7 @@ Repository review found no code consumers outside SF tldraw and generated docume
 
 **Status: evaluated; no shared-layer replacement approved.**
 
-The checked-in live smoke and 30-case sequence matrix pass. A temporary v2-normalized replay of the 230-case public Gallery corpus initially exposed dense cardinality-marker overlaps after legacy source geometry was removed. Automatic layout now reserves card capacity for both preferred and alternate routing sides, reserves self-loop capacity on both exterior sides, and keeps compact cards at least 110 units apart; the pinned corpus passes 230/230 with zero readiness blockers at hash `b480b8b855aa0ce76b93913c73c384494f802149025ba3faf84182efe7600539`. Checked-in per-model maxima for route obstructions, independent-route crossings, and shared corridors make any regression against that qualified baseline fail the live matrix while allowing improvements.
+The checked-in live smoke and 30-case sequence matrix pass. A temporary v2-normalized replay of the 230-case public Gallery corpus initially exposed dense cardinality-marker overlaps after source geometry was removed. Automatic layout now reserves card capacity for both preferred and alternate routing sides, reserves self-loop capacity on both exterior sides, and keeps compact cards at least 110 units apart; the pinned corpus passes 230/230 with zero readiness blockers at hash `b480b8b855aa0ce76b93913c73c384494f802149025ba3faf84182efe7600539`. Checked-in per-model maxima for route obstructions, independent-route crossings, and shared corridors make any regression against that qualified baseline fail the live matrix while allowing improvements.
 
 The v1.12 helper review found no replacement that passes the deletion test. SF tldraw already uses `createArrowBetweenShapes`, `translateShapes`, and `getLints`; `createShapeIfMissing` intentionally does not update existing shapes and therefore cannot satisfy managed-content refresh with preserve-mode positioning. `boxShapes` does not implement the Salesforce profile contract, and document scripts use the wrong durability level. The experimental larger-pitch path was deleted, and the current shared renderer remains until upstream exposes an equivalent managed-diagram primitive that produces net deletion without behavior loss.
 
@@ -164,7 +164,7 @@ Replacement requires both:
 1. checked-in public-safe golden fixtures that run in CI, and
 2. pinned external Gallery and sequence corpora used for manual release qualification with expected count and hash.
 
-The baseline is the completed Spec v2 automatic renderer after P0–P3, not the legacy source-layout renderer.
+The baseline is the completed Spec v2 automatic renderer after P0–P3, not the removed source-layout renderer.
 
 ### Acceptance gate
 

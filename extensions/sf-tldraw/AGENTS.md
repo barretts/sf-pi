@@ -26,7 +26,7 @@ Read [`README.md`](./README.md) and [`docs/cheatsheet.md`](./docs/cheatsheet.md)
 - Require the tldraw offline v1.12 contract. Until upstream exposes machine-readable capabilities, prove it only from required markers in the app-owned `/readme`.
 - Treat the app as the sole owner of the `tldraw-offline` Pi skill. Read its managed marker/manifest for status, but never package, copy, extract, or rewrite the skill.
 - `create_document` accepts only a plain name, uses tldraw's default Documents directory, and never runs implicitly from a render action.
-- Advertise and accept only strict Salesforce Diagram Spec v2. Keep a defensive wrong-version diagnostic for direct validation calls, but never expose a legacy provider schema or compatibility adapter.
+- Advertise and accept only strict Salesforce Diagram Spec v2 through the three family schemas.
 - Reject unknown fields, product marks, source positions, endpoint anchors, and layout mode.
 - Never guess Salesforce facts. Every semantic element cites a declared source id; artifact evidence is provenance, not an independent fact-verification claim.
 - Enforce render privacy on every user-visible string and never persist execution-only `target_org`.
