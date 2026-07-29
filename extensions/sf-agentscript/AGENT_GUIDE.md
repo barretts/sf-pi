@@ -1,17 +1,12 @@
----
-name: sf-agentscript
-description: Agent Script lifecycle — author, preview, evaluate, and publish `.agent` files through four family tools: authoring, preview, eval, and lifecycle.
----
+# SF Agent Script Agent Guide
 
-# SF Agent Script
-
-Use this skill whenever the user is editing `.agent` files, debugging an Agentforce agent, generating/running regression specs, previewing a local or published agent, or publishing/activating an agent.
+Use this guide whenever the user is editing `.agent` files, debugging an Agentforce agent, generating/running regression specs, previewing a local or published agent, or publishing/activating an agent.
 
 ## Tools
 
 | Tool                    | Use it for                                                                                                                                                                                   |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agentscript_authoring` | Create bundles, compile/check or format `.agent` files, inspect structure/references/targets/native quality, run deterministic review, and mutate source. Uses `verb` + `mode`.              |
+| `agentscript_authoring` | Create bundles, compile/check or format `.agent` files, inspect structure/docs/targets/native quality, run deterministic review, and mutate source. Uses `verb` + `mode`.                    |
 | `agentscript_preview`   | Start/send/end live preview sessions, fetch planner traces, bulk-end sessions, clean stale preview artifacts, render rich human Preview Trace Reports, and return compact LLM trace digests. |
 | `agentscript_eval`      | Generate starter eval specs, run regression suites, drill into failures, synthesize trace artifacts, fetch explicit live traces, and resolve active/latest version ids.                      |
 | `agentscript_lifecycle` | Publish, activate/deactivate, list versions, and diagnose/provision Service Agent users.                                                                                                     |
@@ -43,8 +38,9 @@ Rules:
 5. agentscript_preview   { action:"start", agent_file }
 6. agentscript_preview   { action:"send", message:"..." }
 7. agentscript_eval      { action:"generate_spec", agent_file, output_path:"..." }
-8. agentscript_eval      { action:"run", spec_path:"...", agent_api_name:"..." }
-9. agentscript_lifecycle { action:"publish", agent_file, activate:true }
+8. agentscript_lifecycle { action:"publish", agent_file }
+9. agentscript_eval      { action:"run_release", agent_file, agent_api_name:"..." }
+10. agentscript_lifecycle { action:"activate", agent_api_name:"..." }
 ```
 
 ## Branch-Durable Tool State
@@ -144,7 +140,9 @@ Use `get_failure` after large runs. If exactly one failed completed run exists o
 
 ## Lifecycle
 
-Use `publish` to ship a new agent/version. Native quality runs before org calls. New enabled High rule IDs or a quality-analysis failure pause publication and return evidence; retry with `acknowledge_quality_risk=true` only after user approval. Approval is session-scoped to the bundle and reviewed risk IDs. Set `activate=true` only when you intend to immediately serve the new version.
+Use `publish` to create an inactive agent/version. Native quality runs before org calls. New enabled High rule IDs or a quality-analysis failure pause publication and return evidence; retry with `acknowledge_quality_risk=true` only after user approval. Approval is session-scoped to the bundle and reviewed risk IDs.
+
+After publication, run `agentscript_eval action="run_release"` with the local `agent_file` and `agent_api_name`. It generates and runs the baseline against the exact latest inactive BotVersion, then runs `tests/agentforce/<AgentApiName>.eval.json` when present (or `release_spec_path`). `activate` proceeds only when persisted evidence matches the target org, exact BotVersion, current baseline identity, and current designated-spec digest. Emergency activation requires `acknowledge_untested_activation=true` and a distinct Guardrail approval.
 
 Use `agent_user_status`, `diagnose_agent_user`, and `provision_agent_user` for Service Agent user wiring. Provision defaults to `dry_run=true`; pass `dry_run=false` only after reviewing the plan. Live provisioning deploys a synthesized Permission Set for Apex action access with bounded Metadata API start/poll timeouts so stalled deploys return diagnostics instead of waiting on SDR's long default poll window.
 

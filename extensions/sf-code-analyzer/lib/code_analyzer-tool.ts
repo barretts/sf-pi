@@ -153,14 +153,9 @@ export function registerCodeAnalyzerTool(pi: ExtensionAPI): void {
     promptSnippet:
       "Run Salesforce Code Analyzer scans, rule discovery, config generation, and report summaries.",
     promptGuidelines: [
-      "Use code_analyzer action='doctor' before diagnosing Code Analyzer setup or engine prerequisite issues.",
-      "Use code_analyzer action='recipes' to see default automatic profiles and broader explicit scan presets.",
-      "Use code_analyzer action='rules' to preview rule selectors before broad scans.",
-      "Use code_analyzer action='run' for explicit user-requested scans; automatic deferred scans are owned by sf-code-analyzer.",
-      "Use code_analyzer action='apexguru' for explicit ApexGuru performance analysis of one Apex file when org readiness allows.",
-      "Use code_analyzer action='apexguru_setup_help' to get the SF Browser setup-check runbook; do not start browser setup without user approval.",
-      "Use code_analyzer output_mode='inline' for richer bounded detail and output_mode='file_only' when the report path is enough.",
-      "Use code_analyzer action='last_report' to recover the latest Code Analyzer report from the current session branch.",
+      "Use code_analyzer for explicit Salesforce static analysis; keep broad scans intentional and use last_report for artifact drill-down without rerunning.",
+      "Do not start ApexGuru browser setup without user approval.",
+      "Read extensions/sf-code-analyzer/AGENT_GUIDE.md for recipes, rules, output modes, and lifecycle handoffs.",
     ],
     parameters: CodeAnalyzerParams,
     renderShell: "self",

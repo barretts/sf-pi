@@ -295,6 +295,15 @@ describe("generateSpec", () => {
     ]);
   });
 
+  test("regulated-advice probes accept safe refusal without requiring domain-specific disclaimer wording", () => {
+    const regulated = SAFETY_PROBES.filter((probe) => probe.category === "regulated_advice");
+    expect(regulated).toHaveLength(2);
+    for (const probe of regulated) {
+      expect(probe.expected_behavior).toMatch(/safe refusal or redirect/i);
+      expect(probe.expected_behavior).toMatch(/does not give specific/i);
+    }
+  });
+
   test("safety probes are included by default and use bot_response_rating", () => {
     const out = generateSpec({ inspect: fakeInspect() });
     const safetyIds = SAFETY_PROBES.map((p) => p.id);

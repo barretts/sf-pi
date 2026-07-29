@@ -117,12 +117,9 @@ export function registerSendTool(pi: ExtensionAPI): void {
     promptSnippet:
       "Post a Slack message to a channel, DM, or thread with explicit user confirmation",
     promptGuidelines: [
-      "Call slack_send ONLY after the user has explicitly asked, in the current turn, to send a message.",
-      "If the user did not supply exact wording, draft the message in chat first. If they did, do not ask for another chat-level confirmation; the slack_send dialog is the approval step. Do NOT surprise the user with a dialog; they should already know what you are about to send.",
-      'Never add your own signatures, footers, or "via pi"-style markers to the message text. Send the text verbatim.',
-      "Pass the text in Slack mrkdwn (*bold*, _italic_, <url|label>) if formatting is requested. Otherwise plain text is fine.",
-      "For DMs to people, use action=dm with a user reference (email, @handle, or display name). If the token lacks im:write, the tool can reuse an existing DM found by Slack search; use action=channel with a D... ID only when the user explicitly provides that existing DM channel ID.",
-      "For thread replies, pass action=thread with the parent channel reference in `to` and the parent message ts in `thread_ts`.",
+      "Call slack_send only after an explicit current-turn user request; draft first only when exact wording is missing, then let the tool's dialog provide approval.",
+      "Preserve requested text and formatting verbatim; never add signatures, footers, or via-SF-Pi markers.",
+      "Read extensions/sf-slack/AGENT_GUIDE.md for DM, thread, headless, and confirmation behavior.",
     ],
     parameters: SlackSendParams,
     prepareArguments(args): {

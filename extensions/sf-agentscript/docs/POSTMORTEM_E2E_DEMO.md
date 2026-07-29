@@ -53,7 +53,7 @@ i.e. **the SDK only fires the missing-user error when `agent_type` is set explic
 
 Two non-overlapping changes:
 
-1. **Default `agent_type: "AgentforceEmployeeAgent"` in the scaffold.** Employee agents don't need a user, so `agentscript_authoring create → agentscript_lifecycle publish activate=true` works on a dev/sandbox org with zero extra config. Most demo paths want this.
+1. **Default `agent_type: "AgentforceEmployeeAgent"` in the scaffold.** Employee agents don't need a user, so `agentscript_authoring create → agentscript_lifecycle publish → agentscript_eval run_release → agentscript_lifecycle activate` provides a complete dev/sandbox release path with explicit behavioral evidence. Most demo paths want this.
 2. **When `job_spec.agent_user` is provided, scaffold `agent_type: "AgentforceServiceAgent"` and `default_agent_user: <user>`.** That way the user signals "Service Agent" by passing a user; we don't ask them to know two fields.
 
 `agentscript_authoring create`'s `next_steps` should also include a one-liner reminder when the scaffold is a Service Agent without `agent_user`:
@@ -95,7 +95,7 @@ I wrote:
 
 In `lib/code-actions.ts` (the existing quick-fix builder): when the SDK reports `missing-token` and the offending line text starts with `transition to @<ns>.<x>` and contains a `when ` token, emit a no-edit "info" code action describing the two supported shapes plus a quick-fix that strips the `when "…"` clause. Keep it cheap — pattern-match the line, don't try to parse.
 
-Document the same on a single page: `references/transitions.md` in the skill, two examples. Currently this is buried in `patterns-quick-ref.md` L204.
+Document the same on a single page: `docs/transitions.md` in the extension, two examples. Currently this is buried in `patterns-quick-ref.md` L204.
 
 ### Regression test
 

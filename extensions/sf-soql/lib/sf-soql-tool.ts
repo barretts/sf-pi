@@ -115,13 +115,9 @@ export function registerSfSoqlTool(pi: ExtensionAPI): void {
     promptSnippet:
       "Run API-native SOQL lifecycle workflows: describe schema, validate/explain queries, run bounded samples/counts, and inspect artifacts.",
     promptGuidelines: [
-      "Use sf_soql before raw sf data query for SOQL lifecycle work: schema search/describe, relationship discovery, draft, validation, query plan, bounded sample/run/count/queryAll, SOSL, export, file diagnostics, and rerun.",
-      "Use schema.describe or schema.relationships before writing relationship queries; do not guess custom fields or relationship names.",
-      "Prefer query.sample or query.count before broad query.run. query.run without LIMIT returns a safety review unless max_rows or allow_unbounded is explicit.",
-      "Use api='tooling' explicitly for Tooling API objects such as ApexClass, ApexTrigger, ApexLog, or ApexTestResult.",
-      "query.queryAll and ALL ROWS are explicit and include deleted/archived records where supported; call this out to the user.",
-      "Raw and flattened query results are persisted as SOQL Artifacts; keep LLM-facing output compact.",
-      "For complex SOQL authoring or optimization, read the querying-soql skill for syntax, relationship-query, aggregate-query, selector-pattern, and anti-pattern guidance. Still use sf_soql, not raw sf CLI, for schema validation, query plans, samples, counts, and execution.",
+      "Use sf_soql before raw CLI and establish current schema/relationship evidence before relying on custom names.",
+      "Prefer validation, count, or sample before broad execution; queryAll/deleted-row scope must be explicit and disclosed.",
+      "Read extensions/sf-soql/AGENT_GUIDE.md for Tooling API, query-plan, artifact, and export guidance.",
     ],
     parameters: Params,
     renderCall: (args, theme) => renderCall(args as SfSoqlParams, theme),

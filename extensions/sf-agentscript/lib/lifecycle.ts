@@ -123,8 +123,8 @@ export interface PublishResult {
   developer_name: string;
   /** Whether this created the first version of a new agent or a new version of an existing one. */
   was_new_agent: boolean;
-  /** When `activate=true` was passed and activation succeeded. */
-  activated?: boolean;
+  /** Publication always leaves the new version inactive. */
+  activated: false;
   /** Bot version DeveloperName (e.g. v3) — useful for the bundle-meta.xml `target` attribute. */
   version_developer_name?: string;
   /**
@@ -273,8 +273,6 @@ export interface PublishOptions {
   bundleDir?: string;
   /** AAB / agent DeveloperName. Used for the SOQL existence check + return value. */
   agentApiName: string;
-  /** When true, immediately activate the new version. Default false. */
-  activate?: boolean;
   /** Optional progress callback. */
   log?: (msg: string) => void;
   /** Optional local operation timing collector owned by the tool wrapper. */
@@ -786,24 +784,13 @@ export async function publishAgent(opts: PublishOptions): Promise<PublishResult>
     }
   }
 
-  let activated = false;
-  if (opts.activate) {
-    log(`Activating ${botVersionId}…`);
-    await (opts.timings
-      ? opts.timings.time("activate_version", () =>
-          setVersionStatus(opts.conn, botVersionId, "Active", { signal: opts.signal }),
-        )
-      : setVersionStatus(opts.conn, botVersionId, "Active", { signal: opts.signal }));
-    activated = true;
-  }
-
   return {
     ok: true,
     bot_id: botId,
     bot_version_id: botVersionId,
     developer_name: opts.agentApiName,
     was_new_agent: !existingBotId,
-    activated,
+    activated: false,
     version_developer_name: versionDeveloperName,
     authoring_bundle: authoringBundleResult,
     ...(preflightFindings ? { preflight: preflightFindings } : {}),

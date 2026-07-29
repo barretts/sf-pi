@@ -10,7 +10,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
   {
     id: "sf-agentscript",
     name: "SF Agent Script",
-    description: "Single-plugin lifecycle for `.agent` files: official-SDK compile diagnostics, native configurable quality analysis, preview/eval regression, and publish/activation workflows.",
+    description: "Single-plugin lifecycle for `.agent` files: official-SDK compile diagnostics, native quality, preview, exact-version release eval, inactive publication, and gated activation.",
     file: "extensions/sf-agentscript/index.ts",
     category: "agent-tool",
     maturity: "stable",
@@ -39,17 +39,12 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
   {
     id: "sf-brain",
     name: "SF Brain",
-    description: "High-density Salesforce operator kernel injected once per session — describe-before-query rules, API picker, anonymous Apex verification loop, and CLI power moves",
+    description: "Salesforce operator kernel, extension-priority context, and advisory Instruction Surface diagnostics",
     file: "extensions/sf-brain/index.ts",
     category: "assistive",
     maturity: "stable",
     defaultEnabled: true,
     events: ["before_agent_start"],
-    configurable: true,
-    getConfigPanel: async () => {
-      const mod = await import("../extensions/sf-brain/lib/config-panel.ts");
-      return mod.createConfigPanel;
-    },
   },
   {
     id: "sf-browser",
@@ -61,7 +56,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
     defaultEnabled: true,
     commands: ["/sf-browser"],
     tools: ["sf_browser_open_org","sf_browser_snapshot","sf_browser_click","sf_browser_fill","sf_browser_select","sf_browser_press","sf_browser_editor","sf_browser_wait","sf_browser_capture_evidence","sf_browser_resolve_path"],
-    events: ["session_start","session_shutdown","resources_discover"],
+    events: ["session_start","session_shutdown"],
     configurable: true,
     getConfigPanel: async () => {
       const mod = await import("../extensions/sf-browser/lib/config-panel.ts");

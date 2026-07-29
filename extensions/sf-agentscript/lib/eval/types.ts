@@ -218,6 +218,7 @@ export interface RunMetadata {
   run_id: string;
   spec_path?: string;
   org?: string;
+  org_id?: string;
   agent_api_name?: string;
   bot_id?: string;
   bot_version_id?: string;
@@ -277,6 +278,12 @@ export interface RunMetadata {
   traces_live_fetched?: number;
   totals: Omit<RunTotals, "latencies">;
   latency_summary: LatencySummary;
+  release_contract?: {
+    kind: "generated_baseline" | "designated";
+    baseline_id: string;
+    spec_digest: string;
+    spec_path?: string;
+  };
 }
 
 export type TracesMode = "failed" | "all" | "off";

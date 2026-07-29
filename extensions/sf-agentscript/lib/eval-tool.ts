@@ -9,8 +9,8 @@
  *
  * Actions:
  *   run             Run a multi-turn regression spec.
- *                   Streams progress via onUpdate. Returns inline failures
- *                   for small runs, summary + run_id pointer for big runs.
+ *   run_release     Generate/run the exact-version baseline and designated
+ *                   release suite when configured.
  *   get_failure     Drill into one (or all) failures from a previous run.
  *   trace           Fetch a single planner trace by (session_id, plan_id).
  *   resolve_active  Resolve $active_* placeholders from the org's
@@ -52,6 +52,12 @@ import type { EvalSpec, FailureRecord, RunMetadata } from "./eval/types.ts";
 import { renderEvalCall, renderEvalRunResult, renderEvalGetFailureResult } from "./render/eval.ts";
 import { createTimingCollector, withTimings, type TimingCollector } from "./timings.ts";
 import { readEffectiveAgentScriptSettings } from "./settings.ts";
+import {
+  AGENT_SCRIPT_RELEASE_BASELINE_ID,
+  defaultReleaseSpecPath,
+  hashEvalSpec,
+  rewriteReleaseSpecForLatest,
+} from "./release-contract.ts";
 
 export const EVAL_TOOL_NAME = "agentscript_eval";
 
@@ -66,6 +72,7 @@ const Params = Type.Object({
   action: Type.Union(
     [
       Type.Literal("run"),
+      Type.Literal("run_release"),
       Type.Literal("get_failure"),
       Type.Literal("trace"),
       Type.Literal("resolve_active"),
@@ -73,7 +80,7 @@ const Params = Type.Object({
     ],
     {
       description:
-        "run: full multi-turn regression. get_failure: drill into a previous run's failure. trace: fetch a planner trace by (session_id, plan_id). resolve_active: look up Active BotVersion ids for $active_* placeholders. generate_spec: synthesize a starter eval spec from a `.agent` file (subagent routing + action/connected-agent probes + safety/guardrail block).",
+        "run: full multi-turn regression. run_release: generate and run the exact-version release baseline plus tests/agentforce/<AgentApiName>.eval.json when present. get_failure: drill into a previous run's failure. trace: fetch a planner trace by (session_id, plan_id). resolve_active: look up Active BotVersion ids for $active_* placeholders. generate_spec: synthesize a starter eval spec from a `.agent` file.",
     },
   ),
   target_org: Type.Optional(Type.String({ description: "sf CLI alias / username." })),
@@ -88,10 +95,16 @@ const Params = Type.Object({
       description: "For action='run'. Inline spec object. Use this OR spec_path.",
     }),
   ),
+  release_spec_path: Type.Optional(
+    Type.String({
+      description:
+        "Optional for action='run_release'. Explicit designated release eval spec; defaults to tests/agentforce/<AgentApiName>.eval.json when present.",
+    }),
+  ),
   agent_api_name: Type.Optional(
     Type.String({
       description:
-        "Required for resolve_active. For run, resolves and injects missing agent.create_session ids; also required when the spec uses $active_* / $latest_* placeholders.",
+        "Required for resolve_active and run_release. For run, resolves and injects missing agent.create_session ids; also required when the spec uses $active_* / $latest_* placeholders.",
     }),
   ),
   version_resolution: Type.Optional(
@@ -182,7 +195,7 @@ const Params = Type.Object({
   agent_file: Type.Optional(
     Type.String({
       description:
-        "Required for action='generate_spec'. Path to the `.agent` file to derive tests from.",
+        "Required for action='generate_spec' and action='run_release'. Path to the `.agent` file used to derive the generated baseline.",
     }),
   ),
   output_path: Type.Optional(
@@ -245,10 +258,11 @@ const Params = Type.Object({
 });
 
 interface ParamsAny {
-  action: "run" | "get_failure" | "trace" | "resolve_active" | "generate_spec";
+  action: "run" | "run_release" | "get_failure" | "trace" | "resolve_active" | "generate_spec";
   target_org?: string;
   spec_path?: string;
   spec?: unknown;
+  release_spec_path?: string;
   agent_api_name?: string;
   traces_mode?: "failed" | "all" | "off";
   concurrency?: number;
@@ -278,11 +292,18 @@ interface ParamsAny {
   include_guardrail?: boolean;
   include_safety_probes?: boolean;
   max_functional_tests?: number;
+  /** Internal marker set only by run_release. */
+  release_contract_kind?: "generated_baseline" | "designated";
 }
 
 function checkRequired(p: ParamsAny): { ok: true } | { ok: false; error: string } {
   switch (p.action) {
     case "run":
+      return { ok: true };
+    case "run_release":
+      if (!p.agent_file) return { ok: false, error: "action='run_release' requires agent_file." };
+      if (!p.agent_api_name)
+        return { ok: false, error: "action='run_release' requires agent_api_name." };
       return { ok: true };
     case "get_failure":
       return { ok: true };
@@ -309,7 +330,7 @@ export function registerEvalTool(pi: ExtensionAPI): void {
     name: EVAL_TOOL_NAME,
     label: "Agent Script eval",
     description:
-      "Multi-action eval surface: run a regression spec, drill into a failure, fetch a planner trace, or resolve $active_* placeholders. Single Connection-based transport, sandbox-safe SFAP fallback, streamed progress on long runs.",
+      "Multi-action Agent Script eval surface: run specs, run the exact-version release contract, drill into failures, fetch traces, generate specs, or resolve BotVersion ids.",
     renderCall: renderEvalCall,
     renderResult: (result, opts, theme) => {
       // Dispatch on action recovered from the parameters slot. The pi-tui
@@ -334,12 +355,9 @@ export function registerEvalTool(pi: ExtensionAPI): void {
     promptSnippet:
       "Run / debug / introspect Agent Script regression specs against the Salesforce Evaluation API.",
     promptGuidelines: [
-      "action='run' — full multi-turn regression. Pass agent_api_name to auto-inject missing create_session ids from the Active BotVersion (safe default), or when the spec uses $active_* OR $latest_* placeholders. Default traces_mode='failed'. Pass version_resolution='latest' + acknowledge_inactive_version=true when deliberately testing a non-Active latest version (the ship→eval→activate loop).",
-      "action='get_failure' — after a run returned a summary (large run with failures_truncated=true), drill into one test_id or all failures by run_id.",
-      "action='trace' — fetch a planner trace for one (session_id, plan_id). Use when inline llmEvents isn't enough.",
-      "action='resolve_active' — look up BotVersion + planner ids by agent_api_name. Default returns the Active version; pass status='any' for the latest regardless of state, or version=N for a specific historical version.",
-      "action='generate_spec' — synthesize a starter spec from a `.agent` file. Pass context_variables for auth-bypass seeds. Pass output_path to write the spec; otherwise it is returned inline. Chain into action='run' once you've reviewed it.",
-      "Errors carry recover_via when applicable — chain the next tool call directly without parsing prose.",
+      "Use agentscript_eval action='run_release' after inactive publication to run the generated baseline and the current designated suite against the exact latest BotVersion.",
+      "Incomplete batches, missing tests, evaluator failures, and step errors are failed evidence; never treat an empty or partial run as green.",
+      "Read extensions/sf-agentscript/AGENT_GUIDE.md for spec generation, failure drill-down, and version-resolution guidance.",
     ],
     parameters: Params,
     async execute(_id, params, _signal, onUpdate, ctx) {
@@ -353,6 +371,9 @@ export function registerEvalTool(pi: ExtensionAPI): void {
       switch (p.action) {
         case "run":
           result = await actionRun(ctx, p, onUpdate, timings, _signal);
+          break;
+        case "run_release":
+          result = await actionRunRelease(ctx, p, onUpdate, timings, _signal);
           break;
         case "get_failure":
           result = await timings.time("eval.get_failure", () => actionGetFailure(ctx, p));
@@ -377,6 +398,105 @@ export function registerEvalTool(pi: ExtensionAPI): void {
 // -------------------------------------------------------------------------------------------------
 
 type OnUpdateFn = (partial: { content: { type: "text"; text: string }[]; details: never }) => void;
+
+async function actionRunRelease(
+  ctx: ExtensionContext,
+  input: ParamsAny,
+  onUpdate?: OnUpdateFn,
+  timings?: TimingCollector,
+  signal?: AbortSignal,
+): Promise<{
+  content: { type: "text"; text: string }[];
+  details: Record<string, unknown> | ToolError;
+}> {
+  const agentApiName = input.agent_api_name as string;
+  const safeName = agentApiName.replace(/[^A-Za-z0-9._-]/g, "_");
+  const baselinePath = path.join(
+    ctx.cwd,
+    ".pi",
+    "state",
+    "sf-agentscript",
+    "release-contracts",
+    `${safeName}.generated.eval.json`,
+  );
+  const generated = await actionGenerateSpec(ctx, {
+    ...input,
+    action: "generate_spec",
+    output_path: baselinePath,
+  });
+  if ((generated.details as { ok?: boolean }).ok !== true) return generated;
+
+  const common: ParamsAny = {
+    ...input,
+    action: "run",
+    agent_api_name: agentApiName,
+    version_resolution: "latest",
+    acknowledge_inactive_version: true,
+    overwrite_agent_ids: true,
+  };
+  const baseline = await actionRun(
+    ctx,
+    {
+      ...common,
+      spec_path: baselinePath,
+      spec: undefined,
+      release_contract_kind: "generated_baseline",
+    },
+    onUpdate,
+    timings,
+    signal,
+  );
+  if ((baseline.details as { ok?: boolean }).ok !== true) {
+    return prependResult(baseline, "❌ generated release baseline failed");
+  }
+
+  const designatedPath = input.release_spec_path
+    ? path.resolve(ctx.cwd, input.release_spec_path)
+    : defaultReleaseSpecPath(ctx.cwd, agentApiName);
+  let hasDesignated = false;
+  try {
+    await readFile(designatedPath, "utf8");
+    hasDesignated = true;
+  } catch {
+    if (input.release_spec_path) {
+      return toolError(`Designated release spec not found: ${designatedPath}`);
+    }
+  }
+  if (!hasDesignated) {
+    return prependResult(baseline, "✅ Agent Script release contract passed (generated baseline)");
+  }
+
+  const designated = await actionRun(
+    ctx,
+    {
+      ...common,
+      spec_path: designatedPath,
+      spec: undefined,
+      release_contract_kind: "designated",
+    },
+    onUpdate,
+    timings,
+    signal,
+  );
+  return prependResult(
+    designated,
+    (designated.details as { ok?: boolean }).ok === true
+      ? "✅ Agent Script release contract passed (generated baseline + designated suite)"
+      : "❌ designated Agent Script release suite failed after the generated baseline passed",
+  );
+}
+
+function prependResult<T extends { content: { type: "text"; text: string }[] }>(
+  result: T,
+  heading: string,
+): T {
+  return {
+    ...result,
+    content: result.content.map((item, index) =>
+      index === 0 ? { ...item, text: `${heading}\n\n${item.text}` } : item,
+    ),
+  };
+}
 
 async function actionRun(
   ctx: ExtensionContext,
@@ -403,15 +523,17 @@ async function actionRun(
     const inferred = latestEvalSpec(ctx);
     if (inferred) input = { ...input, spec_path: inferred.spec_path };
   }
-  const spec = timings
+  const sourceSpec = timings
     ? await timings.time("load_eval_spec", () => loadSpec(input, ctx.cwd))
     : await loadSpec(input, ctx.cwd);
-  if (!spec) {
+  if (!sourceSpec) {
     return toolError(
       "Either spec_path or spec must be provided.",
       "Pass spec_path: '<file.json>' or first generate a spec with agentscript_eval action='generate_spec'.",
     );
   }
+
+  const spec = input.release_contract_kind ? rewriteReleaseSpecForLatest(sourceSpec) : sourceSpec;
 
   let result: RunEvalResult;
   try {
@@ -466,6 +588,19 @@ async function actionRun(
     result.totals.tests === result.metadata.tests_count &&
     result.totals.test_fail === 0 &&
     result.totals.errors === 0;
+  if (input.release_contract_kind) {
+    result.metadata.release_contract = {
+      kind: input.release_contract_kind,
+      baseline_id: AGENT_SCRIPT_RELEASE_BASELINE_ID,
+      spec_digest: hashEvalSpec(sourceSpec),
+      ...(input.spec_path ? { spec_path: path.resolve(ctx.cwd, input.spec_path) } : {}),
+    };
+    await writeFile(
+      path.join(result.run_dir, "metadata.json"),
+      `${JSON.stringify(result.metadata, null, 2)}\n`,
+      "utf8",
+    );
+  }
   const head = headline(result, passed);
 
   const summary = {
@@ -529,6 +664,7 @@ async function actionRun(
         runDir: result.run_dir,
         ok: passed,
         failedTestIds: result.failures.map((f) => f.test_id),
+        metadata: result.metadata,
       }),
     ),
   };
@@ -581,6 +717,7 @@ function evalRunEvents(input: {
   runDir: string;
   ok: boolean;
   failedTestIds: string[];
+  metadata: RunMetadata;
 }): AgentScriptBranchStateEvent[] {
   return [
     {
@@ -590,6 +727,11 @@ function evalRunEvents(input: {
       run_dir: input.runDir,
       ok: input.ok,
       failed_test_ids: input.failedTestIds,
+      org_id: input.metadata.org_id,
+      agent_api_name: input.metadata.agent_api_name,
+      bot_version_id: input.metadata.bot_version_id,
+      release_contract_kind: input.metadata.release_contract?.kind,
+      release_spec_digest: input.metadata.release_contract?.spec_digest,
       source: "eval.run",
     },
   ];

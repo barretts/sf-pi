@@ -17,9 +17,9 @@ Use purpose-built UI testing frameworks for repeatable CI regression suites. Pag
 ```
 Extension loads
   ├─ registers /sf-browser
-  ├─ waits for session_start/resources_discover
+  ├─ waits for session_start
   ├─ registers hot-path tools only when the extension is enabled
-  └─ contributes the sf-browser skill only while enabled
+  └─ keeps deeper operating guidance in AGENT_GUIDE.md
 
 /sf-browser
   ├─ UI available + no args → open SF Browser in the SF Pi Manager
@@ -63,7 +63,6 @@ sf_browser_capture_evidence
 | ------------------------ | -------------------- | --------------------------------------------------------------- |
 | extension load           | pi version supported | Register `/sf-browser`; no browser probe                        |
 | `session_start`          | extension enabled    | Register SF Browser tools                                       |
-| `resources_discover`     | extension enabled    | Contribute `skills/sf-browser`                                  |
 | `/sf-browser`            | interactive          | Open SF Browser in the SF Pi Manager                            |
 | `/sf-browser status`     | any                  | Print cached runtime status and artifact paths                  |
 | `/sf-browser doctor`     | explicit             | Run `agent-browser --version`, refresh cache, and show guidance |
@@ -106,10 +105,10 @@ sf_browser_capture_evidence
 SF Browser includes documentation-first setup runbooks for API-first/browser-ready workflows:
 
 ```text
-extensions/sf-browser/skills/sf-browser/references/setup-runbooks.md
-extensions/sf-browser/skills/sf-browser/references/setup-destinations.md
-extensions/sf-browser/skills/sf-browser/references/data-cloud-destinations.md
-extensions/sf-browser/skills/sf-browser/references/live-smoke.md
+extensions/sf-browser/docs/setup-runbooks.md
+extensions/sf-browser/docs/setup-destinations.md
+extensions/sf-browser/docs/data-cloud-destinations.md
+extensions/sf-browser/docs/live-smoke.md
 ```
 
 ## Destination Packs
@@ -291,6 +290,7 @@ extensions/sf-browser/
     snapshot-summary.test.ts← unit / smoke test
     timing.test.ts          ← unit / smoke test
     wait.test.ts            ← unit / smoke test
+  AGENT_GUIDE.md            ← supporting file
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata
   README.md                 ← human + agent walkthrough

@@ -89,10 +89,8 @@ export function registerResearchTool(pi: ExtensionAPI): void {
     // compiles — so the LLM sees operator syntax only when slack_research is actually
     // active, rather than bleeding into every Slack tool's guideline block.
     promptGuidelines: [
-      "Pass channel_ref/from_ref/with_ref/since/before/during/content_filters/reaction_names/thread_only to slack_research; it compiles them to Slack's `in:#channel`, `from:@Name`, `with:@Name`, `after:YYYY-MM-DD`, `before:YYYY-MM-DD`, `during:`, `has:link|file|pin|reaction`, `has::emoji:`, and `is:thread` operators.",
-      "If slack_research cannot confidently resolve channel_ref, it asks for clarification or returns candidates — it will not silently broaden to a workspace-wide search. Pick from the returned candidates or supply the exact channel name/ID.",
-      "Use `query` for free-text intent. Exact phrases in quotes are preserved. Use strategy:'broad' only when the strict plan returned too few results; default strict_then_broaden is almost always correct.",
-      "Set include_threads:true to pull full replies for matching threaded results in a single call — cheaper than a follow-up slack action:'thread' loop when you need discussion context.",
+      "Use slack_research's structured channel/person/date/filter inputs rather than hand-building Slack operators; ambiguous channels never silently broaden workspace-wide.",
+      "Default to strict_then_broaden and include threads only when discussion context is needed.",
     ],
     parameters: SlackResearchParams,
 

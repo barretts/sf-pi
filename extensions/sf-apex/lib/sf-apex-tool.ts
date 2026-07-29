@@ -147,13 +147,9 @@ export function registerSfApexTool(pi: ExtensionAPI): void {
     promptSnippet:
       "Run API-native Apex lifecycle workflows: plan, diagnose, trace/log, anonymous Apex, and targeted tests.",
     promptGuidelines: [
-      "Use sf_apex for Apex lifecycle workflows before raw Salesforce CLI: authoring plan, diagnostics, trace flags, logs, anonymous Apex probes, and targeted test runs.",
-      "When sf_apex has an action for the Apex lifecycle step, use it instead of raw sf CLI. Use raw sf CLI only for capabilities not yet exposed by sf_apex.",
-      "Use sf_apex native discovery actions (org.preflight, apex.search, test.discover, test.plan, coverage.summary) instead of raw Tooling SOQL when choosing Apex lifecycle targets.",
-      "sf_apex does not edit source files directly. Use normal read/write/edit tools for code changes, then sf_apex diagnose.file and targeted sf_apex test.run.",
-      "Use sf_apex trace.start before asking the user to reproduce Apex behavior that needs logs; use sf_apex log.watch for a bounded native tail-like observer.",
-      "Use sf_apex anon.run for small Apex probes. If the body appears mutating, pass allow_mutation=true only when intentional.",
-      "sf_apex author.plan may return recommended_skills such as generating-apex, generating-apex-test, running-apex-tests, or debugging-apex-logs; read those skills when deeper Apex guidance is useful.",
+      "Use sf_apex before raw CLI for Apex lifecycle evidence; normal Pi file tools own source edits and focused tests should reproduce behavior before changes when feasible.",
+      "Anonymous Apex is a bounded probe or rollback rehearsal, not a substitute for maintainable targeted tests.",
+      "Read extensions/sf-apex/AGENT_GUIDE.md for trace, log, test, coverage, and artifact workflows.",
     ],
     parameters: Params,
     renderCall: (args, theme) => renderCall(args as SfApexParams, theme),

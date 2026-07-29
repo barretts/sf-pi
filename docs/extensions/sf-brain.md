@@ -47,8 +47,9 @@ You can manage this extension from the SF Pi home base:
 
 ## Safety notes
 
-- Never registers tools; the kernel is delivered through the session entry log only.
-- Honors a user override at &lt;globalAgentDir&gt;/sf-brain/SF_KERNEL.md.
+- Never registers tools; the constitution is delivered through the session entry log only.
+- Always preserves the bundled constitution; user guidance is append-only through &lt;globalAgentDir&gt;/sf-brain/SF_CONSTITUTION_APPEND.md.
+- Instruction Surface diagnostics expose counts and public-safe contributor ids only; they never expose prompt, context-file, skill-description, or tool-schema content.
 
 ## Exact reference
 

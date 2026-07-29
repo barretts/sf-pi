@@ -6,7 +6,7 @@
  * PR1. Diagnose (PR2) and provision (PR3) layer on top without changing
  * what's already exported.
  *
- * Doc: skills/sf-ai-agentscript/references/agent-user-setup.md.
+ * Doc: extensions/sf-agentscript/docs/agent-user-setup.md.
  */
 
 export { getDigitalAgentLicense, type DigitalAgentLicenseCheck } from "./license.ts";

@@ -100,7 +100,7 @@ describe("data-cloud route resolution", () => {
 describe("data cloud destinations reference", () => {
   it("keeps the Markdown reference table in sync with the verified registry", () => {
     const markdown = readFileSync(
-      path.resolve(__dirname, "../skills/sf-browser/references/data-cloud-destinations.md"),
+      path.resolve(__dirname, "../docs/data-cloud-destinations.md"),
       "utf8",
     );
     const documented = new Map<string, string>();

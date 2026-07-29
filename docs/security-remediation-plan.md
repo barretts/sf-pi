@@ -38,7 +38,7 @@ See `extensions/sf-guardrail/CONTEXT.md`.
 P1 focuses on unmediated or model-self-approved high-value durable mutations:
 
 - `sf_apex` `anon.run` bodies, including indirect side-effect risks that regex mutation detection cannot prove safe.
-- `agentscript_lifecycle` publish, activate, deactivate, publish+activate, and `provision_agent_user dry_run=false`.
+- `agentscript_lifecycle` inactive publication, tested activation/deactivation, untested activation override, and `provision_agent_user dry_run=false`.
 - Data 360 raw REST and journey/run paths where `allow_confirmed=true` moves from plan or dry-run into execution.
 - `sf_browser_click` and `sf_browser_press` committing UI gestures, starting with `mutation=true` and commit-oriented reasons; snapshot-label classification is preferred hardening when available.
 - `slack_canvas create` and `slack_canvas edit`.
@@ -53,7 +53,7 @@ Session approvals are appropriate only for stable bounded operations. Arbitrary-
 Examples:
 
 - Anonymous Apex execution: exact verified org plus normalized body fingerprint only; no broad operation-family approval.
-- Agent publish+activate: distinct operation family from publish alone.
+- Untested Agent activation: distinct operation family and fingerprint from tested activation and inactive publication.
 - Agent user provisioning: target user plus permission-impacting input fingerprint.
 - Data 360 raw REST: method, normalized path, target org, and body fingerprint.
 - Data 360 mutating journeys: one Guardrail approval records the declared child mutation families; actual child execution is recorded as `sf-data360-execution-chain` and surfaced beside `/sf-guardrail audit` rather than merged into the approval ledger.

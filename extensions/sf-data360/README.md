@@ -304,6 +304,7 @@ extensions/sf-data360/
     v2-segment-activate-plan.test.ts← unit / smoke test
     v2-semantic-retrieval-plan.test.ts← unit / smoke test
     v2-tools.test.ts        ← unit / smoke test
+  AGENT_GUIDE.md            ← supporting file
   AGENTS.md                 ← extension-specific agent editing rules
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata

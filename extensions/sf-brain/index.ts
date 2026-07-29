@@ -2,63 +2,66 @@
 /**
  * sf-brain behavior contract
  *
- * - Injects the Salesforce Operator Kernel into the session exactly once per
- *   session, on the first before_agent_start where the sf CLI state is known.
- * - If the sf CLI is not installed, injects the short install stub instead.
- * - Honors a user override at `<globalAgentDir>/sf-brain/SF_KERNEL.md`.
- *
- * The kernel is delivered as a persistent, hidden custom message (not a
- * per-turn system-prompt mutation). That means:
- *   - It participates in the session transcript and is replayed on /resume.
- *   - Providers see the same bytes at the top of history turn after turn, so
- *     it benefits from prompt caching.
- *   - /reload and /fork inherit the kernel via the session store rather than
- *     re-running any detection.
+ * - Injects the bundled Salesforce Engineering Constitution as a persistent,
+ *   hidden custom message while it remains live on the active branch.
+ * - Keeps the constitution present when sf CLI is unavailable and adds only a
+ *   compact CLI-status note.
+ * - Appends optional user guidance from SF_CONSTITUTION_APPEND.md without
+ *   allowing replacement of the bundled baseline.
+ * - Re-injects after compaction removes the live constitution entry.
  *
  * Detection reuses the shared sf-environment cache populated by sf-devbar /
- * sf-welcome during startup. If neither has populated it yet (e.g. sf-brain
- * loaded first), we trigger a detection once and the result is cached for
- * other consumers.
- *
- * Behavior matrix:
- *
- *   Event               | Condition                                       | Result
- *   --------------------|-------------------------------------------------|------------------------------------------
- *   before_agent_start  | live kernel custom_message entry exists         | Skip injection
- *   before_agent_start  | last kernel was folded into compaction summary  | Re-inject so model sees rules verbatim
- *   before_agent_start  | CLI installed, no live kernel entry             | Inject full kernel as hidden message
- *   before_agent_start  | CLI not installed, no live kernel entry         | Inject install stub as hidden message
- *
- * The dedup predicate (`shouldInjectKernel` in lib/kernel.ts) reads Pi's
- * active, compaction-aware branch projection and matches `custom_message`
- * entries rather than state-only `custom` entries.
+ * sf-welcome during startup. The constitution bytes remain stable across turns
+ * so provider prompt caches can reuse them.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { VERSION, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+import { SF_PI_REGISTRY } from "../../catalog/registry.ts";
 import { buildExecFn } from "../../lib/common/exec-adapter.ts";
+import { registerManagerDetailActions } from "../../lib/common/manager-actions.ts";
 import { registerLatestContextProjection } from "../../lib/common/session/active-branch-context.ts";
 import {
   getCachedSfEnvironment,
   getSharedSfEnvironment,
 } from "../../lib/common/sf-environment/shared-runtime.ts";
-import { KERNEL_ENTRY_TYPE, loadKernel, shouldInjectKernel } from "./lib/kernel.ts";
+import {
+  CONSTITUTION_ENTRY_TYPE,
+  loadConstitution,
+  shouldInjectConstitution,
+} from "./lib/constitution.ts";
 import { requirePiVersion } from "../../lib/common/pi-compat.ts";
 import {
-  formatSfPiExtensionContext,
-  isHerdrWorkflowModeActive,
-  SF_PI_EXTENSIONS_ENTRY_TYPE,
-  shouldInjectSfPiExtensionContext,
-} from "./lib/extension-context.ts";
-import { readEffectiveSfBrainSettings } from "./lib/settings.ts";
+  formatSfPiRoutingSummary,
+  SF_PI_ROUTING_ENTRY_TYPE,
+  shouldInjectSfPiRoutingSummary,
+} from "./lib/routing-summary.ts";
+import { buildSfBrainManagerActions } from "./lib/instruction-surface-manager.ts";
+
+const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const SF_PI_VERSION = readPackageVersion();
+const SF_PI_TOOL_NAMES = SF_PI_REGISTRY.flatMap((extension) => extension.tools ?? []);
 
 export default function (pi: ExtensionAPI) {
   if (!requirePiVersion(pi, "sf-brain")) return;
 
-  registerLatestContextProjection(pi, [KERNEL_ENTRY_TYPE, SF_PI_EXTENSIONS_ENTRY_TYPE]);
+  registerManagerDetailActions(
+    pi,
+    "sf-brain",
+    buildSfBrainManagerActions(pi, {
+      sfPiPackageRoot: PACKAGE_ROOT,
+      sfPiToolNames: SF_PI_TOOL_NAMES,
+      piRuntimeVersion: VERSION,
+      sfPiVersion: SF_PI_VERSION,
+    }),
+  );
+  registerLatestContextProjection(pi, [CONSTITUTION_ENTRY_TYPE, SF_PI_ROUTING_ENTRY_TYPE]);
   const exec = buildExecFn(pi);
 
   pi.on("before_agent_start", async (_event, ctx) => {
-    if (!shouldInjectKernel(ctx.sessionManager)) return;
+    if (!shouldInjectConstitution(ctx.sessionManager)) return;
 
     // Prefer the already-populated shared cache. If nothing has run detection
     // yet in this process, fall through to a live detection. Either way the
@@ -68,34 +71,38 @@ export default function (pi: ExtensionAPI) {
       env = await getSharedSfEnvironment(exec, ctx.cwd);
     }
 
-    const kernel = loadKernel({ cliInstalled: env.cli.installed });
+    const constitution = loadConstitution({ cliInstalled: env.cli.installed });
 
     return {
       message: {
-        customType: KERNEL_ENTRY_TYPE,
-        content: kernel,
+        customType: CONSTITUTION_ENTRY_TYPE,
+        content: constitution,
         display: false,
       },
     };
   });
 
-  pi.on("before_agent_start", async (event, ctx) => {
-    const activeTools = event.systemPromptOptions.selectedTools;
-    const context = formatSfPiExtensionContext(ctx.cwd, {
-      activeTools,
-      activeSkills: event.systemPromptOptions.skills?.map((skill) => skill.name),
-      herdrWorkflowMode:
-        readEffectiveSfBrainSettings(ctx.cwd).herdrGuidance === "auto" &&
-        isHerdrWorkflowModeActive({ env: process.env, activeTools }),
-    });
-    if (!shouldInjectSfPiExtensionContext(ctx.sessionManager, context)) return;
+  pi.on("before_agent_start", async (_event, ctx) => {
+    const summary = formatSfPiRoutingSummary(ctx.cwd);
+    if (!shouldInjectSfPiRoutingSummary(ctx.sessionManager, summary)) return;
 
     return {
       message: {
-        customType: SF_PI_EXTENSIONS_ENTRY_TYPE,
-        content: context,
+        customType: SF_PI_ROUTING_ENTRY_TYPE,
+        content: summary,
         display: false,
       },
     };
   });
+}
+
+function readPackageVersion(): string {
+  try {
+    const value = JSON.parse(readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8")) as {
+      version?: unknown;
+    };
+    return typeof value.version === "string" ? value.version : "unknown";
+  } catch {
+    return "unknown";
+  }
 }

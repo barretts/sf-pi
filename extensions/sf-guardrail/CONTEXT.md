@@ -140,6 +140,10 @@ _Avoid_: default refusal, prompt, warning, soft block
 The agent-visible SF Guardrail instructions generated from the effective ruleset and runtime config rather than maintained as a separate policy prompt.
 _Avoid_: second rule source, hand-maintained policy prompt, duplicated safety docs
 
+**Guardrail Context Summary**:
+The compact model-visible form of **Rule-Derived Guidance** that states the Safety Mediator contract and includes only active **Hard Blocks** and non-default rule overrides needed for planning. Exact patterns, ordinary confirmation rules, and approval implementation details remain outside model context.
+_Avoid_: full active rule dump, second policy source, hidden enforcement, generic safety tutorial
+
 **Guardrail Preference**:
 A normal user-facing SF Guardrail setting such as confirmation timeout, protected org aliases, or bundled-rule **Rule Behavior**. Routine **Guardrail Preferences** live in Pi settings under `sfPi.guardrail`.
 _Avoid_: rule override, policy config, hidden JSON setting

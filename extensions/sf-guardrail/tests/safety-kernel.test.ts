@@ -251,7 +251,7 @@ describe("Safety Kernel", () => {
     expect(decision?.approvalScope?.detail).toContain("mutation signals: none detected");
   });
 
-  it("confirms AgentScript lifecycle publish+activate as a distinct native operation family", async () => {
+  it("confirms inactive AgentScript publication as its own native operation", async () => {
     mockedEnv = env("DevInt", "sandbox");
 
     const decision = await evaluateSafety({
@@ -260,7 +260,6 @@ describe("Safety Kernel", () => {
         action: "publish",
         agent_file: "agents/MyAgent/MyAgent.agent",
         agent_api_name: "MyAgent",
-        activate: true,
       },
       cwd: "/project",
       config: readBundledConfig(),
@@ -275,37 +274,11 @@ describe("Safety Kernel", () => {
       orgType: "sandbox",
     });
     expect(decision?.approvalScope).toMatchObject({
-      operationFamily: "agent publish+activate",
+      operationFamily: "agent publish",
       riskTier: "agent_lifecycle_mutation",
-      label: "publish and activate agent MyAgent",
+      label: "publish inactive agent version MyAgent",
       allowSession: true,
     });
-  });
-
-  it("keeps AgentScript publish and publish+activate Safety Envelopes separate", async () => {
-    mockedEnv = env("DevInt", "sandbox");
-
-    const baseInput = {
-      action: "publish",
-      agent_file: "agents/MyAgent/MyAgent.agent",
-      agent_api_name: "MyAgent",
-    };
-    const publish = await evaluateSafety({
-      toolName: "agentscript_lifecycle",
-      input: baseInput,
-      cwd: "/project",
-      config: readBundledConfig(),
-    });
-    const publishActivate = await evaluateSafety({
-      toolName: "agentscript_lifecycle",
-      input: { ...baseInput, activate: true },
-      cwd: "/project",
-      config: readBundledConfig(),
-    });
-
-    expect(publish?.approvalScope?.operationFamily).toBe("agent publish");
-    expect(publishActivate?.approvalScope?.operationFamily).toBe("agent publish+activate");
-    expect(publish?.fingerprint).not.toBe(publishActivate?.fingerprint);
   });
 
   it("confirms AgentScript activate/deactivate with action-specific fingerprints", async () => {
@@ -327,6 +300,35 @@ describe("Safety Kernel", () => {
     expect(activate?.approvalScope).toMatchObject({ operationFamily: "agent activation" });
     expect(deactivate?.approvalScope).toMatchObject({ operationFamily: "agent activation" });
     expect(activate?.fingerprint).not.toBe(deactivate?.fingerprint);
+  });
+
+  it("uses a distinct Safety Envelope for untested AgentScript activation", async () => {
+    mockedEnv = env("DevInt", "sandbox");
+
+    const tested = await evaluateSafety({
+      toolName: "agentscript_lifecycle",
+      input: { action: "activate", agent_api_name: "MyAgent", version: 3 },
+      cwd: "/project",
+      config: readBundledConfig(),
+    });
+    const untested = await evaluateSafety({
+      toolName: "agentscript_lifecycle",
+      input: {
+        action: "activate",
+        agent_api_name: "MyAgent",
+        version: 3,
+        acknowledge_untested_activation: true,
+      },
+      cwd: "/project",
+      config: readBundledConfig(),
+    });
+
+    expect(untested?.approvalScope).toMatchObject({
+      operationFamily: "untested agent activation override",
+      allowSession: true,
+    });
+    expect(untested?.reason).toMatch(/without matching release eval evidence/i);
+    expect(untested?.fingerprint).not.toBe(tested?.fingerprint);
   });
 
   it("confirms live AgentScript Service Agent provisioning as allow-once when permission impact is unresolved", async () => {

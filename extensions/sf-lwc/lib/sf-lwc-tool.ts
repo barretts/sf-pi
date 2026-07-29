@@ -104,13 +104,9 @@ export function registerSfLwcTool(pi: ExtensionAPI): void {
     promptSnippet:
       "Run local-native Lightning Web Component lifecycle workflows: scan/inspect bundles, diagnose LWC files, discover/plan/run bounded local Jest tests, and inspect artifacts.",
     promptGuidelines: [
-      "Use sf_lwc for local Lightning Web Component lifecycle workflows before raw npm/Jest commands: project scan, component list/inspect, file diagnostics, test discovery/planning/runs, and reruns.",
-      "sf_lwc V1 is local-only. Do not use it for deploy/retrieve, org source synchronization, visual preview, component creation, or component rename.",
-      "project.scan only scans SFDX package directories from sfdx-project.json; it is not a workspace-wide frontend scanner.",
-      "test.run may execute the local project's node_modules/.bin/lwc-jest runner with bounded args/timeouts. It must not install dependencies, start watch mode, or call Salesforce CLI.",
-      "Use sf_apex for Apex controller verification, sf_soql for schema/field validation, sf-code-analyzer for broader static analysis, and sf-lsp for advisory background diagnostics.",
-      "For LWC authoring, test authoring, and fixing component diagnostics, read the generating-lwc-components skill when deeper framework guidance is useful. Still use sf_lwc first for scan, inspect, diagnose, and bounded local Jest execution.",
-      "For SLDS 2 uplift, deprecated SLDS/LWC tokens, hardcoded style values, SLDS class overrides, or styling-hook migration, read uplifting-components-to-slds2. Use sf_lwc for local component context and evidence; use code_analyzer or a future sf_slds2 surface for SLDS lint execution.",
+      "Use sf_lwc for local LWC inspection, diagnostics, and focused Jest evidence before raw npm commands; normal file tools own edits.",
+      "sf_lwc never deploys, retrieves, installs dependencies, starts watch mode, or substitutes for Apex/schema/browser evidence.",
+      "Read extensions/sf-lwc/AGENT_GUIDE.md for lifecycle boundaries and cross-tool handoffs.",
     ],
     parameters: Params,
     renderCall: (args, theme) => renderCall(args as SfLwcParams, theme),

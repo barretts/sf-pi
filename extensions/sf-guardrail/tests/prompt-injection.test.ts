@@ -55,6 +55,7 @@ describe("loadPrompt", () => {
 
     const prompt = promptModule.loadPrompt(configModule.readBundledConfig());
 
-    expect(prompt).toContain("File protection:");
+    expect(prompt).toContain("Safety Mediator");
+    expect(prompt).toContain("Active hard blocks:");
   });
 });

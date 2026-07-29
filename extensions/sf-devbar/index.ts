@@ -540,9 +540,7 @@ export default function sfDevBar(pi: ExtensionAPI) {
     updateTopBar(ctx);
   });
 
-  // --- Before agent start: inject Salesforce environment context into system prompt ---
-  // Uses systemPromptOptions to inspect active skills. Tool routing belongs in
-  // <sf_pi_extensions>, not in this Salesforce environment fact block.
+  // --- Before agent start: inject compact Salesforce environment facts ---
   //
   // Inject-once-on-change semantics:
   //   - Inject when no live <sf_environment> entry exists (first turn / post-compaction).
@@ -557,13 +555,10 @@ export default function sfDevBar(pi: ExtensionAPI) {
   // (the human-friendly "Detected Xs ago" line lives in formatDetailedStatus,
   // a separate function used by the /sf-org panel) so the equality check is
   // a sound "did anything material change?" signal.
-  pi.on("before_agent_start", async (event, ctx) => {
+  pi.on("before_agent_start", async (_event, ctx) => {
     if (!env) return;
 
-    const { systemPromptOptions } = event;
-    const context = formatAgentContext(env, {
-      activeSkills: systemPromptOptions.skills?.map((s) => s.name),
-    });
+    const context = formatAgentContext(env);
     if (!context) return;
 
     const stillFresh = (entry: { content: string | unknown[] }) =>

@@ -36,7 +36,7 @@ _Salesforce LLM Gateway provider with model discovery_
 
 ### [SF Agent Script](./extensions/sf-agentscript)
 
-_Single-plugin lifecycle for `.agent` files: official-SDK compile diagnostics, native configurable quality analysis, preview/eval regression, and publish/activation workflows._
+_Single-plugin lifecycle for `.agent` files: official-SDK compile diagnostics, native quality, preview, exact-version release eval, inactive publication, and gated activation._
 
 - Default: **on**
 - Commands: `/sf-agentscript`
@@ -137,7 +137,7 @@ _Salesforce-aware safety hooks — file protection policies, dangerous-command g
 
 ### [SF Brain](./extensions/sf-brain)
 
-_High-density Salesforce operator kernel injected once per session — describe-before-query rules, API picker, anonymous Apex verification loop, and CLI power moves_
+_Salesforce operator kernel, extension-priority context, and advisory Instruction Surface diagnostics_
 
 - Default: **on**
 - Commands: _none_

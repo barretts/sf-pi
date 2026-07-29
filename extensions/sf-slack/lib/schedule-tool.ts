@@ -101,11 +101,8 @@ export function registerScheduleTool(pi: ExtensionAPI): void {
       "Use this ONLY when the user explicitly asks for future Slack delivery or scheduled-message management.",
     promptSnippet: "Schedule, list, or cancel Slack messages",
     promptGuidelines: [
-      "Call slack_schedule action:'schedule' ONLY when the user explicitly asks for future delivery or supplies a send time.",
-      "Use slack_resolve first for fuzzy channel names, then pass the resolved C..., G..., or D... ID as channel_id.",
-      "Scheduled messages use Slack's public chat.scheduleMessage API. They post on time and are visible through slack_schedule action:'list', but they are API queue items rather than Slack client scheduled drafts, so they do not show in Drafts & sent → Scheduled.",
-      "For schedule/delete, do not add signatures, footers, or via-pi markers. Preserve the requested message text.",
-      "For action:'delete', pass the scheduled_message_id returned by action:'schedule' or action:'list'.",
+      "Use slack_schedule only for explicitly requested future delivery or scheduled-message management; schedule/delete remains human-confirmed.",
+      "Resolve fuzzy channels first and preserve requested message text without signatures or footers.",
     ],
     parameters: SlackScheduleParams,
     prepareArguments(args): {

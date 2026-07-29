@@ -26,7 +26,8 @@
       "lib/canvas-program.ts",
       "lib/artifacts.ts",
       "lib/settings.ts",
-      "lib/config-panel.ts"
+      "lib/config-panel.ts",
+      "AGENT_GUIDE.md"
     ],
     "stateFiles": [
       "~/Library/Application Support/tldraw/server.json (read-only runtime discovery on macOS)",

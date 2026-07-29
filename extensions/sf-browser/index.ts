@@ -13,13 +13,10 @@
  *   -----------------------|------------------------------------------------------------
  *   extension load         | Register /sf-browser; tool registration is lazy by enablement
  *   session_start/reload   | Register hot-path tools when enabled
- *   resources_discover     | Contribute progressive sf-browser skill when enabled
  *   /sf-browser (no args)  | Open SF Browser in the SF Pi Manager; no runtime probes
  *   /sf-browser doctor     | Explicitly check agent-browser installation
  *   sf_browser_* tools     | Invoke agent-browser only after explicit tool intent
  */
-import { fileURLToPath } from "node:url";
-import path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 import { withSafeCommandHandler } from "../../lib/common/safe-command-handler.ts";
@@ -67,9 +64,6 @@ import { registerSfBrowserSelectTool } from "./lib/sf_browser_select-tool.ts";
 import { registerSfBrowserSnapshotTool } from "./lib/sf_browser_snapshot-tool.ts";
 import { registerSfBrowserWaitTool } from "./lib/sf_browser_wait-tool.ts";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 export default function sfBrowser(pi: ExtensionAPI): void {
   if (!requirePiVersion(pi, "sf-browser")) return;
 
@@ -98,15 +92,6 @@ export default function sfBrowser(pi: ExtensionAPI): void {
     toolsRegistered = false;
   });
   registerManagerDetailActions(pi, EXTENSION_ID, buildSfBrowserManagerActions(pi));
-
-  pi.on("resources_discover", (event) => {
-    if (!isSfPiExtensionEnabled(event.cwd, EXTENSION_ID)) return;
-    if (event.reason === "reload") {
-      toolsRegistered = false;
-      ensureToolsRegistered();
-    }
-    return { skillPaths: [path.join(__dirname, "skills")] };
-  });
 
   pi.registerCommand(COMMAND_NAME, {
     description: "SF Browser — Salesforce UI last-mile automation with agent-browser",

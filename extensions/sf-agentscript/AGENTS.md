@@ -42,5 +42,5 @@ When shipped behavior changes, update:
 
 - `manifest.json`
 - `README.md`
-- `skills/sf-agentscript/SKILL.md`
+- `AGENT_GUIDE.md`
 - generated catalog/docs via `npm run generate-catalog`

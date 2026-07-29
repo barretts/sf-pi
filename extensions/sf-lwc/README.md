@@ -134,6 +134,7 @@ extensions/sf-lwc/
     render.test.ts          ← unit / smoke test
     smoke.test.ts           ← unit / smoke test
     tests.test.ts           ← unit / smoke test
+  AGENT_GUIDE.md            ← supporting file
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata
   README.md                 ← human + agent walkthrough

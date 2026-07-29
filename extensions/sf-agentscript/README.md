@@ -97,12 +97,20 @@ Generated specs compile an internal stateful scenario model into the existing Ev
 
 Eval-created sessions usually disappear before the live planner trace endpoint can read them, so eval runs synthesize trace artifacts from inline Evaluation API data by default; use `agentscript_eval action="trace"` for explicit live trace drill-down when the session is known to be resident. The Evaluation API does not expose `RelatedAgentStep`, so eval digests report connected-agent call evidence as unavailable rather than zero or inferred; preview remains authoritative for direct invocation counts.
 
+## Eval-Gated Release Sequence
+
+`agentscript_lifecycle action="publish"` always creates an inactive BotVersion. `agentscript_eval action="run_release"` generates the current baseline from `agent_file`, runs it against the exact latest inactive version, and then runs `tests/agentforce/<AgentApiName>.eval.json` when present or an explicit `release_spec_path`. Complete passing metadata records the org id, BotVersion id, baseline identity, and spec digest.
+
+`agentscript_lifecycle action="activate"` resolves the exact target version and checks persisted release-contract evidence. Missing, incomplete, failed, wrong-org, wrong-version, stale-baseline, or stale-designated-suite evidence blocks activation with a recoverable `run_release` call. `acknowledge_untested_activation=true` requests an emergency path but is only an intent flag; SF Guardrail uses a distinct Safety Envelope and human approval before execution.
+
+Release evidence has no arbitrary time expiry. It remains valid while the exact org, BotVersion, baseline identity, and designated-suite digest remain unchanged.
+
 ## Runtime Flow
 
 ```text
-create/compile/inspect/mutate  ──▶  preview  ──▶  eval  ──▶  lifecycle
-        ▲                            │            │           │
-        └──── branch-state pointers ─┴────────────┴───────────┘
+create/compile/inspect/mutate → preview → publish inactive → run_release → activate
+        ▲                         │             │             │
+        └──────── branch-state + persisted exact-version evidence ────────┘
 ```
 
 ## Behavior Matrix
@@ -114,8 +122,8 @@ create/compile/inspect/mutate  ──▶  preview  ──▶  eval  ──▶  l
 | `agent_settled`                         | Run enabled global quality rules for changed `.agent` files.          |
 | `agentscript_authoring`                 | Create, compile, inspect quality/review, and mutate local source.     |
 | `agentscript_preview`                   | Start/send/end preview sessions and persist traces/transcripts.       |
-| `agentscript_eval`                      | Generate/run regression specs and persist failure/trace artifacts.    |
-| `agentscript_lifecycle`                 | Publish, activate, list versions, and manage Service Agent users.     |
+| `agentscript_eval`                      | Generate/run regression specs and exact-version release contracts.    |
+| `agentscript_lifecycle`                 | Publish inactive, gate activation, list versions, and manage users.   |
 
 ## Settings
 
@@ -277,6 +285,7 @@ extensions/sf-agentscript/
     package-catalog.ts      ← implementation module
     preflight.ts            ← implementation module
     preview-tool.ts         ← implementation module
+    release-contract.ts     ← implementation module
     sdk.ts                  ← implementation module
     settings.ts             ← implementation module
     sfap-readiness.ts       ← implementation module
@@ -360,6 +369,8 @@ extensions/sf-agentscript/
     quality-settings.test.ts← unit / smoke test
     quality-transcript.test.ts← unit / smoke test
     queue-readiness.test.ts ← unit / smoke test
+    release-contract.test.ts← unit / smoke test
+    release-sequence-contract.test.ts← unit / smoke test
     render-compile.test.ts  ← unit / smoke test
     render-eval.test.ts     ← unit / smoke test
     render-inspect.test.ts  ← unit / smoke test
@@ -379,6 +390,7 @@ extensions/sf-agentscript/
     tool-types.test.ts      ← unit / smoke test
     trace-digest.test.ts    ← unit / smoke test
     upstream-capabilities.test.ts← unit / smoke test
+  AGENT_GUIDE.md            ← supporting file
   AGENTS.md                 ← extension-specific agent editing rules
   CREDITS.md                ← extension attribution
   index.ts                  ← Pi extension entry point

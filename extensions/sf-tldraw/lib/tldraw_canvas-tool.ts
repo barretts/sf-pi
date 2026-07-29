@@ -114,13 +114,9 @@ export function registerTldrawCanvasTool(pi: ExtensionAPI): void {
       "Inspect the local tldraw runtime and deterministically render grounded Salesforce data-model, architecture, and sequence diagrams. Use the upstream tldraw-offline skill for generic canvas work.",
     promptSnippet: "Render editable, deterministic Salesforce diagrams in a local tldraw canvas.",
     promptGuidelines: [
-      "Use tldraw_canvas for Salesforce diagrams when the local canvas is ready; explicit Mermaid or text requests win, and generic canvas work uses the upstream tldraw-offline skill.",
-      "For Salesforce render actions, pass strict spec_version='2.0' with grounding.mode='reference' or 'org' and evidence source ids for every semantic element. Never infer or fabricate Salesforce facts.",
-      "Call action='documents' before rendering when more than one board may be open. When none is open, call action='create_document' separately and pass its returned document_id to the render action.",
-      "Default render_mode='preserve' keeps human positioning and annotations. Use relayout or replace only when explicitly requested.",
-      "A render is complete only when readiness is true, canvas lints are zero, terminal decoration checks pass, and screenshot evidence was captured.",
-      "Use action='cheatsheet' only when the tldraw/Salesforce spec contract is needed; it is not always-on context.",
-      "Never use OS automation or direct .tldraw archive generation as a fallback for missing Canvas API capabilities.",
+      "Every Salesforce diagram element must use strict spec_version='2.0' grounding and declared evidence; never infer or fabricate Salesforce facts.",
+      "A render is complete only when readiness is true, canvas lints/decorations pass, and screenshot evidence exists; never fall back to OS automation or direct archive generation.",
+      "Read extensions/sf-tldraw/AGENT_GUIDE.md for document selection, preserve/relayout semantics, and completion criteria.",
     ],
     parameters: Params,
     async execute(_toolCallId, params, signal, onUpdate, ctx) {

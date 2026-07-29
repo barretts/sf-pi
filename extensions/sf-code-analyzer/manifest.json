@@ -27,7 +27,8 @@
       "lib/settings.ts",
       "lib/config-panel.ts",
       "lib/types.ts",
-      "lib/extension-doctor.ts"
+      "lib/extension-doctor.ts",
+      "AGENT_GUIDE.md"
     ],
     "stateFiles": ["<globalAgentDir>/sf-pi/code-analyzer/sessions/<workspace-session-id>/*"],
     "safety": [

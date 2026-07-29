@@ -1,8 +1,3 @@
----
-name: sf-browser
-description: Use when automating, inspecting, or capturing Salesforce UI with SF Browser or agent-browser. Trigger for Salesforce Setup UI, Lightning UI, builders, managed package configuration pages, UI-only checks, screenshots, and last-mile browser work that Salesforce APIs cannot cover.
----
-
 # SF Browser
 
 SF Browser is an experimental developer-assistive surface for Salesforce UI last-mile work. It does not imply a stable Salesforce UI automation contract.
@@ -27,7 +22,7 @@ Refs are short-lived. Treat them as stale after clicks, saves, modal opens, navi
 - For lookup and combobox controls: fill the visible input, wait for options, snapshot, then click the desired option ref.
 - For code-like editor surfaces, use `sf_browser_editor` instead of generic DOM eval when it can detect the editor. It supports `detect`, bounded `read`, and full-content `write`; writes do not click Save/Apply and do not echo full content.
 - For Setup navigation, prefer curated Setup Destinations over UI search when available. Use structured routes for common Lightning pages: `home`, `setup`, `object-list`, `object-new`, `record-view`, `list-view`, and `record-related-list`.
-- For Data Cloud navigation, use the `data-cloud` route (`{ "type": "data-cloud", "destination": "<id>" }`). It resolves a verified Destination Pack covering the Data Cloud Settings menu; see `references/data-cloud-destinations.md`. Only `verified` entries are navigable. The Data Cloud app container URL is org-specific, so open the app via the App Launcher and reach its tabs by snapshot + click. Packs are grown and re-verified out-of-band by the dev-time Navigation Hardening Harness (`npm run e2e:sf-browser-harden`), which also verifies the curated Setup Destinations and structured routes (`--surface all|data-cloud|setup-destinations|routes`), never by runtime menu scraping. If fuzzy Setup Destination resolution returns multiple candidates, ask the user to choose instead of guessing. `sf_browser_open_org` verifies structured routes through Salesforce APIs before opening; raw `path` remains the direct escape hatch. `object-new` only opens Salesforce's deterministic new-record URL; org overrides or record-type flows may render differently, so verify with a Lightning wait and snapshot instead of assuming a modal opened. Use `lightning: "navigation-ready"` after deep links; DOMContentLoaded alone is often not enough.
+- For Data Cloud navigation, use the `data-cloud` route (`{ "type": "data-cloud", "destination": "<id>" }`). It resolves a verified Destination Pack covering the Data Cloud Settings menu; see `docs/data-cloud-destinations.md`. Only `verified` entries are navigable. The Data Cloud app container URL is org-specific, so open the app via the App Launcher and reach its tabs by snapshot + click. Packs are grown and re-verified out-of-band by the dev-time Navigation Hardening Harness (`npm run e2e:sf-browser-harden`), which also verifies the curated Setup Destinations and structured routes (`--surface all|data-cloud|setup-destinations|routes`), never by runtime menu scraping. If fuzzy Setup Destination resolution returns multiple candidates, ask the user to choose instead of guessing. `sf_browser_open_org` verifies structured routes through Salesforce APIs before opening; raw `path` remains the direct escape hatch. `object-new` only opens Salesforce's deterministic new-record URL; org overrides or record-type flows may render differently, so verify with a Lightning wait and snapshot instead of assuming a modal opened. Use `lightning: "navigation-ready"` after deep links; DOMContentLoaded alone is often not enough.
 - For Classic Setup Surface dual-list controls, use `sf_browser_select` on the source listbox, click Add or Remove, snapshot before Save, then verify through API after Save.
 - For save flows, wait for visible confirmation such as a toast, success text, or expected page state, then snapshot again. Treat near-timeout waits as ambiguous and verify before continuing.
 - If expected controls are missing, consider iframe/frame surfaces or use direct `agent-browser` commands as the escape hatch. `agent-browser frame @iframeRef` scopes snapshot/click-style commands, but frame-scoped `eval` is not guaranteed; do not rely on raw eval for iframe-local Visualforce form submission or dialog handling.
@@ -40,9 +35,9 @@ Refs are short-lived. Treat them as stale after clicks, saves, modal opens, navi
 For common setup/admin tasks, use the reference runbooks before improvising UI automation:
 
 - Use `/sf-browser evidence [limit]` to list current-session Browser Evidence captures, artifact paths, and Setup Audit Trail enrichment status without returning image bytes.
-- `references/setup-runbooks.md` — API-first/browser-ready workflows and UI fallback paths.
-- `references/setup-destinations.md` — curated Setup Destination shortcuts. Runtime destination metadata includes suggested waits and default snapshot focus terms.
-- `references/live-smoke.md` — read-only live smoke checklist for route resolution, Lightning waits, snapshots, and session-scoped evidence.
+- `docs/setup-runbooks.md` — API-first/browser-ready workflows and UI fallback paths.
+- `docs/setup-destinations.md` — curated Setup Destination shortcuts. Runtime destination metadata includes suggested waits and default snapshot focus terms.
+- `docs/live-smoke.md` — read-only live smoke checklist for route resolution, Lightning waits, snapshots, and session-scoped evidence.
 
 A Setup Runbook should prefer the primary API or owning SF Pi extension first, use SF Browser for evidence, and fall back to UI automation only when the primary path fails or is unavailable.
 

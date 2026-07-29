@@ -11,28 +11,12 @@
 import type { SfEnvironment } from "./types.ts";
 
 /**
- * Optional hints from the system prompt options so the agent context can
- * include Salesforce skill availability. Tool routing belongs in
- * <sf_pi_extensions>, not in this Salesforce environment fact block.
- */
-export type AgentContextOptions = {
-  /** Skill names currently loaded. */
-  activeSkills?: string[];
-};
-
-/**
  * Build the context string injected into the system prompt so the agent
  * knows about the Salesforce environment.
  *
- * When activeSkills are provided (from systemPromptOptions), the context
- * includes a hint about which Salesforce-specific skills are available.
- *
  * Returns undefined if there's nothing useful to inject (no CLI, no project, no org).
  */
-export function formatAgentContext(
-  env: SfEnvironment,
-  options?: AgentContextOptions,
-): string | undefined {
+export function formatAgentContext(env: SfEnvironment): string | undefined {
   if (!env.cli.installed) {
     return undefined;
   }
@@ -62,18 +46,8 @@ export function formatAgentContext(
       lines.push(`Namespace: ${env.project.namespace}`);
     }
 
-    if (env.project.packageDirectories?.length) {
-      const dirs = env.project.packageDirectories
-        .map(
-          (d) => `${d.path}${d.default ? " (default)" : ""}${d.package ? ` [${d.package}]` : ""}`,
-        )
-        .join(", ");
-      lines.push(`Package directories: ${dirs}`);
-    }
-
-    if (env.project.projectRoot) {
-      lines.push(`Project root: ${env.project.projectRoot}`);
-    }
+    const defaultPackage = env.project.packageDirectories?.find((directory) => directory.default);
+    if (defaultPackage) lines.push(`Default package: ${defaultPackage.path}`);
   }
 
   // Org
@@ -83,34 +57,11 @@ export function formatAgentContext(
     const status = env.org.connectedStatus ?? "unknown";
     lines.push(`Default org: ${orgLabel}${orgType} — ${status}`);
 
-    if (env.org.instanceUrl) {
-      lines.push(`Instance: ${env.org.instanceUrl}`);
-    }
-
-    if (env.org.apiVersion) {
-      lines.push(`Org API version: ${env.org.apiVersion}`);
-    }
-
-    if (env.config.location) {
-      lines.push(`Config scope: ${env.config.location}`);
-    }
+    if (env.org.apiVersion) lines.push(`Org API version: ${env.org.apiVersion}`);
   } else if (env.config.hasTargetOrg) {
     lines.push(`Default org: ${env.config.targetOrg} (⚠ unable to connect)`);
-    if (env.org.error) {
-      lines.push(`Error: ${env.org.error}`);
-    }
   } else {
     lines.push("Default org: not configured");
-    lines.push("Run: sf org login web --set-default --alias MyOrg");
-  }
-
-  // Append Salesforce skill hints when known. Tool routing belongs in
-  // <sf_pi_extensions>, not in this Salesforce environment fact block.
-  if (options?.activeSkills?.length) {
-    const sfSkills = options.activeSkills.filter((s) => s.startsWith("sf-"));
-    if (sfSkills.length > 0) {
-      lines.push(`Active SF skills: ${sfSkills.join(", ")}`);
-    }
   }
 
   lines.push("</sf_environment>");

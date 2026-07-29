@@ -103,8 +103,9 @@ describe("formatAgentContext", () => {
     });
     const ctx = formatAgentContext(env)!;
     expect(ctx).toContain("Default org: MyOrg (sandbox) — Connected");
-    expect(ctx).toContain("Instance: https://test.sandbox.my.salesforce.com");
-    expect(ctx).toContain("Config scope: Global");
+    expect(ctx).toContain("Org API version: 66.0");
+    expect(ctx).not.toContain("Instance:");
+    expect(ctx).not.toContain("Config scope:");
   });
 
   it("includes CLI version", () => {
@@ -117,7 +118,7 @@ describe("formatAgentContext", () => {
     const env = makeEnv({ projectDetected: true, projectName: "x" });
     const ctx = formatAgentContext(env)!;
     expect(ctx).toContain("not configured");
-    expect(ctx).toContain("sf org login web");
+    expect(ctx).not.toContain("sf org login web");
   });
 
   it("shows error when org fails to connect", () => {
@@ -129,40 +130,12 @@ describe("formatAgentContext", () => {
     });
     const ctx = formatAgentContext(env)!;
     expect(ctx).toContain("unable to connect");
-    expect(ctx).toContain("auth expired");
+    expect(ctx).not.toContain("auth expired");
   });
 
-  // --- systemPromptOptions-aware context ---
-
-  it("omits skill lines when no options provided", () => {
+  it("keeps routing and skill metadata out of the environment fact block", () => {
     const env = makeEnv({ projectDetected: true, projectName: "x" });
     const ctx = formatAgentContext(env)!;
-    expect(ctx).not.toContain("Active SF skills:");
-  });
-
-  it("omits skill lines when options has an empty skills array", () => {
-    const env = makeEnv({ projectDetected: true, projectName: "x" });
-    const ctx = formatAgentContext(env, { activeSkills: [] })!;
-    expect(ctx).not.toContain("Active SF skills:");
-  });
-
-  it("includes active SF skills when provided", () => {
-    const env = makeEnv({ projectDetected: true, projectName: "x" });
-    const ctx = formatAgentContext(env, {
-      activeSkills: ["sf-apex", "sf-testing", "visual-explainer"],
-    })!;
-    expect(ctx).toContain("Active SF skills:");
-    expect(ctx).toContain("sf-apex");
-    expect(ctx).toContain("sf-testing");
-    // "visual-explainer" doesn't start with "sf-", so filtered out
-    expect(ctx).not.toMatch(/Active SF skills:.*visual-explainer/);
-  });
-
-  it("omits skills line when no skills pass the sf- prefix filter", () => {
-    const env = makeEnv({ projectDetected: true, projectName: "x" });
-    const ctx = formatAgentContext(env, {
-      activeSkills: ["visual-explainer", "librarian"],
-    })!;
     expect(ctx).not.toContain("Active SF skills:");
   });
 });

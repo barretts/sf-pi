@@ -16,7 +16,7 @@
  *     Agent (the user is required for activation; the SDK lints will
  *     enforce that going forward).
  *   - Otherwise, scaffold an Employee Agent (no user required — a fresh
- *     dev/sandbox org can publish + activate with zero extra config).
+ *     dev/sandbox org can publish inactive, pass the release eval contract, and activate).
  *   - Always emit `agent_type` explicitly, never rely on the server-side
  *     default. An implicit type also disables the SDK's
  *     `config-missing-default-agent-user` lint, which silently lets

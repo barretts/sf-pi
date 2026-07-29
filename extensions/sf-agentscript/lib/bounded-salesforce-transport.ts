@@ -2,12 +2,15 @@
 /**
  * Bounded Salesforce REST helpers for sf-agentscript.
  *
- * Auth still comes from @salesforce/core Connection / sf CLI auth state. This
- * module only owns the HTTP transport for timeout-sensitive read-only calls so
- * a jsforce request/query hang cannot block Agent Script workflows forever.
+ * Auth still comes from @salesforce/core Connection / sf CLI auth state. The
+ * default path delegates to the shared connRequest seam so stale-token 401/403
+ * responses refresh auth and retry once; custom fetch remains a deterministic
+ * test seam. This module maps that transport into Agent Script's bounded result
+ * shapes and timeout/cancellation semantics.
  */
 
 import type { Connection } from "@salesforce/core";
+import { connRequest } from "../../../lib/common/sf-conn/request.ts";
 
 export const DEFAULT_BOUNDED_LOOKUP_TIMEOUT_MS = 10_000;
 
@@ -219,7 +222,34 @@ export async function boundedRestRequest<T>(
     };
   }
 
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const requestPath = restPath(apiVersion, pathOrUrl);
+  const requestHeaders = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    ...(opts.headers ?? {}),
+  };
+  if (!opts.fetchImpl) {
+    const response = await connRequest<T>(conn, {
+      method,
+      url: requestPath,
+      headers: requestHeaders,
+      body: opts.body,
+      timeoutMs,
+      signal: opts.signal,
+    });
+    if (response.status >= 400) {
+      return {
+        ok: false,
+        reason: "http_error",
+        status: response.status,
+        body: response.body,
+        detail: `Salesforce request returned HTTP ${response.status}.`,
+      };
+    }
+    return { ok: true, status: response.status, body: response.body };
+  }
+
+  const fetchImpl = opts.fetchImpl;
   const controller = new AbortController();
   let timedOut = false;
   const abortFromCaller = (): void => controller.abort();
@@ -238,14 +268,11 @@ export async function boundedRestRequest<T>(
 
   try {
     const base = instanceUrl.endsWith("/") ? instanceUrl.slice(0, -1) : instanceUrl;
-    const path = restPath(apiVersion, pathOrUrl);
-    const url = /^https?:\/\//i.test(path) ? path : `${base}${path}`;
+    const url = /^https?:\/\//i.test(requestPath) ? requestPath : `${base}${requestPath}`;
     const resp = await fetchImpl(url, {
       method,
       headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...(opts.headers ?? {}),
+        ...requestHeaders,
         Authorization: `Bearer ${accessToken}`,
       },
       body: serializeBody(opts.body),
@@ -361,7 +388,33 @@ export async function boundedSoqlQuery<T>(
     };
   }
 
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const base = instanceUrl.endsWith("/") ? instanceUrl.slice(0, -1) : instanceUrl;
+  const relativeUrl = `/services/data/v${apiVersion}/${apiPath}?q=${encodeURIComponent(soql)}`;
+  if (!opts.fetchImpl) {
+    const response = await connRequest<{ records?: T[]; totalSize?: number }>(conn, {
+      method: "GET",
+      url: relativeUrl,
+      timeoutMs,
+      signal: opts.signal,
+    });
+    if (response.status >= 400) {
+      return {
+        ok: false,
+        reason: "http_error",
+        status: response.status,
+        detail: `Salesforce query returned HTTP ${response.status}.`,
+      };
+    }
+    const records = response.body?.records ?? [];
+    return {
+      ok: true,
+      records,
+      totalSize:
+        typeof response.body?.totalSize === "number" ? response.body.totalSize : records.length,
+    };
+  }
+
+  const fetchImpl = opts.fetchImpl;
   const controller = new AbortController();
   let timedOut = false;
   const abortFromCaller = (): void => controller.abort();
@@ -379,8 +432,7 @@ export async function boundedSoqlQuery<T>(
   }, timeoutMs);
 
   try {
-    const base = instanceUrl.endsWith("/") ? instanceUrl.slice(0, -1) : instanceUrl;
-    const url = `${base}/services/data/v${apiVersion}/${apiPath}?q=${encodeURIComponent(soql)}`;
+    const url = `${base}${relativeUrl}`;
     const resp = await fetchImpl(url, {
       method: "GET",
       headers: { Authorization: `Bearer ${accessToken}` },

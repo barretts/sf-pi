@@ -572,6 +572,7 @@ extensions/sf-slack/
     tools.test.ts           ← unit / smoke test
     truncation.test.ts      ← unit / smoke test
     user-cache-from-search.test.ts← unit / smoke test
+  AGENT_GUIDE.md            ← supporting file
   AGENTS.md                 ← extension-specific agent editing rules
   CREDITS.md                ← extension attribution
   index.ts                  ← Pi extension entry point

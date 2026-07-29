@@ -125,6 +125,7 @@ extensions/sf-docs/
     sf_docs-tool.test.ts    ← unit / smoke test
     smoke.test.ts           ← unit / smoke test
     sse.test.ts             ← unit / smoke test
+  AGENT_GUIDE.md            ← supporting file
   AGENTS.md                 ← extension-specific agent editing rules
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata

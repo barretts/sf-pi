@@ -1,113 +1,94 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/**
- * Rule-derived agent guidance for sf-guardrail.
- *
- * This renderer turns the effective config into the hidden `<sf_guardrail>`
- * message injected before the agent starts. It is intentionally deterministic
- * and compact so rule changes update agent guidance without maintaining a
- * second policy prompt by hand.
- */
-import { OPERATOR_AUTO_APPROVE_ENV, OPERATOR_AUTO_APPROVE_VALUE } from "./hitl.ts";
+/** Compact rule-derived model context; exact matching and enforcement stay in the Safety Kernel. */
+import { readBundledConfig } from "./config.ts";
 import { labelForRuleBehavior, resolveRuleBehavior } from "./rule-behavior.ts";
-import type { GuardrailConfig, OrgAwareRule, ShellAstMatch } from "./types.ts";
+import type { GuardrailConfig } from "./types.ts";
 
-export function renderGuardrailGuidance(config: GuardrailConfig): string {
-  const lines: string[] = [
+type RuleEntry = {
+  category: "Files" | "Commands" | "Org-aware";
+  id: string;
+  behavior: ReturnType<typeof resolveRuleBehavior>;
+  serialized: string;
+};
+
+export function renderGuardrailGuidance(config: GuardrailConfig = readBundledConfig()): string {
+  const bundled = readBundledConfig();
+  const entries = flatten(config);
+  const bundledByKey = new Map(
+    flatten(bundled).map((entry) => [`${entry.category}:${entry.id}`, entry]),
+  );
+  const hardBlocks = entries.filter((entry) => entry.behavior === "block");
+  const overrides = entries.filter((entry) => {
+    const baseline = bundledByKey.get(`${entry.category}:${entry.id}`);
+    return !baseline || baseline.serialized !== entry.serialized;
+  });
+
+  const lines = [
     "<sf_guardrail>",
-    "Active: a local safety layer is mediating your tool calls. You do not need to ask the",
-    "user to turn it off; operate normally and it will only interrupt for configured risks.",
-    "When it does, wait for the human's response.",
-    "",
-  ];
-
-  lines.push("File protection:");
-  const activePolicies = config.policies.rules.filter(
-    (rule) => resolveRuleBehavior(rule) !== "off",
-  );
-  if (activePolicies.length === 0) {
-    lines.push("- No active file-protection rules.");
-  } else {
-    for (const rule of activePolicies) {
-      const access = rule.protection === "readOnly" ? "read-only" : rule.protection;
-      const behavior = labelForRuleBehavior(resolveRuleBehavior(rule));
-      lines.push(
-        `- ${rule.description ?? rule.id}: ${behavior}; ${access}; patterns ${formatList(rule.patterns.map((p) => p.pattern))}`,
-      );
-      if (rule.allowedPatterns?.length) {
-        lines.push(
-          `  allowed carve-outs: ${formatList(rule.allowedPatterns.map((p) => p.pattern))}`,
-        );
-      }
-    }
-  }
-
-  lines.push("", "Dangerous-command confirmation:");
-  const activeCommands = config.commandGate.patterns.filter(
-    (pattern) => resolveRuleBehavior(pattern) !== "off",
-  );
-  if (activeCommands.length === 0) {
-    lines.push("- No active dangerous-command patterns.");
-  } else {
-    for (const pattern of activeCommands) {
-      const behavior = labelForRuleBehavior(resolveRuleBehavior(pattern));
-      lines.push(
-        `- ${pattern.pattern}${pattern.description ? ` (${pattern.description})` : ""}: ${behavior}`,
-      );
-    }
-  }
-
-  lines.push("", "Org-aware confirmation:");
-  const activeOrgRules = config.orgAwareGate.rules.filter(
-    (rule) => resolveRuleBehavior(rule) !== "off",
-  );
-  if (activeOrgRules.length === 0) {
-    lines.push("- No active org-aware rules.");
-  } else {
-    for (const rule of activeOrgRules) {
-      lines.push(`- ${formatOrgAwareRule(rule)}`);
-    }
-  }
-
-  lines.push(
-    "",
-    "Target-org resolution:",
-    "- Parse -o <alias> / --target-org <alias> from the command.",
-    "- Else use the default-org alias from <sf_environment>.",
-    "- Explicit non-default aliases may be resolved with a bounded cached org lookup.",
-    "- If unresolvable, the guardrail treats the org as production (fail-closed).",
-    "",
-    "Implications for how you should work:",
-    "- Prefer `sf project deploy validate` and `--check-only` on production.",
-    "- Prefer `Savepoint sp = Database.setSavepoint(); ... Database.rollback(sp);` for anonymous-apex DML rehearsals on production.",
-    `- In headless / non-interactive mode, gated calls fail closed unless ${config.headlessEscapeHatchEnv}=1 is set.`,
-    `- Operator auto-approve mode is env-only: ${OPERATOR_AUTO_APPROVE_ENV}=${OPERATOR_AUTO_APPROVE_VALUE}. It auto-approves confirm-class decisions but never hard blocks, and every pass is audited.`,
-    "",
-    "Override: `/sf-guardrail` shows active rules, recent decisions, and active approval state.",
-    "Users may choose a scoped allow at the confirmation dialog; session approvals persist via pi's session entries and can be revoked with `/sf-guardrail forget`.",
+    "SF Guardrail is the active Safety Mediator for protected files, risky commands, and durable operations.",
+    "Operate normally and wait when it requests human approval. Never bypass, weaken, or work around its decision.",
+    ...hardBlockLines(hardBlocks),
+    ...overrideLines(overrides),
+    ...runtimeOverrideLines(config, bundled),
+    "Exact patterns, ordinary confirmation rules, approvals, and audit details remain in /sf-guardrail.",
     "</sf_guardrail>",
-    "",
-  );
-
-  return lines.join("\n");
-}
-
-function formatOrgAwareRule(rule: OrgAwareRule): string {
-  const orgTypes = rule.whenOrgType.join("|").toUpperCase();
-  const behavior = labelForRuleBehavior(resolveRuleBehavior(rule));
-  return `${formatShellAst(rule.match.ast)} when target org is ${orgTypes}${rule.description ? ` (${rule.description})` : ""}: ${behavior}`;
-}
-
-function formatShellAst(ast: ShellAstMatch): string {
-  const parts = [
-    ast.cmd,
-    ...(ast.subCmd ?? []).map((part) => (Array.isArray(part) ? part.join("|") : part)),
   ];
-  const flags = ast.flagIn
-    ? Object.entries(ast.flagIn).map(([flag, values]) => `${flag} ${values.join("|")}`)
-    : [];
-  return [...parts, ...flags].join(" ");
+  return `${lines.join("\n")}\n`;
 }
 
-function formatList(items: string[]): string {
-  return items.map((item) => `\`${item}\``).join(", ");
+function hardBlockLines(entries: RuleEntry[]): string[] {
+  if (entries.length === 0) return ["Active hard blocks: none."];
+  return [
+    "Active hard blocks:",
+    ...group(entries).map(([category, ids]) => `- ${category}: ${ids.join(", ")}`),
+  ];
+}
+
+function overrideLines(entries: RuleEntry[]): string[] {
+  if (entries.length === 0) return ["Non-default rule overrides: none."];
+  return [
+    "Non-default rule overrides:",
+    ...entries.map((entry) => `- ${entry.id}=${labelForRuleBehavior(entry.behavior)}`),
+  ];
+}
+
+function runtimeOverrideLines(config: GuardrailConfig, bundled: GuardrailConfig): string[] {
+  const overrides: string[] = [];
+  if (config.headlessEscapeHatchEnv !== bundled.headlessEscapeHatchEnv) {
+    overrides.push(`headless confirmation env=${config.headlessEscapeHatchEnv}=1`);
+  }
+  if (config.confirmTimeoutMs !== bundled.confirmTimeoutMs) {
+    overrides.push(`confirmation timeout=${config.confirmTimeoutMs}ms`);
+  }
+  return overrides.length > 0 ? [`Non-default runtime settings: ${overrides.join(", ")}.`] : [];
+}
+
+function flatten(config: GuardrailConfig): RuleEntry[] {
+  return [
+    ...config.policies.rules.map((rule) => entry("Files", rule)),
+    ...config.commandGate.patterns.map((rule) => entry("Commands", rule)),
+    ...config.orgAwareGate.rules.map((rule) => entry("Org-aware", rule)),
+  ];
+}
+
+function entry(
+  category: RuleEntry["category"],
+  rule: { id: string } & Parameters<typeof resolveRuleBehavior>[0],
+): RuleEntry {
+  return {
+    category,
+    id: rule.id,
+    behavior: resolveRuleBehavior(rule),
+    serialized: JSON.stringify(rule),
+  };
+}
+
+function group(entries: RuleEntry[]): Array<[RuleEntry["category"], string[]]> {
+  const grouped = new Map<RuleEntry["category"], string[]>();
+  for (const item of entries) {
+    const ids = grouped.get(item.category) ?? [];
+    ids.push(item.id);
+    grouped.set(item.category, ids);
+  }
+  return [...grouped.entries()];
 }

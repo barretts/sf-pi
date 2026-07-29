@@ -94,3 +94,5 @@ or accidentally contradicted in extension READMEs.
 - [0089: SF tldraw uses deterministic Salesforce diagram profiles](./0089-sf-tldraw-uses-deterministic-salesforce-diagram-profiles.md)
 - [0091: Agent Script Quality Analysis Is Native, AST-Grounded, and Separate from Compilation](./0091-agentscript-native-quality-analysis.md)
 - [0092: Agent Script Quality Rule Settings Are Global-Only and Sparse](./0092-agentscript-quality-rule-settings-are-global-only.md)
+- [0093: Salesforce Instruction Surface Uses a Constitution and Progressive Docs](./0093-salesforce-instruction-surface-and-progressive-docs.md)
+- [0094: Agent Script Activation Requires Exact-Version Eval Evidence](./0094-agent-script-eval-gated-activation.md)

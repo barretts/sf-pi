@@ -53,6 +53,8 @@ You can also manage this extension from the SF Pi home base:
 - Eval, trace, preview, and lifecycle calls reuse @salesforce/core / SF CLI auth context; timeout-sensitive HTTP may use bounded native fetch and never logs or persists tokens.
 - Local-first: compile and validate run via official @sf-agentscript packages before any network call.
 - Eval runs synthesize trace artifacts from inline Evaluation API data by default; explicit trace fetches are idempotent GETs.
+- Publication always creates an inactive version; activation requires complete exact-org, exact-BotVersion generated-baseline evidence plus the current designated release suite when configured.
+- Untested activation is a distinct Guardrail Safety Envelope; acknowledge_untested_activation is intent, never approval.
 - 5xx-only retry on POST avoids amplifying server-side overload (no Retry-After contract on the Eval API); client-side Eval API batch timeouts are terminal and configurable through batch_timeout_ms.
 - Preview sessions land under .sfdx/agents/** (sf-guardrail carve-out); rest of .sfdx/** stays blocked.
 

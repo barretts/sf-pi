@@ -590,6 +590,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       run_id: runId,
       spec_path: opts.specPath,
       org: opts.targetOrg,
+      org_id: ident.org_id,
       agent_api_name: opts.agentApiName,
       // When both $active_* and $latest_* resolve to the same version, the
       // active record is the canonical source. When only $latest_* is in use

@@ -96,8 +96,7 @@ function agentScriptPublishSubject(
   if (!agentFile) return undefined;
   const agentApiName = stringValue(input.agent_api_name) ?? agentNameFromFile(agentFile);
   const targetOrg = stringValue(input.target_org);
-  const activates = input.activate === true;
-  const operationFamily = activates ? "agent publish+activate" : "agent publish";
+  const operationFamily = "agent publish";
   const fingerprint = fingerprintText(JSON.stringify({ operationFamily, agentApiName, agentFile }));
   return {
     kind: "nativeTool",
@@ -105,17 +104,13 @@ function agentScriptPublishSubject(
     action: "publish",
     ruleId: "native-agentscript-lifecycle",
     subject: `agentscript_lifecycle publish ${agentApiName}`,
-    reason: activates
-      ? `Agent Script publish requested with immediate activation for ${agentApiName}.`
-      : `Agent Script publish requested for ${agentApiName}.`,
-    promptTitle: activates ? "⚠ Agent publish + activate" : "⚠ Agent publish",
+    reason: `Agent Script inactive-version publish requested for ${agentApiName}.`,
+    promptTitle: "⚠ Agent publish inactive version",
     operationFamily,
     riskTier: "agent_lifecycle_mutation",
-    fingerprint: `agentscript|publish|activate=${activates}|${fingerprint}`,
-    approvalLabel: activates
-      ? `publish and activate agent ${agentApiName}`
-      : `publish agent ${agentApiName}`,
-    approvalDetail: `agent=${agentApiName}; file=${agentFile}; activate=${activates}`,
+    fingerprint: `agentscript|publish|${fingerprint}`,
+    approvalLabel: `publish inactive agent version ${agentApiName}`,
+    approvalDetail: `agent=${agentApiName}; file=${agentFile}`,
     usesSalesforceOrg: true,
     targetOrg,
     targetOrgExplicit: targetOrg !== undefined,
@@ -131,20 +126,27 @@ function agentScriptActivationSubject(
   if (!agentApiName) return undefined;
   const targetOrg = stringValue(input.target_org);
   const version = typeof input.version === "number" ? String(input.version) : "latest";
-  const fingerprint = fingerprintText(JSON.stringify({ action, agentApiName, version }));
+  const untestedOverride = action === "activate" && input.acknowledge_untested_activation === true;
+  const fingerprint = fingerprintText(
+    JSON.stringify({ action, agentApiName, version, untestedOverride }),
+  );
   return {
     kind: "nativeTool",
     toolName,
     action,
     ruleId: "native-agentscript-lifecycle",
     subject: `agentscript_lifecycle ${action} ${agentApiName} v${version}`,
-    reason: `Agent Script ${action} requested for ${agentApiName} (${version}).`,
-    promptTitle: `⚠ Agent ${action}`,
-    operationFamily: "agent activation",
+    reason: untestedOverride
+      ? `Agent Script activation requested for ${agentApiName} (${version}) without matching release eval evidence.`
+      : `Agent Script ${action} requested for ${agentApiName} (${version}).`,
+    promptTitle: untestedOverride ? "⚠ Untested agent activation" : `⚠ Agent ${action}`,
+    operationFamily: untestedOverride ? "untested agent activation override" : "agent activation",
     riskTier: "agent_lifecycle_activation",
-    fingerprint: `agentscript|${action}|${fingerprint}`,
-    approvalLabel: `${action} agent ${agentApiName}`,
-    approvalDetail: `agent=${agentApiName}; version=${version}`,
+    fingerprint: `agentscript|${action}|untested=${untestedOverride}|${fingerprint}`,
+    approvalLabel: untestedOverride
+      ? `activate untested agent ${agentApiName}`
+      : `${action} agent ${agentApiName}`,
+    approvalDetail: `agent=${agentApiName}; version=${version}; untested=${untestedOverride}`,
     usesSalesforceOrg: true,
     targetOrg,
     targetOrgExplicit: targetOrg !== undefined,

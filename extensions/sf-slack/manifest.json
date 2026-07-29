@@ -1,7 +1,7 @@
 {
   "id": "sf-slack",
   "name": "SF Slack",
-  "description": "Slack integration — search messages, read threads, browse channel history",
+  "description": "Slack integration \u2014 search messages, read threads, browse channel history",
   "category": "agent-tool",
   "maturity": "stable",
   "defaultEnabled": true,
@@ -33,7 +33,8 @@
       "lib/schedule-tool.ts",
       "lib/recipient-confirm.ts",
       "lib/config-panel.ts",
-      "lib/preferences-panel.ts"
+      "lib/preferences-panel.ts",
+      "AGENT_GUIDE.md"
     ],
     "stateFiles": [
       "Pi auth store via /login sf-slack",

@@ -1,7 +1,7 @@
 {
   "id": "sf-data360",
   "name": "SF Data 360",
-  "description": "Data Cloud/Data 360 v2 family tools — discover, connect, prepare, harmonize, segment, activate, query, semantic, observe, orchestrate, and raw API escape hatch",
+  "description": "Data Cloud/Data 360 v2 family tools \u2014 discover, connect, prepare, harmonize, segment, activate, query, semantic, observe, orchestrate, and raw API escape hatch",
   "category": "agent-tool",
   "maturity": "stable",
   "defaultEnabled": true,
@@ -35,7 +35,8 @@
       "lib/safety.ts",
       "lib/settings.ts",
       "lib/config-panel.ts",
-      "references/README.md"
+      "references/README.md",
+      "AGENT_GUIDE.md"
     ],
     "safety": [
       "No MCP runtime or Java subprocess is used.",

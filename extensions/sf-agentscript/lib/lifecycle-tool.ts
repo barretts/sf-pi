@@ -6,9 +6,8 @@
  * this is the verb that actually ships the agent to the org.
  *
  * Actions:
- *   publish        Server-compile + create new agent OR new version of an
- *                  existing agent (auto-detected). Optionally activate the
- *                  new version in the same call.
+ *   publish        Server-compile + create an inactive new agent/version.
+ *                  Activation is always a separate eval-gated action.
  *   activate       Activate a specific version (or the latest).
  *   deactivate     Deactivate a specific version (or the latest).
  *   list_versions  Enumerate every BotVersion for an agent in the org.
@@ -22,7 +21,7 @@ import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { connForAgentApi } from "./agent-api-auth.ts";
 import { getAgentScriptAnalysis } from "./analysis-snapshot.ts";
-import { connFromAlias } from "../../../lib/common/sf-conn/connection.ts";
+import { connFromAlias, resolveOrgIdentity } from "../../../lib/common/sf-conn/connection.ts";
 import {
   checkAgentUserStatus,
   readAgentConfigSlice,
@@ -52,6 +51,7 @@ import { activateVersion, deactivateVersion, listVersions, publishAgent } from "
 import { safeResolveToolPath, toolError, toolOk, type ToolError } from "./tool-types.ts";
 import { renderLifecycleCall, renderLifecycleResult } from "./render/lifecycle.ts";
 import { createTimingCollector, withTimings, type TimingCollector } from "./timings.ts";
+import { evaluateActivationEvidence } from "./release-contract.ts";
 
 export const LIFECYCLE_TOOL_NAME = "agentscript_lifecycle";
 
@@ -70,7 +70,7 @@ const Params = Type.Object({
     ],
     {
       description:
-        "publish: ship a .agent file as a new agent or new version. activate / deactivate: toggle a BotVersion's Status (idempotent). list_versions: return every BotVersion on the agent. agent_user_status: cheap ready/not_ready/n/a preflight on the agent's user wiring. diagnose_agent_user: full read-only checklist (license, user, system PS, per-apex-class access). provision_agent_user: idempotently bring the org up to spec (creates user, assigns system PS, deploys + assigns custom PS for apex actions). Defaults to dry_run=true; pass dry_run=false to mutate.",
+        "publish: ship a .agent file as an inactive new agent or version. activate / deactivate: toggle a BotVersion's Status (activation is release-eval gated and idempotent). list_versions: return every BotVersion on the agent. agent_user_status: cheap ready/not_ready/n/a preflight on the agent's user wiring. diagnose_agent_user: full read-only checklist (license, user, system PS, per-apex-class access). provision_agent_user: idempotently bring the org up to spec (creates user, assigns system PS, deploys + assigns custom PS for apex actions). Defaults to dry_run=true; pass dry_run=false to mutate.",
     },
   ),
   target_org: Type.Optional(Type.String({ description: "sf CLI alias / username." })),
@@ -86,10 +86,16 @@ const Params = Type.Object({
         "Required for activate/deactivate/list_versions. Optional for publish (defaults to basename of agent_file without .agent).",
     }),
   ),
-  activate: Type.Optional(
+  release_spec_path: Type.Optional(
+    Type.String({
+      description:
+        "Optional for action='activate'. Designated release eval spec path; defaults to tests/agentforce/<AgentApiName>.eval.json when present.",
+    }),
+  ),
+  acknowledge_untested_activation: Type.Optional(
     Type.Boolean({
       description:
-        "Optional for action='publish'. Immediately activate the new version. Default false.",
+        "For action='activate'. Request the Guardrail-mediated emergency path when exact-version release eval evidence is missing or failed. This intent flag is not approval.",
     }),
   ),
   version: Type.Optional(
@@ -131,7 +137,8 @@ interface ParamsAny {
   target_org?: string;
   agent_file?: string;
   agent_api_name?: string;
-  activate?: boolean;
+  release_spec_path?: string;
+  acknowledge_untested_activation?: boolean;
   version?: number;
   dry_run?: boolean;
   acknowledge_quality_risk?: boolean;
@@ -169,19 +176,15 @@ export function registerLifecycleTool(pi: ExtensionAPI): void {
     name: LIFECYCLE_TOOL_NAME,
     label: "Agent Script lifecycle",
     description:
-      "Multi-action publish lifecycle: publish a `.agent` (creates new agent or new version), activate / deactivate a specific version, or list every version on an agent in the org. Local pre-flight before server publish; SOQL-backed list_versions; idempotent activate.",
+      "Multi-action Agent Script lifecycle: publish an inactive version, activate only with exact-version release eval evidence, deactivate/list versions, and diagnose or provision Service Agent users.",
     renderCall: renderLifecycleCall,
     renderResult: renderLifecycleResult,
-    promptSnippet: "Ship a .agent file to the org and toggle version activation.",
+    promptSnippet:
+      "Publish inactive Agent Script versions and manage eval-gated activation lifecycle.",
     promptGuidelines: [
-      "action='publish' — pass agent_file (the .agent path). Auto-detects new-agent vs new-version. Native quality runs before any org call. New High rule IDs pause publication; after showing the evidence, pass acknowledge_quality_risk=true to approve those IDs for this bundle and current session. Set activate=true to chain publish+activate.",
-      "action='activate' / 'deactivate' — pass agent_api_name; omit version for the latest. Idempotent: a no-op when already in the requested state.",
-      "action='list_versions' — returns every BotVersion (id, number, status, dates). Use to discover which version is Active before previewing or running eval.",
-      "action='agent_user_status' — cheap read-only check (~2 SOQL hits) that a Service Agent's user wiring is ready before publish. Returns status: ready/not_ready/n/a; not_ready surfaces a stable 'reason' code so the LLM can chain the right fix verb.",
-      "action='diagnose_agent_user' — full read-only checklist (license, user existence + active state, system PS, per-apex-class access). Returns a structured report with per-check status + fix_hint. Use when agent_user_status returns not_ready and you want the full picture before fixing.",
-      "action='provision_agent_user' — idempotent provisioner that brings the org into the 'ready' state. Defaults to dry_run=true (returns the plan + the rendered custom PS XML, no mutations). Pass dry_run=false to execute. Steps: create User if missing, assign AgentforceServiceAgentUser system PS, synthesize + deploy custom PS covering every apex:// target, assign custom PS. Skip-if-already-done at every step. License-missing aborts cleanly (admin-only fix).",
-      "Errors carry recover_via where applicable (e.g. agent not found → list_versions hint, Service Agent missing user → diagnose_agent_user / provision_agent_user).",
-      "No sf CLI subprocess: org auth comes from @salesforce/core / SF CLI state, timeout-sensitive HTTP uses bounded transport, and AiAuthoringBundle deploy uses @salesforce/source-deploy-retrieve. Safe in CI / programmatic contexts.",
+      "Agent Script publication always creates an inactive version; run agentscript_eval action='run_release' before separate activation.",
+      "Activation without matching exact-version evidence requires acknowledge_untested_activation=true and a distinct Guardrail approval; the intent flag is never self-approval.",
+      "Read extensions/sf-agentscript/AGENT_GUIDE.md for quality overrides, version management, and Service Agent user provisioning.",
     ],
     parameters: Params,
     async execute(_id, params, _signal, onUpdate, ctx) {
@@ -353,7 +356,6 @@ async function actionPublish(
           agent_file: filePath,
           ...(input.target_org ? { target_org: input.target_org } : {}),
           ...(input.agent_api_name ? { agent_api_name: input.agent_api_name } : {}),
-          ...(input.activate !== undefined ? { activate: input.activate } : {}),
           acknowledge_quality_risk: true,
         },
       },
@@ -440,7 +442,6 @@ async function actionPublish(
       agentFilePath: filePath,
       bundleDir,
       agentApiName,
-      activate: input.activate ?? false,
       log: stream,
       timings,
       localCompileChecked: true,
@@ -520,7 +521,7 @@ async function actionPublish(
         result.was_new_agent ? "  • created new agent" : "  • new version of existing agent",
         `  • Agent API publish succeeded: bot_version_id=${result.bot_version_id}`,
         bundleLine,
-        result.activated ? "  • activated ✓" : "  • not activated (set activate=true to chain)",
+        "  • published inactive; run agentscript_eval action='run_release' against this exact version before activation",
         ...preflightLines,
       ]
         .filter(Boolean)
@@ -587,6 +588,47 @@ async function actionActivate(
   const agentApiName = input.agent_api_name as string;
   try {
     const conn = await connFromAlias(input.target_org);
+    const versions = await listVersions(conn, agentApiName, { signal });
+    const targetVersion = input.version
+      ? versions.versions.find((candidate) => candidate.version_number === input.version)
+      : [...versions.versions].sort((a, b) => b.version_number - a.version_number)[0];
+    if (!targetVersion) {
+      return toolError(
+        input.version
+          ? `Agent ${agentApiName} has no version ${input.version}.`
+          : `Agent ${agentApiName} has no versions to activate.`,
+        "Run agentscript_lifecycle action='list_versions' to inspect available versions.",
+      );
+    }
+
+    let activationEvidence: Awaited<ReturnType<typeof evaluateActivationEvidence>> | undefined;
+    if (targetVersion.status !== "Active") {
+      const identity = await resolveOrgIdentity(conn, { signal });
+      activationEvidence = await evaluateActivationEvidence({
+        cwd: ctx.cwd,
+        orgId: identity.org_id,
+        agentApiName,
+        botVersionId: targetVersion.bot_version_id,
+        releaseSpecPath: input.release_spec_path,
+      });
+      if (!activationEvidence.proceed && input.acknowledge_untested_activation !== true) {
+        return toolError(
+          `Activation blocked for ${agentApiName} v${targetVersion.version_number}: missing release eval evidence (${activationEvidence.missing.join(", ")}).`,
+          "Run the exact-version release contract, then retry activation. Emergency activation requires acknowledge_untested_activation=true and a distinct Guardrail approval.",
+          {
+            tool: "agentscript_eval",
+            params: {
+              action: "run_release",
+              agent_file: input.agent_file ?? "<path-to-agent-file>",
+              agent_api_name: agentApiName,
+              ...(input.target_org ? { target_org: input.target_org } : {}),
+              ...(input.release_spec_path ? { release_spec_path: input.release_spec_path } : {}),
+            },
+          },
+          { activation_evidence: activationEvidence },
+        );
+      }
+    }
 
     // Issue 6 — optional divergence preflight when caller passed agent_file.
     // Soft warning only: we surface it on the response but proceed with
@@ -611,15 +653,13 @@ async function actionActivate(
       version: input.version,
       signal,
     });
-    // The agent is now reachable by the Eval API. Surface the next-step
-    // hint so the LLM (or the human) knows how to lock the baseline
-    // before iterating further.
-    const orgFlag = input.target_org ? ` target_org='${input.target_org}'` : "";
-    const evalHint =
-      `\n\n→ Lock the regression baseline: ` +
-      `agentscript_eval action='run' agent_api_name='${agentApiName}'${orgFlag} ` +
-      `spec_path=<path-to-spec.json>`;
+    const evalHint = activationEvidence?.proceed
+      ? `\n\n✓ Exact-version release eval contract satisfied by ${activationEvidence.evidence.map((item) => item.run_id).join(", ")}.`
+      : "";
     const headerLines: string[] = [`🟢 ${agentApiName} v${row.VersionNumber} activated`];
+    if (input.acknowledge_untested_activation === true && !activationEvidence?.proceed) {
+      headerLines.push("", "⚠️ Activated through the Guardrail-approved untested emergency path.");
+    }
     if (divergenceWarning) headerLines.push("", divergenceWarning);
     return toolOk(
       withAgentScriptBranchState(
@@ -629,6 +669,10 @@ async function actionActivate(
           bot_version_id: row.Id,
           version_number: row.VersionNumber,
           status: row.Status,
+          ...(activationEvidence ? { activation_evidence: activationEvidence } : {}),
+          ...(input.acknowledge_untested_activation === true && !activationEvidence?.proceed
+            ? { untested_activation_override: true }
+            : {}),
           ...(divergenceDetails ? { divergence: divergenceDetails } : {}),
         },
         lifecycleVersionEvents({

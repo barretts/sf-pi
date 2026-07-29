@@ -101,15 +101,9 @@ export function registerSlackTool(pi: ExtensionAPI): void {
     // routing guidance. Other Slack tools keep their guidelines focused on their own
     // parameters so the flat Guidelines section does not repeat the same routing rule.
     promptGuidelines: [
-      "All Slack tools are read-only except slack_canvas create/edit. No message posting.",
-      "If auth fails for any Slack tool, ask the user to run /login sf-slack in interactive TUI mode and then /sf-slack refresh; SLACK_USER_TOKEN remains the automation fallback.",
-      "Prefer slack_research for natural-language Slack research: it compiles operators, resolves channels, and falls back strict→broad. Do not hand-roll Slack search queries when slack_research can run the plan.",
-      "Use slack_resolve to turn a fuzzy channel or person reference into a Slack ID before calling slack/slack_channel/slack_file/slack_user.",
-      "Use slack_time_range first for any relative or human date expression, then pass the returned oldest/latest to slack action:'history', or since/before to slack_research.",
-      "Use slack action:'search' only when you already have a ready-to-run Slack query. Use action:'thread' when search results show reply_count > 0 — threads carry the most context. Use action:'history' with oldest/latest for chronological browsing.",
-      'Start discovery with `fields: "preview"` (default) or `fields: "summary"` to save tokens. ' +
-        "Escalate to `fields: \"full\"` or follow up with action:'thread' only on the messages that matter. reply_count is returned in every mode — use it to triage.",
-      "Slack user and channel IDs are resolved to display names automatically; do NOT pass resolve_users:true unless you specifically need a network round-trip for missing IDs.",
+      "Prefer slack_research for natural-language research, slack_resolve for fuzzy entities, and slack_time_range for relative dates before lower-level Slack reads.",
+      "Start with summary/preview fields and fetch full messages or threads only for high-value results.",
+      "Read extensions/sf-slack/AGENT_GUIDE.md for auth recovery, research ordering, durable-write confirmation, and public-artifact safety.",
     ],
     parameters: SlackParams,
     renderCall,

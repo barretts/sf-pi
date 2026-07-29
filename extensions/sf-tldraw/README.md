@@ -175,6 +175,7 @@ extensions/sf-tldraw/
     smoke.test.ts           ← unit / smoke test
     spec-validation.test.ts ← unit / smoke test
     tldraw_canvas-tool.test.ts← unit / smoke test
+  AGENT_GUIDE.md            ← supporting file
   AGENTS.md                 ← extension-specific agent editing rules
   CREDITS.md                ← extension attribution
   index.ts                  ← Pi extension entry point

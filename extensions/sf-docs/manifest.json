@@ -27,7 +27,8 @@
       "lib/developer-reference.ts",
       "lib/release-notes.ts",
       "lib/render.ts",
-      "lib/types.ts"
+      "lib/types.ts",
+      "AGENT_GUIDE.md"
     ],
     "stateFiles": [
       "~/.pi/agent/auth.json entry: sf-docs",

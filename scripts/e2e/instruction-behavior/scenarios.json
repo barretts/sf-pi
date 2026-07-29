@@ -1,0 +1,80 @@
+[
+  {
+    "id": "apex-behavior-fix",
+    "prompt": "An Apex service returns the wrong invoice total. Do not edit yet. Invoke the best SF Pi tool and choose the first read-only planning or test-discovery action for behavior-proof-first development.",
+    "expected_first_tools": ["sf_apex"],
+    "forbidden_tools": ["bash"]
+  },
+  {
+    "id": "apex-log-investigation",
+    "prompt": "Investigate an Apex governor-limit failure using the owning SF Pi lifecycle surface. Invoke the first tool you would use; do not execute raw Salesforce CLI.",
+    "expected_first_tools": ["sf_apex"],
+    "forbidden_tools": ["bash"]
+  },
+  {
+    "id": "soql-custom-relationship",
+    "prompt": "Build a SOQL query involving an unknown custom relationship. Invoke the owning SF Pi tool for the first schema-grounding step rather than guessing the relationship name.",
+    "expected_first_tools": ["sf_soql"],
+    "forbidden_tools": ["bash"]
+  },
+  {
+    "id": "lwc-behavior-fix",
+    "prompt": "A Lightning Web Component renders stale data. Do not edit yet. Invoke the SF Pi lifecycle tool for the first focused inspection or test-planning step.",
+    "expected_first_tools": ["sf_lwc"],
+    "forbidden_tools": ["bash"]
+  },
+  {
+    "id": "agentscript-behavior-change",
+    "prompt": "Change force-app/main/default/aiAuthoringBundles/BillingAgent/BillingAgent.agent so a refund conversation preserves state across turns. The path is exact; do not discover files. Invoke agentscript_authoring for the compile/check baseline before editing.",
+    "expected_first_tools": ["agentscript_authoring"]
+  },
+  {
+    "id": "agentscript-release",
+    "prompt": "Prepare force-app/main/default/aiAuthoringBundles/BillingAgent/BillingAgent.agent (API name BillingAgent) for release without immediate activation. The path is exact; do not discover files. Invoke agentscript_authoring for the first compile/review check.",
+    "expected_first_tools": ["agentscript_authoring"],
+    "forbidden_tools": ["agentscript_lifecycle"]
+  },
+  {
+    "id": "repository-owned-metadata",
+    "prompt": "Refactor a Salesforce metadata file already owned by this repository. Invoke the first local inspection tool; do not retrieve from the org before understanding local state.",
+    "expected_first_tools": ["read", "grep", "find", "ls", "bash"]
+  },
+  {
+    "id": "org-owned-metadata",
+    "prompt": "Update configuration whose authoritative state is the current Salesforce org and no owning SF Pi metadata tool exists. Invoke the fallback tool you would use for a targeted machine-readable retrieve.",
+    "expected_first_tools": ["bash"]
+  },
+  {
+    "id": "data360-segment-change",
+    "prompt": "Modify a Data 360 audience segment. Invoke the owning phase tool for the first plan or validation step before mutation.",
+    "expected_first_tools": ["data360_segment", "data360_orchestrate"]
+  },
+  {
+    "id": "salesforce-setup-ui",
+    "prompt": "A Salesforce Setup change is only available through Lightning UI. Invoke the first Salesforce Browser tool required to open the org safely.",
+    "expected_first_tools": ["sf_browser_open_org"]
+  },
+  {
+    "id": "official-salesforce-docs",
+    "prompt": "Find the official Salesforce documentation for Apex REST annotations. Invoke the authoritative Salesforce documentation tool.",
+    "expected_first_tools": ["sf_docs"],
+    "forbidden_tools": ["web_search"]
+  },
+  {
+    "id": "explicit-typescript-refactor",
+    "prompt": "Refactor a generic TypeScript parser in this repository. Invoke a local inspection tool first; do not force Salesforce runtime tools into this explicit general-engineering task.",
+    "expected_first_tools": ["read", "grep", "find", "ls", "bash", "subagent"],
+    "forbidden_tools": ["sf_apex", "sf_soql", "agentscript_authoring"]
+  },
+  {
+    "id": "code-analysis",
+    "prompt": "Run Salesforce static analysis for force-app/main/default/classes/BillingService.cls and force-app/main/default/lwc/billingPanel/billingPanel.js. Paths are exact; do not inspect Git. Invoke code_analyzer.",
+    "expected_first_tools": ["code_analyzer"]
+  },
+  {
+    "id": "untested-agent-activation",
+    "prompt": "BillingAgent version 3 in sandbox alias Dev has no matching eval evidence. Invoke agentscript_lifecycle activate with agent_api_name BillingAgent, version 3, and target_org Dev so the release-evidence gate reports recovery. Do not inspect files or use raw CLI.",
+    "expected_first_tools": ["agentscript_lifecycle"],
+    "forbidden_tools": ["bash"]
+  }
+]

@@ -190,8 +190,9 @@ Why this happens:
 
 Fix:
 
-- Always iterate with `agentscript_lifecycle action='publish'` (and
-  `activate=true` to chain in one call). It's idempotent for new
+- Always iterate with `agentscript_lifecycle action='publish'` to create an
+  inactive version, run `agentscript_eval action='run_release'`, then call
+  `agentscript_lifecycle action='activate'`. Publication is idempotent for new
   versions of an existing agent.
 - If you've already shipped via `sf project deploy` and activation
   is misbehaving, re-publish via `agentscript_lifecycle` to

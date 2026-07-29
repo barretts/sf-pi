@@ -93,6 +93,11 @@ export interface EvalRunBranchEvent extends BranchEventBase {
   run_dir: string;
   ok: boolean;
   failed_test_ids?: string[];
+  org_id?: string;
+  agent_api_name?: string;
+  bot_version_id?: string;
+  release_contract_kind?: "generated_baseline" | "designated";
+  release_spec_digest?: string;
 }
 
 export interface EvalTraceBranchEvent extends BranchEventBase {

@@ -81,10 +81,8 @@ export function registerSfBrowserWaitTool(pi: ExtensionAPI): void {
       "Wait for Salesforce UI progress using expected text, URL pattern, load state, Lightning semantic state, or a last-resort millisecond delay. Prefer text, URL, or Lightning waits over fixed sleeps; long waits are reported as ambiguous when they reach the timeout window.",
     promptSnippet: "Wait for Salesforce UI text, URL, load state, Lightning state, or delay",
     promptGuidelines: [
-      "Use sf_browser_wait with expected text, URL, or lightning state after Salesforce actions; use ms only as a last resort for Lightning async rendering.",
-      "Use lightning='navigation-ready' after sf_browser_open_org or deep-link navigation; use lightning='app-ready' after in-page Lightning rerenders.",
-      "Use lightning='save-result' after Save to classify success, validation, error, or ambiguous post-save outcomes; it is not a success assertion.",
-      "If sf_browser_wait says the wait may have timed out, snapshot or verify through API before continuing.",
+      "Prefer semantic text/URL/Lightning waits over milliseconds; save-result classifies an outcome and is never itself a success assertion.",
+      "After ambiguous or timed-out waits, snapshot or verify through API; read extensions/sf-browser/AGENT_GUIDE.md for the full interaction loop.",
     ],
     parameters: Type.Object({
       text: Type.Optional(

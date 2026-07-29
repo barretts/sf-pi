@@ -284,6 +284,7 @@ extensions/sf-code-analyzer/
     smoke.test.ts           ← unit / smoke test
     tool-actions.test.ts    ← unit / smoke test
     transcript-format.test.ts← unit / smoke test
+  AGENT_GUIDE.md            ← supporting file
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata
   README.md                 ← human + agent walkthrough

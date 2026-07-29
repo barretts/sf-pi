@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { publishMarkdown, versionsTableMarkdown } from "../lib/render/lifecycle.ts";
 
 describe("publishMarkdown", () => {
-  it("renders successful publish with bundle deployed and activated", () => {
+  it("renders successful inactive publish with bundle deployment evidence", () => {
     const md = publishMarkdown({
       ok: true,
       agent_api_name: "Pi_E2E_Final_Test",
@@ -11,10 +11,10 @@ describe("publishMarkdown", () => {
       bot_version_id: "0XwRO0000004T0V",
       version_developer_name: "v3",
       was_new_agent: false,
-      activated: true,
+      activated: false,
       authoring_bundle: {
         full_name: "Pi_E2E_Final_Test",
-        target: "vivint--devint",
+        target: "example-agent-target",
         created: false,
       },
       studio_url: "https://example.salesforce.com/agent-script/Pi_E2E_Final_Test",
@@ -25,7 +25,7 @@ describe("publishMarkdown", () => {
     expect(md).toMatch(/Local \+ server compile clean/);
     expect(md).toMatch(/AiAuthoringBundle/);
     expect(md).toMatch(/updated/);
-    expect(md).toMatch(/Activated/);
+    expect(md).toMatch(/Published .* inactive/);
     expect(md).toMatch(/v3/);
     expect(md).toMatch(/Open in Studio/);
     expect(md).toMatch(/agent-script\/Pi_E2E_Final_Test/);
@@ -57,7 +57,7 @@ describe("publishMarkdown", () => {
     expect(md).toMatch(/Permission denied/);
   });
 
-  it("flags 'not activated' when activate=false", () => {
+  it("renders the required inactive release sequence after publish", () => {
     const md = publishMarkdown({
       ok: true,
       agent_api_name: "x",
@@ -65,8 +65,9 @@ describe("publishMarkdown", () => {
       was_new_agent: false,
       activated: false,
     });
-    expect(md).toMatch(/Not activated/);
-    expect(md).toMatch(/activate=true/);
+    expect(md).toMatch(/Published .* inactive/);
+    expect(md).toMatch(/release eval contract/);
+    expect(md).not.toMatch(/activate=true/);
   });
 });
 

@@ -12,7 +12,7 @@
  *
  * No subprocess — `@salesforce/core` Connection only.
  *
- * Doc: skills/sf-ai-agentscript/references/agent-user-setup.md.
+ * Doc: extensions/sf-agentscript/docs/agent-user-setup.md.
  */
 
 import type { Connection } from "@salesforce/core";

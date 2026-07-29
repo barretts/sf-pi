@@ -180,6 +180,8 @@ The most common entry points, grouped by purpose:
 | Full local validation    | —                                                  | `npm run validate`                    |
 | CI-like local validation | —                                                  | `npm run validate:ci`                 |
 | CI artifact guard        | —                                                  | `bash scripts/check-llm-artifacts.sh` |
+| Instruction surface      | `npm run instruction-surface:report`               | —                                     |
+| Instruction behavior     | `npm run e2e:instruction-behavior -- --model ...`  | —                                     |
 | Scaffold a new extension | `npm run scaffold -- --id sf-my-ext --category ui` | —                                     |
 
 `npm run lint` is a convenience bundle that runs `format:check`,

@@ -7,9 +7,9 @@ patched source modules — bypassing the pi extension runtime so they
 reflect what's on disk, not what the running pi process bundled at
 startup.
 
-These are not part of `npm test` / CI; they require a real `sf` auth
-context and run against a connected org. Use them to validate
-extension changes against a live org of your choice.
+These are not part of `npm test` / CI. Most require a real `sf` auth
+context and run against a connected org; the Instruction Behavior Eval is a
+model-only routing probe and blocks tools before execution.
 
 ## d360-stdm-e2e.ts
 
@@ -47,3 +47,22 @@ D360_E2E_ORG=<orgAlias> node --experimental-strip-types scripts/e2e/d360-agent-p
 By default, an org without Agent Platform Tracing is reported as a clean
 skip. Add `--require-data` or `D360_E2E_REQUIRE_APT=1` when missing
 metadata or empty trace data should fail the smoke.
+
+## instruction-behavior/run.ts
+
+Opt-in live-model regression for SF Brain's instruction architecture. The
+runner loads public-safe scenarios, records selected tools and actions, and
+reports expected or forbidden routing facts without producing a quality score.
+A probe extension allows bounded local `read`/`grep`/`find`/`ls` context and
+blocks every other tool in `tool_call` before execution, so the harness performs
+no Salesforce org call, shell command, file edit, browser commit, or
+collaboration write.
+
+```bash
+npm run e2e:instruction-behavior -- --model <model>
+npm run e2e:instruction-behavior -- --scenario agentscript-release --limit 1
+```
+
+Reports are written under
+`.pi/state/sf-brain/instruction-behavior/<timestamp>/` unless `--output` is
+provided. Model and provider variance make the report advisory and non-blocking.

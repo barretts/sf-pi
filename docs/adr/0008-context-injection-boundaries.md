@@ -9,13 +9,13 @@ Accepted
 Five sf-pi extensions inject context blocks into the agent's session at
 session start or per-turn:
 
-| Extension                 | What it injects                                    |
-| ------------------------- | -------------------------------------------------- |
-| `sf-brain`                | Salesforce Operator Kernel (rule set)              |
-| `sf-devbar`               | Salesforce environment (CLI / project / org / API) |
-| `sf-slack`                | Slack workspace identity (user + team)             |
-| `sf-guardrail`            | Guardrail policy summary                           |
-| `sf-llm-gateway-internal` | Provider/gateway identity                          |
+| Extension                 | What it injects                                         |
+| ------------------------- | ------------------------------------------------------- |
+| `sf-brain`                | Salesforce Engineering Constitution and routing summary |
+| `sf-devbar`               | Salesforce environment (CLI / project / org / API)      |
+| `sf-slack`                | Slack workspace identity (user + team)                  |
+| `sf-guardrail`            | Guardrail policy summary                                |
+| `sf-llm-gateway-internal` | Provider/gateway identity                               |
 
 Each block is delivered through pi's `BeforeAgentStartEventResult.message`
 path, persists as a `custom_message` session entry with `display: false`,
@@ -55,9 +55,13 @@ matching pi's own boundary convention. Each block is wrapped in a
 matched opening + closing pair around its body:
 
 ```
-<sf_operator_kernel>
+<sf_engineering_constitution>
 …body…
-</sf_operator_kernel>
+</sf_engineering_constitution>
+
+<sf_pi_routing>
+…body…
+</sf_pi_routing>
 
 <sf_environment>
 …body…
@@ -130,7 +134,7 @@ Cross-references between blocks use the bare opening tag as the anchor
   boundaries to use explicit XML tags instead of Markdown headings,
   reducing inconsistent boundary ingestion by models."
 - `lib/common/sf-environment/format-agent-context.ts` — `<sf_environment>`
-- `extensions/sf-brain/SF_KERNEL.md` and `extensions/sf-brain/lib/kernel.ts`
-  (`KERNEL_OPEN_TAG`, `KERNEL_CLOSE_TAG`) — `<sf_operator_kernel>`
+- `extensions/sf-brain/SF_CONSTITUTION.md` and `extensions/sf-brain/lib/constitution.ts`
+  (`CONSTITUTION_OPEN_TAG`, `CONSTITUTION_CLOSE_TAG`) — `<sf_engineering_constitution>`
 - `extensions/sf-slack/index.ts` — `<slack_workspace>`
 - `extensions/sf-guardrail/lib/guidance.ts` — `<sf_guardrail>`

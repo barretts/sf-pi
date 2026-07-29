@@ -102,7 +102,9 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "e2e:sf-soql": "node --experimental-strip-types scripts/e2e/sf-soql-e2e.ts",
-    "e2e:sf-lwc": "node --experimental-strip-types scripts/e2e/sf-lwc-e2e.ts"
+    "e2e:sf-lwc": "node --experimental-strip-types scripts/e2e/sf-lwc-e2e.ts",
+    "instruction-surface:report": "node scripts/instruction-surface-report.mjs",
+    "e2e:instruction-behavior": "node --experimental-strip-types scripts/e2e/instruction-behavior/run.ts"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

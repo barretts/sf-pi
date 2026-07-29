@@ -21,10 +21,8 @@ export function registerSfBrowserEditorTool(pi: ExtensionAPI): void {
     promptSnippet:
       "Detect, read, and write Salesforce editor surfaces without generic DOM eval or automatic Save/Apply",
     promptGuidelines: [
-      "Use action='detect' before read/write; editorIndex values are valid only for the current page/render.",
-      "Use sf_browser_editor for code-like editor surfaces when sf_browser_fill is insufficient, especially Monaco-style builders or large text editors.",
-      "After write, do not assume persistence: snapshot, click the explicit Save/Apply control when appropriate, wait for save-result, then verify through API or Browser Evidence.",
-      "Do not use this tool for generic shadow DOM exploration; use direct agent-browser only as the long-tail escape hatch.",
+      "Detect before editor read/write; editor indexes are render-scoped and writes never imply Save/Apply persistence.",
+      "After writing, use the explicit commit control and verify the result; read extensions/sf-browser/AGENT_GUIDE.md for the full loop.",
     ],
     parameters: Type.Object({
       action: Type.Optional(EditorAction),

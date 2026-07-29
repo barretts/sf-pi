@@ -82,12 +82,13 @@ const EXTENSION_INTENT_ORDER = [
 // for everything outside this set.
 const DOCS_OPTIONAL_FOR = new Set([]);
 const EXTENSION_FILE_MAP_INCLUDE = new Set([
+  "AGENT_GUIDE.md",
   "AGENTS.md",
   "CREDITS.md",
   "ROADMAP.md",
   "SF_GUARDRAIL_DEFAULTS.json",
+  "SF_CONSTITUTION.md",
   "SF_GUARDRAIL_PROMPT.md",
-  "SF_KERNEL.md",
   "index.ts",
   "manifest.json",
   "README.md",

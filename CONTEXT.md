@@ -32,6 +32,42 @@ _Avoid_: centralized activity timeline, status noise in model context, hidden ex
 The SF Pi model-context view that follows the active compaction-aware session branch, retains immutable guidance only while it remains live, and exposes only the latest value of each mutable hidden context type. The append-only session remains intact for audit and reconstruction.
 _Avoid_: all-entry injection scan, sibling-branch context, historical mutable-state pileup, audit-entry filtering
 
+**Salesforce Instruction Surface**:
+All SF Pi-owned model-visible context present before task execution: Salesforce kernel and runtime context, active tool definitions and guidance, and the compact SF Pi reference map. It excludes external Salesforce skills, user/project instructions, conversation history, and tool results.
+_Avoid_: system prompt, SF Brain prompt, total context window, provider payload, external skill catalog
+
+**Salesforce-First Interpretation**:
+The SF Pi posture that ambiguous development requests in Salesforce contexts are interpreted through Salesforce concepts and owning SF Pi workflows first, while explicit general engineering requests remain fully supported. It is a domain bias, not a refusal boundary and not a reason to force Salesforce tools into unrelated work.
+_Avoid_: Salesforce-only scope, generic-first routing, unrelated Salesforce tool use, off-topic refusal
+
+**Salesforce Engineering Constitution**:
+The compact bundled baseline in the **Salesforce Instruction Surface** that states universal Salesforce-first, grounding, behavior-proof, safety, minimal-change, evidence, and context principles without operational recipes. It is always present; user guidance may extend it but cannot replace it.
+_Avoid_: CLI cookbook, replaceable kernel, per-tool manual, user-only baseline
+
+**External Salesforce Skill Surface**:
+The model-visible names and descriptions of independently owned Salesforce skills loaded through Pi. SF Pi measures this surface alongside its own context footprint but treats its content as an external fixed cost and does not use it as bundled-extension operating documentation.
+_Avoid_: SF Pi reference documentation, bundled-extension skill, Salesforce Instruction Surface
+
+**Progressive SF Pi Documentation**:
+The SF Pi operating-guidance pattern that keeps a compact topic-to-document map in the **Salesforce Instruction Surface** and lets the model read extension-owned agent reference documentation when it judges the task requires deeper guidance. External Salesforce skills remain a separate discovery system, and no workflow is required to load a guide before proceeding.
+_Avoid_: extension-owned skill, mandatory guide load, full README injection, duplicated tool workflow, external skill as SF Pi manual
+
+**Salesforce Change Authority**:
+The source whose current state governs a requested Salesforce change: repository source for repository outcomes, org metadata or schema for live-org outcomes, and owning SF Pi tool evidence when it already proves the needed fact. SF Pi asks only when the requested outcome leaves authority materially ambiguous.
+_Avoid_: org-always-authoritative, local-always-authoritative, unconditional retrieve, duplicate verification
+
+**SF Pi Routing Summary**:
+The tiny always-visible runtime statement that active SF Pi tools take priority over external skills and raw CLI, plus any disabled **Capability Owners** and their enablement path. It does not repeat the enabled extension catalog, tool descriptions, commands, or UI-only extensions.
+_Avoid_: extension map, active tool catalog, command inventory, enabled-status dump
+
+**Instruction Surface Report**:
+An advisory measurement of the **Salesforce Instruction Surface**, the **External Salesforce Skill Surface**, and their largest contributors and changes from baseline. It informs review without imposing a CI size failure.
+_Avoid_: prompt size gate, token billing claim, hidden telemetry, content dump
+
+**Instruction Behavior Eval**:
+An opt-in live-model regression report for representative Salesforce and explicit general-engineering tasks that measures routing, grounding, behavior-proof posture, unnecessary CLI use, release ordering, and evidence reporting. Deterministic composition and lifecycle tests remain required; model variance keeps this report non-blocking initially.
+_Avoid_: mandatory live CI, prompt score, hidden reviewer, deterministic unit test replacement
+
 **Agent-Settled Quality Gate**:
 A post-agent SF Pi check that runs only after Pi has no automatic retry, compaction retry, or queued follow-up left. It is for workflow completion evidence, not per-run streaming feedback.
 _Avoid_: agent_end hook, background scan, immediate lint pass, always-on watcher
@@ -188,6 +224,10 @@ _Avoid_: broad migration branch, old/new production paths, compile-only adoption
 A test or verified workflow that exercises an SF Pi capability through the same public seam an agent or human uses. It should prove the observable contract before risky runtime delegation or deletion lands.
 _Avoid_: compile-only check, private helper assertion, implementation-detail test, hopeful migration
 
+**Behavior-Proof-First Development**:
+The SF Pi posture that a behavioral change begins with a failing or baseline **Behavior Proof** when feasible, proceeds through the smallest relevant change, and ends with passing evidence through the same public seam. Artifact-specific proof replaces a universal unit-test requirement, and infeasible pre-change proof requires an explicit rationale and the strongest available substitute.
+_Avoid_: test-after default, unit test for every artifact, verification-only development, unexplained no-test change
+
 **Behavior Proof Ladder**:
 The ordered evidence required before a superseded path is deleted: pure behavior tests, exact-Pi integration, support-window and full validation, scoped live proof where fixtures are insufficient, and manual TUI QA only for visual changes. Each rung is used only when the risk requires it.
 _Avoid_: coverage-only confidence, mock-shaped runtime, source-string behavior proof, unobserved live command, exhaustive live matrix
@@ -319,6 +359,18 @@ _Avoid_: compiler error, every-warning blocker, activation gate, org compiler re
 **Agent Script Quality Publication Override**:
 A user-approved, session-scoped exception for one agent bundle and the specific High **Agent Script Quality Rule** IDs already reviewed, or for the separately disclosed `quality-analysis-failed` condition. Repeated publication within that envelope can proceed during the session; a newly appearing High rule requires another approval, and no override persists to project or global settings.
 _Avoid_: blanket session bypass, persistent ignore setting, agent-selected first-attempt override, hidden approval, failed-means-clean
+
+**Agent Script Eval Activation Gate**:
+The lifecycle boundary that requires complete passing eval evidence for the exact target-org BotVersion before activation. It is separate from compile validity and the **Agent Script Quality Publication Gate**, and it can proceed without matching evidence only through an explicit human-approved emergency override.
+_Avoid_: publication quality gate, any-version eval, compile-means-tested, silent activation bypass
+
+**Agent Script Release Eval Contract**:
+The regression evidence required by the **Agent Script Eval Activation Gate**: an automatically generated baseline suite plus a project-designated release suite when one is configured. Both target the exact org and BotVersion, and every expected test must return without evaluator failure or step error.
+_Avoid_: any passing eval, trivial activation test, active-version proxy, partial green run
+
+**Agent Script Release Sequence**:
+The Agent Script lifecycle in which publication creates an inactive BotVersion, the exact version satisfies the **Agent Script Release Eval Contract**, and activation occurs only as a separate final action. Immediate publish-and-activate is not part of the normal release path.
+_Avoid_: publish and activate, activate during publish, test after activation, active-first release
 
 **Agent Script Procedure**:
 One executable logic region whose paths can be analyzed independently, such as reasoning instructions, before/after reasoning, connected-agent after-response logic, or custom subagent lifecycle logic. Prompt text, action declarations, and an entire subagent are not procedures.

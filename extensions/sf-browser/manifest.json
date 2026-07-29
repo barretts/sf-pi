@@ -19,7 +19,7 @@
     "sf_browser_capture_evidence",
     "sf_browser_resolve_path"
   ],
-  "events": ["session_start", "session_shutdown", "resources_discover"],
+  "events": ["session_start", "session_shutdown"],
   "docs": {
     "summary": "Salesforce-aware agent-browser affordance layer for UI last-mile work that Salesforce APIs cannot cover. It registers a cache-first /sf-browser panel plus a small hot-path browser tool set, curated Setup Destinations, Browser Evidence, and lazy agent-browser invocation after explicit command/tool intent.",
     "primaryFiles": [
@@ -41,10 +41,10 @@
       "lib/sf_browser_resolve_path-tool.ts",
       "lib/salesforce-path-resolver.ts",
       "lib/salesforce-route-verifier.ts",
-      "skills/sf-browser/SKILL.md",
-      "skills/sf-browser/references/setup-runbooks.md",
-      "skills/sf-browser/references/setup-destinations.md",
-      "skills/sf-browser/references/live-smoke.md"
+      "AGENT_GUIDE.md",
+      "docs/setup-runbooks.md",
+      "docs/setup-destinations.md",
+      "docs/live-smoke.md"
     ],
     "stateFiles": [
       "<globalAgentDir>/sf-pi/browser-artifacts/sessions/<session-id>/index.json",

@@ -2,128 +2,75 @@
 
 ## What It Does
 
-Injects the **Salesforce Operator Kernel** into the session exactly once, on the
-first agent turn. It also injects a small **SF Pi extension context** whenever
-the bundled-extension state or active tool/skill set changes, so agents know
-which SF Pi workflows are enabled, disabled, or unavailable in the current
-session.
+SF Brain injects two compact hidden context messages:
 
-The kernel is a compact, CLI-focused system-prompt add-on that teaches the
-agent:
+1. The immutable **Salesforce Engineering Constitution** from [`SF_CONSTITUTION.md`](./SF_CONSTITUTION.md).
+2. A tiny **SF Pi Routing Summary** that prioritizes active SF Pi tools and lists only disabled capability owners with their `/sf-pi enable <id>` recovery path.
 
-1. **Retrieve before edit, describe before query** — the single biggest
-   foot-gun with Salesforce LLM workflows.
-2. **A 5-question API picker** — Data vs Tooling vs Metadata vs Composite vs
-   Anonymous Apex.
-3. **`sf org api` as the universal REST tool** — replaces hand-rolled curl.
-4. **API-version pinning** from the injected `<sf_environment>` block.
-5. **`--json` + `jq`** — CLI deprecation policy protects JSON output only.
-6. **Name the org explicitly on destructive calls** with `-o <alias>`.
-7. **Anonymous Apex as the primary verification tool** — a verification loop
-   (`sf apex run --file` → `sf apex get log --number 1`) with concrete patterns
-   for Flow invocation, schema probes, Savepoint/rollback rehearsals, and
-   Queueable/Batch kick-offs.
-8. **Power moves** — `sf project deploy preview/validate`, `sf org list limits`,
-   reading ApexClass bodies from the org via Tooling queries, deep-linking into
-   Setup with `sf org open --path`.
-9. **Org safety** — production confirmation gate, auth-error handling.
-10. **Extension-first routing** — use enabled SF Pi extension workflows before
-    generic skills or raw CLI, and suggest `/sf-pi enable <id>` when the
-    best-fit extension is disabled.
-11. **Lazy reference map guidance** for choosing the smallest SF Pi or Salesforce
-    source of truth when the kernel is not enough.
-12. **CLI install guidance** if `sf --version` fails.
+The constitution establishes Salesforce-first interpretation, Salesforce Change Authority, Behavior-Proof-First Development, minimal-change/evidence expectations, Guardrail authority, raw CLI fallback rules, context discipline, and direct paths to per-extension `AGENT_GUIDE.md` files. Detailed recipes are not always-on context.
 
-The companion `<sf_pi_extensions>` block is built from the generated extension
-registry, project/global package filter state, and Pi's selected tools/skills
-for the turn. It lists every bundled extension with its enabled/disabled state,
-intent, commands, providers, and active or inactive LLM tools. When the active
-`npm:@ogulcancelik/pi-herdr` control path is available — the current session is
-running inside a Herdr-managed pane and the `herdr` tool is active — it also
-includes compact Proactive Herdr Guidance for pane orchestration. The
-separate `herdr-agent-state.ts` socket bridge is passive Herdr → Pi status
-reporting and is not required for this guidance.
+User guidance can extend—but never replace—the bundled constitution through `<globalAgentDir>/sf-brain/SF_CONSTITUTION_APPEND.md`. Legacy replacement-style `SF_KERNEL.md` overrides are intentionally unsupported.
 
-The always-injected kernel body lives in [`SF_KERNEL.md`](./SF_KERNEL.md).
-Broader SF Pi and Salesforce routing guidance lives in
-[`SF_REFERENCE_MAP.md`](./SF_REFERENCE_MAP.md) and is read only when needed.
-Users can override the injected kernel by creating
-`<globalAgentDir>/sf-brain/SF_KERNEL.md`.
+SF Brain also provides a content-safe advisory **Instruction Surface Report** in the SF Pi Manager and through a contributor script. It never registers LLM tools.
 
 ## Runtime Flow
 
-```
-Extension loads
-  └─ before_agent_start handler registered
+```text
+before_agent_start
+  ├─ constitution live on active branch? → skip
+  ├─ otherwise resolve cached sf CLI availability
+  ├─ load bundled constitution + optional append-only user guidance
+  └─ inject hidden sf-brain-constitution message
 
-First user prompt of the session
-  └─ before_agent_start fires
-      ├─ kernel path
-      │   ├─ session entries already contain a sf-brain-kernel custom entry? → skip
-      │   ├─ else resolve SF environment (shared cache from sf-devbar / sf-welcome)
-      │   ├─ CLI installed?
-      │   │   ├─ yes → load bundled kernel or user override from disk
-      │   │   └─ no  → load the install stub
-      │   └─ inject as a persistent hidden message (customType: sf-brain-kernel)
-      └─ extension context path
-          ├─ build <sf_pi_extensions> from registry + package filter + selected tools/skills
-          ├─ if Herdr pane env + selected tool are active, add compact Proactive Herdr Guidance
-          ├─ live matching context entry already exists? → skip
-          └─ inject as a persistent hidden message (customType: sf-pi-extensions-context)
+before_agent_start
+  ├─ build tiny routing summary from package-filter state
+  ├─ matching live summary exists? → skip
+  └─ inject hidden sf-pi-routing-summary message
 
-Subsequent turns in the same session
-  └─ before_agent_start fires
-      ├─ kernel entry exists → skip
-      └─ extension context unchanged → skip; changed → inject fresh context
-
-/reload or /resume
-  └─ session entries persist → kernel already present → skip
+context
+  └─ keep only the latest live constitution/routing-summary message
 ```
 
-## Why a Custom Message, Not a Per-Turn System Prompt Mutation
+Compaction-aware session projection re-injects the constitution only when its live entry has been compacted away. Mutable routing state is replaced only when capability enablement changes.
 
-- The kernel is static within a session. Injecting it once means providers cache
-  the same bytes turn after turn (big prompt-cache wins on Anthropic / OpenAI).
-- Session replays (`/resume`, `/fork`, `/reload`) inherit the entry from the
-  session store — no re-detection, no drift.
-- It participates in the transcript alongside `<sf_environment>` and
-  Slack context, so `/tree` navigation doesn't strand it.
+When sf CLI is unavailable, the full constitution remains present and receives a short `<sf_cli_status>` note. SF Brain never fabricates command output or embeds an installation cookbook in always-on context.
 
-## Why Deferred Until `before_agent_start`, Not `session_start`
+## Why Hidden Custom Messages
 
-- SF environment detection is async. Injecting at `session_start` races the
-  shared cache populated by sf-devbar and sf-welcome.
-- `before_agent_start` always has a `ctx.sessionManager` with the final entry
-  list, so the "inject once" guard is reliable.
+- Stable bytes benefit provider prompt caching.
+- `/resume`, `/fork`, and `/reload` retain live context through the session log.
+- Active-branch projection prevents superseded mutable context from accumulating.
+- Static principles remain separate from Pi's generic coding prompt and user/project instructions.
 
 ## Behavior Matrix
 
-| Event              | Condition                               | Result                                |
-| ------------------ | --------------------------------------- | ------------------------------------- |
-| before_agent_start | kernel entry already in session         | skip                                  |
-| before_agent_start | CLI installed, no kernel entry yet      | inject full kernel as hidden message  |
-| before_agent_start | CLI not installed, no kernel entry yet  | inject install stub as hidden message |
-| before_agent_start | extension context unchanged             | skip                                  |
-| before_agent_start | extension context changed or missing    | inject fresh extension context        |
-| before_agent_start | Herdr pane env and `herdr` tool active  | include Proactive Herdr Guidance      |
-| before_agent_start | Herdr pane env or `herdr` tool inactive | omit Herdr guidance; normal fallback  |
+| Event                | Condition                           | Result                                 |
+| -------------------- | ----------------------------------- | -------------------------------------- |
+| `before_agent_start` | live constitution exists            | skip                                   |
+| `before_agent_start` | constitution absent/post-compaction | inject bundled constitution + addendum |
+| `before_agent_start` | sf CLI unavailable                  | include compact CLI-status note        |
+| `before_agent_start` | routing summary unchanged           | skip                                   |
+| `before_agent_start` | extension enablement changed        | inject updated tiny summary            |
+| `context`            | older SF Brain context exists       | retain latest value only               |
 
-## Settings
+## Append-Only User Guidance
 
-SF Brain has a Manager Settings page for the optional Herdr workflow guidance add-on stored under `sfPi.brain.herdrGuidance`:
+Create `<globalAgentDir>/sf-brain/SF_CONSTITUTION_APPEND.md` to add user-specific guidance. The content is wrapped in `<sf_user_constitution_addendum>` and follows the bundled constitution. Empty or unreadable files are ignored.
 
-- `auto` — include compact Herdr workflow guidance only when the session is inside an active Herdr pane and the `herdr` tool is active.
-- `off` — omit the Herdr add-on from the injected extension context.
+`SF_KERNEL.md` is not read. This is a deliberate clean break: custom replacement kernels must be reviewed and migrated manually so old instructions cannot silently remove the Salesforce-first and behavior-proof baseline.
 
-The core Salesforce Operator Kernel remains enabled while the extension is enabled. Disable the extension itself from SF Pi Manager if you do not want the kernel injected.
+## Instruction Surface Diagnostics
 
-## User Override
+**SF Pi Manager → SF Brain → Instruction surface** opens a read-only report of model-visible context size. It separates SF Pi-owned tool definitions, prompt guidance, hidden context, bundled extension skills, and the externally owned Salesforce skill surface. Counts are advisory characters plus an explicitly approximate characters-divided-by-four token estimate.
 
-Create `<globalAgentDir>/sf-brain/SF_KERNEL.md` (typically `~/.pi/agent/sf-brain/SF_KERNEL.md`)
-to replace the bundled kernel. The override is loaded verbatim when the sf CLI
-is installed; the install stub is always used when the CLI is missing, even if
-an override exists. If the override is empty or unreadable, sf-brain falls back
-to the bundled kernel silently.
+The diagnostic uses Pi's public system-prompt options, active tools, skills, and active-branch session projection. It never renders or persists prompt text, context-file contents, tool schemas, skill descriptions, credentials, org details, session ids, or user-specific paths.
+
+```bash
+npm run instruction-surface:report
+npm run e2e:instruction-behavior -- --model <model> --scenario apex-behavior-fix
+```
+
+Artifacts default to `.pi/state/sf-brain/`. The opt-in behavior regression allows bounded local context reads and blocks every non-local tool before execution.
 
 ## File Structure
 
@@ -132,72 +79,71 @@ to the bundled kernel silently.
 ```
 extensions/sf-brain/
   lib/
-    config-panel.ts         ← implementation module
-    extension-context.ts    ← implementation module
-    kernel.ts               ← implementation module
-    settings.ts             ← implementation module
+    constitution.ts         ← implementation module
+    instruction-surface-artifact.ts← implementation module
+    instruction-surface-baseline.ts← implementation module
+    instruction-surface-manager.ts← implementation module
+    instruction-surface-panel.ts← implementation module
+    instruction-surface-report.ts← implementation module
+    instruction-surface-runtime.ts← implementation module
+    routing-summary.ts      ← implementation module
   tests/
-    extension-context.test.ts← unit / smoke test
+    constitution.test.ts    ← unit / smoke test
     injection.test.ts       ← unit / smoke test
-    kernel.test.ts          ← unit / smoke test
-    reference-map.test.ts   ← unit / smoke test
-    settings.test.ts        ← unit / smoke test
+    instruction-behavior-eval.test.ts← unit / smoke test
+    instruction-surface-artifact.test.ts← unit / smoke test
+    instruction-surface-baseline.test.ts← unit / smoke test
+    instruction-surface-manager.test.ts← unit / smoke test
+    instruction-surface-panel.test.ts← unit / smoke test
+    instruction-surface-report.test.ts← unit / smoke test
+    instruction-surface-runtime.test.ts← unit / smoke test
+    instruction-surface-script.test.ts← unit / smoke test
+    progressive-docs.test.ts← unit / smoke test
+    routing-summary.test.ts ← unit / smoke test
     smoke.test.ts           ← unit / smoke test
+  AGENT_GUIDE.md            ← supporting file
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata
   README.md                 ← human + agent walkthrough
-  SF_KERNEL.md              ← supporting file
+  SF_CONSTITUTION.md        ← supporting file
 ```
 
 <!-- GENERATED:file-structure:end -->
 
 ## Testing Strategy
 
-Run: `npm test`
+Covered behavior includes:
 
-Covered by unit tests:
+- the bundled constitution is present with or without sf CLI;
+- user guidance is append-only and legacy `SF_KERNEL.md` is ignored;
+- direct per-extension guide paths are in the constitution;
+- the all-enabled routing summary stays tiny;
+- disabled capability owners include only their enablement path;
+- active-branch and compaction-aware injection deduplication;
+- content-safe Instruction Surface classification, baseline comparison, Manager rendering, and exact-Pi report artifacts;
+- opt-in behavior-eval facts without hidden scoring or tool execution.
 
-- `loadKernel({ cliInstalled: true })` returns the bundled kernel body with the
-  correct header.
-- `loadKernel({ cliInstalled: false })` returns the short install stub,
-  independent of any user override.
-- A user override at `<globalAgentDir>/sf-brain/SF_KERNEL.md` replaces the
-  bundled body when CLI is installed, and is ignored when CLI is missing.
-- The injected kernel points to `SF_REFERENCE_MAP.md` without inlining the full
-  map.
-- The extension context lists every bundled extension, reflects project-scoped
-  disabled filters, marks active AgentScript tools, and tells agents to suggest
-  `/sf-pi enable <id>` for disabled best-fit extensions.
-- Proactive Herdr Guidance appears only when strict activation succeeds: `HERDR_ENV`
-  and `HERDR_PANE_ID` identify a managed pane, and `herdr` is an active tool.
-- The reference map routes user intent to repo-local Salesforce resources,
-  extension-first workflows, and active SF skills.
-- The `before_agent_start` handler is a no-op if a `sf-brain-kernel` entry
-  already exists in the session, and injects a hidden message otherwise.
+Run focused tests with:
+
+```bash
+npx vitest run extensions/sf-brain/tests
+```
 
 ## Troubleshooting
 
-**Kernel never appears in the prompt:**
+**The constitution never appears in model context:**
 
-- Confirm the extension is enabled: `/sf-pi list` should show `sf-brain` as
-  enabled.
-- Confirm the sf CLI is on PATH: `sf --version`. If the CLI is missing,
-  sf-brain injects the install stub, not the full kernel.
-- If the extension loaded on a session that had a prior kernel entry, the
-  injection is skipped by design. Start a new session with `/new`.
+- Confirm `sf-brain` is enabled in `/sf-pi`.
+- Start a new session if an older session contains the retired `sf-brain-kernel` entry.
+- Inspect the session JSONL for `customType: sf-brain-constitution`; the message uses `display: false`.
 
-**User override does not take effect:**
+**My user guidance does not take effect:**
 
-- Path must be exactly `<globalAgentDir>/sf-brain/SF_KERNEL.md`. On the default
-  CLI that resolves to `~/.pi/agent/sf-brain/SF_KERNEL.md`.
-- The file must be non-empty. Empty overrides silently fall back to the bundled
-  kernel.
-- Start a fresh session with `/new` after changing the override. `/reload` keeps
-  the existing live kernel entry by design.
+- Use exactly `<globalAgentDir>/sf-brain/SF_CONSTITUTION_APPEND.md`.
+- Legacy `<globalAgentDir>/sf-brain/SF_KERNEL.md` is intentionally ignored.
+- Start a new session after changing the addendum; an existing live constitution entry remains stable by design.
 
-**I want to see the kernel content in a session:**
+**The Instruction Surface baseline is not comparable:**
 
-- The kernel and extension context are injected with `display: false`, so they
-  do not render in the transcript. Open the session JSONL file and look for
-  custom entries with `customType: sf-brain-kernel` or
-  `customType: sf-pi-extensions-context`.
+- Baseline comparison requires the same measurement schema and audited Pi Runtime version.
+- Regenerate/review the advisory baseline after intentional runtime or measurement changes.

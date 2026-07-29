@@ -33,16 +33,9 @@ const sources: Record<string, string> = {
 };
 
 describe("prompt-surface — cross-tool routing has a single owner", () => {
-  it("slack tool owns the 'prefer slack_research' routing rule", () => {
-    expect(sources.slack).toMatch(/Prefer slack_research for natural-language/);
-  });
-
-  it("slack tool owns the 'use slack_resolve for fuzzy refs' rule", () => {
-    expect(sources.slack).toMatch(/Use slack_resolve to turn a fuzzy/);
-  });
-
-  it("slack tool owns the 'use slack_time_range first' rule", () => {
-    expect(sources.slack).toMatch(/Use slack_time_range first for any relative/);
+  it("slack tool owns one compact cross-tool routing rule", () => {
+    expect(sources.slack).toMatch(/Prefer slack_research.*slack_resolve.*slack_time_range/);
+    expect(sources.slack).toContain("extensions/sf-slack/AGENT_GUIDE.md");
   });
 
   it("slack_research no longer duplicates the 'use slack_research instead of raw operators' rule", () => {
@@ -72,12 +65,11 @@ describe("prompt-surface — cross-tool routing has a single owner", () => {
   });
 });
 
-describe("prompt-surface — search-operator syntax lives on slack_research", () => {
-  it("slack_research teaches Slack search operators", () => {
-    expect(sources.research).toMatch(/in:#channel/);
-    expect(sources.research).toMatch(/from:@Name/);
-    expect(sources.research).toMatch(/after:YYYY-MM-DD/);
-    expect(sources.research).toMatch(/is:thread/);
+describe("prompt-surface — search operators stay behind the research interface", () => {
+  it("slack_research points at structured inputs without repeating the raw operator catalog", () => {
+    expect(sources.research).toMatch(/structured channel\/person\/date\/filter inputs/);
+    expect(sources.research).not.toMatch(/after:YYYY-MM-DD/);
+    expect(sources.research).not.toMatch(/from:@Name/);
   });
 
   it("slack tool no longer teaches raw Slack search operators", () => {

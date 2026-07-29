@@ -22,19 +22,19 @@ describe("sf-brain before_agent_start handler", () => {
     expect(brainSource).toMatch(/pi\.on\("before_agent_start",\s*async\s*\(/);
   });
 
-  it("delegates the inject/skip decision to the shouldInjectKernel predicate", () => {
+  it("delegates the inject/skip decision to the constitution predicate", () => {
     // The handler delegates Pi's read-only session manager so the shared helper
     // owns active-branch and compaction semantics.
-    expect(brainSource).toContain("shouldInjectKernel");
+    expect(brainSource).toContain("shouldInjectConstitution");
     expect(brainSource).toContain("ctx.sessionManager");
     expect(brainSource).not.toContain("ctx.sessionManager.getEntries()");
     expect(brainSource).toContain("registerLatestContextProjection");
-    expect(brainSource).toMatch(/if \(!shouldInjectKernel\([\s\S]*?\)\) return;/);
+    expect(brainSource).toMatch(/if \(!shouldInjectConstitution\([\s\S]*?\)\) return;/);
   });
 
   it("returns persistent hidden custom messages for kernel and extension context", () => {
-    expect(brainSource).toContain("customType: KERNEL_ENTRY_TYPE");
-    expect(brainSource).toContain("customType: SF_PI_EXTENSIONS_ENTRY_TYPE");
+    expect(brainSource).toContain("customType: CONSTITUTION_ENTRY_TYPE");
+    expect(brainSource).toContain("customType: SF_PI_ROUTING_ENTRY_TYPE");
     expect(brainSource.match(/display: false/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -43,16 +43,11 @@ describe("sf-brain before_agent_start handler", () => {
     expect(brainSource).toContain("getSharedSfEnvironment");
   });
 
-  it("injects the live SF Pi extension context from selected tools and skills", () => {
-    expect(brainSource).toContain("formatSfPiExtensionContext");
-    expect(brainSource).toContain("event.systemPromptOptions.selectedTools");
-    expect(brainSource).toContain("event.systemPromptOptions.skills?.map");
-    expect(brainSource).toContain("shouldInjectSfPiExtensionContext");
-  });
-
-  it("passes strict Proactive Herdr Guidance activation into the extension context", () => {
-    expect(brainSource).toContain("isHerdrWorkflowModeActive");
-    expect(brainSource).toContain("env: process.env");
-    expect(brainSource).toContain("herdrWorkflowMode:");
+  it("injects the compact SF Pi Routing Summary without tool or skill catalogs", () => {
+    expect(brainSource).toContain("formatSfPiRoutingSummary");
+    expect(brainSource).toContain("shouldInjectSfPiRoutingSummary");
+    expect(brainSource).not.toContain("event.systemPromptOptions.selectedTools");
+    expect(brainSource).not.toContain("event.systemPromptOptions.skills?.map");
+    expect(brainSource).not.toContain("isHerdrWorkflowModeActive");
   });
 });

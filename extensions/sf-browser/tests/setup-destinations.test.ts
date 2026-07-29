@@ -73,10 +73,7 @@ describe("setup destinations", () => {
   });
 
   it("keeps the Markdown reference table in sync with the runtime registry", () => {
-    const markdown = readFileSync(
-      path.resolve(__dirname, "../skills/sf-browser/references/setup-destinations.md"),
-      "utf8",
-    );
+    const markdown = readFileSync(path.resolve(__dirname, "../docs/setup-destinations.md"), "utf8");
     const documented = new Map<string, string>();
     for (const line of markdown.split(/\r?\n/)) {
       const match = line.match(/^\| `([^`]+)`\s+\| `([^`]+)`\s+\|/);

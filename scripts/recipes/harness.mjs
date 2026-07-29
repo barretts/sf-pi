@@ -318,7 +318,9 @@ async function runLifecyclePhase(sdk, recipes, args) {
       }
       console.log(`    ✓ compile (${stages.compile.sev2} warnings)`);
 
-      // Publish (with activation).
+      // Publish inactive, then activate explicitly for this opt-in recipe smoke.
+      // This harness is not release-contract evidence; production activation uses
+      // agentscript_eval run_release through the public lifecycle tools.
       const apiConn = await sdk.connForAgentApi(orgAlias);
       const pubResult = await sdk.publishAgent({
         conn,
@@ -326,7 +328,6 @@ async function runLifecyclePhase(sdk, recipes, args) {
         agentSource: renamedSource,
         bundleDir: sandboxBundleDir,
         agentApiName: aliasName,
-        activate: true,
         log: (m) => args.verbose && console.log(`        ${m}`),
       });
       stages.publish = {
@@ -336,7 +337,8 @@ async function runLifecyclePhase(sdk, recipes, args) {
         bundle_deployed: pubResult.authoring_bundle && !pubResult.authoring_bundle.error,
         bundle_error: pubResult.authoring_bundle?.error,
       };
-      stages.activate = { ok: pubResult.activated === true };
+      const activated = await sdk.activateVersion({ conn, agentApiName: aliasName });
+      stages.activate = { ok: activated.Status === "Active" };
       console.log(
         `    ✓ publish v${pubResult.version_developer_name ?? "?"} ${pubResult.was_new_agent ? "(new)" : "(version)"}` +
           (stages.publish.bundle_deployed

@@ -220,16 +220,10 @@ function formatPublishBody(
     }
   }
 
-  if (details.activated) {
-    // version_developer_name typically already starts with 'v' (e.g. 'v3'),
-    // so we surface it as-is rather than prefixing another 'v'.
-    const verLabel = details.version_developer_name ?? "?";
-    lines.push(`  ${ok("✓")} Activated ${code(verLabel)}`);
-  } else {
-    lines.push(
-      `  ${dim("·")} Not activated ${dim(`(set activate=true to chain publish + activate)`)}`,
-    );
-  }
+  const verLabel = details.version_developer_name ?? "?";
+  lines.push(
+    `  ${dim("·")} Published ${code(verLabel)} inactive ${dim("(run the release eval contract, then activate separately)")}`,
+  );
 
   // Pre-flight: surface missing action targets as a clear card so the user
   // sees them on a successful publish (publish itself doesn't block on

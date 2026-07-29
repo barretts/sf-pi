@@ -189,13 +189,9 @@ export function registerPreviewTool(pi: ExtensionAPI): void {
     promptSnippet:
       "Run a single .agent conversation against the live org with full trace capture per turn.",
     promptGuidelines: [
-      "action='start' — local-compiles the .agent file first; only hits /authoring/scripts on success. Returns session_id and the initial agent message. Pass context_variables here for linked VoiceCall/MessagingSession/context/mutable variable preview; values are persisted for every turn.",
-      "action='send' — POSTs one user utterance, fetches the planner trace per turn, returns a compact `digest` of every planner step (topic transitions, LLM calls, variable updates, tool invocations, errors), and writes everything to the session store. Full trace JSON lives at `trace_file` for deep dives.",
-      "context_variables — deterministic state seeds [{name, type?, value, label?, description?, isList?}]. On start with agent_file, sf-pi registers stateVariables and rewrites linked boundInputs from variables.X to state.X; on send, values override the persisted start profile by name.",
-      "action='end' — finalizes metadata (sets endTime).",
-      "action='end_all' — dry-runs by default. Scans .sfdx/agents/*/sessions/*, filters by agent_name/session_kind/target_org/older_than_days, remotely ends api_name sessions when possible, and locally finalizes agent_file sessions. Pass dry_run=false to execute.",
-      "action='trace' — ad-hoc trace fetch by (session_id, plan_id) when you need to revisit a specific turn.",
-      "action='cleanup' — removes session dirs older than older_than_days (default 30). Use dry_run=true to see what would be deleted.",
+      "Use agentscript_preview for behavioral reproduction before release eval; local-file sessions compile first and persist bounded trace artifacts.",
+      "Treat the compact digest as routing/state evidence and fetch the full trace only when diagnosis requires it.",
+      "Read extensions/sf-agentscript/AGENT_GUIDE.md for linked variables, cleanup, and multi-step preview guidance.",
     ],
     parameters: Params,
     async execute(_id, params, _signal, onUpdate, ctx) {
@@ -687,7 +683,10 @@ async function actionEnd(
       result.metadata.sessionKind === "agent_file" && result.metadata.agentFilePath
         ? `
 
-→ Ready to ship? agentscript_lifecycle action='publish' agent_file='${result.metadata.agentFilePath}' activate=true${
+→ Ready to publish inactive? agentscript_lifecycle action='publish' agent_file='${result.metadata.agentFilePath}'${
+            result.metadata.targetOrg ? ` target_org='${result.metadata.targetOrg}'` : ""
+          }
+→ Then run the exact-version release contract: agentscript_eval action='run_release' agent_file='${result.metadata.agentFilePath}' agent_api_name='${result.metadata.agentName}'${
             result.metadata.targetOrg ? ` target_org='${result.metadata.targetOrg}'` : ""
           }`
         : "";
