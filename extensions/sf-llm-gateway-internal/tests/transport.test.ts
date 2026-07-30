@@ -25,7 +25,6 @@ import {
   type Model,
 } from "@earendil-works/pi-ai";
 import {
-  GATEWAY_PROVIDER_DEFAULT_MAX_RETRIES,
   OPUS_47_DEFAULT_MAX_TOKENS,
   OPUS_47_MODEL_MAX_TOKENS,
   allowReasoningEffortParam,
@@ -45,36 +44,14 @@ import {
   isOpus47OrNewerModelId,
   isOpus5OrNewerModelId,
   normalizeCodexReasoningEffort,
-  resolveGatewayProviderMaxRetries,
   resolveOpenAiReasoningEffort,
   resolveOpus47MaxTokensFloor,
   streamSfGatewayOpenAIFull,
   stripReasoningEffortForGpt55,
-  withGatewayProviderRetryDefaults,
 } from "../lib/transport.ts";
 
-describe("Gateway provider retry defaults", () => {
-  it("defaults to 3 retries when Pi has no retry.provider.maxRetries setting", () => {
-    expect(GATEWAY_PROVIDER_DEFAULT_MAX_RETRIES).toBe(3);
-    expect(resolveGatewayProviderMaxRetries(undefined)).toBe(3);
-    expect(withGatewayProviderRetryDefaults(undefined).maxRetries).toBe(3);
-  });
-
-  it("honors explicit Pi provider retry overrides, including 0 to disable", () => {
-    expect(resolveGatewayProviderMaxRetries(0)).toBe(0);
-    expect(resolveGatewayProviderMaxRetries(5)).toBe(5);
-    expect(withGatewayProviderRetryDefaults({ maxRetries: 0 }).maxRetries).toBe(0);
-    expect(withGatewayProviderRetryDefaults({ maxRetries: 5 }).maxRetries).toBe(5);
-  });
-
-  it("normalizes invalid direct option values back to the Gateway default", () => {
-    expect(resolveGatewayProviderMaxRetries(Number.NaN)).toBe(3);
-    expect(resolveGatewayProviderMaxRetries(Number.POSITIVE_INFINITY)).toBe(3);
-  });
-});
-
 describe("Gateway-aware full Chat stream", () => {
-  it("applies retry defaults, reasoning allow-listing, and service tier through the full adapter", async () => {
+  it("leaves retry defaults to Pi while applying Gateway request shaping", async () => {
     const model: Model<"openai-completions"> = {
       id: "gpt-5.6-sol",
       name: "GPT-5.6",
@@ -122,7 +99,7 @@ describe("Gateway-aware full Chat stream", () => {
 
     await stream.result();
 
-    expect(observedRetries).toBe(3);
+    expect(observedRetries).toBeUndefined();
     expect(payload.reasoning_effort).toBe("max");
     expect(payload.allowed_openai_params).toContain("reasoning_effort");
     expect(payload.service_tier).toBe("priority");

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted; the no-args navigation decision is superseded by ADR 0051
 
 ## Context
 
@@ -31,14 +31,19 @@ The current baseline is mixed:
 
 ## Decision
 
-Use the `sf-lsp` panel style as the standard interactive command surface for SF
-Pi extensions:
+> **ADR 0051 amendment:** Every bundled interactive no-args `/sf-*` command now
+> opens that extension's SF Pi Manager detail page. Explicit subcommands remain
+> direct. Specialized/full-screen workflows launch through an explicit action.
+> The panel construction, action metadata, mode fallback, settings, and
+> diagnostics rules below still apply to explicit interactive action surfaces.
 
-1. **No-args slash command opens an action panel** only when `ctx.mode === "tui"`.
-   RPC mode has `ctx.hasUI === true`, but custom TUI components are not available
-   there; RPC should use Pi-native dialog/notification methods such as
-   `ctx.ui.select()` and `ctx.ui.notify()`. Print/JSON modes fall back to concise
-   text status plus help.
+Use Pi-native panel primitives for explicit interactive action surfaces:
+
+1. **Interactive actions are mode-aware.** Custom panels open only when
+   `ctx.mode === "tui"`. RPC mode has `ctx.hasUI === true`, but custom TUI
+   components are not available there; RPC uses Pi-native dialog/notification
+   methods such as `ctx.ui.select()` and `ctx.ui.notify()`. Print/JSON modes fall
+   back to concise text status plus help.
 2. **Panels are Pi-native TUI components**, built from existing primitives such
    as `DynamicBorder`, `SelectList`, `SettingsList`, `Text`, and `Spacer`, and
    guarded by `ctx.mode === "tui"`. Avoid one-off custom routers unless the
@@ -46,23 +51,24 @@ Pi extensions:
 3. **Every action has a label and description.** Descriptions must explain what
    the action does and any safety/troubleshooting implication. The description is
    rendered in the panel and reused in command completions when possible.
-4. **One action catalog drives panel, help, and completions.** Extensions should
-   define their command metadata once and reuse it for:
+4. **One action catalog drives Manager actions, explicit panels, help, and
+   completions.** Extensions should define their command metadata once and reuse
+   it for:
    - `getArgumentCompletions()` with `AutocompleteItem.description`
    - `/extension help`
-   - the no-args action panel
+   - the Manager detail action list
+   - any explicit interactive action panel
    - extension README command tables
 5. **Canonical subcommands are visible; aliases remain accepted.** Help and
    panels show canonical names like `doctor`, `refresh`, `setup`, `models`, and
    `tokens`. Parsers may keep short aliases such as `dr`, but aliases should not
    be the only discoverability path.
 6. **Config panels are for settings, not navigation.** Existing
-   `lib/config-panel.ts` implementations can remain, but they should be opened
-   from the standard action panel or the manager detail page as a settings
-   action. The manager should not be the only path to configure an extension.
-   New or touched preference surfaces should expose descriptor-backed fields
-   (key, label, description, values, default) so a future Pi-native extension
-   settings menu can reuse the same semantics without another migration.
+   `lib/config-panel.ts` implementations remain Manager-mounted settings pages.
+   An explicit `settings` subcommand may deep-link to that same page, but must not
+   create a second settings UI. New or touched preference surfaces should expose
+   descriptor-backed fields (key, label, description, values, default) so the
+   Manager and future Pi-native settings surfaces can reuse the same semantics.
 7. **Diagnostics and health actions are first-class.** Troubleshooting commands
    such as `doctor`, `probe`, `health`, `refresh`, `install status`, and `sent`
    should be grouped under clear section labels and should use action
@@ -82,7 +88,7 @@ standard now reserves three names — each for one purpose:
 
 | Filename                   | Purpose                                                                                                             |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `lib/command-panel.ts`     | The no-args slash-command status & actions panel built on `lib/common/command-panel.ts`. Opened from `/sf-<id>`.    |
+| `lib/command-panel.ts`     | An explicit grouped status/action panel built on `lib/common/command-panel.ts`; never the bundled no-args route.    |
 | `lib/config-panel.ts`      | The `ConfigPanelFactory` invoked by sf-pi-manager when `manifest.configurable === true`. Required for that surface. |
 | `lib/preferences-panel.ts` | A separate mutable user-preferences UI, when distinct from `config-panel.ts` (e.g. opened by `/sf-<id> settings`).  |
 
@@ -91,9 +97,10 @@ rejected by `npm run check:panels`. Most extensions inline their panel
 directly inside `index.ts` and never need a separate file; pull it out
 only when the panel logic exceeds ~50 lines.
 
-## Target panel shape
+## Target explicit-action panel shape
 
-A standard extension panel should fit this skeleton:
+When an explicit action genuinely needs a grouped extension panel, it should fit
+this skeleton:
 
 ```text
 <Extension Name> — status & controls
@@ -130,43 +137,23 @@ type SfPiCommandAction = {
 };
 ```
 
-## Migration plan
+## Current migration direction
 
-1. **Inventory and metadata**
-   - Add per-extension command/action metadata where command surfaces are larger
-     than one or two subcommands.
-   - Make `getArgumentCompletions()` return descriptions, not only labels.
-   - Fix drift where parsers accept commands that completion/help omit.
-
-2. **Gateway first**
-   - Convert `/sf-llm-gateway-internal` no-args from text-only status into a
-     status/actions panel.
-   - Group actions: setup/on/off, refresh/models, doctor/usage-probe/debug,
-     tokens/onboard, beta/help.
-   - Ensure every subcommand has a short description and appears in completion,
-     help, and README.
-
-3. **Configurable extensions**
-   - Add standard panels to `sf-guardrail` and `sf-slack` that launch their
-     existing config/settings panels from a clearly described action.
-   - Keep existing HITL confirmation behavior unchanged.
-
-4. **Manager simplification**
-   - Replace the bespoke `/sf-pi` overlay with a standard list/action panel or a
-     thin catalog browser that reuses the same command-panel primitives.
-   - Keep enable/disable, scope selection, recommendations, announcements,
-     skills, and doctor behavior, but expose them through the shared interaction
-     vocabulary instead of a separate custom UI language.
-
-5. **Small command extensions**
-   - Add lightweight panels only where useful (`sf-agentscript`,
-     `sf-devbar`, `sf-feedback`).
-   - Leave passive extensions alone unless users ask for controls.
+1. Migrate every bundled interactive no-args `/sf-*` command to its Manager
+   detail page.
+2. Preserve explicit subcommands as direct, scriptable paths with noninteractive
+   text fallbacks.
+3. Launch full-screen or specialized UI only through explicit subcommands or
+   Manager actions.
+4. Reuse one action catalog for Manager rows, completion, help, and docs when
+   the grammar is simple.
+5. Retain explicit grouped panels only where they add behavior that Manager
+   actions and direct commands cannot express cleanly.
 
 ## Consequences
 
-- Users get one mental model: type the extension command, scan status, pick an
-  action with visible descriptions.
+- Users get one mental model: type the no-args extension command to enter its
+  Manager page; type an explicit subcommand to execute directly.
 - Slash completion becomes self-documenting because subcommands carry
   descriptions.
 - Existing text commands remain scriptable and stable.

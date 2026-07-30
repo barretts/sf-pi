@@ -387,6 +387,118 @@ describe("streamSfGatewayResponses", () => {
     expect(events).toEqual(["start", "text_start", "text_end", "done"]);
   });
 
+  it("normalizes Pi 0.83 pending partials before emitting an early terminal event", async () => {
+    const bedrockResponsesModel = {
+      ...responsesModel,
+      id: "gpt-5.5-bedrock",
+    } as Model<"openai-responses">;
+    const bedrockChatModel = {
+      ...chatModel,
+      id: "gpt-5.5-bedrock",
+    } as Model<"openai-completions">;
+    const hooks: Gpt55ResponsesTestHooks = {
+      responsesStreamer: () => {
+        responsesCalls++;
+        const stream = createAssistantMessageEventStream();
+        setTimeout(() => {
+          const pending = {
+            ...dummyMessage(),
+            model: "gpt-5.5-bedrock",
+            content: [{ type: "text" as const, text: "ok" }],
+            stopReason: "pending",
+          } as unknown as AssistantMessage;
+          stream.push({ type: "start", partial: pending });
+          stream.push({ type: "text_start", contentIndex: 0, partial: pending });
+          stream.push({ type: "text_end", contentIndex: 0, content: "ok", partial: pending });
+        }, 0);
+        return stream;
+      },
+      chatStreamer: emptyChatStreamer,
+    };
+
+    const events: AssistantMessageEvent[] = [];
+    for await (const event of streamSfGatewayResponses(
+      bedrockResponsesModel,
+      context,
+      undefined,
+      { chatModel: bedrockChatModel },
+      hooks,
+    )) {
+      events.push(event);
+    }
+
+    const done = events.find(
+      (event): event is Extract<AssistantMessageEvent, { type: "done" }> => event.type === "done",
+    );
+    expect(done?.reason).toBe("stop");
+    expect(done?.message.stopReason).toBe("stop");
+  });
+
+  it("keeps synthetic length and tool-use terminal reasons coherent", async () => {
+    const bedrockResponsesModel = {
+      ...responsesModel,
+      id: "gpt-5.5-bedrock",
+    } as Model<"openai-responses">;
+    const bedrockChatModel = {
+      ...chatModel,
+      id: "gpt-5.5-bedrock",
+    } as Model<"openai-completions">;
+
+    for (const expected of ["length", "toolUse"] as const) {
+      const stream = createAssistantMessageEventStream();
+      const content =
+        expected === "toolUse"
+          ? [
+              {
+                type: "toolCall" as const,
+                id: "call-1",
+                name: "probe",
+                arguments: {},
+              },
+            ]
+          : [{ type: "text" as const, text: "partial" }];
+      const partial = {
+        ...dummyMessage(),
+        model: "gpt-5.5-bedrock",
+        content,
+        stopReason: expected === "length" ? "length" : "pending",
+      } as unknown as AssistantMessage;
+      queueMicrotask(() => {
+        stream.push({ type: "start", partial });
+        if (expected === "toolUse") {
+          stream.push({
+            type: "toolcall_end",
+            contentIndex: 0,
+            toolCall: content[0] as Extract<(typeof content)[number], { type: "toolCall" }>,
+            partial,
+          });
+        } else {
+          stream.push({ type: "text_end", contentIndex: 0, content: "partial", partial });
+        }
+      });
+
+      const events: AssistantMessageEvent[] = [];
+      for await (const event of streamSfGatewayResponses(
+        bedrockResponsesModel,
+        context,
+        undefined,
+        { chatModel: bedrockChatModel },
+        {
+          responsesStreamer: () => stream,
+          chatStreamer: emptyChatStreamer,
+        },
+      )) {
+        events.push(event);
+      }
+      const done = events.find(
+        (event): event is Extract<AssistantMessageEvent, { type: "done" }> => event.type === "done",
+      );
+
+      expect(done?.reason).toBe(expected);
+      expect(done?.message.stopReason).toBe(expected);
+    }
+  });
+
   it("does not early-finish non-Bedrock Responses turns before the upstream terminal event", async () => {
     const hooks: Gpt55ResponsesTestHooks = {
       responsesStreamer: () => delayedDoneStreamer("gpt-5.5"),
@@ -424,7 +536,7 @@ describe("streamSfGatewayResponses", () => {
     return stream;
   }
 
-  it("passes the Gateway default provider retry budget to Responses", async () => {
+  it("leaves the provider retry budget unset when Pi omits it", async () => {
     let observedMaxRetries: number | undefined;
     const hooks: Gpt55ResponsesTestHooks = {
       responsesStreamer: (_model, _context, options) => {
@@ -438,7 +550,7 @@ describe("streamSfGatewayResponses", () => {
       streamSfGatewayResponses(responsesModel, context, undefined, { chatModel }, hooks),
     );
 
-    expect(observedMaxRetries).toBe(3);
+    expect(observedMaxRetries).toBeUndefined();
   });
 
   it("preserves explicit Pi provider retry overrides, including 0", async () => {

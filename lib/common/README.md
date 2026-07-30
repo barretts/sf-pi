@@ -84,7 +84,8 @@ Q2. Is the state read by 2+ extensions in the same process?
 
 Q3. Is the state a user-facing pi setting they'd hand-edit?
     YES → mutate pi settings.json via lib/common/sf-pi-settings.ts helpers
-          Project > global precedence; never write opaque blobs there.
+          Resolve each field as project → global → default; omitted project
+          fields inherit global values. Never write opaque blobs there.
           Examples: package filter list, provider/model config, default thinking level
 
 Q4. Otherwise (per-user/project persisted state, sf-pi only) →

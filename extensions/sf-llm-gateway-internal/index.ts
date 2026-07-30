@@ -232,12 +232,6 @@ import {
   createStaleUsageRefreshState,
   maybeAutoRefreshStaleUsage,
 } from "./lib/stale-usage-refresh.ts";
-import {
-  clearRetryEventListener,
-  formatRetryEventNotification,
-  setRetryEventListener,
-  type RetryEvent,
-} from "./lib/retry-telemetry.ts";
 import { installWireTrace, isWireTraceEnabled } from "./lib/wire-trace.ts";
 import { requirePiVersion } from "../../lib/common/pi-compat.ts";
 import { markBootStep } from "../../lib/common/boot-timing.ts";
@@ -383,16 +377,6 @@ export default function sfLlmGatewayInternalExtension(pi: ExtensionAPI) {
     // ctx getters after reload.
     const startupCwd = ctx.cwd;
 
-    // Install the retry-telemetry listener so transparent Anthropic
-    // early-stream retries surface as user-visible notifications. These
-    // retries use the same provider retry budget Pi passes through the
-    // transport; the listener captures `ctx` by closure — session_shutdown
-    // clears it so we do not hold a stale reference past the session.
-    setRetryEventListener((event: RetryEvent) => {
-      const level: "info" | "warning" = event.type === "retry_exhausted" ? "warning" : "info";
-      ctx.ui.notify(formatRetryEventNotification(event), level);
-    });
-
     // One-shot migration: rewrite references to the retired
     // `sf-llm-gateway-internal-anthropic` provider in pi's settings.json
     // files. Idempotent via a per-file sentinel under `sfPi`. See
@@ -486,7 +470,6 @@ export default function sfLlmGatewayInternalExtension(pi: ExtensionAPI) {
     gatewayProviderRuntime.clear();
     clearDeferredStartupTimers();
     clearProviderSignal();
-    clearRetryEventListener();
     detailsKickedOff = false;
     ctx.ui.setStatus(STATUS_KEY, undefined);
     if (unregisterMonthlyUsage) {

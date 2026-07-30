@@ -9,8 +9,12 @@ The minimum Pi Runtime version that SF Pi intentionally supports for loaded bund
 _Avoid_: soft minimum, optional runtime, best-effort compatibility version
 
 **Pi Runtime Support Window**:
-The audited Pi `0.x` minor line SF Pi intentionally supports, expressed as an inclusive **Pi Runtime Floor** and an exclusive next-minor ceiling. Both package metadata and the runtime gate enforce it; required CI proves the floor and newest in-window release before the claim widens.
-_Avoid_: open-ended minimum, latest-is-compatible assumption, nightly-only compatibility claim, silent next-minor adoption
+The audited Pi `0.x` releases from the inclusive **Pi Runtime Floor** through the **Pi Runtime Audit Edge**, represented by an exclusive next-minor ceiling. Required CI and runtime classification enforce the audited claim; package metadata separately enforces the wider hard loadable range for forward-compatible stable `0.x` releases.
+_Avoid_: hard loadable range, open-ended minimum, latest-is-compatible assumption, nightly-only compatibility claim, silent next-minor adoption
+
+**Pi Runtime Audit Edge**:
+The newest exact Pi Runtime release that required CI proves and SF Pi uses for normal development and repair guidance. Newer stable `0.x` releases inside the hard loadable range may run in forward-compatibility mode without becoming audited automatically.
+_Avoid_: Pi Runtime Floor, latest available release, hard maximum, forward-compatible release
 
 **Node Runtime Floor**:
 The minimum Node.js runtime version that SF Pi intentionally supports for installation and loaded bundled extensions. It should be defined once and reused by package metadata, preinstall checks, doctor diagnostics, and startup status surfaces.
@@ -33,8 +37,8 @@ The SF Pi model-context view that follows the active compaction-aware session br
 _Avoid_: all-entry injection scan, sibling-branch context, historical mutable-state pileup, audit-entry filtering
 
 **Salesforce Instruction Surface**:
-All SF Pi-owned model-visible context present before task execution: Salesforce kernel and runtime context, active tool definitions and guidance, and the compact SF Pi reference map. It excludes external Salesforce skills, user/project instructions, conversation history, and tool results.
-_Avoid_: system prompt, SF Brain prompt, total context window, provider payload, external skill catalog
+All SF Pi-owned model-visible context present before task execution: the **Salesforce Engineering Constitution**, the **SF Pi Routing Summary**, active tool definitions and guidance, and other compact hidden runtime context. It excludes external Salesforce skills, user/project instructions, conversation history, and tool results.
+_Avoid_: Salesforce kernel, reference map, system prompt, total context window, provider payload, external skill catalog
 
 **Salesforce-First Interpretation**:
 The SF Pi posture that ambiguous development requests in Salesforce contexts are interpreted through Salesforce concepts and owning SF Pi workflows first, while explicit general engineering requests remain fully supported. It is a domain bias, not a refusal boundary and not a reason to force Salesforce tools into unrelated work.
@@ -335,6 +339,10 @@ _Avoid_: compile-on-save lint dump, per-keystroke graph scan, project-wide quali
 **Agent Script Universal Quality Rule**:
 An **Agent Script Quality Rule** whose meaning does not depend on organization-specific action names, sensitive-resource policy, target allowlists, or threshold choices. The first quality release contains only these rules plus report-only metrics; configurable organization policy is a later boundary.
 _Avoid_: inferred security policy, customer convention, target-name heuristic, configurable v1 rule
+
+**Setting Scope Policy**:
+The declared authority model for one user-facing SF Pi preference. A Global-Only setting can be changed only for the user as a whole; a Project-Inheritable setting can specialize its global value for one project and otherwise inherits it. Scope belongs to each setting rather than implicitly to an entire extension.
+_Avoid_: extension-section scope, accidental project override, implicit scope from file presence, universal project override
 
 **Agent Script Quality Rule Setting**:
 A global-only On/Off preference for one canonical **Agent Script Quality Rule**, stored sparsely under `sfPi.agentScript.quality.rules`. Disabled rules do not report, repair, compute metrics, or gate publication; every **Agent Script Quality Result** discloses effective coverage, and project settings cannot override the preference.

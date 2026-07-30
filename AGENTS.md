@@ -73,30 +73,28 @@ Use these in order:
 - If you change any `manifest.json`, run `npm run generate-catalog`.
 - Prefer deriving extension lists from `catalog/index.json` or `catalog/registry.ts` instead of hardcoding them.
 
-### Standardized `/sf-*` panel pattern
+### Standardized `/sf-*` command pattern
 
-Every interactive extension command (`/sf-slack`, `/sf-devbar`,
-`/sf-data360`, ...) follows the same shape so users don't have to
-relearn each command:
+Every bundled extension command (`/sf-slack`, `/sf-devbar`,
+`/sf-data360`, ...) follows one navigation model so users do not have to
+relearn each extension:
 
-1. Open `lib/common/command-panel.ts` `openCommandPanel` when invoked
-   with no args and `ctx.hasUI`.
-2. Render action results via `lib/common/info-panel.ts` `openInfoPanel`
-   when `fromPanel === true`. Direct command-line invocations may
-   `notify` for short messages; headless mode falls through to stdout.
-3. Append the shared lifecycle toggle row from
-   `extensions/sf-pi-manager/lib/extension-toggle.ts` so users can
-   disable / enable the extension without leaving the panel.
-4. Place Close + the toggle in the `LIFECYCLE_GROUP`. Section labels
-   use `theme.fg("toolTitle")` for visible hierarchy.
-5. Support `Esc`, `q`, and typed `exit` / `quit` to dismiss.
+1. With no arguments and interactive UI, open that extension's detail page in
+   the SF Pi Manager through `openExtensionInManager`.
+2. Explicit subcommands such as `doctor`, `status`, or `refresh` execute
+   directly and remain scriptable.
+3. Specialized or full-screen workflows launch from an explicit subcommand or
+   Manager action; they do not replace the no-args Manager route.
+4. Non-interactive no-args invocations return concise text status/help instead
+   of attempting to open TUI-only UI.
+5. Simple command grammars declare action metadata once and reuse it for
+   parsing, completion, help, Manager actions, and docs where practical.
 
-The lint `npm run check:panels` (and `npm run validate`) verifies the
-three imports above. Documented exceptions live in
-`scripts/check-panel-consistency.mjs` (currently sf-pi-manager,
-sf-brain, sf-ohana-spinner, sf-lsp). New extensions scaffolded via
-`npm run scaffold` start from this template and pass the lint on
-first commit.
+Local `openCommandPanel` surfaces remain available for explicit actions that
+need grouped TUI interaction, but they are not an alternative no-args
+navigation standard. ADR 0051 supersedes the no-args portion of ADR 0005.
+Existing nonconforming commands are migration targets; new and newly touched
+commands follow the Manager-first contract.
 
 ### Boot-path contract
 
@@ -149,7 +147,8 @@ Q2. Is the state read by 2+ extensions in the same process?
 
 Q3. Is the state a user-facing pi setting they'd hand-edit?
     YES → mutate pi settings.json via lib/common/sf-pi-settings.ts helpers
-          Project > global precedence; never write opaque blobs there.
+          Resolve each field as project → global → default; an omitted project
+          field inherits its global value. Never write opaque blobs there.
           Examples: package filter list, provider/model config, thinking level
 
 Q4. Otherwise (per-user persisted state, sf-pi only) →
@@ -195,6 +194,13 @@ ADR 0005 reserves three filenames for the three panel surfaces. The
 | `lib/command-panel.ts`     | The no-args slash-command status & actions panel (built on `lib/common/command-panel.ts`).                          |
 | `lib/config-panel.ts`      | The `ConfigPanelFactory` invoked by sf-pi-manager when `manifest.configurable === true`. Required for that surface. |
 | `lib/preferences-panel.ts` | A separate mutable user-preferences UI when distinct from `config-panel.ts` (e.g. opened by `/sf-<id> settings`).   |
+
+Use the shared descriptor-driven panel only for simple fixed-choice scalar
+fields (booleans, enums, bounded numeric choices). Project rows expose
+**Inherit global** and global rows expose **Use default**; these delete the
+scoped field rather than materializing inherited values. Keep conditional,
+nested, security-sensitive, credential, diagnostic, and specialized editor
+panels extension-owned; do not grow a universal callback-based config framework.
 
 Most extensions inline their command panel directly in `index.ts` and
 never need a separate file; pull it out only when the panel logic

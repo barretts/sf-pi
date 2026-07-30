@@ -316,28 +316,23 @@ If an extension has `"configurable": true` in its manifest, it must export
 `createConfigPanel` from `lib/config-panel.ts` matching the `ConfigPanelFactory`
 type signature.
 
-### Slash-command panels and discoverability
+### Slash-command navigation and discoverability
 
-See [`docs/adr/0005-standard-command-panels.md`](./docs/adr/0005-standard-command-panels.md)
-for the standard interactive command surface.
+ADR 0051 supersedes ADR 0005's original no-args navigation rule.
 
-- If an extension exposes a slash command, the no-args command should either
-  show a concise status/action panel in interactive mode or explain why it is a
-  direct wizard/action instead.
-- Prefer the `sf-lsp` style: `ctx.ui.custom()` with `DynamicBorder`,
-  `SelectList`, `Text`, and short section headings. Use `SettingsList` for
-  simple preference toggles.
-- Every selectable action and every subcommand completion should have a short
-  description. Reuse the same metadata for panel rows, `/help`, README command
-  tables, and `getArgumentCompletions()` where practical.
-- Headless/print/RPC mode must keep a text fallback; panels are progressive
-  enhancement, not the only way to operate an extension.
-- Keep package-level enable/disable centralized in `sf-pi-manager`. Other
-  extension panels may expose local feature toggles, setup, refresh, doctor,
-  probe, health, and help actions.
-- Avoid new bespoke overlay routers unless the surface genuinely requires custom
-  rendering. Extract shared `lib/common/command-panel/` helpers only after the
-  pattern has repeated enough to justify it.
+- Every bundled `/sf-*` command with an interactive no-args invocation opens
+  that extension's detail page in the SF Pi Manager.
+- Explicit subcommands remain direct and scriptable. Full-screen workflows use
+  an explicit subcommand or Manager action rather than replacing no-args
+  navigation.
+- Headless/print/RPC no-args behavior returns concise text status/help.
+- Every selectable action and subcommand completion has a short description.
+  Reuse one action catalog for parsing, completion, help, Manager actions, and
+  README command tables where the grammar is simple.
+- Use Pi-native `SelectList`, `SettingsList`, `DynamicBorder`, and related TUI
+  primitives for explicit interactive actions. Avoid new bespoke overlay
+  routers unless the workflow genuinely requires custom rendering.
+- Keep package-level enable/disable centralized in `sf-pi-manager`.
 
 ### Tool output and display contract
 

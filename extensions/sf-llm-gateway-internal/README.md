@@ -14,8 +14,8 @@ extension. Read this before making changes.
 Registers one complete Pi Provider and keeps Gateway-specific behavior in
 focused adapters. Pi owns credential persistence/logout, provider-scoped model
 storage, refresh coordination, and dispatch by real model API tags. SF Pi keeps
-endpoint normalization, model inference, transport quirks, retries, diagnostics,
-spend, and telemetry.
+endpoint normalization, model inference, transport quirks, terminal error guidance,
+diagnostics, spend, and telemetry.
 
 ## Key Architecture: One Complete Provider, Three APIs
 
@@ -104,11 +104,11 @@ short-circuits subsequent sessions. Users see no prompt and no manual step.
    Bedrock GPT-5.6 routes omit `service_tier` because `priority` is not valid
    for those routes.
 
-2. **Anthropic stream errors** (`streamSfGatewayAnthropic`). Uses Pi's
-   provider retry budget (`retry.provider.maxRetries`, Gateway default: 3) when
-   Anthropic reports a retryable SSE error before any user-visible content is
-   emitted, then normalizes raw error envelopes into a concise message that
-   preserves the request id.
+2. **Anthropic stream errors** (`streamSfGatewayAnthropic`). Pi owns agent-level
+   retry attempts, exponential backoff, cancellation, and human-visible retry
+   lifecycle. The Gateway Adapter makes one upstream stream attempt, normalizes
+   raw error envelopes into a concise message that preserves the request id,
+   and appends bounded terminal guidance.
 
 3. **Modern Opus adaptive thinking** (`streamSfGatewayAnthropic`). pi-ai owns
    the generic adaptive-thinking payload through the model-level
@@ -361,7 +361,6 @@ extensions/sf-llm-gateway-internal/
     provider-auth.ts        ← implementation module
     provider-telemetry.ts   ← implementation module
     provider.ts             ← implementation module
-    retry-telemetry.ts      ← implementation module
     setup-overlay.ts        ← implementation module
     stale-usage-refresh.ts  ← implementation module
     status.ts               ← implementation module
@@ -369,6 +368,7 @@ extensions/sf-llm-gateway-internal/
     transport.ts            ← implementation module
     wire-trace.ts           ← implementation module
   tests/
+    anthropic-transport.test.ts← unit / smoke test
     ca-bundle-fixer.test.ts ← unit / smoke test
     ca-probe-state.test.ts  ← unit / smoke test
     claude-code-import.test.ts← unit / smoke test
@@ -401,6 +401,7 @@ extensions/sf-llm-gateway-internal/
     models.test.ts          ← unit / smoke test
     monthly-usage.test.ts   ← unit / smoke test
     native-provider-live.test.ts← unit / smoke test
+    native-retry-lifecycle.test.ts← unit / smoke test
     onboard-action.test.ts  ← unit / smoke test
     onboarding-sources.test.ts← unit / smoke test
     onboarding.test.ts      ← unit / smoke test
@@ -409,8 +410,6 @@ extensions/sf-llm-gateway-internal/
     provider-auth.test.ts   ← unit / smoke test
     provider-telemetry.test.ts← unit / smoke test
     provider.test.ts        ← unit / smoke test
-    retry-telemetry.test.ts ← unit / smoke test
-    robust-retry.test.ts    ← unit / smoke test
     setup-overlay-single-write.test.ts← unit / smoke test
     stale-usage-refresh.test.ts← unit / smoke test
     status.test.ts          ← unit / smoke test
@@ -582,10 +581,11 @@ payloads. Its preset forces adaptive thinking, preserves distinct `xhigh` and
 native 1M/128K limits.
 
 **Opus 4.7/4.8 returns `api_error: Internal server error` on heavy turns:**
-Transient mid-stream failures use Pi's provider retry budget
-(`retry.provider.maxRetries`, Gateway default: 3) with exponential backoff
-before bubbling. If the retry exhausts, the final error includes an inline
-`Tip:` footer with next steps. For deeper inspection, enable wire tracing
+Pi owns retries through `retry.enabled`, `retry.maxRetries`, and
+`retry.baseDelayMs`, including exponential backoff, cancellation, and visible
+retry lifecycle. The Gateway Adapter makes one stream attempt and preserves the
+sanitized request id plus an inline `Tip:` footer when an error reaches Pi. For
+deeper inspection, enable wire tracing
 (`SF_LLM_GATEWAY_TRACE=1`). Note: the earlier instability at
 `max_tokens=128000 + effort=max` has been resolved upstream (May 2026);
 the transport no longer applies level-scaled output-token floors.

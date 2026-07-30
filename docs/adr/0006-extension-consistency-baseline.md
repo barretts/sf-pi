@@ -40,11 +40,11 @@ match. `sf-feedback`'s local copy was deleted.
 
 ADR 0005 didn't pin filenames; three names emerged. We now reserve:
 
-| Filename                   | Purpose                                                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `lib/command-panel.ts`     | The no-args slash-command status & actions panel built on `lib/common/command-panel.ts`.                            |
-| `lib/config-panel.ts`      | The `ConfigPanelFactory` invoked by sf-pi-manager when `manifest.configurable === true`. Required for that surface. |
-| `lib/preferences-panel.ts` | A separate mutable user-preferences UI when distinct from `config-panel.ts` (e.g. opened by `/sf-<id> settings`).   |
+| Filename                   | Purpose                                                                                                              |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `lib/command-panel.ts`     | An explicit grouped status/action panel built on `lib/common/command-panel.ts`; no-args navigation follows ADR 0051. |
+| `lib/config-panel.ts`      | The `ConfigPanelFactory` invoked by sf-pi-manager when `manifest.configurable === true`. Required for that surface.  |
+| `lib/preferences-panel.ts` | A separate mutable user-preferences UI when distinct from `config-panel.ts` (e.g. opened by `/sf-<id> settings`).    |
 
 The deprecated names `lib/panel.ts` and `lib/settings-panel.ts` are rejected
 by `npm run check:panels`. Most extensions never need a separate file at all
@@ -276,6 +276,31 @@ Every other slack tool was already wrapped through
 `buildSlackTextResult` in `extensions/sf-slack/lib/truncation.ts`,
 so the envelope is now consistent across all 12 LLM tools shipped
 by sf-pi.
+
+## Settings inheritance follow-up
+
+SF Pi extension settings resolve each field independently as **project → global
+→ default**. A project `sfPi.<extension>` section overrides only fields it
+contains; omitted sibling fields inherit their global values. This matches Pi's
+nested-settings model and replaces the inconsistent whole-section behavior in
+older extension adapters. The migration changes read semantics only: SF Pi does
+not rewrite settings files or materialize omitted project fields. Effective
+values can change when a project omitted a field supplied globally; release
+notes and migration guidance must call that out explicitly. Tests prove old and
+new effective values with project/global fixtures and verify byte-for-byte
+settings preservation during reads.
+
+A shared descriptor-driven config panel is limited to simple fixed-choice scalar
+fields such as booleans, enums, and bounded numeric choices. Conditional,
+nested, security-sensitive, credential, diagnostic, and specialized editor
+panels remain extension-owned. SF Pi does not create a universal callback-based
+config framework.
+
+The first pilot is SF Browser plus SF Agent Script. At project scope every row
+includes **Inherit global**; at global scope every row includes **Use default**.
+Selecting either deletes that field from the chosen scope. Saving a field never
+materializes inherited sibling values, and empty extension sections are pruned
+when doing so preserves unrelated settings.
 
 ## Status
 

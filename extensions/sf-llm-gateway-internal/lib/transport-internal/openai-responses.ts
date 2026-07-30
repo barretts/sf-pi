@@ -28,7 +28,7 @@ import {
 import { streamOpenAIResponses, streamSimpleOpenAIResponses } from "@earendil-works/pi-ai/compat";
 import { streamSfGatewayOpenAI, streamSfGatewayOpenAIFull } from "./openai-chat.ts";
 import { injectOpenAiServiceTier } from "./payloads.ts";
-import { isGpt5BedrockResponsesModelId, withGatewayProviderRetryDefaults } from "./shared.ts";
+import { isGpt5BedrockResponsesModelId } from "./shared.ts";
 
 /**
  * Wrap stream options with an `onPayload` hook that sets the gateway's
@@ -46,10 +46,10 @@ import { isGpt5BedrockResponsesModelId, withGatewayProviderRetryDefaults } from 
  * double-setting.
  */
 function withPriorityServiceTier<TOptions extends StreamOptions>(
-  options: TOptions,
+  options: TOptions | undefined,
   modelId: string,
 ): TOptions {
-  const existingOnPayload = options.onPayload;
+  const existingOnPayload = options?.onPayload;
   return {
     ...options,
     onPayload: async (payload, payloadModel) => {
@@ -61,7 +61,7 @@ function withPriorityServiceTier<TOptions extends StreamOptions>(
       }
       return existingOnPayload ? existingOnPayload(nextPayload, payloadModel) : nextPayload;
     },
-  };
+  } as TOptions;
 }
 
 export const GPT5_FORCE_CHAT_ENV = "SF_LLM_GATEWAY_INTERNAL_GPT5_FORCE_CHAT";
@@ -113,6 +113,8 @@ function projectResponsesOptionsForChat(options: OpenAIResponsesOptions): OpenAI
     toolChoice,
     ...common
   } = options;
+  void _reasoningSummary;
+  void _serviceTier;
   const compatibleToolChoice =
     toolChoice === "auto" || toolChoice === "none" || toolChoice === "required"
       ? toolChoice
@@ -134,10 +136,7 @@ export function streamSfGatewayResponsesFull(
   },
   hooks?: Gpt5ResponsesFullTestHooks,
 ): AssistantMessageEventStream {
-  const gatewayOptions = withPriorityServiceTier(
-    withGatewayProviderRetryDefaults(options),
-    model.id,
-  );
+  const gatewayOptions = withPriorityServiceTier(options, model.id);
   const responsesStreamer = hooks?.responsesStreamer ?? streamOpenAIResponses;
   const chatStreamer = hooks?.chatStreamer ?? streamSfGatewayOpenAIFull;
   const chatOptions = projectResponsesOptionsForChat(gatewayOptions);
@@ -168,10 +167,7 @@ export function streamSfGatewayResponses(
   },
   hooks?: Gpt55ResponsesTestHooks,
 ): AssistantMessageEventStream {
-  const gatewayOptions = withPriorityServiceTier(
-    withGatewayProviderRetryDefaults(options),
-    model.id,
-  );
+  const gatewayOptions = withPriorityServiceTier(options, model.id);
   const responsesStreamer = hooks?.responsesStreamer ?? streamSimpleOpenAIResponses;
   const chatStreamer = hooks?.chatStreamer ?? ((m, c, o) => streamSfGatewayOpenAI(m, c, o));
 
@@ -215,9 +211,11 @@ function finishBedrockResponsesAfterVisibleOutput(
     ended = true;
     const message = cloneAssistantMessage(latestPartial);
     const hasToolCall = message.content.some((block) => block.type === "toolCall");
+    const reason = hasToolCall ? "toolUse" : message.stopReason === "length" ? "length" : "stop";
+    message.stopReason = reason;
     wrapped.push({
       type: "done",
-      reason: hasToolCall ? "toolUse" : message.stopReason === "length" ? "length" : "stop",
+      reason,
       message,
     });
     wrapped.end();

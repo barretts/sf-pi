@@ -84,13 +84,6 @@ const onboardMock = vi.hoisted(() => ({
 }));
 vi.mock("../lib/onboard-action.ts", () => onboardMock);
 
-const retryTelemetryMock = vi.hoisted(() => ({
-  clearRetryEventListener: vi.fn(),
-  formatRetryEventNotification: vi.fn(() => "retry"),
-  setRetryEventListener: vi.fn(),
-}));
-vi.mock("../lib/retry-telemetry.ts", () => retryTelemetryMock);
-
 const providerTelemetryMock = vi.hoisted(() => ({
   clearProviderSignal: vi.fn(),
   recordProviderResponse: vi.fn(),

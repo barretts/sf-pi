@@ -49,6 +49,14 @@ design proposal and — ideally — a PR.
 
 ## Next
 
+- [ ] Pi-native product-surface simplification program, after the Pi 0.82
+      adoption/deletion slice is complete: - reduce SF Welcome to Salesforce-specific, cache-first orientation and
+      remove duplicate Pi release/session/resource mechanics only after
+      ownership and behavior parity are proven; - compare SF DevBar with Pi's native footer, retaining prominent
+      Salesforce org, production, diagnostics, and gateway signals; - thin SF Pi Manager onto Pi package-resolution and TUI primitives only
+      where resolver and navigation parity are proven; - compare the advisory SF Herdr planning tool with a compact Pi skill and
+      retain the extension only if deterministic plans or managed preferences
+      demonstrate product leverage.
 - [ ] Generic OpenAI-compatible gateway alternative to `sf-llm-gateway-internal`
       that works for external users
 - [ ] Per-extension telemetry opt-in proposal, if ever needed, with explicit privacy review

@@ -21,14 +21,19 @@ afterEach(() => {
 });
 
 describe("readPiAuthProviderStatus", () => {
-  it("detects configured providers without returning token values", () => {
-    const file = makeAuthFile({ "sf-docs": { access: "secret-token" } });
+  it("detects Pi-owned API-key and OAuth credentials without returning values", () => {
+    for (const credential of [
+      { type: "api_key", key: "secret-key" },
+      { type: "oauth", access: "secret-token", refresh: "secret-refresh", expires: Date.now() },
+    ]) {
+      const file = makeAuthFile({ "sf-docs": credential });
 
-    expect(readPiAuthProviderStatus("sf-docs", file)).toEqual({
-      provider: "sf-docs",
-      configured: true,
-      source: "pi-auth-store",
-    });
+      expect(readPiAuthProviderStatus("sf-docs", file)).toEqual({
+        provider: "sf-docs",
+        configured: true,
+        source: "pi-auth-store",
+      });
+    }
   });
 
   it("reports missing or malformed auth stores as status only", () => {
@@ -44,7 +49,7 @@ describe("readPiAuthProviderStatus", () => {
     writeFileSync(malformed, "{", "utf8");
     expect(readPiAuthProviderStatus("sf-docs", malformed)).toMatchObject({
       configured: false,
-      source: "unavailable",
+      source: "pi-auth-store",
     });
   });
 });

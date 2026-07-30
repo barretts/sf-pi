@@ -130,8 +130,8 @@ macOS, Linux, and WSL are the primary targets. Native Windows works on
 x64 and ARM64 once the `sf` CLI is installed, but WSL is recommended for
 parity with Linux/macOS shell tooling. The loadable Pi range tracks the
 `peerDependencies` range in [`package.json`](./package.json) (currently
-`>=0.82.0 <1.0.0`). Required compatibility CI audits `>=0.82.0 <0.83.0`, with
-Pi 0.82.1 recommended. Newer stable Pi 0.x releases load in
+`>=0.82.0 <1.0.0`). Required compatibility CI audits `>=0.82.0 <0.84.0`, with
+Pi 0.83.0 recommended. Newer stable Pi 0.x releases load in
 forward-compatibility mode with one warning; older, prerelease, and Pi 1.x
 runtimes remain blocked by [`lib/common/pi-compat.ts`](./lib/common/pi-compat.ts).
 SF Docs, Slack, and the Gateway use
@@ -477,7 +477,7 @@ export PI_CODING_AGENT_SESSION_DIR="$HOME/.pi-sessions"
 ```
 
 sf-pi loads stable pi `>=0.82.0 <1.0.0`, so compatible installations honor the
-env var. Pi 0.82.1 is the recommended and latest required-CI runtime.
+env var. Pi 0.83.0 is the recommended and latest required-CI runtime.
 
 ## Adding a New Extension
 

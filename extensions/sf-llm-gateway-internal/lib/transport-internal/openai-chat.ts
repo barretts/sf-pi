@@ -31,17 +31,16 @@ import {
   injectOpenAiReasoningEffort,
   injectOpenAiServiceTier,
 } from "./payloads.ts";
-import { isCodexModelId, isOpenAiModelId, withGatewayProviderRetryDefaults } from "./shared.ts";
+import { isCodexModelId, isOpenAiModelId } from "./shared.ts";
 
 function withGatewayOpenAIOptions<TOptions extends StreamOptions>(
   model: Model<"openai-completions">,
   options: TOptions | undefined,
-): TOptions & { maxRetries: number } {
-  const gatewayOptions = withGatewayProviderRetryDefaults(options);
-  const existingOnPayload = gatewayOptions.onPayload;
+): TOptions {
+  const existingOnPayload = options?.onPayload;
 
   return {
-    ...gatewayOptions,
+    ...options,
     onPayload: async (payload, payloadModel) => {
       let nextPayload = payload;
 
@@ -71,7 +70,7 @@ function withGatewayOpenAIOptions<TOptions extends StreamOptions>(
 
       return existingOnPayload ? existingOnPayload(nextPayload, payloadModel) : nextPayload;
     },
-  };
+  } as TOptions;
 }
 
 export interface GatewayOpenAIFullTestHooks {

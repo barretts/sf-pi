@@ -11,3 +11,9 @@ This consolidates extension UI around one navigation model instead of maintainin
 The SF Pi Manager owns the interactive extension detail route. Configurable extension settings continue to drill into the Settings page introduced by ADR 0050. Extension-owned actions can appear on the Manager detail page and may delegate to existing slash subcommands, preserving the current command behavior without duplicating implementation logic.
 
 Non-interactive modes should keep concise text/status behavior rather than trying to open a Manager UI.
+
+The cutover is package-wide: Apex, LWC, and SOQL migrate their remaining
+interactive no-args local panels in the same release that makes the
+Manager-first checker blocking. Existing commands are not grandfathered, and
+the old exemption path is deleted rather than retained as a warning-only
+transition.

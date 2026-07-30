@@ -15,32 +15,32 @@ Repo-level rules still apply; see root `AGENTS.md`.
 
 ## File map (what lives where)
 
-| Responsibility                                 | File                              |
-| ---------------------------------------------- | --------------------------------- |
-| Extension entry, lifecycle, command dispatch   | `index.ts`                        |
-| Env vars, constants, saved-config I/O          | `lib/config.ts`                   |
-| Gateway URL normalization                      | `lib/gateway-url.ts`              |
-| Model presets + family inference               | `lib/models.ts`                   |
-| Complete Provider + model discovery            | `lib/provider.ts`                 |
-| Provider auth + session context                | `lib/provider-auth.ts`            |
-| Masked API-key input                           | `common secure credential prompt` |
-| HTTP transport (OpenAI-compat + Anthropic)     | `lib/transport.ts`                |
-| Monthly usage / key info / health fetcher      | `lib/monthly-usage.ts`            |
-| Pi settings mutation (defaults, enabledModels) | `lib/pi-settings.ts`              |
-| Legacy provider-id settings migration          | `lib/migrate-unify-provider.ts`   |
-| GPT-5.6 default settings migration             | `lib/migrate-gpt56-default.ts`    |
-| Footer + status report formatting              | `lib/status.ts`                   |
-| Standard command metadata + completions        | `lib/command-surface.ts`          |
-| Standalone slash-command setup overlay         | `lib/setup-overlay.ts`            |
-| Manager settings/setup action panel content    | `lib/config-panel.ts`             |
-| Transform debug probe                          | `lib/debug.ts`                    |
-| `/sf-llm-gateway doctor` diagnostics           | `lib/doctor.ts`                   |
-| `/sf-llm-gateway tokens` counter               | `lib/token-counter.ts`            |
-| `/sf-llm-gateway onboard` SSO link             | `lib/onboarding.ts`               |
-| Existing setup discovery (Claude/DevBar/CA)    | `lib/onboarding-sources.ts`       |
-| Provider-telemetry (429/5xx footer badge)      | `lib/provider-telemetry.ts`       |
-| Transparent inner-stream retry telemetry       | `lib/retry-telemetry.ts`          |
-| Wire-level request/response tracing            | `lib/wire-trace.ts`               |
+| Responsibility                                 | File                               |
+| ---------------------------------------------- | ---------------------------------- |
+| Extension entry, lifecycle, command dispatch   | `index.ts`                         |
+| Env vars, constants, saved-config I/O          | `lib/config.ts`                    |
+| Gateway URL normalization                      | `lib/gateway-url.ts`               |
+| Model presets + family inference               | `lib/models.ts`                    |
+| Complete Provider + model discovery            | `lib/provider.ts`                  |
+| Provider auth + session context                | `lib/provider-auth.ts`             |
+| Masked API-key input                           | `common secure credential prompt`  |
+| HTTP transport (OpenAI-compat + Anthropic)     | `lib/transport.ts`                 |
+| Monthly usage / key info / health fetcher      | `lib/monthly-usage.ts`             |
+| Pi settings mutation (defaults, enabledModels) | `lib/pi-settings.ts`               |
+| Legacy provider-id settings migration          | `lib/migrate-unify-provider.ts`    |
+| GPT-5.6 default settings migration             | `lib/migrate-gpt56-default.ts`     |
+| Footer + status report formatting              | `lib/status.ts`                    |
+| Standard command metadata + completions        | `lib/command-surface.ts`           |
+| Standalone slash-command setup overlay         | `lib/setup-overlay.ts`             |
+| Manager settings/setup action panel content    | `lib/config-panel.ts`              |
+| Transform debug probe                          | `lib/debug.ts`                     |
+| `/sf-llm-gateway doctor` diagnostics           | `lib/doctor.ts`                    |
+| `/sf-llm-gateway tokens` counter               | `lib/token-counter.ts`             |
+| `/sf-llm-gateway onboard` SSO link             | `lib/onboarding.ts`                |
+| Existing setup discovery (Claude/DevBar/CA)    | `lib/onboarding-sources.ts`        |
+| Provider-telemetry (429/5xx footer badge)      | `lib/provider-telemetry.ts`        |
+| Anthropic terminal error normalization         | `lib/transport-internal/shared.ts` |
+| Wire-level request/response tracing            | `lib/wire-trace.ts`                |
 
 The masked input implementation is shared at
 `lib/common/secure-credential-prompt.ts`; do not reintroduce an extension-local
@@ -112,7 +112,8 @@ When adding a subcommand:
 - `tests/command-parsing.test.ts` — every new subcommand needs a parse case
 - `tests/config.test.ts` — settings mutations covered by the `apply*` / `restore*` helpers
 - `tests/models.test.ts` — family inference / new presets
-- `tests/robust-retry.test.ts` — Anthropic early-stream retry behavior
+- `tests/native-retry-lifecycle.test.ts` — exact-Pi agent retry lifecycle behavior
+- `tests/anthropic-transport.test.ts` — Gateway error normalization without local retries
 - `tests/codex-regression.test.ts` — gated live test; runs only when
   `SF_LLM_GATEWAY_*` env vars are present (legacy internal aliases still work)
 

@@ -7,10 +7,11 @@
  * do not receive an ExtensionContext. It intentionally reports only whether a
  * provider appears configured; it never returns token values.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { readStoredCredential } from "@earendil-works/pi-coding-agent";
 import { globalAgentPath } from "./pi-paths.ts";
 
-export type PiAuthProviderStatusSource = "pi-auth-store" | "missing" | "unavailable";
+export type PiAuthProviderStatusSource = "pi-auth-store" | "missing";
 
 export interface PiAuthProviderStatus {
   provider: string;
@@ -28,17 +29,6 @@ export function readPiAuthProviderStatus(
 ): PiAuthProviderStatus {
   if (!existsSync(authPath)) return { provider, configured: false, source: "missing" };
 
-  try {
-    const parsed = JSON.parse(readFileSync(authPath, "utf8")) as Record<
-      string,
-      { access?: unknown; token?: unknown }
-    >;
-    const entry = parsed?.[provider];
-    const configured = [entry?.access, entry?.token].some(
-      (value) => typeof value === "string" && value.trim().length > 0,
-    );
-    return { provider, configured, source: "pi-auth-store" };
-  } catch {
-    return { provider, configured: false, source: "unavailable" };
-  }
+  const credential = readStoredCredential(provider, authPath);
+  return { provider, configured: credential !== undefined, source: "pi-auth-store" };
 }
