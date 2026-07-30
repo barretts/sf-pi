@@ -103,98 +103,154 @@ describe("flowResolver", () => {
 });
 
 describe("apexResolver", () => {
-  it("handles both apex:// and apexRest:// schemes against ApexClass.Name (Tooling)", async () => {
+  function fakeApexActionConn(
+    descriptions: Record<
+      string,
+      { name: string; inputs: Array<{ name: string }>; outputs: Array<{ name: string }> }
+    >,
+  ) {
+    const request = vi.fn(async (options: { url: string }) => {
+      const name = decodeURIComponent(options.url.split("/").at(-1) ?? "");
+      const description = descriptions[name];
+      if (!description) throw new Error(`No action description for ${name}`);
+      return description;
+    });
+    return { conn: { request } as unknown as Connection, request };
+  }
+
+  function authenticatedConn() {
+    return {
+      accessToken: "JWT",
+      instanceUrl: "https://example.my.salesforce.com",
+      getApiVersion: () => "67.0",
+      getConnectionOptions: () => ({
+        accessToken: "JWT",
+        instanceUrl: "https://example.my.salesforce.com",
+      }),
+    } as unknown as Connection;
+  }
+
+  it("uses the registered Apex action contract for direct primitive inputs and outputs", async () => {
     expect(apexResolver.schemes).toContain("apex");
     expect(apexResolver.schemes).toContain("apexRest");
-    const { conn, captured } = fakeConn([
-      {
-        Name: "MyClass",
-        Body: "public class MyClass { @InvocableMethod public static void run() {} }",
+    const { conn, request } = fakeApexActionConn({
+      DirectPrimitiveAction: {
+        name: "DirectPrimitiveAction",
+        inputs: [{ name: "channelName" }],
+        outputs: [{ name: "output" }],
       },
-    ]);
-    const found = await apexResolver.resolve(
-      conn,
-      ["MyClass"],
-      [{ name: "x", target: "apex://MyClass", scheme: "apex", ref_name: "MyClass" }],
-    );
-    expect(found?.has("MyClass")).toBe(true);
-    expect(decode(captured.url)).toContain("/tooling/query");
-    expect(decode(captured.url)).toContain("FROM ApexClass");
-    expect(decode(captured.url)).toContain("Body");
-  });
+    });
 
-  it("requires @InvocableMethod for apex:// targets", async () => {
-    const { conn } = fakeConn([{ Name: "PlainClass", Body: "public class PlainClass {}" }]);
-    const found = await apexResolver.resolve(
-      conn,
-      ["PlainClass"],
-      [{ name: "x", target: "apex://PlainClass", scheme: "apex", ref_name: "PlainClass" }],
-    );
-    expect(found?.has("PlainClass")).toBe(false);
     const detailed = await apexResolver.resolveTargets?.(conn, [
-      { name: "x", target: "apex://PlainClass", scheme: "apex", ref_name: "PlainClass" },
-    ]);
-    expect(detailed?.[0].reason).toBe("missing_invocable_method");
-    expect(detailed?.[0].detail).toMatch(/does not contain @InvocableMethod/);
-  });
-
-  it("checks Agent Script I/O names against @InvocableVariable fields", async () => {
-    const { conn } = fakeConn([
       {
-        Name: "OrderAction",
-        Body: [
-          "public class OrderAction {",
-          "  public class Request { @InvocableVariable public String orderId; }",
-          "  public class Response { @InvocableVariable public String status; }",
-          "  @InvocableMethod public static List<Response> run(List<Request> reqs) { return null; }",
-          "}",
-        ].join("\n"),
+        name: "check_availability",
+        target: "apex://DirectPrimitiveAction",
+        scheme: "apex",
+        ref_name: "DirectPrimitiveAction",
+        input_names: ["channelName"],
+        output_names: ["output"],
       },
     ]);
-    const found = await apexResolver.resolve(
-      conn,
-      ["OrderAction"],
-      [
-        {
-          name: "ok",
-          target: "apex://OrderAction",
-          scheme: "apex",
-          ref_name: "OrderAction",
-          input_names: ["orderId"],
-          output_names: ["status"],
-        },
-      ],
-    );
-    expect(found?.has("OrderAction")).toBe(true);
 
-    const mismatch = await apexResolver.resolve(
-      conn,
-      ["OrderAction"],
-      [
-        {
-          name: "bad",
-          target: "apex://OrderAction",
-          scheme: "apex",
-          ref_name: "OrderAction",
-          input_names: ["order_id"],
-          output_names: ["status"],
-        },
-      ],
-    );
-    expect(mismatch?.has("OrderAction")).toBe(false);
+    expect(detailed?.[0].status).toBe("ok");
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]?.[0].url).toBe("/actions/custom/apex/DirectPrimitiveAction");
+  });
+
+  it("compares registered Apex inputs and outputs separately", async () => {
+    const { conn } = fakeApexActionConn({
+      OrderAction: {
+        name: "OrderAction",
+        inputs: [{ name: "orderId" }],
+        outputs: [{ name: "status" }],
+      },
+    });
+
     const detailed = await apexResolver.resolveTargets?.(conn, [
       {
         name: "bad",
         target: "apex://OrderAction",
         scheme: "apex",
         ref_name: "OrderAction",
-        input_names: ["order_id"],
-        output_names: ["status"],
+        input_names: ["status"],
+        output_names: ["orderId"],
       },
     ]);
+
+    expect(detailed?.[0].status).toBe("missing");
     expect(detailed?.[0].reason).toBe("io_mismatch");
-    expect(detailed?.[0].detail).toMatch(/order_id/);
-    expect(detailed?.[0].detail).toMatch(/orderId/);
+    expect(detailed?.[0].detail).toMatch(/missing input\(s\): status/);
+    expect(detailed?.[0].detail).toMatch(/missing output\(s\): orderId/);
+    expect(detailed?.[0].data?.actual_inputs).toEqual(["orderId"]);
+    expect(detailed?.[0].data?.actual_outputs).toEqual(["status"]);
+  });
+
+  it("describes each unique Apex action once", async () => {
+    const { conn, request } = fakeApexActionConn({
+      SharedAction: { name: "SharedAction", inputs: [], outputs: [] },
+    });
+
+    const detailed = await apexResolver.resolveTargets?.(conn, [
+      { name: "first", target: "apex://SharedAction", scheme: "apex", ref_name: "SharedAction" },
+      { name: "second", target: "apex://SharedAction", scheme: "apex", ref_name: "SharedAction" },
+    ]);
+
+    expect(detailed?.map((item) => item.status)).toEqual(["ok", "ok"]);
+    expect(request).toHaveBeenCalledOnce();
+  });
+
+  it("classifies a confirmed missing Apex action as missing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(
+        async () =>
+          new Response(JSON.stringify([{ errorCode: "NOT_FOUND", message: "Not found" }]), {
+            status: 404,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    try {
+      const detailed = await apexResolver.resolveTargets?.(authenticatedConn(), [
+        { name: "x", target: "apex://PlainClass", scheme: "apex", ref_name: "PlainClass" },
+      ]);
+      expect(detailed?.[0].status).toBe("missing");
+      expect(detailed?.[0].reason).toBe("missing_invocable_action");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("classifies non-404 Apex action describe failures as unverifiable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(
+        async () =>
+          new Response(JSON.stringify([{ errorCode: "SERVER_ERROR", message: "Try again" }]), {
+            status: 500,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    try {
+      const detailed = await apexResolver.resolveTargets?.(authenticatedConn(), [
+        { name: "x", target: "apex://Unclear", scheme: "apex", ref_name: "Unclear" },
+      ]);
+      expect(detailed?.[0].status).toBe("unverifiable");
+      expect(detailed?.[0].detail).toMatch(/could not be described/i);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("classifies malformed successful action descriptions as unverifiable", async () => {
+    const request = vi.fn(async () => ({ inputs: [null], outputs: [] }));
+    const detailed = await apexResolver.resolveTargets?.({ request } as unknown as Connection, [
+      { name: "x", target: "apex://Malformed", scheme: "apex", ref_name: "Malformed" },
+    ]);
+
+    expect(detailed?.[0].status).toBe("unverifiable");
+    expect(detailed?.[0].reason).toBe("invalid_describe_response");
   });
 
   it("requires @RestResource for apexRest:// targets", async () => {

@@ -73,7 +73,7 @@ Use before inspecting deeply, mutating, previewing, or publishing.
 
 Use `fallback="server"` only when local severity-1 diagnostics look like dialect-version skew. It requires `target_org` and costs a network call.
 
-Explicit compile/check returns every upstream diagnostic severity. `clean=true` means no severity-1 errors; warnings, information, and hints remain visible evidence. Automatic compile-on-save feedback stays limited to errors and warnings.
+Explicit compile/check returns every upstream diagnostic severity. `clean=true` means no severity-1 errors; warnings, information, and hints remain visible evidence. The detailed human result shows every diagnostic and its full message; the LLM-facing summary remains compact. Automatic compile-on-save feedback stays limited to errors and warnings.
 
 `mode="format"` writes canonical SDK formatting and refuses parse errors.
 
@@ -85,7 +85,7 @@ Use `inspect/context_profile` before previewing or publishing voice, messaging, 
 
 Use `inspect/find_references` before mutating a symbol. Use `inspect/definition` when you only need the declaration.
 
-Use `inspect/check_targets` before publish when action or connected-agent targets must resolve in the org. Requires `target_org`; schemes without a proven resolver remain explicitly unverifiable. Connected-agent existence and runtime readiness are separate: an existing target without an Active version warns and provides an activation hint without blocking parent publication. Local project sources are traversed cycle-safely to depth five; transitive gaps warn, while direct targets retain existing blocker semantics.
+Use `inspect/check_targets` before publish when action or connected-agent targets must resolve in the org. Requires `target_org`; schemes without a proven resolver remain explicitly unverifiable. Actionable target rows always appear before resolved samples. Apex invocable input/output contracts come from Salesforce's registered Apex Action description so direct primitive and wrapper-based methods use the same runtime authority. Connected-agent existence and runtime readiness are separate: an existing target without an Active version warns and provides an activation hint without blocking parent publication. Local project sources are traversed cycle-safely to depth five; transitive gaps warn, while direct targets retain existing blocker semantics.
 
 Use `inspect/quality` to run the global enabled native quality catalog for one `.agent` file. It returns High/Moderate/Low/Info findings, rule coverage, suppressions, and report-only cyclomatic complexity. Global per-rule toggles live under SF Pi Manager → SF Agent Script → Settings → Quality Rules. Disabled rules do not report, repair, compute metrics, or gate publication.
 

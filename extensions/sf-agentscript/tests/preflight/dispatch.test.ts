@@ -20,6 +20,12 @@ import type { ComponentSummary } from "../../lib/inspect.ts";
 function fakeConn(byObject: Record<string, Array<Record<string, unknown>>>) {
   const handler = vi.fn(async (options: { url: string }) => {
     const url = decodeURIComponent(options.url);
+    if (url.includes("/actions/custom/apex/")) {
+      const name = url.split("/").at(-1) ?? "";
+      const action = byObject.ApexAction?.find((row) => row.name === name);
+      if (!action) throw new Error(`No Apex action ${name}`);
+      return action;
+    }
     for (const [sobject, rows] of Object.entries(byObject)) {
       if (url.includes(`FROM ${sobject}`)) return { records: rows };
     }
@@ -32,12 +38,7 @@ describe("checkActionTargets dispatch", () => {
   it("routes flow + apex + agentforce + externalService through their resolvers", async () => {
     const conn = fakeConn({
       Flow: [{ Definition: { DeveloperName: "Foo" }, Metadata: {} }],
-      ApexClass: [
-        {
-          Name: "Bar",
-          Body: "public class Bar { @InvocableMethod public static void run() {} }",
-        },
-      ],
+      ApexAction: [{ name: "Bar", inputs: [], outputs: [] }],
       BotDefinition: [{ DeveloperName: "Sub_Agent" }],
       ExternalServiceRegistration: [{ DeveloperName: "Svc" }],
     });
@@ -61,7 +62,7 @@ describe("checkActionTargets dispatch", () => {
   it("flags missing names per resolver, allows partial pass", async () => {
     const conn = fakeConn({
       Flow: [{ Definition: { DeveloperName: "Found" }, Metadata: {} }],
-      ApexClass: [],
+      ApexAction: [],
     });
     const result = await checkActionTargets(conn, [
       { name: "ok_flow", target: "flow://Found" },
@@ -70,12 +71,13 @@ describe("checkActionTargets dispatch", () => {
     ] as ComponentSummary[]);
     expect(result.ok).toBe(false);
     expect(result.resolved).toBe(1);
-    expect(result.missing).toBe(2);
+    expect(result.missing).toBe(1);
+    expect(result.unverifiable).toBe(1);
     const byName = new Map(result.targets.map((t) => [t.name, t]));
     expect(byName.get("ok_flow")?.status).toBe("ok");
     expect(byName.get("miss_flow")?.status).toBe("missing");
     expect(byName.get("miss_flow")?.metadata_label).toBe("Flow");
-    expect(byName.get("miss_apex")?.status).toBe("missing");
+    expect(byName.get("miss_apex")?.status).toBe("unverifiable");
     expect(byName.get("miss_apex")?.metadata_label).toBe("ApexClass");
   });
 

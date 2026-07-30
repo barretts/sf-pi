@@ -10,7 +10,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { renderTargetCheckSummary } from "../lib/authoring/actions/inspect.ts";
 import { findDefinition, findReferences } from "../lib/inspect.ts";
+import type { CheckActionTargetsResult } from "../lib/preflight.ts";
 
 let workDir: string;
 
@@ -98,5 +100,33 @@ describe("findDefinition", () => {
     const result = await findDefinition(filePath, "@outputs.foo");
     expect(result.ok).toBe(false);
     expect(result.reason).toBe("bad_symbol");
+  });
+});
+
+describe("renderTargetCheckSummary", () => {
+  test("shows a failed target even when it follows eight successful targets", () => {
+    const targets = Array.from({ length: 10 }, (_, index) => ({
+      name: index === 9 ? "failed_last" : `ok_${index}`,
+      target: `flow://Target_${index}`,
+      scheme: "flow",
+      ref_name: `Target_${index}`,
+      status: index === 9 ? ("missing" as const) : ("ok" as const),
+      ...(index === 9 ? { detail: "Flow exists but its active contract does not match." } : {}),
+    }));
+    const result: CheckActionTargetsResult = {
+      ok: false,
+      targets,
+      total: targets.length,
+      resolved: 9,
+      missing: 1,
+      unverifiable: 0,
+    };
+
+    const summary = renderTargetCheckSummary(result).join("\n");
+
+    expect(summary).toContain("1/10 action target checks failed");
+    expect(summary).toContain("✗ failed_last → flow://Target_9");
+    expect(summary).toContain("Flow exists but its active contract does not match.");
+    expect(summary).not.toContain("✓ ok_7");
   });
 });

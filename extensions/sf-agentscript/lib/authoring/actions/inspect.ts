@@ -17,7 +17,12 @@ import { buildFeatureProfile } from "../../feature-profile.ts";
 import { isAgentScriptFile } from "../../file-classify.ts";
 import { findDefinition, findReferences } from "../../inspect.ts";
 import { connFromAlias } from "../../../../../lib/common/sf-conn/connection.ts";
-import { checkActionTargets, checkConnectedAgentReadinessGraph } from "../../preflight.ts";
+import {
+  checkActionTargets,
+  checkConnectedAgentReadinessGraph,
+  type ActionTargetCheck,
+  type CheckActionTargetsResult,
+} from "../../preflight.ts";
 import { diagnoseRuntimeSmoke, type RuntimeSmokeResult } from "../../preflight/runtime-smoke.ts";
 import { collectOrgReviewFindings } from "../../review/org-checks.ts";
 import type { AgentScriptQualityResult } from "../../quality/types.ts";
@@ -302,35 +307,7 @@ async function actionCheckTargets(
       issue.kind === "cycle" ||
       issue.kind === "depth_limit",
   );
-  const runtimeNotReady = result.targets.filter(
-    (target) => target.runtime_readiness === "not_ready",
-  );
-  const summaryLines = [
-    !result.ok
-      ? `⚠ ${result.missing}/${result.total} action target(s) missing in org`
-      : runtimeNotReady.length > 0
-        ? `⚠ All ${result.total} action target(s) exist; ${runtimeNotReady.length} connected agent target(s) are not runtime-ready`
-        : `✓ All ${result.total} action target(s) resolved in org`,
-  ];
-  for (const t of result.targets.slice(0, 8)) {
-    const flag =
-      t.status === "missing"
-        ? "✗"
-        : t.status === "unverifiable"
-          ? "?"
-          : t.runtime_readiness === "not_ready"
-            ? "⚠"
-            : "✓";
-    const detail =
-      t.status === "ok"
-        ? t.runtime_detail
-          ? ` — ${t.runtime_detail}`
-          : ""
-        : ` — ${t.detail ?? "not verified"}`;
-    summaryLines.push(`  ${flag} ${t.name} → ${t.target}${detail}`);
-  }
-  if (result.targets.length > 8)
-    summaryLines.push(`  …and ${result.targets.length - 8} more in details.targets`);
+  const summaryLines = renderTargetCheckSummary(result);
   if (connectedGraph.nodes.length > 1) {
     summaryLines.push(
       `Connected graph: ${connectedGraph.nodes.length} node(s) · ${graphIssues.length} transitive warning(s)`,
@@ -366,6 +343,55 @@ async function actionCheckTargets(
     ),
     summaryLines.join("\n"),
   );
+}
+
+const MAX_TARGET_SUMMARY_ROWS = 8;
+
+function isActionableTarget(target: ActionTargetCheck): boolean {
+  return target.status !== "ok" || target.runtime_readiness === "not_ready";
+}
+
+/** Keep target output compact without ever hiding the rows that need action. */
+export function renderTargetCheckSummary(result: CheckActionTargetsResult): string[] {
+  const runtimeNotReady = result.targets.filter(
+    (target) => target.runtime_readiness === "not_ready",
+  );
+  const lines = [
+    result.missing > 0
+      ? `⚠ ${result.missing}/${result.total} action target checks failed`
+      : result.unverifiable > 0
+        ? `⚠ ${result.unverifiable}/${result.total} action target checks could not be verified`
+        : runtimeNotReady.length > 0
+          ? `⚠ All ${result.total} action targets exist; ${runtimeNotReady.length} connected agent target(s) are not runtime-ready`
+          : `✓ All ${result.total} action targets resolved in org`,
+  ];
+
+  const actionable = result.targets.filter(isActionableTarget);
+  const resolved = result.targets.filter((target) => !isActionableTarget(target));
+  const resolvedSlots = Math.max(0, MAX_TARGET_SUMMARY_ROWS - actionable.length);
+  const displayed = [...actionable, ...resolved.slice(0, resolvedSlots)];
+
+  for (const target of displayed) {
+    const flag =
+      target.status === "missing"
+        ? "✗"
+        : target.status === "unverifiable"
+          ? "?"
+          : target.runtime_readiness === "not_ready"
+            ? "⚠"
+            : "✓";
+    const detail =
+      target.status === "ok"
+        ? target.runtime_detail
+          ? ` — ${target.runtime_detail}`
+          : ""
+        : ` — ${target.detail ?? "not verified"}`;
+    lines.push(`  ${flag} ${target.name} → ${target.target}${detail}`);
+  }
+
+  const hidden = result.targets.length - displayed.length;
+  if (hidden > 0) lines.push(`  …and ${hidden} resolved target(s) in details.targets`);
+  return lines;
 }
 
 async function actionQuality(agentFile: string, timings?: TimingCollector) {

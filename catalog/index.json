@@ -68,6 +68,7 @@
         "Global per-rule quality toggles dynamically control reporting, repair, metrics, and local-file publication gating without a reload.",
         "Eval, trace, preview, and lifecycle calls reuse @salesforce/core / SF CLI auth context; timeout-sensitive HTTP may use bounded native fetch and never logs or persists tokens.",
         "Local-first: compile and validate run via official @sf-agentscript packages before any network call.",
+        "Apex action preflight uses Salesforce's registered action description for authoritative primitive and wrapper input/output contracts; failed target rows are never hidden behind resolved samples.",
         "Eval runs synthesize trace artifacts from inline Evaluation API data by default; explicit trace fetches are idempotent GETs.",
         "Publication always creates an inactive version; activation requires complete exact-org, exact-BotVersion generated-baseline evidence plus the current designated release suite when configured.",
         "Untested activation is a distinct Guardrail Safety Envelope; acknowledge_untested_activation is intent, never approval.",
@@ -78,7 +79,7 @@
     "entry": "extensions/sf-agentscript/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 30274
+    "srcLoc": 30371
   },
   {
     "id": "sf-apex",

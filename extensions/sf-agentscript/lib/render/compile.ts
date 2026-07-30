@@ -13,7 +13,7 @@
 
 import { Text } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { padRightVisible, visibleWidth, clipLine } from "./shared.ts";
+import { padRightVisible, visibleWidth } from "./shared.ts";
 
 export interface CompileDiagnostic {
   severity: number;
@@ -140,9 +140,10 @@ function formatCompileBody(details: CompileResultDetails, theme: Theme | undefin
 
   // Sort: errors first, then warnings/info, in original order within group.
   const ordered = [...diagnostics].sort((a, b) => a.severity - b.severity);
-  const widestCode = ordered
-    .slice(0, 8)
-    .reduce((max, d) => Math.max(max, visibleWidth(d.code ?? "(no-code)")), 0);
+  const widestCode = ordered.reduce(
+    (max, d) => Math.max(max, visibleWidth(d.code ?? "(no-code)")),
+    0,
+  );
 
   // Header row
   const sevHeader = padRightVisible(dim("Sev"), 5);
@@ -150,16 +151,12 @@ function formatCompileBody(details: CompileResultDetails, theme: Theme | undefin
   const lineHeader = padRightVisible(dim("Line"), 6);
   lines.push(`  ${sevHeader} ${codeHeader} ${lineHeader} ${dim("Message")}`);
 
-  for (const d of ordered.slice(0, 8)) {
+  for (const d of ordered) {
     const dot = d.severity === 1 ? err("●") : d.severity === 2 ? warn("⚠") : fg("muted", "·");
     const sev = padRightVisible(`${dot} `, 5);
     const codeStr = padRightVisible(code(d.code ?? "(no-code)"), widestCode + 2);
     const ln = padRightVisible(dim(`L${(d.range?.start?.line ?? 0) + 1}`), 6);
-    const msg = clipLine(d.message ?? "", 80);
-    lines.push(`  ${sev} ${codeStr} ${ln} ${msg}`);
-  }
-  if (diagnostics.length > 8) {
-    lines.push(dim(`  …and ${diagnostics.length - 8} more in details.diagnostics`));
+    lines.push(`  ${sev} ${codeStr} ${ln} ${d.message ?? ""}`);
   }
 
   // Quick-fix recover_via hint

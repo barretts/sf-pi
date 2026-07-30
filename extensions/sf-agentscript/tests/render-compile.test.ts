@@ -112,11 +112,14 @@ describe("compileResultMarkdown", () => {
     expect(md).toMatch(/code=missing-required-field/);
   });
 
-  it("clips at 8 sample diagnostics with overflow note", () => {
+  it("renders every diagnostic and its complete message", () => {
     const diagnostics = Array.from({ length: 12 }, (_, i) => ({
       severity: 2 as const,
       code: `c${i}`,
-      message: `m${i}`,
+      message:
+        i === 11
+          ? "the final diagnostic message is intentionally longer than eighty characters so detailed output cannot silently clip it"
+          : `m${i}`,
       range: { start: { line: i } },
     }));
     const md = compileResultMarkdown({
@@ -127,7 +130,10 @@ describe("compileResultMarkdown", () => {
       diagnostics,
     });
     expect(md).toMatch(/12 issues/);
-    expect(md).toMatch(/and 4 more/);
+    expect(md).toContain("c0");
+    expect(md).toContain("c11");
+    expect(md).toContain(diagnostics[11].message);
+    expect(md).not.toContain("more in details.diagnostics");
   });
 
   it("format action: changed file shows bytes_changed", () => {

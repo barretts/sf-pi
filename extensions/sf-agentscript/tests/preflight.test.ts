@@ -112,6 +112,14 @@ describe("checkActionTargets", () => {
     // `request` (used by connRequest under the hood).
     const handler = vi.fn((options: { url: string }) => {
       const url = decodeURIComponent(options.url);
+      if (url.includes("/actions/custom/apex/")) {
+        const name = url.split("/").at(-1) ?? "";
+        const action = records
+          .find((entry) => entry.sobject === "ApexAction")
+          ?.rows.find((row) => row.name === name);
+        if (!action) return Promise.reject(new Error(`No Apex action ${name}`));
+        return Promise.resolve(action);
+      }
       const found = records.find((entry) => url.includes(`FROM ${entry.sobject}`));
       return Promise.resolve({ records: found?.rows ?? [] });
     });
@@ -122,13 +130,8 @@ describe("checkActionTargets", () => {
     const conn = fakeConn([
       { sobject: "Flow", rows: [{ Definition: { DeveloperName: "LogEvent" }, Metadata: {} }] },
       {
-        sobject: "ApexClass",
-        rows: [
-          {
-            Name: "IssueClassifier",
-            Body: "public class IssueClassifier { @InvocableMethod public static void run() {} }",
-          },
-        ],
+        sobject: "ApexAction",
+        rows: [{ name: "IssueClassifier", inputs: [], outputs: [] }],
       },
     ]);
     const result = await checkActionTargets(conn, [
@@ -183,7 +186,7 @@ describe("checkActionTargets", () => {
   it("flags missing targets and continues", async () => {
     const conn = fakeConn([
       { sobject: "Flow", rows: [{ Definition: { DeveloperName: "Found" }, Metadata: {} }] },
-      { sobject: "ApexClass", rows: [] },
+      { sobject: "ApexAction", rows: [] },
     ]);
     const result = await checkActionTargets(conn, [
       { name: "ok", target: "flow://Found" },
@@ -192,12 +195,14 @@ describe("checkActionTargets", () => {
     ] as ComponentSummary[]);
     expect(result.ok).toBe(false);
     expect(result.resolved).toBe(1);
-    expect(result.missing).toBe(2);
+    expect(result.missing).toBe(1);
+    expect(result.unverifiable).toBe(1);
     const missingNames = result.targets.filter((t) => t.status === "missing").map((t) => t.name);
-    expect(missingNames.sort()).toEqual(["miss_apex", "miss_flow"]);
+    expect(missingNames).toEqual(["miss_flow"]);
     const byName = new Map(result.targets.map((t) => [t.name, t]));
     expect(byName.get("miss_flow")?.detail).toMatch(/active Flow/);
-    expect(byName.get("miss_apex")?.detail).toMatch(/not found in the org/);
+    expect(byName.get("miss_apex")?.status).toBe("unverifiable");
+    expect(byName.get("miss_apex")?.detail).toMatch(/could not be described/);
   });
 
   it("reports unverifiable schemes that have no resolver registered", async () => {
