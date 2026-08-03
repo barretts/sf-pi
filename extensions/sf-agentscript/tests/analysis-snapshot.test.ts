@@ -24,8 +24,21 @@ vi.mock("../lib/inspect.ts", () => ({
   })),
 }));
 
+vi.mock("../lib/quality/engine.ts", () => ({
+  runAgentScriptQuality: vi.fn(async () => ({
+    ok: true,
+    status: "clean",
+    findings: [],
+    summary: { high: 0, moderate: 0, low: 0, info: 0 },
+    metrics: { cyclomatic_complexity: [] },
+    coverage: { total_rules: 0, enabled_rules: 0, disabled_rules: [] },
+    suppressions: { applied: [], invalid: [], unused: [] },
+  })),
+}));
+
 const { checkAgentScriptSource } = await import("../lib/diagnostics.ts");
 const { inspectSource } = await import("../lib/inspect.ts");
+const { runAgentScriptQuality } = await import("../lib/quality/engine.ts");
 
 afterEach(() => {
   clearAgentScriptAnalysisCache();
@@ -46,10 +59,12 @@ describe("Agent Script Analysis Snapshot", () => {
 
       await Promise.all([one.getCompile(), two.getCompile()]);
       await Promise.all([one.getInspect(), two.getInspect()]);
+      await Promise.all([one.getQuality(), two.getQuality()]);
       await Promise.all([one.getFeatureProfile(), two.getFeatureProfile()]);
 
       expect(checkAgentScriptSource).toHaveBeenCalledTimes(1);
       expect(inspectSource).toHaveBeenCalledTimes(1);
+      expect(runAgentScriptQuality).toHaveBeenCalledTimes(1);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

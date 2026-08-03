@@ -9,6 +9,7 @@ export const AGENT_SCRIPT_PACKAGES = [
   { name: "@sf-agentscript/agentscript-dialect", kind: "transitive" },
   { name: "@sf-agentscript/parser", kind: "transitive" },
   { name: "@sf-agentscript/types", kind: "transitive" },
+  { name: "@sf-agentscript/agentfabric-dialect", kind: "dev" },
 ] as const;
 
 export type AgentScriptPackageCatalogEntry = (typeof AGENT_SCRIPT_PACKAGES)[number];

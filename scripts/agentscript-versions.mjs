@@ -26,7 +26,10 @@ function readJson(filePath) {
 
 function declaredVersions() {
   const pkg = readJson(path.join(ROOT, "package.json"));
-  return pkg.dependencies ?? {};
+  return {
+    ...(pkg.dependencies ?? {}),
+    ...(pkg.devDependencies ?? {}),
+  };
 }
 
 async function latestVersion(packageName) {
@@ -71,7 +74,9 @@ for (const pkg of AGENT_SCRIPT_PACKAGES) {
 console.table(rows);
 const coherenceIssues = rows.flatMap((row) => {
   if (row.resolved === "—") return [`${row.package} is unresolved`];
-  if (row.kind === "direct" && row.declared === "—") return [`${row.package} is undeclared`];
+  if ((row.kind === "direct" || row.kind === "dev") && row.declared === "—") {
+    return [`${row.package} is undeclared`];
+  }
   if (row.status === "duplicate versions") return [`${row.package} resolves ${row.resolved}`];
   return [];
 });
@@ -85,5 +90,6 @@ console.log("\nIntentional refresh workflow:");
 console.log(
   "  npm install --save-exact @sf-agentscript/agentforce@<version> @sf-agentscript/language@<version> @sf-agentscript/lsp@<version>",
 );
+console.log("  npm install --save-dev --save-exact @sf-agentscript/agentfabric-dialect@<version>");
 console.log("  npm run check && npm test && npm run generate-catalog:check");
 console.log("\nNote: @sf-agentscript/compiler is transitive through @sf-agentscript/agentforce.");

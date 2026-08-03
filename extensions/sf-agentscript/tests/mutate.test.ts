@@ -53,6 +53,52 @@ const FULL_FIXTURE = [
   "",
 ].join("\n");
 
+const PROSE_RENAME_FIXTURE = [
+  "config:",
+  '    agent_name: "Test_Bot"',
+  '    agent_type: "AgentforceEmployeeAgent"',
+  "",
+  "subagent billing:",
+  '    description: "Billing"',
+  "",
+  "start_agent main:",
+  '    description: "Mention @subagent.billing as prose"',
+  "    # Keep @subagent.billing in this comment",
+  "    before_reasoning:",
+  "        transition to @subagent.billing",
+  "    reasoning:",
+  "        instructions: ->",
+  "            | Tell the user about @subagent.billing without invoking it.",
+  "",
+].join("\n");
+
+const SEMANTIC_RENAME_FIXTURE = [
+  "config:",
+  '    agent_name: "Test_Bot"',
+  '    agent_type: "AgentforceEmployeeAgent"',
+  "",
+  "subagent billing:",
+  '    description: "Billing"',
+  "",
+  "subagent billing_help:",
+  '    description: "A distinct helper"',
+  "",
+  "subagent helper_router:",
+  '    description: "Routes to the distinct helper"',
+  "    before_reasoning:",
+  "        transition to @subagent.billing_help",
+  "",
+  "start_agent main:",
+  '    description: "Mention @subagent.billing as prose"',
+  "    # Keep @subagent.billing in this comment",
+  "    before_reasoning:",
+  "        transition to @subagent.billing",
+  "    reasoning:",
+  "        instructions: ->",
+  "            | Tell the user about @subagent.billing without invoking it.",
+  "",
+].join("\n");
+
 describe("applyMutation: apply_quick_fix", () => {
   test("returns no_matching_diagnostic when the line/code don't match", async () => {
     const filePath = await writeAgent(
@@ -332,6 +378,49 @@ describe("applyMutation: rename", () => {
     expect(after).toContain("transition to @subagent.account_billing");
     expect(after).not.toContain("subagent billing:");
   });
+
+  test("characterizes the current exact-token fallback rewriting symbol-like prose", async () => {
+    const filePath = await writeAgent("bot.agent", PROSE_RENAME_FIXTURE);
+    const result = await applyMutation({
+      op: "rename",
+      path: filePath,
+      from: "@subagent.billing",
+      to: "@subagent.account_billing",
+    });
+    if (!result.ok) {
+      throw new Error(`Expected success, got ${result.reason}: ${result.reason_detail}`);
+    }
+
+    const after = await readFile(filePath, "utf8");
+    expect(after).toContain('description: "Mention @subagent.account_billing as prose"');
+    expect(after).toContain("# Keep @subagent.account_billing in this comment");
+    expect(after).toContain("| Tell the user about @subagent.account_billing without invoking it.");
+  });
+
+  test.fails(
+    "renames semantic references without changing comments, prompt text, or similar symbols",
+    async () => {
+      const filePath = await writeAgent("bot.agent", SEMANTIC_RENAME_FIXTURE);
+      const result = await applyMutation({
+        op: "rename",
+        path: filePath,
+        from: "@subagent.billing",
+        to: "@subagent.account_billing",
+      });
+      if (!result.ok) {
+        throw new Error(`Expected success, got ${result.reason}: ${result.reason_detail}`);
+      }
+
+      const after = await readFile(filePath, "utf8");
+      expect(after).toContain("subagent account_billing:");
+      expect(after).toContain("transition to @subagent.account_billing");
+      expect(after).toContain('description: "Mention @subagent.billing as prose"');
+      expect(after).toContain("# Keep @subagent.billing in this comment");
+      expect(after).toContain("| Tell the user about @subagent.billing without invoking it.");
+      expect(after).toContain("subagent billing_help:");
+      expect(after).toContain("transition to @subagent.billing_help");
+    },
+  );
 
   test("supports legacy topic.X → subagent.X conversion input", async () => {
     const filePath = await writeAgent("bot.agent", FULL_FIXTURE);

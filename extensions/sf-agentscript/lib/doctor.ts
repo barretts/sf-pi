@@ -12,7 +12,11 @@ import { existsSync } from "node:fs";
 import { access, constants } from "node:fs/promises";
 import type { ExtensionDoctorReport } from "../../../lib/common/doctor/registry.ts";
 import { boundedPromise } from "./bounded-salesforce-transport.ts";
-import { AGENT_SCRIPT_PACKAGES, collectLockedAgentScriptVersions } from "./package-catalog.ts";
+import {
+  AGENT_SCRIPT_PACKAGES,
+  collectLockedAgentScriptVersions,
+  type AgentScriptPackageCatalogEntry,
+} from "./package-catalog.ts";
 import { AGENTFORCE_SDK_PACKAGE, loadAgentforceSDK } from "./sdk.ts";
 import { probeSfapReadiness, type SfapReadinessReport } from "./sfap-readiness.ts";
 
@@ -151,6 +155,14 @@ export async function probeDoctor(
   };
 }
 
+type RuntimeAgentScriptPackage = Exclude<AgentScriptPackageCatalogEntry, { kind: "dev" }>;
+
+function isRuntimeAgentScriptPackage(
+  pkg: AgentScriptPackageCatalogEntry,
+): pkg is RuntimeAgentScriptPackage {
+  return pkg.kind !== "dev";
+}
+
 async function readAgentScriptPackageStatuses(
   includeFreshness = false,
 ): Promise<AgentScriptPackageStatus[]> {
@@ -165,9 +177,10 @@ async function readAgentScriptPackageStatuses(
   }
 
   const lockedVersions = await readLockedPackageVersions(fs);
+  const runtimePackages = AGENT_SCRIPT_PACKAGES.filter(isRuntimeAgentScriptPackage);
 
   return Promise.all(
-    AGENT_SCRIPT_PACKAGES.map(async (pkg) => {
+    runtimePackages.map(async (pkg) => {
       const resolvedVersion = await readInstalledPackageVersion(pkg.name);
       const resolvedVersions =
         lockedVersions.get(pkg.name) ?? (resolvedVersion ? [resolvedVersion] : []);

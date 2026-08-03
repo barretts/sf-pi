@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   npmRegistryPackageUrl,
   packageCoherenceIssues,
+  probeDoctor,
   renderDoctorReport,
   type DoctorStatus,
 } from "../lib/doctor.ts";
@@ -46,6 +47,13 @@ describe("renderDoctorReport", () => {
   test("builds scoped npm registry URLs", () => {
     expect(npmRegistryPackageUrl("@sf-agentscript/agentforce")).toBe(
       "https://registry.npmjs.org/@sf-agentscript%2Fagentforce",
+    );
+  });
+
+  test("omits the test-only AgentFabric package from runtime doctor status", async () => {
+    const status = await probeDoctor(process.cwd());
+    expect(status.agentScriptPackages.map((entry) => entry.name)).not.toContain(
+      "@sf-agentscript/agentfabric-dialect",
     );
   });
 

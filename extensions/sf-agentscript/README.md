@@ -362,6 +362,8 @@ extensions/sf-agentscript/
     agent-api-error-map.test.ts← unit / smoke test
     agent-config.test.ts    ← unit / smoke test
     agent-user-status.test.ts← unit / smoke test
+    agentfabric-graph-parity.test.ts← unit / smoke test
+    analysis-pipeline-characterization.test.ts← unit / smoke test
     analysis-snapshot.test.ts← unit / smoke test
     authoring-quality.test.ts← unit / smoke test
     authoring-review.test.ts← unit / smoke test

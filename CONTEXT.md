@@ -329,8 +329,8 @@ The agentic Apex development cycle coordinated by an **Apex Lifecycle Extension*
 _Avoid_: test runner only, log viewer only
 
 **Agent Script Quality Rule**:
-A static-analysis rule over compiler-valid Agent Script that identifies a deterministic defect, configured policy breach, maintainability problem, or advisory risk without redefining **Agent Script Compile Validity**. An **Agent Script Hardening Diagnostic** is the narrow proven-failure subset.
-_Avoid_: compiler diagnostic, generic lint rule, compile error, behavioral test result
+A static-analysis rule over compiler-valid Agent Script that identifies a deterministic defect, configured policy breach, maintainability problem, or advisory risk without redefining **Agent Script Compile Validity**. An **Agent Script Hardening Diagnostic** is the narrow proven-failure subset. When an official Agent Script diagnostic reaches strict semantic parity, SF Pi deletes the duplicate local evaluator and may retain only a thin policy projection that maps the upstream evidence into existing quality presentation, repair, suppression, or publication behavior.
+_Avoid_: duplicate upstream evaluator, compiler diagnostic presented as a second local finding, compile error, behavioral test result
 
 **Agent Script Quality Pass**:
 A source-versioned, single-agent-file evaluation of **Agent Script Quality Rules** after the agent settles or during explicit review. Edit-time feedback remains limited to compilation and **Agent Script Hardening Diagnostics**; multiple changed files are evaluated independently rather than becoming a project-wide quality claim.
@@ -405,8 +405,8 @@ A compact, stable, agent-facing summary of workflow topology and review/prefligh
 _Avoid_: raw AST, CST dump, compiler mirror, universal feature inventory
 
 **Agent Script Flow Projection**:
-An SF Pi-owned, source-versioned graph derived only from the official Agent Script AST that distinguishes one-way transitions, returning subagent delegations, and connected-agent invocations with their conditions and source ranges. **Agent Script Quality Rules** consume it for graph facts without introducing another parser or language model.
-_Avoid_: raw reference graph, visual diagram, copied upstream extractor, inferred runtime trace
+An SF Pi-owned, source-versioned graph derived only from the official Agent Script AST that distinguishes one-way transitions, returning subagent delegations, and connected-agent invocations with their conditions and source ranges. **Agent Script Quality Rules** consume it for graph facts without introducing another parser or language model. The public AgentFabric graph extractor may provide test-time parity insight over Agentforce fixtures, but it is not a production dependency, user-facing output, or replacement authority until it proves equivalent Agentforce edge semantics.
+_Avoid_: raw reference graph, runtime AgentFabric supplement, copied upstream extractor, inferred runtime trace
 
 **Agent Script Cycle Finding**:
 An **Agent Script Quality Rule** result whose confidence follows edge semantics: an unconditional one-way transition cycle is a deterministic defect, while conditional transition and returning-delegation cycles are advisory risks. A connected-agent cycle with unavailable source remains unverifiable rather than inferred broken.
@@ -431,6 +431,10 @@ _Avoid_: guessed type policy, every non-Service type is ready, unsupported-type 
 **Agent Script Package Coherence**:
 The official Agent Script parser, compiler, dialect, language, LSP, and types packages resolve as one compatible toolchain without missing or duplicate foundational versions. It is a read-only health claim, not an update mechanism.
 _Avoid_: latest-only check, generic dependency health, automatic package update, version-count dashboard
+
+**Agent Script Dual Upstream Analysis**:
+The local analysis contract that retains both the official compiler-document result and the official language-server document result for one Agent Script source identity. Their diagnostics form one deterministic deduplicated result, any severity-1 diagnostic blocks compile validity, and each result's distinct document, range, symbol, and language-service facts remain available to downstream workflows. SF Pi does not turn differences between the two official results into a separate user-facing status or report.
+_Avoid_: winner pipeline, duplicated diagnostic display, upstream divergence report, independent local parser, compile-only analysis
 
 **Agent Script Scaffold Routing**:
 The routing contract for generated Agent Script bundles: a single generated subagent is entered deterministically, while a multi-subagent scaffold exposes one planner-selectable transition per subagent with descriptions derived from the requested responsibilities.

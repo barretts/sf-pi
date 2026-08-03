@@ -8,6 +8,7 @@ describe("Agent Script package coherence", () => {
   test("resolves one locked version for every package in the local toolchain", () => {
     const pkg = JSON.parse(readFileSync(path.resolve("package.json"), "utf8")) as {
       dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
     };
     const lock = JSON.parse(readFileSync(path.resolve("package-lock.json"), "utf8")) as {
       packages?: Record<string, { version?: string }>;
@@ -18,6 +19,13 @@ describe("Agent Script package coherence", () => {
       expect(versionsByPackage.get(entry.name), entry.name).toHaveLength(1);
       if (entry.kind === "direct") {
         expect(pkg.dependencies?.[entry.name], `${entry.name} direct declaration`).toBeDefined();
+      }
+      if (entry.kind === "dev") {
+        expect(pkg.devDependencies?.[entry.name], `${entry.name} dev declaration`).toBeDefined();
+        expect(
+          pkg.dependencies?.[entry.name],
+          `${entry.name} production declaration`,
+        ).toBeUndefined();
       }
     }
   });
