@@ -7,7 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { checkActionTargets, checkBundleType, extractActionTargets } from "../lib/preflight.ts";
+import {
+  checkActionTargets,
+  checkBundleType,
+  extractActionTargets,
+} from "../lib/preflight/index.ts";
 import type { ComponentSummary } from "../lib/inspect.ts";
 
 let workDir: string;

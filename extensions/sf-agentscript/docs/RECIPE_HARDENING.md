@@ -73,7 +73,7 @@ Unable to load agent config: Invalid Config`. Either way, the user has
 already paid the publish + (sometimes) activate round-trip before learning
 that backing metadata is missing.
 
-**Fix**: `lib/preflight.ts::checkActionTargets()` runs **before** server
+**Fix**: `lib/preflight/index.ts::checkActionTargets()` runs **before** server
 compile / publish. For every `target:` URI on every action declaration
 (top-level OR inline under subagent / topic), it queries the target org:
 
@@ -106,7 +106,7 @@ that feeds the pre-flight) and live exercise in the recipe harness.
 cryptic `Required fields are missing: [BundleType]` error AFTER the
 zip + upload round-trip.
 
-**Fix**: `lib/preflight.ts::checkBundleType()` reads the bundle XML
+**Fix**: `lib/preflight/index.ts::checkBundleType()` reads the bundle XML
 before SDR ever sees it. Missing-field / wrong-root / unparseable cases
 each return a distinct `reason` code so the LLM error envelope can carry
 a clear suggestion ("Add `<bundleType>AGENT</bundleType>` inside

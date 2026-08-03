@@ -2,20 +2,15 @@
 /**
  * Server-error → actionable diagnostic mapping. Locks in the patterns that
  * most often confuse the LLM, with chain-able recover_via where possible.
- *
- * Originally tested mapPreviewError; promoted to mapAgentApiError when the
- * map moved to lib/errors/ for shared use across preview + lifecycle. The
- * compatibility shim re-exports the old name; we exercise both here so a
- * future shim removal can't silently break in-repo imports.
+ * Preview and lifecycle share this canonical map.
  */
 
 import { describe, expect, test } from "vitest";
 import { mapAgentApiError } from "../lib/errors/agent-api-error-map.ts";
-import { mapPreviewError } from "../lib/preview/error-map.ts";
 
 describe("mapAgentApiError (preview surface)", () => {
   test("version-cache-miss → bundle-meta / publish hint", () => {
-    const m = mapPreviewError(
+    const m = mapAgentApiError(
       500,
       {
         message: "Attempted to retrieve bot version ID to insert into cache, but record not found",
@@ -28,7 +23,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("surface population failure → connection surface guidance", () => {
-    const m = mapPreviewError(
+    const m = mapAgentApiError(
       500,
       {
         errorCode: "Error",
@@ -47,7 +42,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("session-not-found → recover_via start", () => {
-    const m = mapPreviewError(
+    const m = mapAgentApiError(
       500,
       { message: "V6Session not found for sessionId: xyz" },
       { phase: "send", surface: "api_name", agentApiName: "Bot" },
@@ -60,7 +55,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("session-not-found also matches v1.1 wording", () => {
-    const m = mapPreviewError(
+    const m = mapAgentApiError(
       500,
       { message: "Session not found for sessionId: abc" },
       { phase: "send", surface: "agent_file" },
@@ -69,7 +64,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("invalid-user-id → Service vs Employee guidance", () => {
-    const svc = mapPreviewError(
+    const svc = mapAgentApiError(
       400,
       { message: "Bad Request: Invalid user ID provided on start session: " },
       { phase: "start", surface: "api_name", agentApiName: "Bot" },
@@ -80,7 +75,7 @@ describe("mapAgentApiError (preview surface)", () => {
     expect(svc.message).toMatch(/provision_agent_user/);
     expect(svc.message).toMatch(/Einstein Agent User/);
 
-    const emp = mapPreviewError(
+    const emp = mapAgentApiError(
       400,
       { message: "Bad Request: Invalid user ID provided on start session: " },
       { phase: "start", surface: "agent_file" },
@@ -90,7 +85,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("inactive-agent → activate recover_via", () => {
-    const m = mapPreviewError(
+    const m = mapAgentApiError(
       412,
       {
         message:
@@ -106,7 +101,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("412 status alone (without the canonical message) still maps to inactive-agent", () => {
-    const m = mapPreviewError(
+    const m = mapAgentApiError(
       412,
       { message: "Some other 412" },
       { phase: "start", surface: "api_name", agentApiName: "X" },
@@ -120,7 +115,7 @@ describe("mapAgentApiError (preview surface)", () => {
     // session. The rewritten message states what happened, calls out
     // 404s as usually transient, and lists possible permanent causes
     // without claiming any of them are true.
-    const m = mapPreviewError(
+    const m = mapAgentApiError(
       404,
       { errorCode: "ERROR_HTTP_404", message: "" },
       { phase: "start", surface: "agent_file" },
@@ -135,7 +130,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("sfap-404 includes a list_versions hint when agentApiName is known", () => {
-    const m = mapPreviewError(
+    const m = mapAgentApiError(
       404,
       { errorCode: "ERROR_HTTP_404", message: "" },
       { phase: "start", surface: "api_name", agentApiName: "My_Bot" },
@@ -146,7 +141,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("bootstrap-failed → JWT scopes hint", () => {
-    const m = mapPreviewError(
+    const m = mapAgentApiError(
       401,
       { message: "Agent API auth bootstrap failed at /agentforce/bootstrap/nameduser" },
       { phase: "start", surface: "agent_file" },
@@ -156,7 +151,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("server compile 422 with compatibility risks explains local/org compiler skew", () => {
-    const m = mapPreviewError(
+    const m = mapAgentApiError(
       400,
       {
         message:
@@ -183,7 +178,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("HTTP 200 server compile failure maps experimental collect skew", () => {
-    const m = mapPreviewError(
+    const m = mapAgentApiError(
       200,
       {
         status: "failure",
@@ -207,7 +202,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("unknown errors pass through verbatim with matched=null", () => {
-    const m = mapPreviewError(
+    const m = mapAgentApiError(
       500,
       { message: "Some new server error we haven't seen before" },
       { phase: "send", surface: "agent_file" },
@@ -219,7 +214,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("string body is handled (some routes return text/plain)", () => {
-    const m = mapPreviewError(500, "V6Session not found for sessionId: abc", {
+    const m = mapAgentApiError(500, "V6Session not found for sessionId: abc", {
       phase: "send",
       surface: "api_name",
     });
@@ -227,7 +222,7 @@ describe("mapAgentApiError (preview surface)", () => {
   });
 
   test("null/empty body still produces a non-empty message", () => {
-    const m = mapPreviewError(500, null, { phase: "start", surface: "agent_file" });
+    const m = mapAgentApiError(500, null, { phase: "start", surface: "agent_file" });
     expect(m.matched).toBeNull();
     expect(m.message).toBeTruthy();
   });
@@ -371,15 +366,5 @@ describe("mapAgentApiError (lifecycle surface, Issue 4 patterns)", () => {
       { phase: "activate", surface: "lifecycle", agentApiName: "X" },
     );
     expect(m.matched).toBe("should-have-user-assigned");
-  });
-});
-
-describe("mapPreviewError compatibility shim", () => {
-  // The old name re-exports the new function so existing call sites in
-  // lib/preview/client.ts keep working until they migrate. Removing the
-  // shim is intentional API change; this test makes that decision
-  // explicit.
-  test("mapPreviewError === mapAgentApiError (same function under two names)", () => {
-    expect(mapPreviewError).toBe(mapAgentApiError);
   });
 });

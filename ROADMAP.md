@@ -17,7 +17,7 @@ design proposal and — ideally — a PR.
 - [x] Agent-friendly validation output in `scripts/validate.sh`
 - [x] SPDX pre-commit / CI enforcement and LLM-artifact CI guard
 - [x] In-process Agent Script authoring companion (`sf-agentscript`)
-      with vendored SDK, deterministic quick fixes, and weekly upstream sync
+      using official packages with deterministic quick fixes and version coherence checks
 - [x] `slack_send` with human-in-the-loop confirm + audit trail
 - [x] Scope probing + dynamic tool gating for `sf-slack`
 - [x] Unified one-provider gateway design with OpenAI-compat + native

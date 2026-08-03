@@ -9,9 +9,6 @@ import { actionRun, actionRunRelease } from "./eval/actions/run.ts";
 import { actionGetFailure, actionTrace } from "./eval/actions/evidence.ts";
 import { actionGenerateSpec, actionResolveActive } from "./eval/actions/generation.ts";
 
-export { actionRunRelease } from "./eval/actions/run.ts";
-export { readPublicFailures } from "./eval/actions/evidence.ts";
-
 export const EVAL_TOOL_NAME = "agentscript_eval";
 
 // -------------------------------------------------------------------------------------------------

@@ -1020,7 +1020,3 @@ export async function recordRunInIndex(
   });
   await rename(tempPath, idxPath);
 }
-
-// Re-export resolver primitives for the eval-resolve tool.
-export { resolveActiveIds, resolveAgentIds } from "./active-ids.ts";
-export type { ResolvedAgentIds, ResolveAgentIdsOptions, StatusFilter } from "./active-ids.ts";

@@ -30,7 +30,7 @@ import {
   checkActionTargets,
   checkBundleType,
   checkConnectedAgentReadinessGraph,
-} from "./preflight.ts";
+} from "./preflight/index.ts";
 import { loadAgentforceSDK } from "./sdk.ts";
 import type { TimingCollector } from "./timings.ts";
 

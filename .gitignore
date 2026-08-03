@@ -4,10 +4,6 @@ dist/
 **/.DS_Store
 *.js
 !*.config.js
-# Vendored @agentscript/agentforce ESM bundle — upstream build artifact that
-# MUST be committed so `npm install` works offline. Synced from
-# salesforce/agentscript by scripts/sync-agentforce-sdk.mjs.
-!extensions/sf-agentscript/lib/vendor/agentforce/browser.js
 *.tsbuildinfo
 
 # catalog/registry.ts and catalog/index.json are generated but checked in

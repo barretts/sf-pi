@@ -171,17 +171,6 @@ export async function resolveAgentIds(
   };
 }
 
-/**
- * Backward-compatible alias. New code should call `resolveAgentIds`
- * directly. Existing imports continue to work.
- */
-export async function resolveActiveIds(
-  conn: Connection,
-  agentApiName: string,
-): Promise<ResolvedAgentIds> {
-  return resolveAgentIds(conn, agentApiName, { status: "Active" });
-}
-
 // -------------------------------------------------------------------------------------------------
 // Placeholder substitution
 //
@@ -363,14 +352,4 @@ export function detectPlaceholderUsage(spec: unknown): PlaceholderUsage {
     active: s.includes("$active_bot_version_id") || s.includes("$active_planner_id"),
     latest: s.includes("$latest_bot_version_id") || s.includes("$latest_planner_id"),
   };
-}
-
-/**
- * Backward-compatible: returns true if any active OR latest placeholder is
- * referenced. Existing call sites continue to work; new code should prefer
- * `detectPlaceholderUsage` for the per-family signal.
- */
-export function specHasActivePlaceholders(spec: unknown): boolean {
-  const u = detectPlaceholderUsage(spec);
-  return u.active || u.latest;
 }

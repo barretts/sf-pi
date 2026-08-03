@@ -9,10 +9,6 @@ reports/licenses-production.json
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 
-# Vendored @agentscript/agentforce bundle — do not reformat.
-# It's a prebuilt upstream artifact synced by scripts/sync-agentforce-sdk.mjs.
-extensions/sf-agentscript/lib/vendor/
-
 # Agent / local verification scratch files.
 context.md
 progress.md

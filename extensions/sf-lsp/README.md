@@ -33,7 +33,7 @@ transcript row and the permanent sf-devbar top-bar LSP segment.
 
 **Agent Script note:** when the `sf-agentscript` extension is loaded,
 sf-lsp yields `.agent` files to it. That extension handles the same diagnostic
-flow in-process via the vendored Agent Script SDK — faster, richer, and with
+flow in-process via the official Agent Script packages — faster, richer, and with
 deterministic quick fixes. sf-lsp still observes the metadata the assist
 extension stamps onto the tool result so the transcript stays accurate for
 `.agent` edits.

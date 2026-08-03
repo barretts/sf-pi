@@ -299,7 +299,6 @@ extensions/sf-agentscript/
         trace.ts            ← implementation module
       client.ts             ← implementation module
       context-vars.ts       ← implementation module
-      error-map.ts          ← implementation module
       resolve-agent-version.ts← implementation module
       session-store.ts      ← implementation module
       trace-digest.ts       ← implementation module
@@ -357,7 +356,6 @@ extensions/sf-agentscript/
     mutate.ts               ← implementation module
     mutation-policy.ts      ← implementation module
     package-catalog.ts      ← implementation module
-    preflight.ts            ← implementation module
     preview-tool.ts         ← implementation module
     release-contract.ts     ← implementation module
     sdk.ts                  ← implementation module

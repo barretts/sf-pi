@@ -9,8 +9,6 @@
  *    contaminate)
  *  - `detectPlaceholderUsage` returns a per-family signal so the
  *    orchestrator can skip family resolvers it doesn't need
- *  - `specHasActivePlaceholders` (back-compat alias) still returns true
- *    when either family is referenced
  */
 
 import { describe, expect, test, vi } from "vitest";
@@ -19,7 +17,6 @@ import {
   injectResolvedAgentIds,
   resolveAgentIds,
   shouldInjectResolvedAgentIds,
-  specHasActivePlaceholders,
   substitutePlaceholders,
   type ResolvedAgentIds,
 } from "../lib/eval/active-ids.ts";
@@ -128,12 +125,6 @@ describe("detectPlaceholderUsage", () => {
       active: false,
       latest: false,
     });
-  });
-
-  test("specHasActivePlaceholders returns true on either family (back-compat)", () => {
-    expect(specHasActivePlaceholders({ x: "$active_planner_id" })).toBe(true);
-    expect(specHasActivePlaceholders({ x: "$latest_planner_id" })).toBe(true);
-    expect(specHasActivePlaceholders({ x: "no placeholder" })).toBe(false);
   });
 });
 

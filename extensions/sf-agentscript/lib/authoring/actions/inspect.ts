@@ -22,7 +22,7 @@ import {
   checkConnectedAgentReadinessGraph,
   type ActionTargetCheck,
   type CheckActionTargetsResult,
-} from "../../preflight.ts";
+} from "../../preflight/index.ts";
 import { diagnoseRuntimeSmoke, type RuntimeSmokeResult } from "../../preflight/runtime-smoke.ts";
 import { collectOrgReviewFindings } from "../../review/org-checks.ts";
 import type { AgentScriptQualityResult } from "../../quality/types.ts";

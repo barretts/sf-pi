@@ -39,7 +39,7 @@ import {
   type ResolveAgentVersionResult,
 } from "./resolve-agent-version.ts";
 import { boundedRestRequest, boundedSoqlQuery } from "../bounded-salesforce-transport.ts";
-import { mapPreviewError, type PreviewErrorContext } from "./error-map.ts";
+import { mapAgentApiError, type AgentApiErrorContext } from "../errors/agent-api-error-map.ts";
 import {
   applyPreviewContextPatch,
   mergeContextVariables,
@@ -133,7 +133,7 @@ export interface PreviewStartOptions {
   /** True when caller already performed an equivalent local compile/check. */
   skipLocalValidation?: boolean;
   /** Source-derived risks used to explain target-org server compiler rejection. */
-  publishFeatureRisks?: PreviewErrorContext["publishFeatureRisks"];
+  publishFeatureRisks?: AgentApiErrorContext["publishFeatureRisks"];
 }
 
 export interface PreviewStartResult {
@@ -311,7 +311,7 @@ export async function startPreview(opts: PreviewStartOptions): Promise<PreviewSt
     if (isSfapRoutingFailure(compileResp)) {
       throw new Error(sfap404Message({ phase: "compile" }));
     }
-    const mapped = mapPreviewError(compileResp.status, compileResp.body, {
+    const mapped = mapAgentApiError(compileResp.status, compileResp.body, {
       phase: "start",
       surface: "agent_file",
       agentName: opts.agentName,
@@ -445,7 +445,7 @@ export async function startPreview(opts: PreviewStartOptions): Promise<PreviewSt
     });
   }
   if (sessionResp.status < 200 || sessionResp.status >= 300) {
-    const mapped = mapPreviewError(sessionResp.status, sessionResp.body, {
+    const mapped = mapAgentApiError(sessionResp.status, sessionResp.body, {
       phase: "start",
       surface: "agent_file",
       agentName: opts.agentName,
@@ -612,7 +612,7 @@ export async function sendMessage(opts: PreviewSendOptions): Promise<PreviewSend
     });
   }
   if (resp.status < 200 || resp.status >= 300) {
-    const mapped = mapPreviewError(resp.status, resp.body, {
+    const mapped = mapAgentApiError(resp.status, resp.body, {
       phase: "send",
       surface: metadata.sessionKind === "api_name" ? "api_name" : "agent_file",
       agentName: opts.agentName,
@@ -1026,7 +1026,7 @@ export async function startPreviewByApiName(
         }));
   }
   if (sessionResp.status < 200 || sessionResp.status >= 300) {
-    const mapped = mapPreviewError(sessionResp.status, sessionResp.body, {
+    const mapped = mapAgentApiError(sessionResp.status, sessionResp.body, {
       phase: "start",
       surface: "api_name",
       agentApiName: opts.agentApiName,

@@ -12,7 +12,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { renderTargetCheckSummary } from "../lib/authoring/actions/inspect.ts";
 import { findDefinition, findReferences } from "../lib/inspect.ts";
-import type { CheckActionTargetsResult } from "../lib/preflight.ts";
+import type { CheckActionTargetsResult } from "../lib/preflight/index.ts";
 
 let workDir: string;
 

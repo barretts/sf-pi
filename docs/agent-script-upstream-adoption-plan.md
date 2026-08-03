@@ -1,6 +1,6 @@
 # Agent Script Upstream Adoption and Simplification Plan
 
-Status: approved; Milestones 0–4 are merged; Milestone 5 is implemented, independently reviewed, and validated on 2026-08-03; Milestone 6 requires separate approval
+Status: complete; Milestones 0–5 are merged; Milestone 6 is implemented, independently reviewed, and validated on 2026-08-03
 
 ## Goal
 
@@ -371,20 +371,14 @@ Registration Modules are materially smaller and easier to navigate, aggregate br
 
 Remove shallow internal seams and stale terminology after all functional behavior has settled.
 
-### Candidates
+### Completed work
 
-- `lib/preflight.ts` forwarding to `lib/preflight/index.ts`;
-- `lib/preview/error-map.ts` forwarding to the canonical Agent API error map;
-- unused compatibility exports in `lib/eval/active-ids.ts`;
-- stale vendored-SDK terminology;
-- other internal-only aliases discovered by repository-wide reference analysis.
-
-### Work
-
-- Confirm each candidate is absent from declared package/public exports and public documentation.
-- Migrate internal imports/tests to canonical Modules.
-- Delete the shim, compatibility-only tests, and stale comments together.
-- If a path is a supported external interface, defer it to a separately approved deprecation rather than deleting it here.
+- Removed the top-level preflight forwarding shim after migrating callers to the canonical preflight index.
+- Removed the preview-only error-map alias after migrating preview to the canonical shared Agent API error map.
+- Removed unused active-ID and placeholder compatibility exports plus the unused orchestrator resolver re-export surface.
+- Removed private action compatibility re-exports left after Milestone 5 once repository consumers used canonical action Modules.
+- Replaced stale vendored-SDK language and deleted obsolete vendor sync/ignore configuration.
+- Removed compatibility-only tests and updated implementation-path documentation together with each shim.
 
 ### Exit gate
 

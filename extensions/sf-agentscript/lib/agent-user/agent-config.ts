@@ -58,7 +58,7 @@ export async function readAgentConfigSliceFromSource(
     return {
       ok: false,
       reason: "sdk_unavailable",
-      reason_detail: "Vendored Agentforce SDK is not loadable.",
+      reason_detail: "The official Agent Script SDK package is not loadable.",
     };
   }
   let ast: Record<string, unknown>;

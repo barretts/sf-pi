@@ -6,7 +6,7 @@ import { inferAgentTypeFromTemplate } from "../agent-user/agent-config.ts";
 import { checkAgentUserStatus } from "../agent-user/status.ts";
 import type { AgentFeatureProfile } from "../feature-profile.ts";
 import type { ComponentSummary } from "../inspect.ts";
-import { checkActionTargets, checkConnectedAgentReadinessGraph } from "../preflight.ts";
+import { checkActionTargets, checkConnectedAgentReadinessGraph } from "../preflight/index.ts";
 import { checkSurfaceReadiness } from "../preflight/surface-readiness.ts";
 import type { ReviewFinding } from "./types.ts";
 

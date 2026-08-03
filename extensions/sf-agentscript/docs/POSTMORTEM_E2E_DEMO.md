@@ -162,11 +162,11 @@ The mutation adapter now uses the official SDK package's structured mutation/emi
 
 `/Activation request did not succeed/i` is not matched → message passes through verbatim.
 
-Meanwhile, `lib/preview/error-map.ts` already has a perfect mapping for `Invalid user ID provided on start session` (case `invalid-user-id`, L91-96). Same root cause, two surfaces, one map.
+At the time, preview had a dedicated error map with a mapping for `Invalid user ID provided on start session` (case `invalid-user-id`). The same root cause appeared on two surfaces but was not yet shared.
 
 ### Fix
 
-1. Promote `lib/preview/error-map.ts` to `lib/errors/agent-api-error-map.ts` and reuse it from both `preview-tool.ts` and `lifecycle-tool.ts`.
+1. Consolidate preview and lifecycle error handling in `lib/errors/agent-api-error-map.ts`.
 2. Add three more cases that fired this session:
    - `/should have a user assigned/i` → "Add `agent_type: AgentforceServiceAgent` + `default_agent_user: <user>` to your `.agent` config and republish (lifecycle.publish, not `sf project deploy`)."
    - `/Agent Type should have/i + agent metadata says Service Agent` → identical message but with `recover_via: agentscript_lifecycle action='publish' agent_file=<bundle>.agent`.

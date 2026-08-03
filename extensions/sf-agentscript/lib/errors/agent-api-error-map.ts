@@ -9,10 +9,7 @@
  *
  * Pure function — no I/O, no Connection. Safe to call from anywhere.
  *
- * Originally lived under `lib/preview/error-map.ts` (function
- * `mapPreviewError`). Promoted to its own module after Issue 4 surfaced
- * the same root causes on the lifecycle surface; see
- * docs/POSTMORTEM_E2E_DEMO.md.
+ * Preview and lifecycle intentionally share this canonical implementation.
  */
 
 import { sfap404Message } from "./sfap-404.ts";

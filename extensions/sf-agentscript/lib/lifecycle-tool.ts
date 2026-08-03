@@ -17,8 +17,6 @@ import {
   actionProvisionAgentUser,
 } from "./lifecycle/actions/agent-user.ts";
 
-export { classifyLifecycleError } from "./lifecycle/error-classification.ts";
-
 export const LIFECYCLE_TOOL_NAME = "agentscript_lifecycle";
 
 // Single Type.Object: emits root `type:"object"` so OpenAI's strict tool
