@@ -6,37 +6,46 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let expectedRunDir = "";
 let observedStartArtifacts = false;
+let inFlightBatches = 0;
+let maxInFlightBatches = 0;
 
 vi.mock("../lib/eval/eval-client.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/eval/eval-client.ts")>();
   return {
     ...actual,
     callEval: vi.fn(async (_conn, tests: Array<{ id?: string; steps?: unknown[] }>) => {
-      const names = await readdir(expectedRunDir);
-      observedStartArtifacts = [
-        "manifest.json",
-        "spec.source.snapshot.json",
-        "spec.executed.snapshot.json",
-        "status.json",
-      ].every((name) => names.includes(name));
-      return {
-        status: 200,
-        body: {
-          results: tests.map((test) => ({
-            id: test.id,
-            evaluation_results: (test.steps ?? [])
-              .filter(
-                (step): step is { id?: string; type: string } =>
-                  !!step &&
-                  typeof step === "object" &&
-                  typeof (step as { type?: unknown }).type === "string" &&
-                  (step as { type: string }).type.startsWith("evaluator."),
-              )
-              .map((step) => ({ id: step.id, type: step.type, is_pass: true })),
-          })),
-        },
-        endpoint: "",
-      };
+      inFlightBatches++;
+      maxInFlightBatches = Math.max(maxInFlightBatches, inFlightBatches);
+      try {
+        const names = await readdir(expectedRunDir);
+        observedStartArtifacts = [
+          "manifest.json",
+          "spec.source.snapshot.json",
+          "spec.executed.snapshot.json",
+          "status.json",
+        ].every((name) => names.includes(name));
+        return {
+          status: 200,
+          body: {
+            results: tests.map((test) => ({
+              id: test.id,
+              evaluation_results: (test.steps ?? [])
+                .filter(
+                  (step): step is { id?: string; type: string } =>
+                    !!step &&
+                    typeof step === "object" &&
+                    typeof (step as { type?: unknown }).type === "string" &&
+                    (step as { type: string }).type.startsWith("evaluator."),
+                )
+                .map((step) => ({ id: step.id, type: step.type, is_pass: true })),
+            })),
+          },
+          endpoint: "test." as const,
+          endpoint_cache: "miss" as const,
+        };
+      } finally {
+        inFlightBatches--;
+      }
     }),
   };
 });
@@ -65,6 +74,8 @@ beforeEach(async () => {
   base = await mkdtemp(path.join(tmpdir(), "sf-agentscript-boundary-"));
   expectedRunDir = path.join(base, "run-fixed");
   observedStartArtifacts = false;
+  inFlightBatches = 0;
+  maxInFlightBatches = 0;
 });
 
 afterEach(async () => {
@@ -111,6 +122,8 @@ describe("eval Run boundary", () => {
 
     const run = async (runId: string, withTimings: boolean) => {
       expectedRunDir = path.join(base, runId);
+      maxInFlightBatches = 0;
+      const timings = withTimings ? createTimingCollector() : undefined;
       const result = await runEval({
         conn: conn as never,
         targetOrg: "test-org",
@@ -118,8 +131,9 @@ describe("eval Run boundary", () => {
         runBase: base,
         runId,
         tracesMode: "off",
+        concurrency: 2,
         spec,
-        ...(withTimings ? { timings: createTimingCollector() } : {}),
+        ...(timings ? { timings } : {}),
       });
       const readJson = async (name: string) =>
         JSON.parse(await readFile(path.join(base, runId, name), "utf8")) as Record<string, unknown>;
@@ -133,6 +147,8 @@ describe("eval Run boundary", () => {
         executed: await readJson("spec.executed.snapshot.json"),
         raw: await readJson("raw.json"),
         evidence: await readJson("evidence.json"),
+        timings: timings?.snapshot(),
+        maxInFlightBatches,
       };
     };
 
@@ -162,6 +178,18 @@ describe("eval Run boundary", () => {
     expect(timed.executed).toEqual(untimed.executed);
     expect(timed.raw).toEqual(untimed.raw);
     expect(timed.evidence).toEqual(untimed.evidence);
+    expect(untimed.maxInFlightBatches).toBe(2);
+    expect(timed.maxInFlightBatches).toBe(2);
+    expect(timed.status).toMatchObject({
+      concurrency: 2,
+      progress: { completed_batches: 2, total_batches: 2, returned_tests: 6 },
+    });
+    expect(untimed.timings).toBeUndefined();
+    expect(timed.timings?.phases.filter((phase) => phase.name === "eval_batches")).toHaveLength(1);
+    expect(timed.timings?.phases.filter((phase) => phase.name === "sfap_endpoint_cache")).toEqual([
+      expect.objectContaining({ cache: "miss", endpoint: "test." }),
+      expect.objectContaining({ cache: "miss", endpoint: "test." }),
+    ]);
   });
 
   it("persists immutable source/executed snapshots and manifest before the first API call", async () => {

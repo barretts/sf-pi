@@ -28,6 +28,7 @@ import { synthesizeTracesFromMerged } from "./synthesize-trace.ts";
 import { deepDecode } from "./decode.ts";
 import { latencySummary, summarize, type BuildOptions } from "./render.ts";
 import {
+  buildUtteranceIndex,
   defaultRunBase,
   newRunId,
   resolveRunDir,
@@ -60,6 +61,7 @@ import type {
   EvalApiResponse,
   EvalBatchFailure,
   EvalSpec,
+  EvalTest,
   FailureRecord,
   LatencySummary,
   RunMetadata,
@@ -210,6 +212,81 @@ async function queryEvalSeed(
 function errorPayload(err: unknown): { name?: string; message: string } {
   if (err instanceof Error) return { name: err.name, message: err.message };
   return { message: String(err) };
+}
+
+interface RunEvalBatchesOptions {
+  conn: Connection;
+  batches: EvalTest[][];
+  headers: EvalApiHeaders;
+  concurrency: number;
+  batchTimeoutMs?: number;
+  signal?: AbortSignal;
+  log: (message: string) => void;
+  timings?: TimingCollector;
+  recordProgress: (returnedTests: number) => Promise<void>;
+}
+
+interface RunEvalBatchesResult {
+  results: Array<EvalApiResponse["results"]>;
+  batchFailures: EvalBatchFailure[];
+}
+
+async function runEvalBatches(options: RunEvalBatchesOptions): Promise<RunEvalBatchesResult> {
+  const { batches, log, timings } = options;
+  const results: Array<EvalApiResponse["results"]> = new Array(batches.length).fill(null);
+  const batchFailures: EvalBatchFailure[] = [];
+  const sema = makeSemaphore(options.concurrency);
+  const execute = async (): Promise<void> => {
+    const settled = await Promise.allSettled(
+      batches.map((batch, index) =>
+        sema(async () => {
+          log(`  batch ${index + 1}/${batches.length}: started (${batch.length} test(s))`);
+          throwIfAborted(options.signal);
+          const response = await callEval(options.conn, batch, options.headers, {
+            timeoutMs: options.batchTimeoutMs,
+            signal: options.signal,
+          });
+          if (response.status === 499) {
+            throwIfAborted(options.signal);
+            throw new EvalRunCancelledError();
+          }
+          if (timings) {
+            timings.add("sfap_endpoint_cache", 0, {
+              cache: response.endpoint_cache,
+              endpoint: response.endpoint,
+            });
+          }
+          if (response.status >= 200 && response.status < 300) {
+            results[index] = response.body.results ?? [];
+            if (batches.length > 1) {
+              log(
+                `  batch ${index + 1}/${batches.length}: ${(results[index] ?? []).length} tests complete`,
+              );
+            }
+          } else {
+            batchFailures.push({
+              batch_index: index,
+              status: response.status,
+              test_ids: batch.map((test) => test.id),
+              body: response.body,
+            });
+            const snippet = JSON.stringify(response.body).slice(0, 1500);
+            log(`  batch ${index + 1}/${batches.length}: HTTP ${response.status}  ${snippet}`);
+            results[index] = [];
+          }
+          await options.recordProgress((results[index] ?? []).length);
+        }),
+      ),
+    );
+    const rejected = settled.find(
+      (outcome): outcome is PromiseRejectedResult => outcome.status === "rejected",
+    );
+    if (rejected) throw rejected.reason;
+  };
+
+  if (timings) await timings.time("eval_batches", execute);
+  else await execute();
+  return { results, batchFailures };
 }
 
 async function resolveIdsForInjection(
@@ -436,6 +513,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       throw new Error("Spec contains no tests; nothing to do.");
     }
     const batches = splitIntoBatches(tests);
+    const utteranceIndex = buildUtteranceIndex(spec);
     if (runDir) {
       const now = new Date().toISOString();
       const scope: EvalRunScope = opts.runScope ?? (opts.specPath ? "suite" : "ad_hoc");
@@ -541,8 +619,6 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
         `(concurrency=${Math.min(batches.length, concurrency)}, batch_timeout_ms=${opts.batchTimeoutMs ?? 300_000})`,
     );
 
-    const results: Array<EvalApiResponse["results"]> = new Array(batches.length).fill(null);
-    let failedBatches = 0;
     let completedBatches = 0;
     let returnedTests = 0;
     let statusQueue = Promise.resolve();
@@ -563,89 +639,18 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       );
       return statusQueue;
     };
-    const batchFailures: EvalBatchFailure[] = [];
-    const sema = makeSemaphore(concurrency);
-    await (opts.timings
-      ? opts.timings.time("eval_batches", () =>
-          Promise.all(
-            batches.map((b, idx) =>
-              sema(async () => {
-                log(`  batch ${idx + 1}/${batches.length}: started (${b.length} test(s))`);
-                throwIfAborted(opts.signal);
-                const res = await callEval(opts.conn, b, headers, {
-                  timeoutMs: opts.batchTimeoutMs,
-                  signal: opts.signal,
-                });
-                if (res.status === 499) {
-                  throwIfAborted(opts.signal);
-                  throw new EvalRunCancelledError();
-                }
-                if (opts.timings) {
-                  opts.timings.add("sfap_endpoint_cache", 0, {
-                    cache: res.endpoint_cache,
-                    endpoint: res.endpoint,
-                  });
-                }
-                if (res.status >= 200 && res.status < 300) {
-                  results[idx] = res.body.results ?? [];
-                  if (batches.length > 1) {
-                    log(
-                      `  batch ${idx + 1}/${batches.length}: ${(results[idx] ?? []).length} tests complete`,
-                    );
-                  }
-                } else {
-                  failedBatches++;
-                  batchFailures.push({
-                    batch_index: idx,
-                    status: res.status,
-                    test_ids: b.map((test) => test.id),
-                    body: res.body,
-                  });
-                  const snippet = JSON.stringify(res.body).slice(0, 1500);
-                  log(`  batch ${idx + 1}/${batches.length}: HTTP ${res.status}  ${snippet}`);
-                  results[idx] = [];
-                }
-                await recordBatchProgress((results[idx] ?? []).length);
-              }),
-            ),
-          ),
-        )
-      : Promise.all(
-          batches.map((b, idx) =>
-            sema(async () => {
-              log(`  batch ${idx + 1}/${batches.length}: started (${b.length} test(s))`);
-              throwIfAborted(opts.signal);
-              const res = await callEval(opts.conn, b, headers, {
-                timeoutMs: opts.batchTimeoutMs,
-                signal: opts.signal,
-              });
-              if (res.status === 499) {
-                throwIfAborted(opts.signal);
-                throw new EvalRunCancelledError();
-              }
-              if (res.status >= 200 && res.status < 300) {
-                results[idx] = res.body.results ?? [];
-                if (batches.length > 1) {
-                  log(
-                    `  batch ${idx + 1}/${batches.length}: ${(results[idx] ?? []).length} tests complete`,
-                  );
-                }
-              } else {
-                failedBatches++;
-                batchFailures.push({
-                  batch_index: idx,
-                  status: res.status,
-                  test_ids: b.map((test) => test.id),
-                  body: res.body,
-                });
-                const snippet = JSON.stringify(res.body).slice(0, 1500);
-                log(`  batch ${idx + 1}/${batches.length}: HTTP ${res.status}  ${snippet}`);
-                results[idx] = [];
-              }
-              await recordBatchProgress((results[idx] ?? []).length);
-            }),
-          ),
-        ));
+    const { results, batchFailures } = await runEvalBatches({
+      conn: opts.conn,
+      batches,
+      headers,
+      concurrency,
+      batchTimeoutMs: opts.batchTimeoutMs,
+      signal: opts.signal,
+      log,
+      timings: opts.timings,
+      recordProgress: recordBatchProgress,
+    });
+    const failedBatches = batchFailures.length;
 
     // 4. Merge + HTML-decode
     const mergedRaw: EvalApiResponse = { results: results.flatMap((r) => r ?? []) };
@@ -673,20 +678,6 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
     let liveFetchedCount = 0;
     let synthesizedCount = 0;
     if (tracesMode !== "off") {
-      // Build the spec utterance index up-front so synthesized UserInputSteps
-      // carry the user's actual input. The persistence step builds the same
-      // index later for transcript.jsonl; we duplicate the cheap walk here
-      // rather than restructure ordering.
-      const utteranceIndex = new Map<string, string>();
-      for (const test of spec.tests ?? []) {
-        const tid = String(test.id ?? "?");
-        for (const step of test.steps ?? []) {
-          if (step.type === "agent.send_message" && typeof step.utterance === "string") {
-            utteranceIndex.set(`${tid}::${step.id}`, step.utterance);
-          }
-        }
-      }
-
       // Synthesize for every test in scope, applying the same
       // failed-only filter as the live fetch when traces_mode='failed'.
       const inScopeIds = new Set<string>();
@@ -755,18 +746,9 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
     }
 
     // 6. Build summary + failure records
-    // Cross-reference user utterances from the spec, so transcript +
-    // FailureRecord both carry the actual user input (the eval API doesn't
-    // echo it back in EvalOutput.utterance).
-    const utteranceIndex = new Map<string, string>();
-    for (const test of spec.tests ?? []) {
-      const tid = String(test.id ?? "?");
-      for (const step of test.steps ?? []) {
-        if (step.type === "agent.send_message" && typeof step.utterance === "string") {
-          utteranceIndex.set(`${tid}::${step.id}`, step.utterance);
-        }
-      }
-    }
+    // Cross-reference user utterances from the one shared spec index, so
+    // synthesized traces, transcripts, and FailureRecords agree even when the
+    // Evaluation API omits EvalOutput.utterance.
     const buildOpts: BuildOptions = {
       promptChars: opts.promptChars,
       interestingStateKeys: opts.interestingStateKeys,
@@ -858,6 +840,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
               batchFailures,
               verdict: strictVerdict,
               spec,
+              utteranceIndex,
             }),
           )
         : writeRun({
@@ -869,6 +852,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
             batchFailures,
             verdict: strictVerdict,
             spec,
+            utteranceIndex,
           }));
       await statusQueue;
       await writeStatus(

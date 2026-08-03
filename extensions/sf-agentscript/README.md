@@ -388,6 +388,7 @@ extensions/sf-agentscript/
     eval-persist-status.test.ts← unit / smoke test
     eval-plan-id-path.test.ts← unit / smoke test
     eval-run-boundary.test.ts← unit / smoke test
+    eval-run-failure-boundary.test.ts← unit / smoke test
     eval-scenario.test.ts   ← unit / smoke test
     eval-seed-failure-redaction.test.ts← unit / smoke test
     eval-seed-run.test.ts   ← unit / smoke test
@@ -404,6 +405,7 @@ extensions/sf-agentscript/
     eval-studio-redaction.test.ts← unit / smoke test
     eval-studio-run-coordinator.test.ts← unit / smoke test
     eval-synthesize-trace.test.ts← unit / smoke test
+    eval-tool-run.test.ts   ← unit / smoke test
     eval-utterance-index.test.ts← unit / smoke test
     eval-verdict.test.ts    ← unit / smoke test
     feedback.test.ts        ← unit / smoke test

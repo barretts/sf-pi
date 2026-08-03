@@ -106,6 +106,8 @@ export interface PersistInput {
    * a developer reads the transcript later.
    */
   spec?: EvalSpec;
+  /** Precomputed by runEval so traces, summaries, and transcripts share one source walk. */
+  utteranceIndex?: ReadonlyMap<string, string>;
 }
 
 export type EvalRunStatus =
@@ -186,7 +188,7 @@ export async function writeRunStartArtifacts(input: RunStartInput): Promise<void
  * transcript writer can fill in the user input when the API response omits
  * it.
  */
-function buildUtteranceIndex(spec?: EvalSpec): Map<string, string> {
+export function buildUtteranceIndex(spec?: EvalSpec): Map<string, string> {
   const out = new Map<string, string>();
   for (const test of spec?.tests ?? []) {
     const tid = String(test.id ?? "?");
@@ -201,7 +203,7 @@ function buildUtteranceIndex(spec?: EvalSpec): Map<string, string> {
 
 export async function writeRun(input: PersistInput): Promise<void> {
   const { runDir, merged, traces, metadata, failures } = input;
-  const utteranceIndex = buildUtteranceIndex(input.spec);
+  const utteranceIndex = input.utteranceIndex ?? buildUtteranceIndex(input.spec);
   await mkdir(runDir, { recursive: true });
 
   // metadata.json

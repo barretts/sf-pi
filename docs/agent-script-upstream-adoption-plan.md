@@ -1,6 +1,6 @@
 # Agent Script Upstream Adoption and Simplification Plan
 
-Status: approved; Milestones 0 and 1 are merged; Milestone 2 is implemented, independently reviewed, and validated on 2026-08-03; Milestone 3 requires separate approval
+Status: approved; Milestones 0–2 are merged; Milestone 3 is implemented, independently reviewed, and validated on 2026-08-03; Milestone 4 requires separate approval
 
 ## Goal
 

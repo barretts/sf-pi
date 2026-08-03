@@ -79,4 +79,49 @@ describe("eval batch failure evidence", () => {
     );
     expect(persisted).toEqual(result.batch_failures);
   });
+
+  test("records progress and every failure across multiple batches", async () => {
+    const conn = {
+      instanceUrl: "https://example.invalid",
+      identity: async () => ({ user_id: "005", organization_id: "00D" }),
+    };
+    const testIds = Array.from({ length: 6 }, (_, index) => `scenario-${index + 1}`);
+    const result = await runEval({
+      conn: conn as never,
+      targetOrg: "test-org",
+      cwd: workDir,
+      runBase: workDir,
+      runId: "multi-batch-failure",
+      tracesMode: "off",
+      concurrency: 2,
+      spec: {
+        tests: testIds.map((id) => ({
+          id,
+          steps: [
+            {
+              type: "agent.create_session",
+              id: "session",
+              agent_id: "0Xx",
+              agent_version_id: "0X9",
+            },
+          ],
+        })),
+      },
+    });
+
+    expect(result.failed_batches).toBe(2);
+    expect(result.batch_failures).toHaveLength(2);
+    expect(result.batch_failures.flatMap((failure) => failure.test_ids).sort()).toEqual(testIds);
+    expect(result.metadata).toMatchObject({
+      execution_state: "infrastructure_failed",
+      evidence_verdict: "incomplete",
+      missing_test_ids: testIds,
+    });
+    expect(
+      JSON.parse(await readFile(path.join(result.run_dir!, "status.json"), "utf8")),
+    ).toMatchObject({
+      status: "infrastructure_failed",
+      progress: { completed_batches: 2, total_batches: 2, returned_tests: 0 },
+    });
+  });
 });
