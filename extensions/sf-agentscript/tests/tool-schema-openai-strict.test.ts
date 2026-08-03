@@ -3,6 +3,8 @@
  * Regression: every registered sf-agentscript tool's parameter schema must be
  * OpenAI strict-tool-call compatible.
  */
+import { createHash } from "node:crypto";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, test } from "vitest";
 import { registerAuthoringTool } from "../lib/authoring-tool.ts";
 import { registerEvalTool } from "../lib/eval-tool.ts";
@@ -11,17 +13,23 @@ import { registerPreviewTool } from "../lib/preview-tool.ts";
 
 interface CapturedTool {
   name: string;
+  label?: string;
+  description?: string;
+  promptSnippet?: string;
+  promptGuidelines?: string[];
   parameters: unknown;
+  renderCall?: unknown;
+  renderResult?: unknown;
 }
 
 function captureRegistrations(): {
-  pi: { registerTool: (def: { name: string; parameters: unknown }) => void };
+  pi: { registerTool: (def: CapturedTool) => void };
   tools: CapturedTool[];
 } {
   const tools: CapturedTool[] = [];
   const pi = {
-    registerTool: (def: { name: string; parameters: unknown }) => {
-      tools.push({ name: def.name, parameters: def.parameters });
+    registerTool: (def: CapturedTool) => {
+      tools.push(def);
     },
   };
   return { pi, tools };
@@ -30,11 +38,25 @@ function captureRegistrations(): {
 describe("Every sf-agentscript tool emits an OpenAI-strict-compatible schema", () => {
   const { pi, tools } = captureRegistrations();
 
-  const fakePi = pi as any;
+  const fakePi = pi as unknown as ExtensionAPI;
   registerAuthoringTool(fakePi);
   registerPreviewTool(fakePi);
   registerEvalTool(fakePi);
   registerLifecycleTool(fakePi);
+
+  test("pins the complete family-tool registration contracts", () => {
+    const contracts = tools.map((tool) => ({
+      name: tool.name,
+      label: tool.label,
+      description: tool.description,
+      promptSnippet: tool.promptSnippet,
+      promptGuidelines: tool.promptGuidelines,
+      schemaHash: createHash("sha256").update(JSON.stringify(tool.parameters)).digest("hex"),
+      hasRenderCall: typeof tool.renderCall === "function",
+      hasRenderResult: typeof tool.renderResult === "function",
+    }));
+    expect(contracts).toMatchSnapshot();
+  });
 
   test("registers exactly the 4 family tools we expect", () => {
     expect(tools.map((t) => t.name).sort()).toEqual(

@@ -17,7 +17,7 @@ import { discoverEvalStudio } from "./discovery.ts";
 import { collectAuthoringBrief, handoffAuthoringBrief } from "./handoff.ts";
 import { cancelStudioRun, startStudioBackgroundTask, startStudioRun } from "./run-coordinator.ts";
 import { collectStudioRunTarget } from "./run-target.ts";
-import { actionRunRelease } from "../eval-tool.ts";
+import { actionRunRelease } from "../eval/actions/run.ts";
 
 const execFileAsync = promisify(execFile);
 

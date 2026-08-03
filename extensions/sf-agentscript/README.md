@@ -223,6 +223,10 @@ extensions/sf-agentscript/
       agent-api-error-map.ts← implementation module
       sfap-404.ts           ← implementation module
     eval/
+      actions/
+        evidence.ts         ← implementation module
+        generation.ts       ← implementation module
+        run.ts              ← implementation module
       active-ids.ts         ← implementation module
       decode.ts             ← implementation module
       eval-client.ts        ← implementation module
@@ -255,6 +259,11 @@ extensions/sf-agentscript/
       run-lease.ts          ← implementation module
       run-target.ts         ← implementation module
       types.ts              ← implementation module
+    lifecycle/
+      actions/
+        agent-user.ts       ← implementation module
+        release.ts          ← implementation module
+      error-classification.ts← implementation module
     preflight/
       resolvers/
         agentforce.ts       ← implementation module
@@ -284,6 +293,10 @@ extensions/sf-agentscript/
       surface-readiness.ts  ← implementation module
       types.ts              ← implementation module
     preview/
+      actions/
+        maintenance.ts      ← implementation module
+        session.ts          ← implementation module
+        trace.ts            ← implementation module
       client.ts             ← implementation module
       context-vars.ts       ← implementation module
       error-map.ts          ← implementation module
@@ -409,6 +422,7 @@ extensions/sf-agentscript/
     eval-tool-run.test.ts   ← unit / smoke test
     eval-utterance-index.test.ts← unit / smoke test
     eval-verdict.test.ts    ← unit / smoke test
+    family-tool-action-dispatch.test.ts← unit / smoke test
     feedback.test.ts        ← unit / smoke test
     file-classify.test.ts   ← unit / smoke test
     inspect-actions.test.ts ← unit / smoke test

@@ -20,6 +20,13 @@ Do **not** re-register removed single-purpose public authoring tools. The family
 - Do not collapse all Agent Script behavior into one mega-tool.
 - Do not add compatibility wrappers for removed authoring tool names.
 
+## Private action locality
+
+- `preview-tool.ts`, `eval-tool.ts`, and `lifecycle-tool.ts` own public schemas, renderers, required-field validation, timing decoration, and obvious dispatch.
+- Meaningful private behavior lives under `preview/actions/`, `eval/actions/`, and `lifecycle/actions/`, split by responsibility rather than switch case.
+- Action modules use narrowed inputs and depend inward on domain modules; they never import a family-tool registration module.
+- Do not introduce a generic family-tool framework or forwarding wrappers that mirror every action.
+
 ## Branch-Durable Tool State
 
 - Store branch-state events in `details.sf_agentscript_branch_state`.

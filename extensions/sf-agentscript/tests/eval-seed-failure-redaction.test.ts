@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
-import { readPublicFailures } from "../lib/eval-tool.ts";
+import { readPublicFailures } from "../lib/eval/actions/evidence.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {
