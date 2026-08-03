@@ -36,7 +36,7 @@ _Salesforce LLM Gateway provider with model discovery_
 
 ### [SF Agent Script](./extensions/sf-agentscript)
 
-_Single-plugin lifecycle for `.agent` files: official-SDK compile diagnostics, native quality, preview, exact-version release eval, inactive publication, and gated activation._
+_Single-plugin lifecycle for `.agent` files: compile diagnostics, native quality, preview, local-first Eval Studio, exact-version release eval, inactive publication, and gated activation._
 
 - Default: **on**
 - Commands: `/sf-agentscript`

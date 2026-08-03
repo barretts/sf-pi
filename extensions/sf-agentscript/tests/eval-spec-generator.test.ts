@@ -45,6 +45,41 @@ describe("generateSpec", () => {
     expect(out.spec.tests.length).toBe(1 + SAFETY_PROBES.length);
   });
 
+  test("skips subagents that are not directly reachable from the start agent", () => {
+    const out = generateSpec({
+      inspect: fakeInspect({
+        start_agents: [
+          {
+            name: "agent_router",
+            subagent_refs: ["billing"],
+          },
+        ],
+        subagents: [
+          { name: "billing", description: "Handles billing." },
+          { name: "farewell", description: "Ends after feedback." },
+        ],
+      }),
+      includeActionTests: false,
+      includeSafetyProbes: false,
+      includeGuardrail: false,
+    });
+
+    expect(out.spec.tests.map((test) => test.id)).toEqual(["subagent_billing"]);
+    expect(out.summary.skipped_subagents).toContain("farewell");
+
+    const noDirectRefs = generateSpec({
+      inspect: fakeInspect({
+        start_agents: [{ name: "agent_router", subagent_refs: [] }],
+        subagents: [{ name: "billing", description: "Handles billing." }],
+      }),
+      includeActionTests: false,
+      includeSafetyProbes: false,
+      includeGuardrail: false,
+    });
+    expect(noDirectRefs.spec.tests).toEqual([]);
+    expect(noDirectRefs.summary.skipped_subagents).toEqual(["billing"]);
+  });
+
   test("emits one routing test per non-start subagent and legacy topic", () => {
     const out = generateSpec({
       inspect: fakeInspect({
@@ -86,6 +121,7 @@ describe("generateSpec", () => {
     expect(assert.actual).toBe("{state1.response.planner_response.lastExecution.topic}");
     expect(assert.expected).toBe("billing");
     expect(assert.operator).toBe("equals");
+    expect(test.steps.some((step) => step.type === "evaluator.bot_response_rating")).toBe(false);
   });
 
   test("uses $active_* placeholders on agent.create_session (no hardcoded ids)", () => {
@@ -156,7 +192,34 @@ describe("generateSpec", () => {
     );
   });
 
-  test("action probes include inline and top-level actions with a target", () => {
+  test("skips inline actions even when their local names are duplicated", () => {
+    const out = generateSpec({
+      inspect: fakeInspect({
+        actions: [
+          {
+            name: "update_session",
+            parent: "subagent.billing",
+            target: "flow://UpdateSession",
+            description: "Update billing routing.",
+          },
+          {
+            name: "update_session",
+            parent: "subagent.shipping",
+            target: "flow://UpdateSession",
+            description: "Update shipping routing.",
+          },
+        ],
+      }),
+      includeSubagentTests: false,
+      includeSafetyProbes: false,
+      includeGuardrail: false,
+    });
+
+    expect(out.spec.tests).toEqual([]);
+    expect(out.summary.skipped_actions).toEqual(["update_session", "update_session"]);
+  });
+
+  test("action probes include only top-level zero-input actions with a target", () => {
     const out = generateSpec({
       inspect: fakeInspect({
         subagents: [],
@@ -166,7 +229,7 @@ describe("generateSpec", () => {
             description: "Look up the customer's current balance.",
             target: "apex://LookupBalance",
           },
-          // Inline action — still useful as a direct action-invocation smoke row.
+          // Inline action — requires owning-subagent context, so it is skipped.
           {
             name: "send_email",
             description: "Send confirmation email.",
@@ -180,14 +243,39 @@ describe("generateSpec", () => {
       includeSafetyProbes: false,
       includeGuardrail: false,
     });
-    expect(out.summary.action_tests).toBe(2);
-    expect(out.summary.skipped_actions).toEqual(["describe_thing"]);
-    expect(out.spec.tests.map((t) => t.id)).toEqual(["action_lookup_balance", "action_send_email"]);
-    expect(out.spec.tests[0].steps.some((s) => s.type === "evaluator.string_assertion")).toBe(
+    expect(out.summary.action_tests).toBe(1);
+    expect(out.summary.skipped_actions).toEqual(["send_email", "describe_thing"]);
+    expect(out.spec.tests.map((t) => t.id)).toEqual(["action_lookup_balance"]);
+    expect(out.spec.tests[0].steps).toContainEqual({
+      type: "evaluator.list_assertion",
+      id: "eval_action_lookup_balance",
+      actual: "{state1.response.planner_response.lastExecution.invokedActions}",
+      expected: ["lookup_balance"],
+      operator: "contains",
+    });
+    expect(out.spec.tests[0].steps.some((s) => s.type === "evaluator.bot_response_rating")).toBe(
       false,
     );
-    const rating = out.spec.tests[0].steps.find((s) => s.type === "evaluator.bot_response_rating")!;
-    expect(rating.expected).toMatch(/attempt the "lookup_balance" action/);
+  });
+
+  test("skips one-turn action probes that require internal inputs", () => {
+    const out = generateSpec({
+      inspect: fakeInspect({
+        actions: [
+          {
+            name: "shipment_context",
+            description: "Retrieve shipment context.",
+            target: "prompt://Shipment_Context",
+            input_names: ["Input:WorkOrder"],
+          },
+        ],
+      }),
+      includeSafetyProbes: false,
+      includeGuardrail: false,
+    });
+
+    expect(out.spec.tests).toEqual([]);
+    expect(out.summary.skipped_actions).toEqual(["shipment_context"]);
   });
 
   test("connected agents receive functional invocation probes", () => {

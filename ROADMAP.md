@@ -42,6 +42,8 @@ design proposal and — ideally — a PR.
 - [ ] Ratchet coverage floor toward 60%
 - [ ] Promote remaining warn-level ESLint rules to errors where practical
 - [ ] `NO_COLOR=1` support across splash, spinner, devbar
+- [ ] Executable standards program, delivered as four independently green serial milestones: make the Manager-first command contract blocking, update the extension scaffold to emit the current pattern, attest tool/event registration by executing extension factories, and make catalog integrity fail closed before broader simplification work begins
+      (see [`docs/pi-native-reuse-audit-2026-07-24.md`](./docs/pi-native-reuse-audit-2026-07-24.md))
 - [ ] Standardize SF Pi slash-command panels and subcommand descriptions
       (see [`docs/adr/0005-standard-command-panels.md`](./docs/adr/0005-standard-command-panels.md))
 - [ ] `sf-skills` Phase 2 (see

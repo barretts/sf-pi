@@ -16,6 +16,7 @@
  *   /sf-agentscript doctor    | Show official SDK package status + readiness
  *   /sf-agentscript check     | Manually compile a `.agent` file
  *   /sf-agentscript eval      | Run a multi-turn regression spec
+ *   /sf-agentscript evals     | Open Agent Script Eval Studio
  *   /sf-agentscript help      | Print command usage
  *
  * Tools registered:
@@ -85,6 +86,10 @@ import { clearSfapEndpointCache } from "./lib/eval/sfap.ts";
 import { resetSessionQualityOverrides } from "./lib/quality/publication-gate.ts";
 import { registerDeferredAgentScriptQuality } from "./lib/quality/auto-scan.ts";
 import { registerAgentScriptQualityTranscriptRenderer } from "./lib/quality/transcript.ts";
+import { registerHumanOnlyCommandOutput } from "../../lib/common/human-only-command-output.ts";
+import { EVAL_STUDIO_OUTPUT_TYPE, openEvalStudio } from "./lib/eval-studio/open.ts";
+import { handleEvalStudioIntent } from "./lib/eval-studio/actions.ts";
+import { interruptStudioRuns } from "./lib/eval-studio/run-coordinator.ts";
 
 const EXTENSION_ID = "sf-agentscript";
 const COMMAND_NAME = "sf-agentscript";
@@ -103,6 +108,7 @@ export default function sfAgentScriptExtension(pi: ExtensionAPI): void {
   registerSessionHooks(pi, state);
   registerToolResultHook(pi, state);
   registerAgentScriptQualityTranscriptRenderer(pi);
+  registerHumanOnlyCommandOutput(pi, EVAL_STUDIO_OUTPUT_TYPE);
   registerDeferredAgentScriptQuality(pi);
 
   // LLM-callable tools — four family surfaces for the Agent Script lifecycle.
@@ -118,7 +124,7 @@ export default function sfAgentScriptExtension(pi: ExtensionAPI): void {
 // /sf-agentscript
 // -------------------------------------------------------------------------------------------------
 
-type AgentScriptAction = "doctor" | "check" | "eval" | "report" | "help";
+type AgentScriptAction = "doctor" | "check" | "eval" | "evals" | "report" | "help";
 
 const AGENTSCRIPT_ACTIONS: SfPiCommandAction<AgentScriptAction>[] = [
   {
@@ -139,6 +145,12 @@ const AGENTSCRIPT_ACTIONS: SfPiCommandAction<AgentScriptAction>[] = [
     label: "Run an eval suite",
     description:
       "Run a multi-turn regression spec against the Salesforce Evaluation API. Usage: /sf-agentscript eval <spec.json>",
+    group: "Testing",
+  },
+  {
+    value: "evals",
+    label: "Open Eval Studio",
+    description: "Review local Eval Suites, Scenarios, Runs, and release evidence.",
     group: "Testing",
   },
   {
@@ -212,6 +224,7 @@ function buildAgentScriptManagerActions(
     description: action.description,
     group: action.group,
     run: (ctx) => handleAgentScriptCommand(pi, ctx, state, action.value, [], true),
+    ...(action.value === "evals" ? { closeBeforeRun: true } : {}),
     ...(action.value === "check"
       ? {
           createPanel: (theme, _cwd, _scope, done, ctx) =>
@@ -301,6 +314,11 @@ async function handleAgentScriptCommand(
     await handleCheckSubcommand(inputPath, ctx, state);
     return;
   }
+  if (subcommand === "evals") {
+    const intent = await openEvalStudio(pi, ctx);
+    if (intent) await handleEvalStudioIntent(pi, ctx, intent);
+    return;
+  }
   if (subcommand === "eval") {
     if (args.length === 0 && ctx.hasUI && fromPanel) {
       const path =
@@ -327,7 +345,7 @@ async function handleAgentScriptCommand(
   await emitOutput(
     ctx,
     "SF Agent Script usage",
-    "Usage: /sf-agentscript [doctor | check <file> | eval <spec.json> | help]",
+    "Usage: /sf-agentscript [doctor | check <file> | eval <spec.json> | evals | report | help]",
     "warning",
     fromPanel,
   );
@@ -373,6 +391,7 @@ function renderHelp(): string {
     "  /sf-agentscript                  Open SF Agent Script in the SF Pi Manager",
     "  /sf-agentscript doctor [--org A] [--freshness] Show SDK status + optional SFAP/package freshness",
     "  /sf-agentscript check <file>     Run one manual compile diagnostic pass",
+    "  /sf-agentscript evals            Open Agent Script Eval Studio (local-first)",
     "  /sf-agentscript eval <spec.json> [--org A] [--agent N] [--traces failed|all|off]",
     "                                   [--concurrency N] [--prompt-chars N] [--verbose]",
     "  /sf-agentscript report eval <run_id> [--save] [--test-id <id>]",
@@ -441,6 +460,7 @@ function registerSessionHooks(pi: ExtensionAPI, state: AgentScriptAssistState): 
     resetSessionQualityOverrides();
   });
   pi.on("session_shutdown", async () => {
+    interruptStudioRuns();
     resetState(state);
     clearConnectionCache();
     clearAgentApiAuthCache();

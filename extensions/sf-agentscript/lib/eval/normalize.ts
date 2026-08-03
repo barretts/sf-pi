@@ -28,33 +28,11 @@
  */
 
 import type { EvalSpec, EvalStep } from "./types.ts";
-
-// -------------------------------------------------------------------------------------------------
-// Evaluator classification + canonical fields
-// -------------------------------------------------------------------------------------------------
-
-/** Evaluators that score (return a `score`, optionally with a `threshold`). */
-const SCORING_EVALUATORS = new Set([
-  "evaluator.text_alignment",
-  "evaluator.hallucination_detection",
-  "evaluator.citation_recall",
-  "evaluator.answer_faithfulness",
-]);
-
-/** Evaluators that assert (return is_pass). */
-const ASSERTION_EVALUATORS = new Set([
-  "evaluator.string_assertion",
-  "evaluator.numeric_assertion",
-  "evaluator.list_assertion",
-]);
-
-/** Default metric_name for scoring evaluators when caller omits it. */
-const DEFAULT_METRIC_NAMES: Record<string, string> = {
-  "evaluator.text_alignment": "base.cosine_similarity",
-  "evaluator.hallucination_detection": "hallucination_detection",
-  "evaluator.citation_recall": "citation_recall",
-  "evaluator.answer_faithfulness": "answer_faithfulness",
-};
+import {
+  ASSERTION_EVALUATORS,
+  DEFAULT_METRIC_NAMES,
+  SCORING_EVALUATORS,
+} from "./evaluator-catalog.ts";
 
 // -------------------------------------------------------------------------------------------------
 // Alias maps

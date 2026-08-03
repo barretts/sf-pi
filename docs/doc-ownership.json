@@ -50,6 +50,17 @@
     ],
     "checks": ["npm run docs:health:check", "npm run docs:build"]
   },
+  "docs/agent-script-eval-studio-implementation-plan.md": {
+    "source": [
+      "CONTEXT.md",
+      "docs/adr/0090-agentscript-stateful-eval-scenarios.md",
+      "docs/adr/0094-agent-script-eval-gated-activation.md",
+      "docs/adr/0097-agent-script-eval-studio-local-first-workspace.md",
+      "extensions/sf-agentscript/**",
+      "approved architecture grilling decisions"
+    ],
+    "checks": ["npm run docs:health:check", "npm run docs:build"]
+  },
   "docs/settings-surfaces.md": {
     "source": ["extension settings behavior", "extensions/*/manifest.json"],
     "checks": ["npm run docs:health:check", "npm run docs:build"]

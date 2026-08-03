@@ -118,12 +118,14 @@ export async function handleEvalAction(
     });
     void legacyReport;
 
-    const passed = result.totals.test_fail === 0 && result.totals.errors === 0;
+    const passed = result.metadata.evidence_verdict === "passed";
     const niceMarkdown = evalRunMarkdown(
       {
         ok: passed,
         run_id: result.run_id,
         run_dir: result.run_dir,
+        execution_state: result.metadata.execution_state,
+        evidence_verdict: result.metadata.evidence_verdict,
         totals: result.metadata.totals as never,
         latency: result.latency,
         failed_test_ids: result.failures.map((f) => f.test_id),

@@ -70,7 +70,10 @@ describe("eval batch failure evidence", () => {
     expect(result.metadata.missing_test_ids).toEqual(["stateful"]);
 
     const status = JSON.parse(await readFile(path.join(result.run_dir!, "status.json"), "utf8"));
-    expect(status.status).toBe("failed");
+    expect(status).toMatchObject({
+      status: "infrastructure_failed",
+      progress: { completed_batches: 1, total_batches: 1, returned_tests: 0 },
+    });
     const persisted = JSON.parse(
       await readFile(path.join(result.run_dir!, "batch-failures.json"), "utf8"),
     );

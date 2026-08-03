@@ -16,11 +16,38 @@
 
 export interface EvalSpec {
   tests: EvalTest[];
+  /** Extension-owned, source-only org-data seeds. Stripped before Evaluation API POST. */
+  seed_profiles?: Record<string, EvalSeedProfile>;
+  /** Optional profile assignment copied into the generated release baseline. */
+  generated_baseline?: {
+    default_seed_profile?: string;
+    overrides?: Record<string, string>;
+    /** Exact generated test IDs omitted in favor of designated multi-turn coverage. */
+    skip_tests?: string[];
+  };
+}
+
+export interface EvalSeedProfile {
+  /** Read-only SOQL returning exactly one row at run preflight. */
+  soql: string;
+  /** Values merged into the Scenario's first agent.send_message context_variables. */
+  context_variables: EvalSeedContextVariable[];
+}
+
+export interface EvalSeedContextVariable {
+  name: string;
+  type?: string;
+  /** Top-level field from the single SOQL result row. Mutually exclusive with value. */
+  field?: string;
+  /** Literal scalar value. Mutually exclusive with field. */
+  value?: string | number | boolean;
 }
 
 export interface EvalTest {
   id: string;
   steps: EvalStep[];
+  /** Source-only reference to one seed_profiles entry. Stripped before API POST. */
+  seed_profile?: string;
 }
 
 export interface EvalStep {
@@ -216,6 +243,10 @@ export interface LatencySummary {
 
 export interface RunMetadata {
   run_id: string;
+  /** Strict recorded interpretation for Studio-era and newly executed runs. */
+  execution_state?: import("./verdict.ts").EvalExecutionState;
+  evidence_verdict?: import("./verdict.ts").EvidenceVerdict;
+  verdict_semantics_version?: number;
   spec_path?: string;
   org?: string;
   org_id?: string;

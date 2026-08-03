@@ -47,6 +47,9 @@ describe("sf-agentscript", () => {
     expect(getAgentScriptArgumentCompletions("rep")?.map((item) => item.value)).toEqual([
       "report ",
     ]);
+    expect(getAgentScriptArgumentCompletions("evals")?.map((item) => item.value)).toEqual([
+      "evals",
+    ]);
     expect(getAgentScriptArgumentCompletions("report ")?.map((item) => item.value)).toEqual([
       "report eval",
     ]);
@@ -100,11 +103,13 @@ describe("sf-agentscript", () => {
       "doctor",
       "check",
       "eval",
+      "evals",
       "report",
       "help",
     ]);
     expect(actions.find((action) => action.id === "doctor")?.group).toBe("Diagnostics");
     expect(actions.find((action) => action.id === "eval")?.group).toBe("Testing");
+    expect(actions.find((action) => action.id === "evals")?.closeBeforeRun).toBe(true);
     expect(actions.find((action) => action.id === "help")?.group).toBe("Reference");
     expect(typeof actions.find((action) => action.id === "check")?.createPanel).toBe("function");
     expect(typeof actions.find((action) => action.id === "eval")?.createPanel).toBe("function");

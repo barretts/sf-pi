@@ -20,8 +20,9 @@
  * `<cwd>/.pi/state/sf-agentscript/runs/` by default.
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { detectProject } from "../../../../lib/common/sf-environment/detect.ts";
 import type {
   EvalApiResponse,
   EvalBatchFailure,
@@ -35,12 +36,58 @@ import type {
 
 export const DEFAULT_RUN_BASE_REL = path.join(".pi", "state", "sf-agentscript", "runs");
 
+export function evalProjectRoot(cwd: string): string {
+  const project = detectProject(cwd);
+  return project.detected && project.projectRoot ? project.projectRoot : path.resolve(cwd);
+}
+
 export function defaultRunBase(cwd: string): string {
-  return path.join(cwd, DEFAULT_RUN_BASE_REL);
+  return path.join(evalProjectRoot(cwd), DEFAULT_RUN_BASE_REL);
 }
 
 export function resolveRunDir(cwd: string, runId: string, base?: string): string {
   return path.join(base ?? defaultRunBase(cwd), runId);
+}
+
+export type EvalRunScope = "suite" | "scenario" | "ad_hoc";
+
+export interface EvalRunManifest {
+  schema_version: 2;
+  run_id: string;
+  created: string;
+  scope: EvalRunScope;
+  scenario_id?: string;
+  spec_path?: string;
+  org: string;
+  org_id: string;
+  agent_api_name?: string;
+  bot_version_id?: string;
+  planner_id?: string | null;
+  source_digest: string;
+  executed_digest: string;
+  source_snapshot: "spec.source.snapshot.json";
+  executed_snapshot: "spec.executed.snapshot.json";
+  expected: {
+    scenarios: Array<{ id: string; evaluator_ids: string[] }>;
+  };
+  release_contract?: RunMetadata["release_contract"];
+  seed_provenance?: Array<{
+    scenario_id: string;
+    names: string[];
+    profile?: string;
+    sensitive_names?: string[];
+    query_digest?: string;
+  }>;
+  unverified_evaluator_acknowledged?: boolean;
+  coordinator?: { kind: "studio"; owner_token: string };
+}
+
+export interface RunStartInput {
+  runDir: string;
+  manifest: EvalRunManifest;
+  sourceSpec: EvalSpec;
+  executedSpec: EvalSpec;
+  status: EvalRunStatusArtifact;
 }
 
 export interface PersistInput {
@@ -50,6 +97,7 @@ export interface PersistInput {
   metadata: RunMetadata;
   failures: FailureRecord[];
   batchFailures?: EvalBatchFailure[];
+  verdict?: import("./verdict.ts").EvalVerdictResult;
   /**
    * Optional: the post-normalize spec, used to cross-reference user
    * utterances onto each turn in transcript.jsonl. The eval API doesn't
@@ -60,7 +108,13 @@ export interface PersistInput {
   spec?: EvalSpec;
 }
 
-export type EvalRunStatus = "running" | "completed" | "failed" | "cancelled";
+export type EvalRunStatus =
+  | "running"
+  | "completed"
+  | "failed" // legacy schema-v1 reader compatibility
+  | "cancelled"
+  | "interrupted"
+  | "infrastructure_failed";
 
 export interface EvalRunStatusArtifact {
   schema_version: 1;
@@ -78,18 +132,53 @@ export interface EvalRunStatusArtifact {
   concurrency?: number;
   traces_mode?: string;
   batch_timeout_ms?: number;
+  progress?: {
+    completed_batches: number;
+    total_batches: number;
+    returned_tests: number;
+  };
   error?: {
     name?: string;
     message: string;
   };
 }
 
+export async function atomicWriteFile(
+  filePath: string,
+  content: string,
+  mode = 0o600,
+): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  const tempPath = `${filePath}.tmp-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  try {
+    await writeFile(tempPath, content, { encoding: "utf8", mode });
+    await rename(tempPath, filePath);
+  } catch (error) {
+    await rm(tempPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> {
+  await atomicWriteFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
 export async function writeRunStatus(
   runDir: string,
   artifact: EvalRunStatusArtifact,
 ): Promise<void> {
-  await mkdir(runDir, { recursive: true });
-  await writeFile(path.join(runDir, "status.json"), JSON.stringify(artifact, null, 2), "utf-8");
+  await writeJsonAtomic(path.join(runDir, "status.json"), artifact);
+}
+
+export async function writeRunStartArtifacts(input: RunStartInput): Promise<void> {
+  await mkdir(input.runDir, { recursive: true, mode: 0o700 });
+  await writeJsonAtomic(path.join(input.runDir, input.manifest.source_snapshot), input.sourceSpec);
+  await writeJsonAtomic(
+    path.join(input.runDir, input.manifest.executed_snapshot),
+    input.executedSpec,
+  );
+  await writeJsonAtomic(path.join(input.runDir, "manifest.json"), input.manifest);
+  await writeRunStatus(input.runDir, input.status);
 }
 
 /**
@@ -116,17 +205,17 @@ export async function writeRun(input: PersistInput): Promise<void> {
   await mkdir(runDir, { recursive: true });
 
   // metadata.json
-  await writeFile(path.join(runDir, "metadata.json"), JSON.stringify(metadata, null, 2), "utf-8");
+  await writeJsonAtomic(path.join(runDir, "metadata.json"), metadata);
 
   // raw.json — the full merged eval response (already HTML-decoded by caller)
-  await writeFile(path.join(runDir, "raw.json"), JSON.stringify(merged, null, 2), "utf-8");
+  await writeJsonAtomic(path.join(runDir, "raw.json"), merged);
+
+  if (input.verdict) {
+    await writeJsonAtomic(path.join(runDir, "evidence.json"), input.verdict);
+  }
 
   if (input.batchFailures && input.batchFailures.length > 0) {
-    await writeFile(
-      path.join(runDir, "batch-failures.json"),
-      JSON.stringify(input.batchFailures, null, 2),
-      "utf-8",
-    );
+    await writeJsonAtomic(path.join(runDir, "batch-failures.json"), input.batchFailures);
   }
 
   // transcript.jsonl — one entry per agent.send_message turn across all tests
@@ -201,17 +290,13 @@ export async function writeRun(input: PersistInput): Promise<void> {
     }
   }
   if (transcriptLines.length > 0) {
-    await writeFile(
-      path.join(runDir, "transcript.jsonl"),
-      transcriptLines.join("\n") + "\n",
-      "utf-8",
-    );
+    await atomicWriteFile(path.join(runDir, "transcript.jsonl"), transcriptLines.join("\n") + "\n");
   }
 
   // failures.jsonl — one line per failed test, LLM-shaped
   if (failures.length > 0) {
     const lines = failures.map((f) => JSON.stringify(f));
-    await writeFile(path.join(runDir, "failures.jsonl"), lines.join("\n") + "\n", "utf-8");
+    await atomicWriteFile(path.join(runDir, "failures.jsonl"), lines.join("\n") + "\n");
   }
 
   // traces/<planId>.json — only writes for traces that returned a usable body
@@ -221,11 +306,7 @@ export async function writeRun(input: PersistInput): Promise<void> {
     for (const [key, body] of traces.entries()) {
       if (body == null) continue;
       const planId = key.split("::").pop() ?? key;
-      await writeFile(
-        path.join(tracesDir, `${planId}.json`),
-        JSON.stringify(body, null, 2),
-        "utf-8",
-      );
+      await writeJsonAtomic(path.join(tracesDir, `${planId}.json`), body);
     }
   }
 }

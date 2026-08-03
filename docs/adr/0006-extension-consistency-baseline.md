@@ -110,15 +110,26 @@ The `npm run docs:health:check` lint now verifies that every entry in
 string-literal match somewhere in the extension. Catches manifest typos and
 tools registered with the wrong name.
 
-### 9. Updated scaffold
+### 9. Scaffold contract
 
-`scripts/scaffold.mjs` reflects every rule above:
+`scripts/scaffold.mjs` must reflect every rule above. The executable-standards
+program closes the current template drift with this contract:
 
-- imports `extension-toggle` from `lib/common/`
-- accepts the six new categories (rejects the old three)
-- writes `manifest.maturity: "experimental"` and `docs.{summary,primaryFiles}` so the generator accepts the new extension on first run
-- drops a sample `lib/example-tool.ts` for `agent-tool` extensions
-- prints next-step instructions that match the new conventions
+- generate a Manager-first slash command by default and support an explicit
+  `--no-command` option for passive extensions; do not infer command presence
+  from category
+- wrap generated command handlers with the shared safe-command handler and
+  route interactive no-args behavior to the matching Manager detail page
+- accept the six current categories
+- write `manifest.maturity: "experimental"` and
+  `docs.{summary,primaryFiles}` so the generator accepts the new extension on
+  first run
+- generate the agent-tool example as `lib/<tool-name>-tool.ts`, with the
+  canonical exported tool-name constant and registration function
+- generate behavior tests for command and no-command scaffolds, then verify the
+  isolated output with catalog generation, panel checks, typecheck, and smoke
+  tests
+- print next-step instructions that match the generated conventions
 
 ## Consequences
 
@@ -276,31 +287,6 @@ Every other slack tool was already wrapped through
 `buildSlackTextResult` in `extensions/sf-slack/lib/truncation.ts`,
 so the envelope is now consistent across all 12 LLM tools shipped
 by sf-pi.
-
-## Settings inheritance follow-up
-
-SF Pi extension settings resolve each field independently as **project → global
-→ default**. A project `sfPi.<extension>` section overrides only fields it
-contains; omitted sibling fields inherit their global values. This matches Pi's
-nested-settings model and replaces the inconsistent whole-section behavior in
-older extension adapters. The migration changes read semantics only: SF Pi does
-not rewrite settings files or materialize omitted project fields. Effective
-values can change when a project omitted a field supplied globally; release
-notes and migration guidance must call that out explicitly. Tests prove old and
-new effective values with project/global fixtures and verify byte-for-byte
-settings preservation during reads.
-
-A shared descriptor-driven config panel is limited to simple fixed-choice scalar
-fields such as booleans, enums, and bounded numeric choices. Conditional,
-nested, security-sensitive, credential, diagnostic, and specialized editor
-panels remain extension-owned. SF Pi does not create a universal callback-based
-config framework.
-
-The first pilot is SF Browser plus SF Agent Script. At project scope every row
-includes **Inherit global**; at global scope every row includes **Use default**.
-Selecting either deletes that field from the chosen scope. Saving a field never
-materializes inherited sibling values, and empty extension sections are pruned
-when doing so preserves unrelated settings.
 
 ## Status
 

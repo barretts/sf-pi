@@ -10,7 +10,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
   {
     id: "sf-agentscript",
     name: "SF Agent Script",
-    description: "Single-plugin lifecycle for `.agent` files: official-SDK compile diagnostics, native quality, preview, exact-version release eval, inactive publication, and gated activation.",
+    description: "Single-plugin lifecycle for `.agent` files: compile diagnostics, native quality, preview, local-first Eval Studio, exact-version release eval, inactive publication, and gated activation.",
     file: "extensions/sf-agentscript/index.ts",
     category: "agent-tool",
     maturity: "stable",

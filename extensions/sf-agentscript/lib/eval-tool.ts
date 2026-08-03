@@ -34,9 +34,20 @@ import {
   readMetadata,
   type RunEvalResult,
 } from "./eval/orchestrator.ts";
-import { resolveAgentIds, type StatusFilter } from "./eval/active-ids.ts";
+import { evalProjectRoot, type EvalRunManifest } from "./eval/persist.ts";
+import {
+  resolveAgentIds,
+  substitutePlaceholders,
+  type ResolvedAgentIds,
+  type StatusFilter,
+} from "./eval/active-ids.ts";
 import { fetchTrace } from "./eval/trace-client.ts";
 import { generateSpec } from "./eval/spec-generator.ts";
+import {
+  applyGeneratedBaselineSeedConfig,
+  redactResolvedSeedValues,
+  type EvalSeedProvenance,
+} from "./eval/seeds.ts";
 import { inspectFile } from "./inspect.ts";
 import { isAgentScriptFile } from "./file-classify.ts";
 import {
@@ -56,6 +67,7 @@ import {
   AGENT_SCRIPT_RELEASE_BASELINE_ID,
   defaultReleaseSpecPath,
   hashEvalSpec,
+  recordReleaseEvidence,
   rewriteReleaseSpecForLatest,
 } from "./release-contract.ts";
 
@@ -356,6 +368,7 @@ export function registerEvalTool(pi: ExtensionAPI): void {
       "Run / debug / introspect Agent Script regression specs against the Salesforce Evaluation API.",
     promptGuidelines: [
       "Use agentscript_eval action='run_release' after inactive publication to run the generated baseline and the current designated suite against the exact latest BotVersion.",
+      "Use EvalSpec seed_profiles for scenarios that need dynamic target-org IDs; query only dedicated test fixtures with bounded read-only SOQL.",
       "Incomplete batches, missing tests, evaluator failures, and step errors are failed evidence; never treat an empty or partial run as green.",
       "Read extensions/sf-agentscript/AGENT_GUIDE.md for spec generation, failure drill-down, and version-resolution guidance.",
     ],
@@ -398,10 +411,16 @@ export function registerEvalTool(pi: ExtensionAPI): void {
 // -------------------------------------------------------------------------------------------------
 
 type OnUpdateFn = (partial: { content: { type: "text"; text: string }[]; details: never }) => void;
+type InternalRunParams = ParamsAny & {
+  release_version?: number;
+  source_spec?: EvalSpec;
+  prepared_spec?: EvalSpec;
+  coordinator_token?: string;
+};
 
-async function actionRunRelease(
+export async function actionRunRelease(
   ctx: ExtensionContext,
-  input: ParamsAny,
+  input: InternalRunParams,
   onUpdate?: OnUpdateFn,
   timings?: TimingCollector,
   signal?: AbortSignal,
@@ -410,9 +429,29 @@ async function actionRunRelease(
   details: Record<string, unknown> | ToolError;
 }> {
   const agentApiName = input.agent_api_name as string;
+  const projectRoot = evalProjectRoot(ctx.cwd);
+  const designatedPath = input.release_spec_path
+    ? path.resolve(projectRoot, input.release_spec_path)
+    : defaultReleaseSpecPath(projectRoot, agentApiName);
+  let designatedSource: EvalSpec | undefined;
+  try {
+    designatedSource = JSON.parse(await readFile(designatedPath, "utf8")) as EvalSpec;
+  } catch (error) {
+    const missing = (error as { code?: string }).code === "ENOENT";
+    if (input.release_spec_path || !missing) {
+      return toolError(
+        missing
+          ? `Designated release spec not found: ${designatedPath}`
+          : `Failed to read designated release spec: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+      );
+    }
+  }
+
   const safeName = agentApiName.replace(/[^A-Za-z0-9._-]/g, "_");
   const baselinePath = path.join(
-    ctx.cwd,
+    projectRoot,
     ".pi",
     "state",
     "sf-agentscript",
@@ -425,12 +464,33 @@ async function actionRunRelease(
     output_path: baselinePath,
   });
   if ((generated.details as { ok?: boolean }).ok !== true) return generated;
+  const generatedSource = JSON.parse(await readFile(baselinePath, "utf8")) as EvalSpec;
+  const baselineSource = designatedSource
+    ? applyGeneratedBaselineSeedConfig(generatedSource, designatedSource)
+    : generatedSource;
+  if (designatedSource?.generated_baseline) {
+    await writeFile(baselinePath, `${JSON.stringify(baselineSource, null, 2)}\n`, "utf8");
+  }
 
-  const common: ParamsAny = {
+  const conn = await connFromAlias(input.target_org);
+  const exactVersion = await resolveAgentIds(conn, agentApiName, {
+    ...(typeof input.release_version === "number"
+      ? { version: input.release_version }
+      : { status: "any" as const }),
+    signal,
+  });
+  if (exactVersion.status === "Active") {
+    return toolError(
+      `No pending non-Active BotVersion exists for '${agentApiName}'.`,
+      "Publish an inactive version before running the release contract.",
+    );
+  }
+  const common: InternalRunParams = {
     ...input,
     action: "run",
     agent_api_name: agentApiName,
-    version_resolution: "latest",
+    version_resolution: "version",
+    version: exactVersion.version_number,
     acknowledge_inactive_version: true,
     overwrite_agent_ids: true,
   };
@@ -441,6 +501,8 @@ async function actionRunRelease(
       spec_path: baselinePath,
       spec: undefined,
       release_contract_kind: "generated_baseline",
+      source_spec: baselineSource,
+      prepared_spec: pinReleaseSpec(baselineSource, exactVersion),
     },
     onUpdate,
     timings,
@@ -450,19 +512,7 @@ async function actionRunRelease(
     return prependResult(baseline, "❌ generated release baseline failed");
   }
 
-  const designatedPath = input.release_spec_path
-    ? path.resolve(ctx.cwd, input.release_spec_path)
-    : defaultReleaseSpecPath(ctx.cwd, agentApiName);
-  let hasDesignated = false;
-  try {
-    await readFile(designatedPath, "utf8");
-    hasDesignated = true;
-  } catch {
-    if (input.release_spec_path) {
-      return toolError(`Designated release spec not found: ${designatedPath}`);
-    }
-  }
-  if (!hasDesignated) {
+  if (!designatedSource) {
     return prependResult(baseline, "✅ Agent Script release contract passed (generated baseline)");
   }
 
@@ -473,6 +523,8 @@ async function actionRunRelease(
       spec_path: designatedPath,
       spec: undefined,
       release_contract_kind: "designated",
+      source_spec: designatedSource,
+      prepared_spec: pinReleaseSpec(designatedSource, exactVersion),
     },
     onUpdate,
     timings,
@@ -484,6 +536,13 @@ async function actionRunRelease(
       ? "✅ Agent Script release contract passed (generated baseline + designated suite)"
       : "❌ designated Agent Script release suite failed after the generated baseline passed",
   );
+}
+
+function pinReleaseSpec(spec: EvalSpec, exactVersion: ResolvedAgentIds): EvalSpec {
+  return substitutePlaceholders(spec, {
+    active: exactVersion,
+    latest: exactVersion,
+  });
 }
 
 function prependResult<T extends { content: { type: "text"; text: string }[] }>(
@@ -500,7 +559,7 @@ function prependResult<T extends { content: { type: "text"; text: string }[] }>(
 
 async function actionRun(
   ctx: ExtensionContext,
-  input: ParamsAny,
+  input: InternalRunParams,
   onUpdate?: OnUpdateFn,
   timings?: TimingCollector,
   signal?: AbortSignal,
@@ -523,9 +582,11 @@ async function actionRun(
     const inferred = latestEvalSpec(ctx);
     if (inferred) input = { ...input, spec_path: inferred.spec_path };
   }
-  const sourceSpec = timings
-    ? await timings.time("load_eval_spec", () => loadSpec(input, ctx.cwd))
-    : await loadSpec(input, ctx.cwd);
+  const sourceSpec = input.source_spec
+    ? input.source_spec
+    : timings
+      ? await timings.time("load_eval_spec", () => loadSpec(input, ctx.cwd))
+      : await loadSpec(input, ctx.cwd);
   if (!sourceSpec) {
     return toolError(
       "Either spec_path or spec must be provided.",
@@ -533,7 +594,19 @@ async function actionRun(
     );
   }
 
-  const spec = input.release_contract_kind ? rewriteReleaseSpecForLatest(sourceSpec) : sourceSpec;
+  const spec = input.prepared_spec
+    ? (input.prepared_spec as EvalSpec)
+    : input.release_contract_kind
+      ? rewriteReleaseSpecForLatest(sourceSpec)
+      : sourceSpec;
+  const releaseContract = input.release_contract_kind
+    ? {
+        kind: input.release_contract_kind,
+        baseline_id: AGENT_SCRIPT_RELEASE_BASELINE_ID,
+        spec_digest: hashEvalSpec(sourceSpec),
+        ...(input.spec_path ? { spec_path: path.resolve(ctx.cwd, input.spec_path) } : {}),
+      }
+    : undefined;
 
   let result: RunEvalResult;
   try {
@@ -559,6 +632,7 @@ async function actionRun(
       traceConn,
       targetOrg: input.target_org ?? conn.getUsername() ?? "<default>",
       spec,
+      sourceSpec,
       agentApiName: input.agent_api_name,
       tracesMode,
       concurrency: input.concurrency ?? settings.evalConcurrency,
@@ -568,6 +642,10 @@ async function actionRun(
       versionResolution: input.version_resolution,
       version: input.version,
       overwriteAgentIds: input.overwrite_agent_ids,
+      releaseContract,
+      coordinator: input.coordinator_token
+        ? { kind: "studio", owner_token: input.coordinator_token }
+        : undefined,
       cwd: ctx.cwd,
       specPath: input.spec_path,
       log,
@@ -581,32 +659,28 @@ async function actionRun(
   await (timings
     ? timings.time("record_eval_run_index", () => recordRunInIndex(ctx.cwd, result.run_id))
     : recordRunInIndex(ctx.cwd, result.run_id));
+  if (input.release_contract_kind) {
+    try {
+      await recordReleaseEvidence(ctx.cwd, result.run_id);
+    } catch (error) {
+      log(
+        `Release-evidence index update deferred; activation can rebuild it: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
 
   const inlineThreshold = input.inline_threshold ?? 5;
-  const passed =
-    result.failed_batches === 0 &&
-    result.totals.tests === result.metadata.tests_count &&
-    result.totals.test_fail === 0 &&
-    result.totals.errors === 0;
-  if (input.release_contract_kind) {
-    result.metadata.release_contract = {
-      kind: input.release_contract_kind,
-      baseline_id: AGENT_SCRIPT_RELEASE_BASELINE_ID,
-      spec_digest: hashEvalSpec(sourceSpec),
-      ...(input.spec_path ? { spec_path: path.resolve(ctx.cwd, input.spec_path) } : {}),
-    };
-    await writeFile(
-      path.join(result.run_dir, "metadata.json"),
-      `${JSON.stringify(result.metadata, null, 2)}\n`,
-      "utf8",
-    );
-  }
+  const passed = result.metadata.evidence_verdict === "passed";
   const head = headline(result, passed);
 
   const summary = {
     run_id: result.run_id,
     run_dir: result.run_dir,
     ok: passed,
+    execution_state: result.metadata.execution_state,
+    evidence_verdict: result.metadata.evidence_verdict,
     totals: result.metadata.totals,
     latency: result.latency,
     failed_batches: result.failed_batches,
@@ -655,6 +729,8 @@ async function actionRun(
         ok: passed,
         run_id: result.run_id,
         run_dir: result.run_dir,
+        execution_state: result.metadata.execution_state,
+        evidence_verdict: result.metadata.evidence_verdict,
         totals: result.metadata.totals,
         latency: result.latency,
         failed_test_ids: result.failures.map((f) => f.test_id),
@@ -784,6 +860,50 @@ async function loadSpec(input: ParamsAny, cwd: string): Promise<EvalSpec | null>
 // action = get_failure
 // -------------------------------------------------------------------------------------------------
 
+export async function readPublicFailures(
+  ctx: ExtensionContext,
+  runId: string,
+): Promise<FailureRecord[]> {
+  const failures = await readFailures(ctx.cwd, runId);
+  const runDir = path.join(
+    evalProjectRoot(ctx.cwd),
+    ".pi",
+    "state",
+    "sf-agentscript",
+    "runs",
+    runId,
+  );
+  let manifest: EvalRunManifest;
+  try {
+    manifest = JSON.parse(
+      await readFile(path.join(runDir, "manifest.json"), "utf8"),
+    ) as EvalRunManifest;
+  } catch {
+    throw new Error(`Unable to safely expose failure evidence for run '${runId}'.`);
+  }
+  if (manifest.schema_version !== 2 || manifest.run_id !== runId) {
+    throw new Error(`Unable to safely expose failure evidence for run '${runId}'.`);
+  }
+  const rows = manifest.seed_provenance ?? [];
+  if (rows.length === 0) return failures;
+  let spec: EvalSpec;
+  try {
+    spec = JSON.parse(
+      await readFile(path.join(runDir, "spec.executed.snapshot.json"), "utf8"),
+    ) as EvalSpec;
+  } catch {
+    throw new Error(`Unable to safely redact seeded failure evidence for run '${runId}'.`);
+  }
+  const provenance: EvalSeedProvenance[] = rows.map((row) => ({
+    profile: row.profile ?? "context_variables",
+    scenario_ids: [row.scenario_id],
+    variable_names: row.names,
+    sensitive_variable_names: row.sensitive_names ?? row.names,
+    query_digest: row.query_digest ?? "",
+  }));
+  return redactResolvedSeedValues(failures, spec, provenance);
+}
+
 async function actionGetFailure(
   ctx: ExtensionContext,
   input: ParamsAny,
@@ -798,7 +918,7 @@ async function actionGetFailure(
   let all: FailureRecord[];
   let meta: RunMetadata | null;
   try {
-    all = await readFailures(ctx.cwd, input.run_id);
+    all = await readPublicFailures(ctx, input.run_id);
     meta = await readMetadata(ctx.cwd, input.run_id);
   } catch (err) {
     return toolError(

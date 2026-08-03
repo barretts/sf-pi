@@ -19,7 +19,7 @@
  * parallelism.
  */
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Connection } from "@salesforce/core";
 import { callEval, type EvalApiHeaders, splitIntoBatches } from "./eval-client.ts";
@@ -28,13 +28,22 @@ import { synthesizeTracesFromMerged } from "./synthesize-trace.ts";
 import { deepDecode } from "./decode.ts";
 import { latencySummary, summarize, type BuildOptions } from "./render.ts";
 import {
+  defaultRunBase,
   newRunId,
   resolveRunDir,
   writeRun,
+  writeRunStartArtifacts,
   writeRunStatus,
+  type EvalRunScope,
   type EvalRunStatus,
 } from "./persist.ts";
 import { normalizeSpec } from "./normalize.ts";
+import {
+  redactResolvedSeedValues,
+  resolveEvalSeedProfiles,
+  type EvalSeedProvenance,
+} from "./seeds.ts";
+import { deriveEvalVerdict } from "./verdict.ts";
 import {
   detectPlaceholderUsage,
   injectResolvedAgentIds,
@@ -46,6 +55,7 @@ import {
   type ResolvedAgentIds,
 } from "./active-ids.ts";
 import { resolveOrgIdentity } from "../../../../lib/common/sf-conn/connection.ts";
+import { connRequest } from "../../../../lib/common/sf-conn/request.ts";
 import type {
   EvalApiResponse,
   EvalBatchFailure,
@@ -57,6 +67,7 @@ import type {
   TracesMode,
 } from "./types.ts";
 import type { TimingCollector } from "../timings.ts";
+import { hashEvalSpec } from "../release-contract.ts";
 
 // -------------------------------------------------------------------------------------------------
 // Run options + result
@@ -70,8 +81,12 @@ export interface RunEvalOptions {
   /** sf CLI alias / username. Recorded in metadata. Required. */
   targetOrg: string;
   spec: EvalSpec;
+  /** Full authored Suite snapshot when spec is an executed Scenario subset. */
+  sourceSpec?: EvalSpec;
   /** For $active_* placeholder resolution and default create-session id injection. */
   agentApiName?: string;
+  /** Exact target already reviewed and pinned by a higher-level Studio flow. */
+  resolvedTarget?: ResolvedAgentIds;
   /** Default create-session id injection mode when agentApiName is supplied. Default `active`. */
   versionResolution?: AgentVersionResolutionMode;
   /** Required when versionResolution='version'. Pins BotVersion.VersionNumber. */
@@ -102,6 +117,16 @@ export interface RunEvalOptions {
   runId?: string;
   /** Optional spec source path, recorded in metadata. */
   specPath?: string;
+  /** Persisted execution scope. Defaults to suite when specPath exists, otherwise ad_hoc. */
+  runScope?: EvalRunScope;
+  /** Immutable release-contract identity known before execution begins. */
+  releaseContract?: RunMetadata["release_contract"];
+  /** One-run acknowledgement; it never promotes capability or release eligibility. */
+  unverifiedEvaluatorAcknowledged?: boolean;
+  /** Exact Studio owner identity for orphan recovery; omitted on direct runs. */
+  coordinator?: { kind: "studio"; owner_token: string };
+  /** Selected Scenario for runScope='scenario'. */
+  scenarioId?: string;
   /** cwd anchoring the run-output base. Required for persistence. */
   cwd: string;
   /** Skip writing artifacts to disk. Default false. */
@@ -144,6 +169,13 @@ function enforceLatestAcknowledgement(ids: ResolvedAgentIds, opts: RunEvalOption
   );
 }
 
+export class EvalRunInterruptedError extends Error {
+  constructor(message = "Eval run interrupted because its owner session ended.") {
+    super(message);
+    this.name = "EvalRunInterruptedError";
+  }
+}
+
 export class EvalRunCancelledError extends Error {
   constructor(message = "Eval run cancelled.") {
     super(message);
@@ -152,7 +184,27 @@ export class EvalRunCancelledError extends Error {
 }
 
 function throwIfAborted(signal?: AbortSignal): void {
-  if (signal?.aborted) throw new EvalRunCancelledError();
+  if (!signal?.aborted) return;
+  if (signal.reason === "interrupted") throw new EvalRunInterruptedError();
+  throw new EvalRunCancelledError();
+}
+
+async function queryEvalSeed(
+  conn: Connection,
+  soql: string,
+  signal?: AbortSignal,
+): Promise<{ records: Array<Record<string, unknown>> }> {
+  const version = (conn as unknown as { version?: string }).version ?? "66.0";
+  const response = await connRequest<{ records?: Array<Record<string, unknown>> }>(conn, {
+    method: "GET",
+    url: `/services/data/v${version}/query/?q=${encodeURIComponent(soql)}`,
+    timeoutMs: 30_000,
+    signal,
+  });
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`Eval seed SOQL failed with HTTP ${response.status}.`);
+  }
+  return { records: response.body.records ?? [] };
 }
 
 function errorPayload(err: unknown): { name?: string; message: string } {
@@ -205,7 +257,8 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
   const tracesMode: TracesMode = opts.tracesMode ?? "failed";
   const runId = opts.runId ?? newRunId(startedAt);
   const runDir = !opts.noPersist ? resolveRunDir(opts.cwd, runId, opts.runBase) : undefined;
-  let statusPhase = "starting";
+  let statusPhase = "preflight";
+  let runBegun = false;
   let terminalStatusWritten = false;
   const writeStatus = async (
     status: EvalRunStatus,
@@ -215,9 +268,14 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       batches?: number;
       error?: unknown;
       completed?: Date;
+      progress?: {
+        completed_batches: number;
+        total_batches: number;
+        returned_tests: number;
+      };
     } = {},
   ): Promise<void> => {
-    if (!runDir) return;
+    if (!runDir || !runBegun) return;
     statusPhase = phase;
     await writeRunStatus(runDir, {
       schema_version: 1,
@@ -235,19 +293,16 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       concurrency,
       traces_mode: tracesMode,
       batch_timeout_ms: opts.batchTimeoutMs ?? 300_000,
+      progress: extras.progress,
       ...(extras.error ? { error: errorPayload(extras.error) } : {}),
     });
   };
-  await writeStatus("running", "starting", {
-    testsCount: opts.spec.tests?.length ?? 0,
-  });
-
   try {
     throwIfAborted(opts.signal);
 
     // 1. Resolve $active_* / $latest_* placeholders + apply spec normalization
     let spec = opts.spec;
-    let resolvedIds: ResolvedAgentIds | null = null;
+    let resolvedIds: ResolvedAgentIds | null = opts.resolvedTarget ?? null;
     let latestIds: ResolvedAgentIds | null = null;
     let injectedIds: ResolvedAgentIds | null = null;
     let injectionStats: AgentIdInjectionStats | undefined;
@@ -305,6 +360,8 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       });
     }
 
+    let seedProvenance: EvalSeedProvenance[] = [];
+
     const wantsInjection =
       Boolean(opts.agentApiName) &&
       shouldInjectResolvedAgentIds(spec, opts.overwriteAgentIds ?? false);
@@ -340,6 +397,19 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
     }
 
     throwIfAborted(opts.signal);
+    const resolvedSeeds = opts.timings
+      ? await opts.timings.time("resolve_eval_seeds", () =>
+          resolveEvalSeedProfiles(spec, {
+            query: async (soql) => await queryEvalSeed(opts.conn, soql, opts.signal),
+          }),
+        )
+      : await resolveEvalSeedProfiles(spec, {
+          query: async (soql) => await queryEvalSeed(opts.conn, soql, opts.signal),
+        });
+    spec = resolvedSeeds.spec;
+    seedProvenance = resolvedSeeds.provenance;
+
+    throwIfAborted(opts.signal);
     spec = opts.timings
       ? await opts.timings.time("normalize_eval_spec", () => normalizeSpec(spec))
       : normalizeSpec(spec);
@@ -366,10 +436,106 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       throw new Error("Spec contains no tests; nothing to do.");
     }
     const batches = splitIntoBatches(tests);
-    await writeStatus("running", "running_batches", {
-      testsCount: tests.length,
-      batches: batches.length,
-    });
+    if (runDir) {
+      const now = new Date().toISOString();
+      const scope: EvalRunScope = opts.runScope ?? (opts.specPath ? "suite" : "ad_hoc");
+      try {
+        await writeRunStartArtifacts({
+          runDir,
+          sourceSpec: opts.sourceSpec ?? opts.spec,
+          executedSpec: spec,
+          manifest: {
+            schema_version: 2,
+            run_id: runId,
+            created: startedAt.toISOString(),
+            scope,
+            ...(scope === "scenario" && opts.scenarioId ? { scenario_id: opts.scenarioId } : {}),
+            spec_path: opts.specPath,
+            org: opts.targetOrg,
+            org_id: ident.org_id,
+            agent_api_name: opts.agentApiName,
+            bot_version_id:
+              resolvedIds?.bot_version_id ??
+              latestIds?.bot_version_id ??
+              injectedIds?.bot_version_id,
+            planner_id:
+              resolvedIds?.planner_id ?? latestIds?.planner_id ?? injectedIds?.planner_id ?? null,
+            source_digest: hashEvalSpec(opts.sourceSpec ?? opts.spec),
+            executed_digest: hashEvalSpec(spec),
+            source_snapshot: "spec.source.snapshot.json",
+            executed_snapshot: "spec.executed.snapshot.json",
+            expected: {
+              scenarios: tests.map((test) => ({
+                id: test.id,
+                evaluator_ids: test.steps
+                  .filter((step) => step.type.startsWith("evaluator."))
+                  .map((step) => step.id),
+              })),
+            },
+            release_contract: opts.releaseContract,
+            unverified_evaluator_acknowledged: opts.unverifiedEvaluatorAcknowledged,
+            coordinator: opts.coordinator,
+            seed_provenance:
+              seedProvenance.length > 0
+                ? seedProvenance.flatMap((profile) =>
+                    profile.scenario_ids.map((scenarioId) => ({
+                      scenario_id: scenarioId,
+                      names: profile.variable_names,
+                      profile: profile.profile,
+                      sensitive_names: profile.sensitive_variable_names,
+                      query_digest: profile.query_digest,
+                    })),
+                  )
+                : tests
+                    .map((test) => ({
+                      scenario_id: test.id,
+                      names: [
+                        ...new Set(
+                          test.steps.flatMap((step) =>
+                            Array.isArray(step.context_variables)
+                              ? step.context_variables
+                                  .map((row) =>
+                                    row && typeof row === "object" && typeof row.name === "string"
+                                      ? row.name
+                                      : undefined,
+                                  )
+                                  .filter((name): name is string => !!name)
+                              : [],
+                          ),
+                        ),
+                      ],
+                    }))
+                    .filter((row) => row.names.length > 0),
+          },
+          status: {
+            schema_version: 1,
+            run_id: runId,
+            status: "running",
+            phase: "running_batches",
+            started: startedAt.toISOString(),
+            updated: now,
+            spec_path: opts.specPath,
+            org: opts.targetOrg,
+            agent_api_name: opts.agentApiName,
+            tests_count: tests.length,
+            batches: batches.length,
+            concurrency,
+            traces_mode: tracesMode,
+            batch_timeout_ms: opts.batchTimeoutMs ?? 300_000,
+            progress: {
+              completed_batches: 0,
+              total_batches: batches.length,
+              returned_tests: 0,
+            },
+          },
+        });
+        runBegun = true;
+        statusPhase = "running_batches";
+      } catch (error) {
+        await rm(runDir, { recursive: true, force: true }).catch(() => undefined);
+        throw error;
+      }
+    }
     log(
       `Running ${tests.length} tests across ${batches.length} batch(es) ` +
         `(concurrency=${Math.min(batches.length, concurrency)}, batch_timeout_ms=${opts.batchTimeoutMs ?? 300_000})`,
@@ -377,6 +543,26 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
 
     const results: Array<EvalApiResponse["results"]> = new Array(batches.length).fill(null);
     let failedBatches = 0;
+    let completedBatches = 0;
+    let returnedTests = 0;
+    let statusQueue = Promise.resolve();
+    const recordBatchProgress = (returned: number): Promise<void> => {
+      completedBatches++;
+      returnedTests += returned;
+      const progress = {
+        completed_batches: completedBatches,
+        total_batches: batches.length,
+        returned_tests: returnedTests,
+      };
+      statusQueue = statusQueue.then(() =>
+        writeStatus("running", "running_batches", {
+          testsCount: tests.length,
+          batches: batches.length,
+          progress,
+        }),
+      );
+      return statusQueue;
+    };
     const batchFailures: EvalBatchFailure[] = [];
     const sema = makeSemaphore(concurrency);
     await (opts.timings
@@ -390,7 +576,10 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
                   timeoutMs: opts.batchTimeoutMs,
                   signal: opts.signal,
                 });
-                if (res.status === 499) throw new EvalRunCancelledError();
+                if (res.status === 499) {
+                  throwIfAborted(opts.signal);
+                  throw new EvalRunCancelledError();
+                }
                 if (opts.timings) {
                   opts.timings.add("sfap_endpoint_cache", 0, {
                     cache: res.endpoint_cache,
@@ -416,6 +605,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
                   log(`  batch ${idx + 1}/${batches.length}: HTTP ${res.status}  ${snippet}`);
                   results[idx] = [];
                 }
+                await recordBatchProgress((results[idx] ?? []).length);
               }),
             ),
           ),
@@ -429,7 +619,10 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
                 timeoutMs: opts.batchTimeoutMs,
                 signal: opts.signal,
               });
-              if (res.status === 499) throw new EvalRunCancelledError();
+              if (res.status === 499) {
+                throwIfAborted(opts.signal);
+                throw new EvalRunCancelledError();
+              }
               if (res.status >= 200 && res.status < 300) {
                 results[idx] = res.body.results ?? [];
                 if (batches.length > 1) {
@@ -449,6 +642,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
                 log(`  batch ${idx + 1}/${batches.length}: HTTP ${res.status}  ${snippet}`);
                 results[idx] = [];
               }
+              await recordBatchProgress((results[idx] ?? []).length);
             }),
           ),
         ));
@@ -462,6 +656,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       (merged.results ?? []).map((test) => test.id).filter((id): id is string => !!id),
     );
     const missingTestIds = tests.map((test) => test.id).filter((id) => !returnedTestIds.has(id));
+    const strictVerdict = deriveEvalVerdict(spec, merged, { failedBatches });
 
     // 5. Trace surface — synthesize-then-merge.
     //
@@ -497,10 +692,10 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       const inScopeIds = new Set<string>();
       for (const test of merged.results ?? []) {
         if (tracesMode === "failed") {
-          const evals = test.evaluation_results ?? [];
-          const errs = test.errors ?? [];
-          const anyFail = evals.some((e) => e.is_pass === false) || errs.length > 0;
-          if (!anyFail) continue;
+          const scenarioVerdict = strictVerdict.scenarios.find(
+            (scenario) => scenario.id === String(test.id ?? ""),
+          );
+          if (scenarioVerdict?.verdict === "passed") continue;
         }
         if (test.id !== undefined) inScopeIds.add(String(test.id));
       }
@@ -588,6 +783,9 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
     const completedAt = new Date();
     const metadata: RunMetadata = {
       run_id: runId,
+      execution_state: failedBatches > 0 ? "infrastructure_failed" : "completed",
+      evidence_verdict: strictVerdict.verdict,
+      verdict_semantics_version: strictVerdict.semantics_version,
       spec_path: opts.specPath,
       org: opts.targetOrg,
       org_id: ident.org_id,
@@ -644,6 +842,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
         errors: totals.errors,
       },
       latency_summary: lat,
+      release_contract: opts.releaseContract,
     };
 
     // 8. Persist (unless disabled)
@@ -657,6 +856,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
               metadata,
               failures,
               batchFailures,
+              verdict: strictVerdict,
               spec,
             }),
           )
@@ -667,40 +867,56 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
             metadata,
             failures,
             batchFailures,
+            verdict: strictVerdict,
             spec,
           }));
+      await statusQueue;
       await writeStatus(
-        failedBatches > 0 ? "failed" : "completed",
+        failedBatches > 0 ? "infrastructure_failed" : "completed",
         failedBatches > 0 ? "batch_failure" : "completed",
         {
           testsCount: tests.length,
           batches: batches.length,
           completed: completedAt,
+          progress: {
+            completed_batches: batches.length,
+            total_batches: batches.length,
+            returned_tests: merged.results?.length ?? 0,
+          },
         },
       );
       terminalStatusWritten = true;
       log(`Artifacts: ${runDir}/`);
     }
 
+    const publicFailures = redactResolvedSeedValues(failures, spec, seedProvenance);
+    const publicBatchFailures = redactResolvedSeedValues(batchFailures, spec, seedProvenance);
     return {
       run_id: runId,
       run_dir: runDir,
       totals,
       latency: lat,
-      failures,
+      failures: publicFailures,
       merged,
       metadata,
       failed_batches: failedBatches,
-      batch_failures: batchFailures,
+      batch_failures: publicBatchFailures,
     };
   } catch (err) {
     if (!terminalStatusWritten) {
-      const cancelled = err instanceof EvalRunCancelledError || opts.signal?.aborted;
-      await writeStatus(cancelled ? "cancelled" : "failed", statusPhase, {
-        testsCount: opts.spec.tests?.length ?? 0,
-        error: err,
-        completed: new Date(),
-      });
+      const interrupted =
+        err instanceof EvalRunInterruptedError || opts.signal?.reason === "interrupted";
+      const cancelled =
+        !interrupted && (err instanceof EvalRunCancelledError || opts.signal?.aborted);
+      await writeStatus(
+        interrupted ? "interrupted" : cancelled ? "cancelled" : "infrastructure_failed",
+        statusPhase,
+        {
+          testsCount: opts.spec.tests?.length ?? 0,
+          error: err,
+          completed: new Date(),
+        },
+      );
     }
     throw err;
   }
@@ -737,9 +953,9 @@ export async function readFailures(
   try {
     raw = await readFile(file, "utf-8");
   } catch (err) {
+    if (await readMetadata(cwd, runId, runBase)) return [];
     throw new Error(
-      `No failures.jsonl for run '${runId}'. Suggested fix: confirm the run id and ` +
-        `that the run actually had failed tests. Path tried: ${file}`,
+      `No failures.jsonl for run '${runId}'. Suggested fix: confirm the run id. Path tried: ${file}`,
       { cause: err },
     );
   }
@@ -764,7 +980,7 @@ export async function readMetadata(
 
 /** Save a run-id index entry so `agentscript_eval_get_failure` can look up failures. */
 export async function ensureRunBase(cwd: string, runBase?: string): Promise<string> {
-  const dir = runBase ?? path.join(cwd, ".pi", "state", "sf-agentscript", "runs");
+  const dir = runBase ?? defaultRunBase(cwd);
   await mkdir(dir, { recursive: true });
   return dir;
 }
@@ -785,7 +1001,12 @@ export async function recordRunInIndex(
     /* index doesn't exist yet — fine */
   }
   entries = [runId, ...entries.filter((e) => e !== runId)].slice(0, 50);
-  await writeFile(idxPath, JSON.stringify(entries, null, 2), "utf-8");
+  const tempPath = `${idxPath}.tmp-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  await writeFile(tempPath, `${JSON.stringify(entries, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  await rename(tempPath, idxPath);
 }
 
 // Re-export resolver primitives for the eval-resolve tool.

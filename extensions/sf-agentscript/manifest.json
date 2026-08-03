@@ -1,7 +1,7 @@
 {
   "id": "sf-agentscript",
   "name": "SF Agent Script",
-  "description": "Single-plugin lifecycle for `.agent` files: official-SDK compile diagnostics, native quality, preview, exact-version release eval, inactive publication, and gated activation.",
+  "description": "Single-plugin lifecycle for `.agent` files: compile diagnostics, native quality, preview, local-first Eval Studio, exact-version release eval, inactive publication, and gated activation.",
   "category": "agent-tool",
   "maturity": "stable",
   "defaultEnabled": true,
@@ -15,7 +15,7 @@
   ],
   "events": ["session_start", "session_shutdown", "tool_result", "agent_settled"],
   "docs": {
-    "summary": "Owns the entire Agent Script lifecycle: compile and quality hardening, structural review, preview, exact-version release eval contracts, inactive publication, and Guardrail-mediated activation.",
+    "summary": "Owns the entire Agent Script lifecycle: compile and quality hardening, structural review, preview, local-first Eval Studio, exact-version release eval contracts, inactive publication, and Guardrail-mediated activation.",
     "primaryFiles": [
       "index.ts",
       "lib/diagnostics.ts",
@@ -45,6 +45,10 @@
       "lib/eval/trace-client.ts",
       "lib/eval/render.ts",
       "lib/eval/persist.ts",
+      "lib/eval/verdict.ts",
+      "lib/eval-studio/discovery.ts",
+      "lib/eval-studio/component.ts",
+      "lib/eval-studio/run-coordinator.ts",
       "lib/preview/client.ts",
       "lib/preview/session-store.ts",
       "lib/preview-tool.ts",
@@ -59,6 +63,7 @@
       "Eval, trace, preview, and lifecycle calls reuse @salesforce/core / SF CLI auth context; timeout-sensitive HTTP may use bounded native fetch and never logs or persists tokens.",
       "Local-first: compile and validate run via official @sf-agentscript packages before any network call.",
       "Apex action preflight uses Salesforce's registered action description for authoritative primitive and wrapper input/output contracts; failed target rows are never hidden behind resolved samples.",
+      "Eval Studio inventories repository EvalSpec JSON and local Run artifacts without Salesforce calls; org/version resolution occurs only after an explicit Run or Release Contract action.",
       "Eval runs synthesize trace artifacts from inline Evaluation API data by default; explicit trace fetches are idempotent GETs.",
       "Publication always creates an inactive version; activation requires complete exact-org, exact-BotVersion generated-baseline evidence plus the current designated release suite when configured.",
       "Untested activation is a distinct Guardrail Safety Envelope; acknowledge_untested_activation is intent, never approval.",

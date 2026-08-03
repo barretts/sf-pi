@@ -45,7 +45,7 @@ Successful tool results may include `details.sf_agentscript_branch_state`, an ar
 Branch state stores only lightweight pointers such as file paths, session ids, run ids, plan ids, and readiness summaries. Heavy evidence remains on disk:
 
 - preview traces/transcripts and compact per-turn reports under `.sfdx/agents/**`
-- eval run status, raw responses, failures, and synthesized traces under `.pi/state/sf-agentscript/**`
+- eval Run manifests, source/executed snapshots, status, raw responses, failures, and synthesized traces under `.pi/state/sf-agentscript/**`
 - optional review reports at the caller-provided `output_path`
 
 Auto-resolution validates referenced disk artifacts before use and proceeds only when exactly one candidate exists.
@@ -87,9 +87,52 @@ Use `agentscript_authoring { "verb": "inspect", "mode": "runtime_smoke", "target
 - Internal planner variable spam is hidden from the human timeline by default, while user-visible state changes show previous → new previews when available.
 - Action input/output previews are screenshot-friendly and bounded/redacted; use `agentscript_preview trace` with the returned `plan_id` for the full raw trace.
 
+## Agent Script Eval Studio
+
+`/sf-agentscript evals` opens the local-first **Agent Script Eval Studio**. It inventories `tests/agentforce/<AgentApiName>.eval.json`, additional `<AgentApiName>.<suite-slug>.eval.json` Suites, generated baselines, and persisted Run evidence without contacting Salesforce. The responsive overlay drills through Agent → Suite → Scenario → Turn/Evaluator evidence, preserves source order, distinguishes execution state from evidence verdict, and keeps stale source as an independent fact.
+
+Studio supports reviewed Suite and diagnostic Scenario Runs, exact historical reruns, explicit cancellation, Release Contract execution, Markdown reports, copy/open artifact actions, and compact conversational authoring handoffs. The Run Target always reviews the run-local org, Agent API name, exact version policy/result, trace mode, concurrency, and optional Scenario seed overrides. Closing the overlay does not cancel a Run; one Studio-owned Run may execute per project while direct `agentscript_eval run` and `/sf-agentscript eval <spec>` remain independent power-user paths.
+
+EvalSpec JSON remains the only source-controlled format. Source is read-only in the Studio; New/Edit/Diagnose actions close the overlay and prefill Pi's editor with an authoring brief. General file watching, direct JSON editing, inferred Agent coverage, automated Preview replay, Run deletion, and retention management are not part of the MVP.
+
+### Dynamic org seed profiles
+
+A Suite can resolve scenario context from the eval target org at run preflight without hardcoding Salesforce record IDs. Define a read-only `seed_profiles` entry, reference it from a Scenario with `seed_profile`, and map the profile's single SOQL row into ordinary `context_variables`:
+
+```json
+{
+  "seed_profiles": {
+    "open_case": {
+      "soql": "SELECT Id, AccountId FROM Case WHERE Status = 'New' ORDER BY CreatedDate DESC LIMIT 1",
+      "context_variables": [
+        { "name": "case_id", "type": "Text", "field": "Id" },
+        { "name": "account_id", "type": "Text", "field": "AccountId" },
+        { "name": "verified", "type": "Boolean", "value": true }
+      ]
+    }
+  },
+  "tests": [
+    {
+      "id": "case_help",
+      "seed_profile": "open_case",
+      "steps": [
+        { "type": "agent.create_session", "id": "session" },
+        { "type": "agent.send_message", "id": "turn1", "utterance": "Help with my case" }
+      ]
+    }
+  ]
+}
+```
+
+Seed v1 permits one bounded REST SOQL query and one scalar result row per profile. The resolver rejects unsafe query features, zero or ambiguous rows, null/missing fields, type mismatches, duplicate IDs, and unknown profiles before creating a Run or calling the Evaluation API. Reused profiles query once per Run. Explicit one-run Studio overrides win over profile values.
+
+For release baselines, the designated Suite can provide `generated_baseline.default_seed_profile`, exact test-id `overrides`, and `skip_tests` for generated one-turn probes replaced by designated multi-turn coverage. `run_release` copies only the referenced profiles and assignments into the regenerated baseline and still pins both baseline and designated runs to the same exact BotVersion.
+
+Org-derived values are masked on Studio/source-preview surfaces. Exact resolved values remain confined to the restricted executed/raw Run artifacts and the Evaluation API request.
+
 ## Eval Run Hardening
 
-`agentscript_eval action="run"` creates a lightweight `status.json` in the run directory before it posts Evaluation API batches. The status artifact records pointer-sized local facts such as status, phase, spec path, org, test count, batch count, and timeout; it does not contain raw eval responses, prompts, traces, transcripts, or failure payloads.
+After local normalization/projectability (Studio only), target resolution, and org identity preflight succeed, `agentscript_eval action="run"` creates an immutable `manifest.json`, `spec.source.snapshot.json`, `spec.executed.snapshot.json`, and lightweight atomic `status.json` before the first Evaluation API batch. Failed preflight creates no historical Run. Terminal persistence adds `evidence.json`, metadata, raw response, transcript/failure artifacts, and only then marks status Completed. Status records pointer-sized lifecycle/progress facts and never contains raw eval responses, prompts, traces, transcripts, or failure payloads.
 
 Eval batches keep the compatibility default timeout of 300 seconds, but callers can pass `batch_timeout_ms` for shorter local runs. Client-side request timeouts are terminal for a batch instead of being retried three times. Non-2xx batch responses are persisted in `batch-failures.json`, make the run fail, and can never produce a green zero-result run.
 
@@ -103,7 +146,7 @@ Eval-created sessions usually disappear before the live planner trace endpoint c
 
 `agentscript_lifecycle action="activate"` resolves the exact target version and checks persisted release-contract evidence. Missing, incomplete, failed, wrong-org, wrong-version, stale-baseline, or stale-designated-suite evidence blocks activation with a recoverable `run_release` call. `acknowledge_untested_activation=true` requests an emergency path but is only an intent flag; SF Guardrail uses a distinct Safety Envelope and human approval before execution.
 
-Release evidence has no arbitrary time expiry. It remains valid while the exact org, BotVersion, baseline identity, and designated-suite digest remain unchanged.
+Release evidence has no arbitrary time expiry. It remains valid while the exact org, BotVersion, baseline identity, and designated-suite digest remain unchanged. Activation uses an atomic exact-identity release-evidence index and validates terminal status, immutable snapshots, raw evidence, and both recorded/current strict verdicts before accepting an entry. A complete current-schema manifest scan rebuilds the release index when needed; the rolling recent-Run index is display convenience, never release authority.
 
 ## Runtime Flow
 
@@ -143,7 +186,8 @@ Quality controls are global-only; project settings cannot weaken or strengthen t
 /sf-agentscript                   Open SF Agent Script in the SF Pi Manager
 /sf-agentscript doctor            SDK + @salesforce/core + .sfdx/agents writability
 /sf-agentscript check <file>      Manually compile a `.agent` file
-/sf-agentscript eval <spec.json>  Run a multi-turn regression suite
+/sf-agentscript evals             Open the local-first Agent Script Eval Studio
+/sf-agentscript eval <spec.json>  Run a multi-turn regression suite directly
 /sf-agentscript help              Show command usage
 ```
 
@@ -182,17 +226,34 @@ extensions/sf-agentscript/
       active-ids.ts         ← implementation module
       decode.ts             ← implementation module
       eval-client.ts        ← implementation module
+      evaluator-catalog.ts  ← implementation module
       normalize.ts          ← implementation module
       orchestrator.ts       ← implementation module
       persist.ts            ← implementation module
       render.ts             ← implementation module
       safety-probes.ts      ← implementation module
       scenario.ts           ← implementation module
+      seeds.ts              ← implementation module
       sfap.ts               ← implementation module
       spec-generator.ts     ← implementation module
       synthesize-trace.ts   ← implementation module
       threshold.ts          ← implementation module
       trace-client.ts       ← implementation module
+      types.ts              ← implementation module
+      verdict.ts            ← implementation module
+    eval-studio/
+      actions.ts            ← implementation module
+      artifact-reader.ts    ← implementation module
+      component.ts          ← implementation module
+      discovery.ts          ← implementation module
+      handoff.ts            ← implementation module
+      layout.ts             ← implementation module
+      open.ts               ← implementation module
+      projectability.ts     ← implementation module
+      redaction.ts          ← implementation module
+      run-coordinator.ts    ← implementation module
+      run-lease.ts          ← implementation module
+      run-target.ts         ← implementation module
       types.ts              ← implementation module
     preflight/
       resolvers/
@@ -323,12 +384,25 @@ extensions/sf-agentscript/
     eval-normalize.test.ts  ← unit / smoke test
     eval-persist-status.test.ts← unit / smoke test
     eval-plan-id-path.test.ts← unit / smoke test
+    eval-run-boundary.test.ts← unit / smoke test
     eval-scenario.test.ts   ← unit / smoke test
+    eval-seed-failure-redaction.test.ts← unit / smoke test
+    eval-seed-run.test.ts   ← unit / smoke test
+    eval-seeds.test.ts      ← unit / smoke test
     eval-sfap.test.ts       ← unit / smoke test
     eval-spec-generator.test.ts← unit / smoke test
     eval-state-pairing.test.ts← unit / smoke test
+    eval-studio-artifact-reader.test.ts← unit / smoke test
+    eval-studio-authoring.test.ts← unit / smoke test
+    eval-studio-component.test.ts← unit / smoke test
+    eval-studio-discovery.test.ts← unit / smoke test
+    eval-studio-open.test.ts← unit / smoke test
+    eval-studio-projectability.test.ts← unit / smoke test
+    eval-studio-redaction.test.ts← unit / smoke test
+    eval-studio-run-coordinator.test.ts← unit / smoke test
     eval-synthesize-trace.test.ts← unit / smoke test
     eval-utterance-index.test.ts← unit / smoke test
+    eval-verdict.test.ts    ← unit / smoke test
     feedback.test.ts        ← unit / smoke test
     file-classify.test.ts   ← unit / smoke test
     inspect-actions.test.ts ← unit / smoke test

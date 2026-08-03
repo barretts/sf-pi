@@ -147,8 +147,7 @@ Q2. Is the state read by 2+ extensions in the same process?
 
 Q3. Is the state a user-facing pi setting they'd hand-edit?
     YES → mutate pi settings.json via lib/common/sf-pi-settings.ts helpers
-          Resolve each field as project → global → default; an omitted project
-          field inherits its global value. Never write opaque blobs there.
+          Project > global precedence; never write opaque blobs there.
           Examples: package filter list, provider/model config, thinking level
 
 Q4. Otherwise (per-user persisted state, sf-pi only) →
@@ -194,13 +193,6 @@ ADR 0005 reserves three filenames for the three panel surfaces. The
 | `lib/command-panel.ts`     | The no-args slash-command status & actions panel (built on `lib/common/command-panel.ts`).                          |
 | `lib/config-panel.ts`      | The `ConfigPanelFactory` invoked by sf-pi-manager when `manifest.configurable === true`. Required for that surface. |
 | `lib/preferences-panel.ts` | A separate mutable user-preferences UI when distinct from `config-panel.ts` (e.g. opened by `/sf-<id> settings`).   |
-
-Use the shared descriptor-driven panel only for simple fixed-choice scalar
-fields (booleans, enums, bounded numeric choices). Project rows expose
-**Inherit global** and global rows expose **Use default**; these delete the
-scoped field rather than materializing inherited values. Keep conditional,
-nested, security-sensitive, credential, diagnostic, and specialized editor
-panels extension-owned; do not grow a universal callback-based config framework.
 
 Most extensions inline their command panel directly in `index.ts` and
 never need a separate file; pull it out only when the panel logic

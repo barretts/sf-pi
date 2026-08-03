@@ -27,9 +27,15 @@ export interface ScenarioTopicExpectation {
   expected: string;
 }
 
+export interface ScenarioActionExpectation {
+  id: string;
+  expected: string;
+}
+
 export interface EvalScenarioTurn {
   utterance: string;
   topic?: ScenarioTopicExpectation;
+  action?: ScenarioActionExpectation;
   response?: ScenarioResponseExpectation;
   state?: ScenarioStateCheckpoint[];
 }
@@ -58,6 +64,15 @@ export function compileEvalScenario(
           expected: turn.topic.expected,
         }),
       );
+    }
+    if (turn.action) {
+      steps.push({
+        type: "evaluator.list_assertion",
+        id: turn.action.id,
+        actual: `{${stateId}.response.planner_response.lastExecution.invokedActions}`,
+        expected: [turn.action.expected],
+        operator: "contains",
+      });
     }
     if (turn.response) {
       steps.push({

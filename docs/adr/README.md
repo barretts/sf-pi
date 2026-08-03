@@ -99,3 +99,5 @@ or accidentally contradicted in extension READMEs.
 - [0094: Agent Script Activation Requires Exact-Version Eval Evidence](./0094-agent-script-eval-gated-activation.md)
 - [0095: Pi-Owned Gateway Retry Lifecycle](./0095-pi-owned-gateway-retry-lifecycle.md)
 - [0096: Setting Scope Policy Is Declared per Setting](./0096-setting-scope-policy-is-per-setting.md)
+- [0097: Agent Script Eval Studio Is a Local-First EvalSpec Workspace](./0097-agent-script-eval-studio-local-first-workspace.md)
+- [0098: Agent Script Eval Uses Bounded SOQL Seed Profiles](./0098-agentscript-eval-soql-seed-profiles.md)

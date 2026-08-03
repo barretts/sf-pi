@@ -17,3 +17,8 @@ interactive no-args local panels in the same release that makes the
 Manager-first checker blocking. Existing commands are not grandfathered, and
 the old exemption path is deleted rather than retained as a warning-only
 transition.
+
+CI loads every bundled command-bearing extension, invokes its interactive
+no-args command, and verifies that it opens the matching Manager detail route.
+Extensions without slash commands are non-applicable rather than exempt, and
+the Manager itself remains the destination-specific special case.

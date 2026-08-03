@@ -72,10 +72,9 @@ export interface GenerateSpecOptions {
   includeSubagentTests?: boolean;
   /**
    * Include action invocation tests. Default true. One test per targeted
-   * action plus one functional probe per connected agent.
-   * The probe is "use the {action description}" — the assertion is a
-   * bot_response_rating only (action invocation requires a planner trace
-   * which we don't get back from the eval API in flat form).
+   * top-level zero-input action plus one functional probe per connected agent.
+   * Action probes assert lastExecution.invokedActions directly. Actions
+   * requiring internal inputs are skipped for designated multi-turn coverage.
    */
   includeActionTests?: boolean;
   /** Generate evidence-backed same-session scenarios. Default true. */
@@ -157,13 +156,20 @@ export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
   let connectedAgentCount = 0;
   let multiTurnCount = 0;
 
-  // Subagent routing tests — one per non-start subagent.
+  // Subagent routing tests — only direct start-agent destinations can be
+  // meaningfully asserted from one synthesized first turn.
   if (includeSubagent) {
+    const startAgents = components.start_agents ?? [];
+    const directSubagents = new Set(startAgents.flatMap((start) => start.subagent_refs ?? []));
     for (const sa of components.subagents ?? []) {
       if (subagentCount + topicCount + actionCount >= maxFunctional) break;
       const slug = slugify(sa.name);
       // start_agent is the dispatcher — testing routing TO it is meaningless.
-      if (slug === "start_agent" || slug === "start") {
+      if (
+        slug === "start_agent" ||
+        slug === "start" ||
+        (startAgents.length > 0 && !directSubagents.has(sa.name))
+      ) {
         skippedSubagents.push(sa.name);
         continue;
       }
@@ -194,11 +200,12 @@ export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
     }
   }
 
-  // Action invocation tests — one per action with a target.
+  // Action invocation tests — only top-level zero-input actions are safe
+  // to probe from one synthesized first turn.
   if (includeAction) {
     for (const a of components.actions ?? []) {
       if (subagentCount + topicCount + actionCount >= maxFunctional) break;
-      if (!a.target) {
+      if (!a.target || a.parent || (a.input_names?.length ?? 0) > 0) {
         skippedActions.push(a.name);
         continue;
       }
@@ -212,9 +219,8 @@ export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
     }
   }
 
-  // Connected-agent invocation probes use the same LLM-judged posture as
-  // ordinary action probes because the Evaluation API doesn't expose a
-  // RelatedAgentStep timeline in its flat lastExecution surface.
+  // Connected-agent invocation probes remain LLM-judged because the
+  // Evaluation API does not expose RelatedAgentStep evidence.
   if (includeAction) {
     for (const connected of components.connected_subagents ?? []) {
       if (subagentCount + topicCount + actionCount + connectedAgentCount >= maxFunctional) break;
@@ -298,13 +304,14 @@ function buildRoutingTest(
           utterance,
           ...(kind === "subagent"
             ? { topic: { id: `eval_topic_${slug}`, expected: targetName } }
-            : {}),
-          response: {
-            id: `eval_response_${slug}`,
-            rubric:
-              `The agent's response should be relevant to the user's request to "${escapeForRubric(utterance)}". ` +
-              `A passing response stays on the supported domain and is allowed to ask clarifying questions, ask whether the user wants human assistance, request identity verification, request missing inputs, or explain prerequisite workflow steps instead of completing the path immediately.`,
-          },
+            : {
+                response: {
+                  id: `eval_response_${slug}`,
+                  rubric:
+                    `The agent's response should be relevant to the user's request to "${escapeForRubric(utterance)}". ` +
+                    `A passing response stays on the supported domain and is allowed to ask clarifying questions, ask whether the user wants human assistance, request identity verification, request missing inputs, or explain prerequisite workflow steps instead of completing the path immediately.`,
+                },
+              }),
         },
       ],
     },
@@ -324,11 +331,9 @@ function buildActionTest(
       turns: [
         {
           utterance,
-          response: {
-            id: `eval_response_action_${slug}`,
-            rubric:
-              `The agent should attempt the "${actionName}" action in response to the user's request. ` +
-              `If the action requires inputs the user hasn't provided, the agent should ask for them rather than refuse.`,
+          action: {
+            id: `eval_action_${slug}`,
+            expected: actionName,
           },
         },
       ],

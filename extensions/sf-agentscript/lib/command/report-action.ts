@@ -3,7 +3,7 @@
  * /sf-agentscript report eval <run_id> [--save]
  *
  * Re-render a past eval run as a Markdown report. Reads the persisted
- * failure records + run metadata from `.sfdx/agents/_runs/<run_id>/` and
+ * failure records + run metadata from `.pi/state/sf-agentscript/runs/<run_id>/` and
  * emits the same Markdown the eval slash command produces, optionally
  * saving alongside the JSONL artifacts.
  *
@@ -14,9 +14,11 @@
 import path from "node:path";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { readFailures, readMetadata } from "../eval/orchestrator.ts";
+import { resolveRunDir } from "../eval/persist.ts";
 import { evalRunMarkdown, evalFailureMarkdown } from "../render/eval.ts";
 import { evalReportPath, reportHeader, writeMarkdownReport } from "../render/report-writer.ts";
 import { openInfoPanel } from "../../../../lib/common/info-panel.ts";
+import { readEvalRunArtifact } from "../eval-studio/artifact-reader.ts";
 
 interface Args {
   kind?: "eval" | "preview";
@@ -72,18 +74,49 @@ export async function handleReportAction(
     return;
   }
 
-  let failures;
+  let failures = [];
   let meta;
   try {
-    failures = await readFailures(ctx.cwd, args.run_id);
     meta = await readMetadata(ctx.cwd, args.run_id);
+    if (meta) failures = await readFailures(ctx.cwd, args.run_id);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (ctx.hasUI) ctx.ui.notify(`Cannot read run ${args.run_id}: ${msg}`, "error");
     return;
   }
   if (!meta) {
-    if (ctx.hasUI) ctx.ui.notify(`No metadata for run ${args.run_id}.`, "warning");
+    const runDir = resolveRunDir(ctx.cwd, args.run_id);
+    const artifact = await readEvalRunArtifact(runDir);
+    if (artifact.summary.classification === "unavailable") {
+      if (ctx.hasUI) ctx.ui.notify(`No readable evidence for run ${args.run_id}.`, "warning");
+      return;
+    }
+    const md =
+      reportHeader({
+        kind: "eval",
+        title: `Eval run ${args.run_id}`,
+        meta: { run_id: args.run_id, run_dir: runDir },
+      }) +
+      [
+        `## Run status`,
+        ``,
+        `- Execution: **${artifact.summary.execution_state ?? "unknown"}**`,
+        `- Evidence: **${artifact.summary.current_verdict ?? artifact.summary.recorded_verdict ?? "incomplete"}**`,
+        `- Scope: ${artifact.summary.scope}`,
+        artifact.summary.scenario_id ? `- Scenario: ${artifact.summary.scenario_id}` : undefined,
+        artifact.summary.error ? `- Error: ${artifact.summary.error}` : undefined,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    let savedPath: string | undefined;
+    if (args.save) savedPath = (await writeMarkdownReport(evalReportPath(runDir), md)).path;
+    if (ctx.hasUI) {
+      await openInfoPanel(ctx, {
+        title: `Eval run ${args.run_id} — ${artifact.summary.execution_state ?? "unknown"}`,
+        body: savedPath ? `${md}\n\nSaved: ${savedPath}` : md,
+        severity: "warning",
+      });
+    }
     return;
   }
 
@@ -101,7 +134,7 @@ export async function handleReportAction(
         meta: { run_id: args.run_id, test_id: args.test_id },
       }) + evalFailureMarkdown(f);
     if (args.save) {
-      const runDir = path.join(ctx.cwd, ".sfdx", "agents", "_runs", args.run_id);
+      const runDir = resolveRunDir(ctx.cwd, args.run_id);
       const file = path.join(runDir, "reports", `${args.test_id}.md`);
       await writeMarkdownReport(file, md);
       if (ctx.hasUI) {
@@ -122,11 +155,15 @@ export async function handleReportAction(
   }
 
   // Whole-run report
-  const passed = meta.totals.test_fail === 0 && meta.totals.errors === 0;
+  const passed = meta.evidence_verdict
+    ? meta.evidence_verdict === "passed"
+    : meta.totals.test_fail === 0 && meta.totals.errors === 0;
   const niceMarkdown = evalRunMarkdown(
     {
       ok: passed,
       run_id: args.run_id,
+      execution_state: meta.execution_state,
+      evidence_verdict: meta.evidence_verdict,
       totals: meta.totals as never,
       latency: meta.latency_summary,
       failed_test_ids: failures.map((f) => f.test_id),
@@ -150,7 +187,7 @@ export async function handleReportAction(
 
   let savedPath: string | undefined;
   if (args.save) {
-    const runDir = path.join(ctx.cwd, ".sfdx", "agents", "_runs", args.run_id);
+    const runDir = resolveRunDir(ctx.cwd, args.run_id);
     const written = await writeMarkdownReport(evalReportPath(runDir), md);
     savedPath = written.path;
   }

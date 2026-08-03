@@ -372,8 +372,12 @@ _Avoid_: blanket session bypass, persistent ignore setting, agent-selected first
 The lifecycle boundary that requires complete passing eval evidence for the exact target-org BotVersion before activation. It is separate from compile validity and the **Agent Script Quality Publication Gate**, and it can proceed without matching evidence only through an explicit human-approved emergency override.
 _Avoid_: publication quality gate, any-version eval, compile-means-tested, silent activation bypass
 
+**Agent Script Generated Baseline Suite**:
+A read-only **Agent Script Eval Suite** generated from the current Agent Script source to provide minimum release evidence. It is regenerated rather than edited and forms one part of the **Agent Script Release Eval Contract**.
+_Avoid_: designated release suite, editable regression suite, hidden release check, stable hand-authored baseline
+
 **Agent Script Release Eval Contract**:
-The regression evidence required by the **Agent Script Eval Activation Gate**: an automatically generated baseline suite plus a project-designated release suite when one is configured. Both target the exact org and BotVersion, and every expected test must return without evaluator failure or step error.
+The regression evidence required by the **Agent Script Eval Activation Gate** for a pending latest non-Active BotVersion: an **Agent Script Generated Baseline Suite** plus a project-designated release suite when one is configured. Both target the exact org and BotVersion, and every expected result must return effectively true without step error or incomplete evidence.
 _Avoid_: any passing eval, trivial activation test, active-version proxy, partial green run
 
 **Agent Script Release Sequence**:
@@ -436,13 +440,85 @@ _Avoid_: deprecated topic scaffold, empty behavioral node, unconditional first-s
 A deterministic test of the boundary SF Pi owns: official package loading, diagnostic preservation, stable structural projection, target-preflight routing, or package coherence. Upstream compiler internals and live Salesforce execution are separate evidence tiers.
 _Avoid_: upstream test mirror, internal AST assertion, release-note checklist, local proof of runtime behavior
 
+**Agent Script Eval Agent Identity**:
+The canonical Agent API name associated with local bundle configuration, Suite filename, or Run evidence. A local bundle is optional, and conflicting identities remain explicit rather than being merged or reassigned.
+_Avoid_: basename-only identity, latest-run inference, silent identity merge, local-bundle requirement
+
+**Agent Script Eval Suite Identity**:
+The current project-relative Suite path, with historical continuity across a rename only when the source digest and **Agent Script Eval Agent Identity** both match exactly. Similar names, approximate content, and ambiguous digest matches never establish continuity.
+_Avoid_: filename similarity, latest-run ownership, fuzzy content match, silent rename inference
+
+**Agent Script Eval Suite**:
+One executable EvalSpec JSON file containing one or more **Agent Script Eval Scenarios** for one **Agent Script Eval Agent Identity**. It is the only source-controlled eval format and has one **Agent Script Eval Suite Identity**; an **Agent Script Release Eval Contract** can compose multiple suites without becoming a suite itself.
+_Avoid_: test class, run, multi-file collection, authoring sidecar, higher-level source format, release contract
+
+**Agent Script Eval Seed Profile**:
+A source-only declaration inside one **Agent Script Eval Suite** that resolves exactly one row from one bounded read-only SOQL query against the **Agent Script Eval Run Target** org and maps scalar fields or constants into ordinary Scenario context variables. Reused profiles execute once per Run; unsafe, empty, ambiguous, null, or mistyped results fail before Run creation.
+_Avoid_: fixture registry, sidecar, data picker, multi-row fan-out, mutation, fallback ID, cross-org seed
+
+**Agent Script Ad Hoc Eval Run**:
+An **Agent Script Eval Run** created without an **Agent Script Eval Suite Identity**, such as from an inline spec or missing source path. It remains inspectable evidence but never creates a synthetic Suite or satisfies a release contract.
+_Avoid_: synthetic suite, hidden run, inferred source path, release evidence
+
+**Agent Script Eval Run Scope**:
+The execution breadth of an **Agent Script Eval Run**: Suite scope executes every Scenario in one Suite, while Scenario scope executes one selected Scenario for diagnosis. Only complete Suite-scope evidence can satisfy an **Agent Script Release Eval Contract**.
+_Avoid_: partial suite presented as release evidence, hidden scenario subset, run filter
+
+**Agent Script Eval Run Target**:
+The explicit per-run combination of Salesforce org, Agent API name, and version policy. It can default from current configuration but never changes the Salesforce CLI default org or silently inherits a different Run’s target.
+_Avoid_: implicit org, persistent Studio org, alias-only evidence, cross-run target reuse
+
+**Agent Script Eval Run**:
+One execution attempt of one validated **Agent Script Eval Suite** against an **Agent Script Eval Run Target**, with immutable source and executed-suite evidence. It begins only after local suite preflight and target resolution succeed, continues independently when **Agent Script Eval Studio** closes, and ends early only through explicit cancellation or execution failure.
+_Avoid_: draft snapshot, validation attempt, modal lifetime, implicit cancellation, release contract, generic tool run
+
+**Agent Script Eval Run Execution State**:
+The lifecycle state of an **Agent Script Eval Run**: Running, Completed, Cancelled, Interrupted, or Infrastructure Failed. It is separate from the evidence verdict and never turns cancellation or process loss into a behavioral failure.
+_Avoid_: behavioral verdict, orphaned-running state, cancelled-means-failed, age-based interruption
+
+**Agent Script Eval Run Verdict**:
+The evidence outcome of an **Agent Script Eval Run**: Passed when every expected result returns effectively true, Failed for explicit behavioral failures, Incomplete for missing or errored evidence, or Unverified for unresolved evidence. Historical Runs preserve both their recorded verdict and the current evidence interpretation without rewriting artifacts; source freshness remains separate.
+_Avoid_: execution state, aggregate green count, null-as-pass, unavailable-as-failed, overwritten historical verdict, stale-source verdict
+
+**Agent Script Eval Studio**:
+A local-first human review and execution workspace for source-controlled **Agent Script Eval Suites**, **Agent Script Release Eval Contracts**, and locally persisted run evidence. It consults Salesforce only for explicit version resolution or runtime execution.
+_Avoid_: Testing Center clone, Agent Script Test Studio, org-first test inventory, startup org scan, trace viewer only
+
 **Agent Script Eval Scenario**:
-A transport-independent regression definition with one shared agent session, an ordered sequence of user turns, per-turn response and routing expectations, explicit state checkpoints, and evidence provenance. It models real stateful conversation rather than injecting synthetic conversation history.
+A transport-independent regression definition with one shared agent session, one or more ordered user turns, and at least one Turn- or Scenario-scoped evaluator, with explicit state checkpoints and evidence provenance. It models real stateful conversation rather than injecting synthetic conversation history.
 _Avoid_: raw Evaluation API steps, unrelated one-turn test bundle, synthetic history presented as state progression, free-form prompt script
+
+**Agent Script Eval Studio Projectability**:
+The ability to map one raw EvalSpec test entry unambiguously into one shared-session **Agent Script Eval Scenario**, its Turns, and evaluator scopes. An unprojectable entry remains source-visible but blocks Studio execution rather than being silently coerced.
+_Avoid_: raw-step guess, multiple sessions presented as one conversation, silent scenario split, misleading partial projection
 
 **Agent Script Eval Scenario Compiler**:
 The deterministic translation from an **Agent Script Eval Scenario** to the current Salesforce Evaluation API step graph. It centralizes session reuse, step IDs, references, state checkpoints, and evaluator wiring so generation does not depend directly on transport details.
 _Avoid_: second eval backend, per-generator step assembly, transport-specific scenario model, hidden evaluator inference
+
+**Agent Script Eval Evaluator Capability**:
+The support posture of an evaluator type: Live-Proven through the current direct Evaluation API, Client-Recognized without equivalent runtime proof, or Candidate/Unverified. Default guidance exposes Live-Proven evaluators; Advanced guidance labels the others explicitly and requires per-run acknowledgement without making their results release-ready.
+_Avoid_: client recognition means supported, flat evaluator catalog, hidden capability gap, universal target-org support, acknowledgement means proof
+
+**Agent Script Eval Evaluator Scope**:
+The evidence boundary of an evaluator: Turn scope when it clearly references one turn, or Scenario scope when it spans turns or cannot be attributed safely. Ambiguous evaluators remain Scenario-scoped rather than being assigned to a nearby turn.
+_Avoid_: nearest-turn guess, flat evaluator list, conversation-level means every evaluator
+
+**Agent Script Eval Expected Behavior**:
+A per-turn semantic expectation shown before execution and compared with the actual Agent response after execution. It describes acceptable behavior rather than scripting an expected Agent utterance.
+_Avoid_: expected bot message, golden response, synthetic Agent turn, exact dialogue
+
+**Agent Script Eval Authoring Brief**:
+A compact human intent summary used to hand off **Agent Script Eval Suite** or Scenario creation to the conversational agent. It captures purpose, turn examples, proof goals, and seed assumptions without becoming an executable spec or transport-schema editor.
+_Avoid_: Testing Center wizard, EvalSpec form, hidden generation prompt, executable sidecar
+
+**Agent Script Eval Input Seed**:
+An explicit Scenario-owned context-variable value, optionally expanded from a Suite authoring default or replaced by a Run override, with effective value and provenance recorded as Run evidence. Sensitive seed values remain masked by default.
+_Avoid_: hidden context, inferred default, unproven runtime value, raw secret display
+
+**Agent Script Eval State Timeline**:
+The ordered view of effective seeds, expected checkpoints, observed after-turn state, and previous-to-current deltas for one **Agent Script Eval Scenario**. Missing state remains unavailable rather than being inferred unchanged, false, or empty.
+_Avoid_: raw state dump, missing-means-false, prose-derived state, timeless variable value
 
 **Agent Script Eval State Checkpoint**:
 A per-turn assertion derived from a statically provable Agent Script state update, such as a literal assignment or simple arithmetic over a known default. Dynamic updates without an exact expected value are reported as skipped rather than guessed.
@@ -789,6 +865,15 @@ A redundant visual cue tied to a node’s Salesforce identity and always paired 
 _Avoid_: emoji, inferred custom-object icon, icon-only node, decorative product mark
 
 ## Example dialogue
+
+Dev: "Open the eval workspace and show me the last result for the billing safety suite."
+Agent: "I will open **Agent Script Eval Studio**, locate the **Agent Script Eval Suite** from its local Suite identity, and overlay the newest matching completed **Agent Script Eval Run**. The Scenario list will preserve source order and show the selected Run's recorded and current verdicts."
+
+Dev: "Rerun only the failed cancellation conversation against the same version."
+Agent: "I will prepare a Scenario-scope **Agent Script Eval Run**, prefill the historical **Agent Script Eval Run Target** for visible review, and execute the whole **Agent Script Eval Scenario** so its prior-turn state is preserved. This diagnostic Run cannot satisfy the **Agent Script Release Eval Contract**."
+
+Dev: "Add a two-turn scenario that starts verified and proves the confirmation flag changes."
+Agent: "I will collect an **Agent Script Eval Authoring Brief** with the user turns, proof goals, and **Agent Script Eval Input Seed**, then hand it to the conversational agent. After you reopen the Studio, the **Agent Script Eval State Timeline** will show the seed, checkpoint, observed state, and delta."
 
 Dev: "Inspect this Lightning Web Component before I change it."
 Agent: "I will run an **LWC Component Inspection** as part of the **LWC Lifecycle Loop**. The **LWC Result Card** will summarize the bundle, imports, public API, and tests, while full evidence is saved as **LWC Artifacts**."

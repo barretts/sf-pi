@@ -17,6 +17,7 @@ import { Text } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { clipLine, fmtMs, padRightVisible, rowDetail, styleForStep, stepLabel } from "./shared.ts";
 import type { TraceDigest } from "../preview/trace-digest.ts";
+import { redactDisplayText } from "../../../../lib/common/redaction.ts";
 
 interface FailureRecord {
   test_id: string;
@@ -65,6 +66,8 @@ export interface EvalRunDetails {
   ok?: boolean;
   run_id?: string;
   run_dir?: string;
+  execution_state?: string;
+  evidence_verdict?: string;
   totals?: RunTotals;
   latency?: LatencySummary;
   failed_test_ids?: string[];
@@ -150,10 +153,10 @@ export function renderEvalGetFailureResult(
   if (opts.isPartial) return new Text(theme.fg("warning", "🧪 eval get_failure · running…"), 0, 0);
   const details = (result.details ?? {}) as EvalGetFailureDetails;
   if (details.failure) {
-    return new Text(formatFailureCard(details.failure, theme, /*ansi=*/ true), 0, 0);
+    return new Text(formatFailureCard(details.failure, theme), 0, 0);
   }
   if (details.failures && details.failures.length > 0) {
-    const lines = details.failures.map((f) => formatFailureCard(f, theme, true)).join("\n\n");
+    const lines = details.failures.map((f) => formatFailureCard(f, theme)).join("\n\n");
     return new Text(lines, 0, 0);
   }
   return new Text(theme.fg("success", `✓ run ${details.run_id ?? "?"} has no failures`), 0, 0);
@@ -162,11 +165,11 @@ export function renderEvalGetFailureResult(
 // ─── Markdown emitters ────────────────────────────────────────────────────────
 
 export function evalRunMarkdown(details: EvalRunDetails, inlineFailures: FailureRecord[]): string {
-  return formatRunBody(details, inlineFailures, undefined, /*ansi=*/ false);
+  return redactDisplayText(formatRunBody(details, inlineFailures, undefined, /*ansi=*/ false));
 }
 
 export function evalFailureMarkdown(failure: FailureRecord): string {
-  return formatFailureCard(failure, undefined, /*ansi=*/ false);
+  return redactDisplayText(formatFailureCard(failure, undefined));
 }
 
 // ─── Shared body formatters ───────────────────────────────────────────────────
@@ -195,7 +198,7 @@ function formatRunBody(
     ev_fail: 0,
     errors: 0,
   };
-  const passed = totals.test_fail === 0 && totals.errors === 0;
+  const passed = details.ok ?? (totals.test_fail === 0 && totals.errors === 0);
   const lat = details.latency ?? { count: 0 };
 
   const lines: string[] = [];
@@ -205,6 +208,11 @@ function formatRunBody(
     code(`run ${details.run_id ?? "?"}`),
   ];
   lines.push(head.join("  "));
+  if (details.execution_state || details.evidence_verdict) {
+    lines.push(
+      `  ${dim(`execution=${details.execution_state ?? "unknown"}`)}  ${accent(`evidence=${details.evidence_verdict ?? "unverified"}`)}`,
+    );
+  }
 
   // Totals badges
   const badges = [
@@ -293,11 +301,7 @@ function formatRunBody(
   return lines.join("\n");
 }
 
-function formatFailureCard(
-  failure: FailureRecord,
-  theme: Theme | undefined,
-  _ansi: boolean,
-): string {
+function formatFailureCard(failure: FailureRecord, theme: Theme | undefined): string {
   const fg = (token: Parameters<Theme["fg"]>[0], s: string): string =>
     theme ? theme.fg(token, s) : s;
   const bold = (s: string): string => (theme ? theme.bold(s) : `**${s}**`);

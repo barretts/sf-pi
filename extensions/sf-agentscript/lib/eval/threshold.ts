@@ -46,7 +46,8 @@ export function applyScoreThreshold(ev: EvalResult): EvalResult {
   if (score === null || score === undefined) {
     return {
       ...ev,
-      is_pass: false,
+      is_pass: null,
+      error_message: ev.error_message ?? "No score returned.",
       explainability: `${ev.explainability ?? ""} [no score returned]`.trim(),
     };
   }
@@ -82,16 +83,18 @@ export function groupEvaluators(evals: EvalResult[]): EvalResult[] {
   const out: EvalResult[] = [...singletons];
   for (const [gid, members] of groups.entries()) {
     const anyPass = members.some((m) => m.is_pass === true);
+    const unresolved = !anyPass && members.some((m) => m.is_pass == null);
+    const groupPass = anyPass ? true : unresolved ? null : false;
     const details = members
       .map((m) => {
         const opt = (m.id ?? "").split("__opt").pop();
-        return `${opt}=${m.is_pass ? "Y" : "N"}`;
+        return `${opt}=${m.is_pass === true ? "Y" : m.is_pass === false ? "N" : "?"}`;
       })
       .join(", ");
     out.push({
       id: gid,
-      is_pass: anyPass,
-      score: anyPass ? 1.0 : 0.0,
+      is_pass: groupPass,
+      score: groupPass === true ? 1.0 : groupPass === false ? 0.0 : null,
       type: "evaluator.string_assertion (group)",
       explainability: `one-of match: ${details}`,
     });

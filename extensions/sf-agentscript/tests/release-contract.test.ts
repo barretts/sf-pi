@@ -58,9 +58,10 @@ describe("Agent Script Release Eval Contract", () => {
     mkdirSync(path.dirname(designatedPath), { recursive: true });
     writeFileSync(designatedPath, `${JSON.stringify(designated)}\n`);
 
+    const baselineDigest = writeBaselineSource(cwd, agent);
     writeRun(cwd, "baseline-run", {
       kind: "generated_baseline",
-      spec_digest: "baseline-digest",
+      spec_digest: baselineDigest,
       baseline_id: AGENT_SCRIPT_RELEASE_BASELINE_ID,
     });
     writeRun(cwd, "designated-run", {
@@ -68,6 +69,27 @@ describe("Agent Script Release Eval Contract", () => {
       spec_digest: hashEvalSpec(designated),
       baseline_id: AGENT_SCRIPT_RELEASE_BASELINE_ID,
     });
+    // `_index.json` is display-only. Exact release evidence remains valid after eviction.
+    const runBase = path.join(cwd, ".pi", "state", "sf-agentscript", "runs");
+    writeFileSync(path.join(runBase, "_index.json"), "[]");
+    // Simulate a process ending after designated evidence became terminal but before index update.
+    writeFileSync(
+      path.join(runBase, "_release-evidence.json"),
+      JSON.stringify({
+        schema_version: 1,
+        entries: [
+          {
+            run_id: "baseline-run",
+            org_id: "00D000000000001",
+            agent_api_name: agent,
+            bot_version_id: "0X9000000000001",
+            kind: "generated_baseline",
+            spec_digest: baselineDigest,
+            baseline_id: AGENT_SCRIPT_RELEASE_BASELINE_ID,
+          },
+        ],
+      }),
+    );
 
     const result = await evaluateActivationEvidence({
       cwd,
@@ -78,6 +100,103 @@ describe("Agent Script Release Eval Contract", () => {
 
     expect(result).toMatchObject({ proceed: true, required: ["generated_baseline", "designated"] });
     expect(result.evidence).toHaveLength(2);
+    const releaseIndex = JSON.parse(
+      readFileSync(
+        path.join(cwd, ".pi", "state", "sf-agentscript", "runs", "_release-evidence.json"),
+        "utf8",
+      ),
+    );
+    expect(releaseIndex.entries).toHaveLength(2);
+  });
+
+  it("rejects release evidence whose immutable snapshot digest does not match the manifest", async () => {
+    const cwd = tempCwd();
+    const agent = "BillingAgent";
+    const digest = writeBaselineSource(cwd, agent);
+    writeRun(cwd, "tampered-run", {
+      kind: "generated_baseline",
+      spec_digest: digest,
+      baseline_id: AGENT_SCRIPT_RELEASE_BASELINE_ID,
+    });
+    writeFileSync(
+      path.join(
+        cwd,
+        ".pi",
+        "state",
+        "sf-agentscript",
+        "runs",
+        "tampered-run",
+        "spec.executed.snapshot.json",
+      ),
+      JSON.stringify({ tests: [{ id: "replaced", steps: [] }] }),
+    );
+
+    const result = await evaluateActivationEvidence({
+      cwd,
+      orgId: "00D000000000001",
+      agentApiName: agent,
+      botVersionId: "0X9000000000001",
+    });
+    expect(result).toMatchObject({ proceed: false, missing: ["generated_baseline"] });
+  });
+
+  it("rejects a passing metadata file until status and raw evidence are terminal", async () => {
+    const cwd = tempCwd();
+    const agent = "BillingAgent";
+    const digest = writeBaselineSource(cwd, agent);
+    writeRun(cwd, "partial-run", {
+      kind: "generated_baseline",
+      spec_digest: digest,
+      baseline_id: AGENT_SCRIPT_RELEASE_BASELINE_ID,
+    });
+    writeFileSync(
+      path.join(cwd, ".pi", "state", "sf-agentscript", "runs", "partial-run", "status.json"),
+      JSON.stringify({
+        schema_version: 1,
+        run_id: "partial-run",
+        status: "running",
+        phase: "persisting",
+        started: "2026-07-30T00:00:00.000Z",
+        updated: "2026-07-30T00:00:01.000Z",
+      }),
+    );
+
+    const result = await evaluateActivationEvidence({
+      cwd,
+      orgId: "00D000000000001",
+      agentApiName: agent,
+      botVersionId: "0X9000000000001",
+    });
+    expect(result).toMatchObject({ proceed: false, missing: ["generated_baseline"] });
+  });
+
+  it("rejects generated-baseline evidence when the current generated source changes", async () => {
+    const cwd = tempCwd();
+    const agent = "BillingAgent";
+    const originalDigest = writeBaselineSource(cwd, agent);
+    writeRun(cwd, "baseline-run", {
+      kind: "generated_baseline",
+      spec_digest: originalDigest,
+      baseline_id: AGENT_SCRIPT_RELEASE_BASELINE_ID,
+    });
+    const baselinePath = path.join(
+      cwd,
+      ".pi",
+      "state",
+      "sf-agentscript",
+      "release-contracts",
+      `${agent}.generated.eval.json`,
+    );
+    writeFileSync(baselinePath, JSON.stringify({ tests: [{ id: "changed", steps: [] }] }));
+
+    const result = await evaluateActivationEvidence({
+      cwd,
+      orgId: "00D000000000001",
+      agentApiName: agent,
+      botVersionId: "0X9000000000001",
+    });
+
+    expect(result).toMatchObject({ proceed: false, missing: ["generated_baseline"] });
   });
 
   it("rejects stale designated evidence when the current suite changes", async () => {
@@ -86,9 +205,10 @@ describe("Agent Script Release Eval Contract", () => {
     const designatedPath = path.join(cwd, "tests", "agentforce", `${agent}.eval.json`);
     mkdirSync(path.dirname(designatedPath), { recursive: true });
     writeFileSync(designatedPath, JSON.stringify({ tests: [{ id: "new", steps: [] }] }));
+    const baselineDigest = writeBaselineSource(cwd, agent);
     writeRun(cwd, "baseline-run", {
       kind: "generated_baseline",
-      spec_digest: "baseline-digest",
+      spec_digest: baselineDigest,
       baseline_id: AGENT_SCRIPT_RELEASE_BASELINE_ID,
     });
     writeRun(cwd, "stale-designated", {
@@ -116,10 +236,21 @@ function writeRun(
   const base = path.join(cwd, ".pi", "state", "sf-agentscript", "runs");
   const run = path.join(base, runId);
   mkdirSync(run, { recursive: true });
+  const proofSpec = {
+    tests: [
+      {
+        id: "release",
+        steps: [{ type: "evaluator.string_assertion", id: "ok" }],
+      },
+    ],
+  };
   writeFileSync(
     path.join(run, "metadata.json"),
     JSON.stringify({
       run_id: runId,
+      execution_state: "completed",
+      evidence_verdict: "passed",
+      verdict_semantics_version: 1,
       org_id: "00D000000000001",
       agent_api_name: "BillingAgent",
       bot_version_id: "0X9000000000001",
@@ -130,6 +261,47 @@ function writeRun(
       release_contract: releaseContract,
     }),
   );
+  writeFileSync(
+    path.join(run, "manifest.json"),
+    JSON.stringify({
+      schema_version: 2,
+      run_id: runId,
+      scope: "suite",
+      org_id: "00D000000000001",
+      agent_api_name: "BillingAgent",
+      bot_version_id: "0X9000000000001",
+      release_contract: releaseContract,
+      source_snapshot: "spec.source.snapshot.json",
+      executed_snapshot: "spec.executed.snapshot.json",
+      source_digest: hashEvalSpec(proofSpec),
+      executed_digest: hashEvalSpec(proofSpec),
+    }),
+  );
+  writeFileSync(path.join(run, "spec.source.snapshot.json"), JSON.stringify(proofSpec));
+  writeFileSync(path.join(run, "spec.executed.snapshot.json"), JSON.stringify(proofSpec));
+  writeFileSync(
+    path.join(run, "raw.json"),
+    JSON.stringify({
+      results: [
+        {
+          id: "release",
+          evaluation_results: [{ id: "ok", type: "evaluator.string_assertion", is_pass: true }],
+        },
+      ],
+    }),
+  );
+  writeFileSync(
+    path.join(run, "status.json"),
+    JSON.stringify({
+      schema_version: 1,
+      run_id: runId,
+      status: "completed",
+      phase: "completed",
+      started: "2026-07-30T00:00:00.000Z",
+      updated: "2026-07-30T00:00:01.000Z",
+      completed: "2026-07-30T00:00:01.000Z",
+    }),
+  );
   const indexPath = path.join(base, "_index.json");
   let ids: string[] = [];
   try {
@@ -138,4 +310,19 @@ function writeRun(
     // First run has no index yet.
   }
   writeFileSync(indexPath, JSON.stringify([runId, ...ids]));
+}
+
+function writeBaselineSource(cwd: string, agent: string): string {
+  const baseline = { tests: [{ id: "baseline", steps: [] }] };
+  const file = path.join(
+    cwd,
+    ".pi",
+    "state",
+    "sf-agentscript",
+    "release-contracts",
+    `${agent}.generated.eval.json`,
+  );
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(baseline));
+  return hashEvalSpec(baseline);
 }
