@@ -366,6 +366,7 @@ extensions/sf-agentscript/
     analysis-pipeline-characterization.test.ts← unit / smoke test
     analysis-snapshot.test.ts← unit / smoke test
     authoring-quality.test.ts← unit / smoke test
+    authoring-rename.test.ts← unit / smoke test
     authoring-review.test.ts← unit / smoke test
     authoring-tool.test.ts  ← unit / smoke test
     bounded-salesforce-transport.test.ts← unit / smoke test

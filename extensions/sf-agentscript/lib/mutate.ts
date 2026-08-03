@@ -19,11 +19,13 @@ import { invalidateAgentScriptAnalysis } from "./analysis-snapshot.ts";
 import { checkAgentScriptFile } from "./diagnostics.ts";
 import { buildQuickFixes } from "./code-actions.ts";
 import {
+  convertTopicToSubagent,
+  findAgentforceDefinitions,
   findAgentforceReferenceEdits,
   formatAgentforceSymbol,
   isDeclarableNavigationNamespace,
   parseAgentforceSymbol,
-  resolveAgentforceSymbol,
+  renameAgentforceSymbol,
   type AgentforceSymbol,
 } from "./agentforce-navigation.ts";
 import {
@@ -74,6 +76,7 @@ export interface MutateResult {
   diagnostics_after?: AgentScriptDiagnostic[];
   reason?: string;
   reason_detail?: string;
+  candidates?: Array<{ symbol: string; line: number; scope?: Record<string, string> }>;
   /** Set when dry_run=true. Unified-style diff of the proposed change. */
   diff?: string;
   /** Set when dry_run=true. The full source after the mutation. */
@@ -492,7 +495,7 @@ async function applyAstSetField(
 }
 
 // -------------------------------------------------------------------------------------------------
-// op: rename  (AST primary — currently topic→subagent only)
+// op: rename  (official semantic providers plus narrow conversion adapters)
 // -------------------------------------------------------------------------------------------------
 
 async function applyAstRename(
@@ -526,7 +529,9 @@ async function applyAstRename(
 
   const after = await (from.symbol.namespace === to.symbol.namespace
     ? renameWithinNamespace(sourceBefore, from.symbol, to.symbol)
-    : renameTopicSubagent(sourceBefore, parsed.doc, from.symbol, to.symbol));
+    : from.symbol.namespace === "topic"
+      ? renameTopicToSubagent(sourceBefore, from.symbol, to.symbol)
+      : renameSubagentToTopic(sourceBefore, from.symbol, to.symbol));
 
   if (after.ok === false) return after.error;
   if (after.source === sourceBefore) {
@@ -595,83 +600,30 @@ async function renameWithinNamespace(
   const resolved = await resolveSymbol(source, from);
   if (resolved.ok === false) return resolved;
 
-  const existing = await resolveSymbol(source, to);
-  if (existing.ok) {
+  const collision = await findRenameCollision(source, to, resolved.scope);
+  if (collision.ok === false) return collision;
+  if (collision.exists) {
     return {
       ok: false,
       error: {
         ok: false,
         reason: "target_exists",
-        reason_detail: `${formatSymbol(to)} is already declared. Choose a unique target name.`,
+        reason_detail: `${formatSymbol(to)} is already declared in the source symbol's scope. Choose a unique target name.`,
       },
     };
   }
 
-  const declarationEdit = replaceNameOnLine(source, resolved.definitionLine, from.name, to.name);
-  if (!declarationEdit) {
-    return {
-      ok: false,
-      error: {
-        ok: false,
-        reason: "rename_unsupported",
-        reason_detail: `Could not locate declaration name '${from.name}' for ${formatSymbol(from)}. Use generic edit + compile/check.`,
-      },
-    };
-  }
-
-  const edits = [declarationEdit, ...(await findReferenceRenameEdits(source, from, to))];
-  return { ok: true, source: applyTextEdits(source, edits) };
-}
-
-async function renameTopicSubagent(
-  source: string,
-  _doc: ParsedDoc,
-  from: RenameSymbol,
-  to: RenameSymbol,
-): Promise<{ ok: true; source: string } | { ok: false; error: MutateResult }> {
-  const resolved = await resolveSymbol(source, from);
-  if (resolved.ok === false) return resolved;
-
-  const existing = await resolveSymbol(source, to);
-  if (existing.ok) {
-    return {
-      ok: false,
-      error: {
-        ok: false,
-        reason: "target_exists",
-        reason_detail: `${formatSymbol(to)} is already declared. Remove it or choose a different conversion target.`,
-      },
-    };
-  }
-
-  const declarationEdit = replaceNameOnLine(
-    source,
-    resolved.definitionLine,
-    from.namespace,
-    to.namespace,
-  );
-  if (!declarationEdit) {
-    return {
-      ok: false,
-      error: {
-        ok: false,
-        reason: "rename_unsupported",
-        reason_detail: `Could not locate '${from.namespace}' keyword on declaration line for ${formatSymbol(from)}. Use generic edit + compile/check.`,
-      },
-    };
-  }
-
-  const edits = [declarationEdit, ...(await findReferenceRenameEdits(source, from, to))];
-  return { ok: true, source: applyTextEdits(source, edits) };
-}
-
-async function resolveSymbol(
-  source: string,
-  symbol: RenameSymbol,
-): Promise<{ ok: true; definitionLine: number } | { ok: false; error: MutateResult }> {
-  let definition: Awaited<ReturnType<typeof resolveAgentforceSymbol>>;
   try {
-    definition = await resolveAgentforceSymbol(source, symbol);
+    const edits = await renameAgentforceSymbol(source, from, to.name);
+    if (edits.length === 0) {
+      return {
+        ok: false,
+        error: unsupportedRename(
+          `The official rename provider returned no edits for ${formatSymbol(from)}.`,
+        ),
+      };
+    }
+    return { ok: true, source: applyTextEdits(source, edits) };
   } catch (err) {
     return {
       ok: false,
@@ -682,97 +634,206 @@ async function resolveSymbol(
       },
     };
   }
+}
 
-  const line = definition?.definitionRange.start.line;
-  if (typeof line !== "number") {
+async function renameTopicToSubagent(
+  source: string,
+  from: RenameSymbol,
+  to: RenameSymbol,
+): Promise<{ ok: true; source: string } | { ok: false; error: MutateResult }> {
+  const resolved = await resolveSymbol(source, from);
+  if (resolved.ok === false) return resolved;
+
+  const collision = await findRenameCollision(source, to, resolved.scope);
+  if (collision.ok === false) return collision;
+  if (collision.exists) {
     return {
       ok: false,
       error: {
         ok: false,
-        reason: "entry_not_found",
-        reason_detail: `${formatSymbol(symbol)} is not declared.`,
+        reason: "target_exists",
+        reason_detail: `${formatSymbol(to)} is already declared. Remove it before converting the topic.`,
       },
     };
   }
-  return { ok: true, definitionLine: line };
+
+  try {
+    const edits = await convertTopicToSubagent(source, from);
+    if (edits.length === 0) {
+      return {
+        ok: false,
+        error: unsupportedRename(
+          `The official topic-to-subagent code action returned no edits for ${formatSymbol(from)}.`,
+        ),
+      };
+    }
+    return { ok: true, source: applyTextEdits(source, edits) };
+  } catch (err) {
+    return {
+      ok: false,
+      error: {
+        ok: false,
+        reason: "parse_failed",
+        reason_detail: err instanceof Error ? err.message : String(err),
+      },
+    };
+  }
 }
 
-function replaceNameOnLine(
-  source: string,
-  lineIndex: number,
-  fromText: string,
-  toText: string,
-): AgentScriptQuickFix["edits"][number] | null {
-  const lines = source.split("\n");
-  const line = lines[lineIndex] ?? "";
-  const character = line.indexOf(fromText);
-  if (character < 0) return null;
-  return {
-    range: {
-      start: { line: lineIndex, character },
-      end: { line: lineIndex, character: character + fromText.length },
-    },
-    newText: toText,
-  };
-}
-
-async function findReferenceRenameEdits(
+async function renameSubagentToTopic(
   source: string,
   from: RenameSymbol,
   to: RenameSymbol,
-): Promise<AgentScriptQuickFix["edits"]> {
-  const edits: AgentScriptQuickFix["edits"] = [];
-  const seen = new Set<string>();
+): Promise<{ ok: true; source: string } | { ok: false; error: MutateResult }> {
+  const resolved = await resolveSymbol(source, from);
+  if (resolved.ok === false) return resolved;
+
+  const collision = await findRenameCollision(source, to, resolved.scope);
+  if (collision.ok === false) return collision;
+  if (collision.exists) {
+    return {
+      ok: false,
+      error: {
+        ok: false,
+        reason: "target_exists",
+        reason_detail: `${formatSymbol(to)} is already declared. Remove it before converting the subagent.`,
+      },
+    };
+  }
+
+  const declarationEdit = declarationKeywordEdit(
+    resolved.definitionRange,
+    from.namespace,
+    to.namespace,
+  );
+  if (!declarationEdit) {
+    return {
+      ok: false,
+      error: unsupportedRename(
+        `Could not locate '${from.namespace}' on the declaration line for ${formatSymbol(from)}.`,
+      ),
+    };
+  }
+
   try {
-    for (const edit of await findAgentforceReferenceEdits(source, from, formatSymbol(to))) {
-      addRenameEdit(edits, seen, edit);
-    }
-  } catch {
-    // Exact token fallback below still handles common Agent Script reference
-    // shapes such as deterministic transitions.
+    const referenceEdits = await findAgentforceReferenceEdits(source, from, formatSymbol(to));
+    return { ok: true, source: applyTextEdits(source, [declarationEdit, ...referenceEdits]) };
+  } catch (err) {
+    return {
+      ok: false,
+      error: {
+        ok: false,
+        reason: "parse_failed",
+        reason_detail: err instanceof Error ? err.message : String(err),
+      },
+    };
   }
-
-  for (const edit of findExactTokenEdits(source, formatSymbol(from), formatSymbol(to))) {
-    addRenameEdit(edits, seen, edit);
-  }
-  return edits;
 }
 
-function addRenameEdit(
-  edits: AgentScriptQuickFix["edits"],
-  seen: Set<string>,
-  edit: AgentScriptQuickFix["edits"][number],
-): void {
-  const key = `${edit.range.start.line}:${edit.range.start.character}:${edit.range.end.line}:${edit.range.end.character}`;
-  if (seen.has(key)) return;
-  seen.add(key);
-  edits.push(edit);
+interface ResolvedRenameSymbol {
+  ok: true;
+  definitionRange: AgentScriptRange;
+  scope: Record<string, string>;
 }
 
-function findExactTokenEdits(
+async function resolveSymbol(
   source: string,
-  fromToken: string,
-  toToken: string,
-): AgentScriptQuickFix["edits"] {
-  const edits: AgentScriptQuickFix["edits"] = [];
-  const lines = source.split("\n");
-  for (let line = 0; line < lines.length; line++) {
-    const text = lines[line] ?? "";
-    let searchFrom = 0;
-    while (searchFrom < text.length) {
-      const character = text.indexOf(fromToken, searchFrom);
-      if (character < 0) break;
-      edits.push({
-        range: {
-          start: { line, character },
-          end: { line, character: character + fromToken.length },
+  symbol: RenameSymbol,
+): Promise<ResolvedRenameSymbol | { ok: false; error: MutateResult }> {
+  try {
+    const definitions = await findAgentforceDefinitions(source, symbol);
+    if (definitions.length === 0) {
+      return {
+        ok: false,
+        error: {
+          ok: false,
+          reason: "entry_not_found",
+          reason_detail: `${formatSymbol(symbol)} is not declared.`,
         },
-        newText: toToken,
-      });
-      searchFrom = character + fromToken.length;
+      };
     }
+    if (definitions.length > 1) {
+      return {
+        ok: false,
+        error: {
+          ok: false,
+          reason: "ambiguous_symbol",
+          reason_detail: `${formatSymbol(symbol)} has ${definitions.length} declarations. Pass a symbol that resolves uniquely before renaming.`,
+          candidates: definitions.map((definition) => ({
+            symbol: formatSymbol(symbol),
+            line: definition.definitionRange.start.line + 1,
+            ...(definition.scope && Object.keys(definition.scope).length > 0
+              ? { scope: definition.scope }
+              : {}),
+          })),
+        },
+      };
+    }
+    const definition = definitions[0];
+    return {
+      ok: true,
+      definitionRange: definition.definitionRange,
+      scope: definition.scope ?? {},
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: {
+        ok: false,
+        reason: "parse_failed",
+        reason_detail: err instanceof Error ? err.message : String(err),
+      },
+    };
   }
-  return edits;
+}
+
+async function findRenameCollision(
+  source: string,
+  target: RenameSymbol,
+  sourceScope: Record<string, string>,
+): Promise<{ ok: true; exists: boolean } | { ok: false; error: MutateResult }> {
+  try {
+    const definitions = await findAgentforceDefinitions(source, target);
+    return {
+      ok: true,
+      exists:
+        Object.keys(sourceScope).length === 0
+          ? definitions.length > 0
+          : definitions.some((definition) => sameScope(definition.scope ?? {}, sourceScope)),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: {
+        ok: false,
+        reason: "parse_failed",
+        reason_detail: err instanceof Error ? err.message : String(err),
+      },
+    };
+  }
+}
+
+function sameScope(left: Record<string, string>, right: Record<string, string>): boolean {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  return [...keys].every((key) => left[key] === right[key]);
+}
+
+function declarationKeywordEdit(
+  definitionRange: AgentScriptRange,
+  fromNamespace: string,
+  toNamespace: string,
+): AgentScriptQuickFix["edits"][number] | null {
+  if (definitionRange.start.line !== definitionRange.end.line) return null;
+  return {
+    range: {
+      start: definitionRange.start,
+      end: {
+        line: definitionRange.start.line,
+        character: definitionRange.start.character + fromNamespace.length,
+      },
+    },
+    newText: toNamespace,
+  };
 }
 
 // -------------------------------------------------------------------------------------------------

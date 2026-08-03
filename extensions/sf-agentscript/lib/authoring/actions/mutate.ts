@@ -53,6 +53,10 @@ export async function runMutateAction(
       `Mutate failed (${result.reason ?? "unknown"})`,
       result.reason_detail ?? "See the sf-agentscript skill for supported mutate modes.",
       recover,
+      {
+        reason: result.reason,
+        ...(result.candidates ? { candidates: result.candidates } : {}),
+      },
     );
   }
 

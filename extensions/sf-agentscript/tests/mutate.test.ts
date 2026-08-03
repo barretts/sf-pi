@@ -53,25 +53,6 @@ const FULL_FIXTURE = [
   "",
 ].join("\n");
 
-const PROSE_RENAME_FIXTURE = [
-  "config:",
-  '    agent_name: "Test_Bot"',
-  '    agent_type: "AgentforceEmployeeAgent"',
-  "",
-  "subagent billing:",
-  '    description: "Billing"',
-  "",
-  "start_agent main:",
-  '    description: "Mention @subagent.billing as prose"',
-  "    # Keep @subagent.billing in this comment",
-  "    before_reasoning:",
-  "        transition to @subagent.billing",
-  "    reasoning:",
-  "        instructions: ->",
-  "            | Tell the user about @subagent.billing without invoking it.",
-  "",
-].join("\n");
-
 const SEMANTIC_RENAME_FIXTURE = [
   "config:",
   '    agent_name: "Test_Bot"',
@@ -98,6 +79,8 @@ const SEMANTIC_RENAME_FIXTURE = [
   "            | Tell the user about @subagent.billing without invoking it.",
   "",
 ].join("\n");
+
+const TOPIC_CONVERSION_FIXTURE = SEMANTIC_RENAME_FIXTURE.replaceAll("subagent", "topic");
 
 describe("applyMutation: apply_quick_fix", () => {
   test("returns no_matching_diagnostic when the line/code don't match", async () => {
@@ -379,8 +362,8 @@ describe("applyMutation: rename", () => {
     expect(after).not.toContain("subagent billing:");
   });
 
-  test("characterizes the current exact-token fallback rewriting symbol-like prose", async () => {
-    const filePath = await writeAgent("bot.agent", PROSE_RENAME_FIXTURE);
+  test("renames semantic references without changing comments, prompt text, or similar symbols", async () => {
+    const filePath = await writeAgent("bot.agent", SEMANTIC_RENAME_FIXTURE);
     const result = await applyMutation({
       op: "rename",
       path: filePath,
@@ -392,38 +375,203 @@ describe("applyMutation: rename", () => {
     }
 
     const after = await readFile(filePath, "utf8");
-    expect(after).toContain('description: "Mention @subagent.account_billing as prose"');
-    expect(after).toContain("# Keep @subagent.account_billing in this comment");
-    expect(after).toContain("| Tell the user about @subagent.account_billing without invoking it.");
+    expect(after).toContain("subagent account_billing:");
+    expect(after).toContain("transition to @subagent.account_billing");
+    expect(after).toContain('description: "Mention @subagent.billing as prose"');
+    expect(after).toContain("# Keep @subagent.billing in this comment");
+    expect(after).toContain("| Tell the user about @subagent.billing without invoking it.");
+    expect(after).toContain("subagent billing_help:");
+    expect(after).toContain("transition to @subagent.billing_help");
   });
 
-  test.fails(
-    "renames semantic references without changing comments, prompt text, or similar symbols",
-    async () => {
-      const filePath = await writeAgent("bot.agent", SEMANTIC_RENAME_FIXTURE);
-      const result = await applyMutation({
-        op: "rename",
-        path: filePath,
-        from: "@subagent.billing",
-        to: "@subagent.account_billing",
-      });
-      if (!result.ok) {
-        throw new Error(`Expected success, got ${result.reason}: ${result.reason_detail}`);
-      }
+  test("renames inline actions and variables through semantic provider ranges", async () => {
+    const filePath = await writeAgent(
+      "bot.agent",
+      [
+        "config:",
+        '    agent_name: "Scoped_Rename"',
+        '    agent_type: "AgentforceEmployeeAgent"',
+        "",
+        "variables:",
+        '    customer_name: mutable string = "Ada"',
+        "",
+        "start_agent main:",
+        '    description: "Main"',
+        "    actions:",
+        "        lookup:",
+        '            description: "Lookup"',
+        "            inputs:",
+        "                query: string",
+        "            outputs:",
+        "                result: string",
+        '            target: "flow://Lookup"',
+        "    reasoning:",
+        "        instructions: ->",
+        "            run @actions.lookup",
+        "                with query = @variables.customer_name",
+        "",
+      ].join("\n"),
+    );
 
-      const after = await readFile(filePath, "utf8");
-      expect(after).toContain("subagent account_billing:");
-      expect(after).toContain("transition to @subagent.account_billing");
-      expect(after).toContain('description: "Mention @subagent.billing as prose"');
-      expect(after).toContain("# Keep @subagent.billing in this comment");
-      expect(after).toContain("| Tell the user about @subagent.billing without invoking it.");
-      expect(after).toContain("subagent billing_help:");
-      expect(after).toContain("transition to @subagent.billing_help");
-    },
-  );
+    const variable = await applyMutation({
+      op: "rename",
+      path: filePath,
+      from: "@variables.customer_name",
+      to: "@variables.contact_name",
+    });
+    expect(variable.ok).toBe(true);
+    const action = await applyMutation({
+      op: "rename",
+      path: filePath,
+      from: "@actions.lookup",
+      to: "@actions.find_contact",
+    });
+    expect(action.ok).toBe(true);
+
+    const after = await readFile(filePath, "utf8");
+    expect(after).toContain("contact_name: mutable string");
+    expect(after).toContain("with query = @variables.contact_name");
+    expect(after).toContain("find_contact:");
+    expect(after).toContain("run @actions.find_contact");
+  });
+
+  test("refuses ambiguous scoped action symbols with structured candidates", async () => {
+    const source = [
+      "config:",
+      '    agent_name: "Ambiguous_Actions"',
+      "",
+      "subagent first:",
+      '    description: "First"',
+      "    actions:",
+      "        lookup:",
+      '            description: "Lookup first"',
+      '            target: "flow://First"',
+      "",
+      "subagent second:",
+      '    description: "Second"',
+      "    actions:",
+      "        lookup:",
+      '            description: "Lookup second"',
+      '            target: "flow://Second"',
+      "",
+      "start_agent main:",
+      '    description: "Main"',
+      "",
+    ].join("\n");
+    const filePath = await writeAgent("bot.agent", source);
+    const result = await applyMutation({
+      op: "rename",
+      path: filePath,
+      from: "@actions.lookup",
+      to: "@actions.find_contact",
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: "ambiguous_symbol" });
+    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates?.map((candidate) => candidate.scope)).toEqual(
+      expect.arrayContaining([{ subagent: "first" }, { subagent: "second" }]),
+    );
+    expect(await readFile(filePath, "utf8")).toBe(source);
+  });
+
+  test("checks scoped action collisions only inside the source scope", async () => {
+    const source = [
+      "config:",
+      '    agent_name: "Scoped_Collision"',
+      "",
+      "subagent first:",
+      '    description: "First"',
+      "    actions:",
+      "        lookup:",
+      '            description: "Lookup first"',
+      '            target: "flow://First"',
+      "    reasoning:",
+      "        instructions: ->",
+      "            run @actions.lookup",
+      "",
+      "subagent second:",
+      '    description: "Second"',
+      "    actions:",
+      "        find_contact:",
+      '            description: "Existing in another scope"',
+      '            target: "flow://Second"',
+      "",
+      "start_agent main:",
+      '    description: "Main"',
+      "",
+    ].join("\n");
+    const filePath = await writeAgent("bot.agent", source);
+    const result = await applyMutation({
+      op: "rename",
+      path: filePath,
+      from: "@actions.lookup",
+      to: "@actions.find_contact",
+    });
+    expect(result.ok).toBe(true);
+
+    const after = await readFile(filePath, "utf8");
+    expect(after).toContain('description: "Existing in another scope"');
+    expect(after.match(/find_contact:/g)).toHaveLength(2);
+    expect(after).toContain("run @actions.find_contact");
+
+    const sameScopeSource = source.replace(
+      '            target: "flow://First"',
+      [
+        '            target: "flow://First"',
+        "        find_contact:",
+        '            description: "Existing in source scope"',
+        '            target: "flow://Existing"',
+      ].join("\n"),
+    );
+    const sameScopeFile = await writeAgent("same-scope.agent", sameScopeSource);
+    const collision = await applyMutation({
+      op: "rename",
+      path: sameScopeFile,
+      from: "@actions.lookup",
+      to: "@actions.find_contact",
+    });
+    expect(collision).toMatchObject({ ok: false, reason: "target_exists" });
+    expect(await readFile(sameScopeFile, "utf8")).toBe(sameScopeSource);
+  });
+
+  test("rejects missing sources and target-name collisions", async () => {
+    const filePath = await writeAgent(
+      "bot.agent",
+      `${SEMANTIC_RENAME_FIXTURE}\nsubagent account_billing:\n    description: "Existing"\n`,
+    );
+    const missing = await applyMutation({
+      op: "rename",
+      path: filePath,
+      from: "@subagent.unknown",
+      to: "@subagent.other",
+    });
+    expect(missing).toMatchObject({ ok: false, reason: "entry_not_found" });
+
+    const collision = await applyMutation({
+      op: "rename",
+      path: filePath,
+      from: "@subagent.billing",
+      to: "@subagent.account_billing",
+    });
+    expect(collision).toMatchObject({ ok: false, reason: "target_exists" });
+  });
+
+  test("dry-run semantic rename previews edits without writing", async () => {
+    const filePath = await writeAgent("bot.agent", SEMANTIC_RENAME_FIXTURE);
+    const result = await applyMutation({
+      op: "rename",
+      path: filePath,
+      from: "@subagent.billing",
+      to: "@subagent.account_billing",
+      dry_run: true,
+    });
+    expect(result).toMatchObject({ ok: true, was_dry_run: true });
+    expect(result.preview_source).toContain("subagent account_billing:");
+    expect(await readFile(filePath, "utf8")).toBe(SEMANTIC_RENAME_FIXTURE);
+  });
 
   test("supports legacy topic.X → subagent.X conversion input", async () => {
-    const filePath = await writeAgent("bot.agent", FULL_FIXTURE);
+    const filePath = await writeAgent("bot.agent", TOPIC_CONVERSION_FIXTURE);
     const result = await applyMutation({
       op: "rename",
       path: filePath,
@@ -436,6 +584,40 @@ describe("applyMutation: rename", () => {
     const after = await readFile(filePath, "utf8");
     expect(after).toContain("subagent billing:");
     expect(after).toContain("transition to @subagent.billing");
+    expect(after).toContain('description: "Mention @topic.billing as prose"');
+    expect(after).toContain("topic billing_help:");
+    expect(after).toContain("transition to @topic.billing_help");
+  });
+
+  test("keeps reverse subagent → topic conversion as a narrow semantic operation", async () => {
+    const filePath = await writeAgent(
+      "bot.agent",
+      [
+        "config:",
+        '    agent_name: "Reverse_Conversion"',
+        "",
+        "subagent billing:",
+        '    description: "Billing"',
+        "",
+        "start_agent main:",
+        '    description: "Mention @subagent.billing as prose"',
+        "    before_reasoning:",
+        "        transition to @subagent.billing",
+        "",
+      ].join("\n"),
+    );
+    const result = await applyMutation({
+      op: "rename",
+      path: filePath,
+      from: "subagent.billing",
+      to: "topic.billing",
+    });
+    expect(result.ok).toBe(true);
+
+    const after = await readFile(filePath, "utf8");
+    expect(after).toContain("topic billing:");
+    expect(after).toContain("transition to @topic.billing");
+    expect(after).toContain('description: "Mention @subagent.billing as prose"');
   });
 
   test("rejects broad cross-namespace renames", async () => {
