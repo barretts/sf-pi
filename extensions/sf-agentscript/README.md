@@ -405,6 +405,7 @@ extensions/sf-agentscript/
     eval-studio-redaction.test.ts← unit / smoke test
     eval-studio-run-coordinator.test.ts← unit / smoke test
     eval-synthesize-trace.test.ts← unit / smoke test
+    eval-terminal-persistence.test.ts← unit / smoke test
     eval-tool-run.test.ts   ← unit / smoke test
     eval-utterance-index.test.ts← unit / smoke test
     eval-verdict.test.ts    ← unit / smoke test
@@ -447,6 +448,7 @@ extensions/sf-agentscript/
     quality-publication-gate.test.ts← unit / smoke test
     quality-settings.test.ts← unit / smoke test
     quality-transcript.test.ts← unit / smoke test
+    quality-upstream-parity.test.ts← unit / smoke test
     queue-readiness.test.ts ← unit / smoke test
     release-contract.test.ts← unit / smoke test
     release-sequence-contract.test.ts← unit / smoke test

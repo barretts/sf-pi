@@ -1,0 +1,1138 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`quality upstream strict parity > 'conditional transition cycle' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "component graph with conditional deterministic transitions",
+  "local_diagnostics": [
+    {
+      "code": "conditional-transition-cycle",
+      "data": {
+        "evidence": [
+          "@variables.go_b == True",
+          "@variables.go_a == True",
+        ],
+        "qualitySeverity": "info",
+        "ruleName": "Conditional Transition Loop",
+      },
+      "message": "Conditional transition loop: subagent.b → subagent.a → subagent.b.",
+      "range": {
+        "end": {
+          "character": 37,
+          "line": 29,
+        },
+        "start": {
+          "character": 0,
+          "line": 25,
+        },
+      },
+      "severity": 3,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "conditional-transition-cycle",
+      "evidence": [
+        "@variables.go_b == True",
+        "@variables.go_a == True",
+      ],
+      "message": "Conditional transition loop: subagent.b → subagent.a → subagent.b.",
+      "range": {
+        "end": {
+          "character": 37,
+          "line": 29,
+        },
+        "start": {
+          "character": 0,
+          "line": 25,
+        },
+      },
+      "severity": "info",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'cyclomatic complexity' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "procedure with if and short-circuit expressions",
+  "local_diagnostics": [],
+  "local_findings": [],
+  "metrics": [
+    {
+      "component": "start_agent.main",
+      "decisions": [
+        {
+          "kind": "if",
+          "range": {
+            "end": {
+              "character": 22,
+              "line": 23,
+            },
+            "start": {
+              "character": 12,
+              "line": 22,
+            },
+          },
+        },
+        {
+          "kind": "and",
+          "range": {
+            "end": {
+              "character": 62,
+              "line": 22,
+            },
+            "start": {
+              "character": 15,
+              "line": 22,
+            },
+          },
+        },
+        {
+          "kind": "or",
+          "range": {
+            "end": {
+              "character": 61,
+              "line": 22,
+            },
+            "start": {
+              "character": 33,
+              "line": 22,
+            },
+          },
+        },
+      ],
+      "procedure": "start_agent.main.reasoning.instructions",
+      "value": 4,
+    },
+  ],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'deep deterministic action chain' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "second nested deterministic follow-up",
+  "local_diagnostics": [
+    {
+      "code": "action-chain-too-deep",
+      "data": {
+        "qualitySeverity": "high",
+        "ruleName": "Action Chain Is Too Deep",
+      },
+      "message": "Action chain exceeds one supported follow-up at @actions.third.",
+      "range": {
+        "end": {
+          "character": 38,
+          "line": 32,
+        },
+        "start": {
+          "character": 20,
+          "line": 32,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "action-chain-too-deep",
+      "evidence": undefined,
+      "message": "Action chain exceeds one supported follow-up at @actions.third.",
+      "range": {
+        "end": {
+          "character": 38,
+          "line": 32,
+        },
+        "start": {
+          "character": 20,
+          "line": 32,
+        },
+      },
+      "severity": "high",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'delegation cycle and unreachable suba…' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "returning subagent graph plus orphan declaration",
+  "local_diagnostics": [
+    {
+      "code": "subagent-delegation-cycle",
+      "data": {
+        "evidence": [
+          "subagent.a",
+          "start_agent.main",
+          "subagent.a",
+        ],
+        "qualitySeverity": "info",
+        "ruleName": "Subagent Call Cycle",
+      },
+      "message": "Subagent Call Cycle: subagent.a → start_agent.main → subagent.a.",
+      "range": {
+        "end": {
+          "character": 43,
+          "line": 21,
+        },
+        "start": {
+          "character": 0,
+          "line": 16,
+        },
+      },
+      "severity": 3,
+      "source": "sf-agentscript-quality",
+    },
+    {
+      "code": "unreachable-subagent",
+      "data": {
+        "qualitySeverity": "moderate",
+        "ruleName": "Unreachable Subagent",
+      },
+      "message": "Subagent 'orphan' has no supported incoming flow edge.",
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 26,
+        },
+        "start": {
+          "character": 0,
+          "line": 22,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "unreachable-subagent",
+      "evidence": undefined,
+      "message": "Subagent 'orphan' has no supported incoming flow edge.",
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 26,
+        },
+        "start": {
+          "character": 0,
+          "line": 22,
+        },
+      },
+      "severity": "moderate",
+      "suggestion": undefined,
+    },
+    {
+      "code": "subagent-delegation-cycle",
+      "evidence": [
+        "subagent.a",
+        "start_agent.main",
+        "subagent.a",
+      ],
+      "message": "Subagent Call Cycle: subagent.a → start_agent.main → subagent.a.",
+      "range": {
+        "end": {
+          "character": 43,
+          "line": 21,
+        },
+        "start": {
+          "character": 0,
+          "line": 16,
+        },
+      },
+      "severity": "info",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'deterministic input type mismatch' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "deterministic run with known literal input type",
+  "local_diagnostics": [
+    {
+      "code": "deterministic-action-input-type-mismatch",
+      "data": {
+        "qualitySeverity": "moderate",
+        "ruleName": "Wrong Action Input Type",
+      },
+      "message": "Input 'query' expects 'string' but received 'number'.",
+      "range": {
+        "end": {
+          "character": 31,
+          "line": 24,
+        },
+        "start": {
+          "character": 16,
+          "line": 24,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "deterministic-action-input-type-mismatch",
+      "evidence": undefined,
+      "message": "Input 'query' expects 'string' but received 'number'.",
+      "range": {
+        "end": {
+          "character": 31,
+          "line": 24,
+        },
+        "start": {
+          "character": 16,
+          "line": 24,
+        },
+      },
+      "severity": "moderate",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'deterministic missing input' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "deterministic run in reasoning.instructions",
+  "local_diagnostics": [
+    {
+      "code": "deterministic-action-missing-input",
+      "data": {
+        "qualitySeverity": "high",
+        "ruleName": "Required Action Input Is Missing",
+      },
+      "message": "Required input 'query' is missing from deterministic action 'lookup'.",
+      "range": {
+        "end": {
+          "character": 31,
+          "line": 23,
+        },
+        "start": {
+          "character": 12,
+          "line": 23,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "deterministic-action-missing-input",
+      "evidence": undefined,
+      "message": "Required input 'query' is missing from deterministic action 'lookup'.",
+      "range": {
+        "end": {
+          "character": 31,
+          "line": 23,
+        },
+        "start": {
+          "character": 12,
+          "line": 23,
+        },
+      },
+      "severity": "high",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'deterministic output type mismatch' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "deterministic run output assigned to mutable variable",
+  "local_diagnostics": [
+    {
+      "code": "deterministic-action-output-type-mismatch",
+      "data": {
+        "qualitySeverity": "moderate",
+        "ruleName": "Wrong Action Output Type",
+      },
+      "message": "Output 'score' is 'number' but variable 'name' is 'string'.",
+      "range": {
+        "end": {
+          "character": 52,
+          "line": 28,
+        },
+        "start": {
+          "character": 16,
+          "line": 28,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "deterministic-action-output-type-mismatch",
+      "evidence": undefined,
+      "message": "Output 'score' is 'number' but variable 'name' is 'string'.",
+      "range": {
+        "end": {
+          "character": 52,
+          "line": 28,
+        },
+        "start": {
+          "character": 16,
+          "line": 28,
+        },
+      },
+      "severity": "moderate",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'deterministic slot filling' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "deterministic run with ellipsis input",
+  "local_diagnostics": [
+    {
+      "code": "slot-filling-in-deterministic-action",
+      "data": {
+        "qualitySeverity": "high",
+        "ruleName": "Deterministic Action Cannot Use Slot Filling",
+      },
+      "message": "Deterministic actions cannot use ellipsis slot filling. Bind a known value instead.",
+      "range": {
+        "end": {
+          "character": 32,
+          "line": 24,
+        },
+        "start": {
+          "character": 16,
+          "line": 24,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "slot-filling-in-deterministic-action",
+      "evidence": undefined,
+      "message": "Deterministic actions cannot use ellipsis slot filling. Bind a known value instead.",
+      "range": {
+        "end": {
+          "character": 32,
+          "line": 24,
+        },
+        "start": {
+          "character": 16,
+          "line": 24,
+        },
+      },
+      "severity": "high",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'deterministic unknown input' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "deterministic run with misspelled with-binding",
+  "local_diagnostics": [
+    {
+      "code": "deterministic-action-missing-input",
+      "data": {
+        "qualitySeverity": "high",
+        "ruleName": "Required Action Input Is Missing",
+      },
+      "message": "Required input 'query' is missing from deterministic action 'lookup'.",
+      "range": {
+        "end": {
+          "character": 31,
+          "line": 24,
+        },
+        "start": {
+          "character": 12,
+          "line": 23,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+    {
+      "code": "deterministic-action-unknown-input",
+      "data": {
+        "qualitySeverity": "high",
+        "ruleName": "Unknown Action Input",
+        "suggestion": "Use 'query'.",
+      },
+      "message": "'qury' is not an input of action 'lookup'.",
+      "range": {
+        "end": {
+          "character": 31,
+          "line": 24,
+        },
+        "start": {
+          "character": 16,
+          "line": 24,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "deterministic-action-missing-input",
+      "evidence": undefined,
+      "message": "Required input 'query' is missing from deterministic action 'lookup'.",
+      "range": {
+        "end": {
+          "character": 31,
+          "line": 24,
+        },
+        "start": {
+          "character": 12,
+          "line": 23,
+        },
+      },
+      "severity": "high",
+      "suggestion": undefined,
+    },
+    {
+      "code": "deterministic-action-unknown-input",
+      "evidence": undefined,
+      "message": "'qury' is not an input of action 'lookup'.",
+      "range": {
+        "end": {
+          "character": 31,
+          "line": 24,
+        },
+        "start": {
+          "character": 16,
+          "line": 24,
+        },
+      },
+      "severity": "high",
+      "suggestion": "Use 'query'.",
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'list element and index types' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "typed list literal and statically nonnumeric subscript",
+  "local_diagnostics": [
+    {
+      "code": "list-element-type-mismatch",
+      "data": {
+        "qualitySeverity": "moderate",
+        "ruleName": "Wrong Value Type in List",
+      },
+      "message": "List expects 'string' values but contains 'number'.",
+      "range": {
+        "end": {
+          "character": 28,
+          "line": 12,
+        },
+        "start": {
+          "character": 4,
+          "line": 11,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+    {
+      "code": "non-numeric-list-index",
+      "data": {
+        "qualitySeverity": "moderate",
+        "ruleName": "List Index Must Be a Number",
+      },
+      "message": "List index must be numeric, not 'string'.",
+      "range": {
+        "end": {
+          "character": 40,
+          "line": 18,
+        },
+        "start": {
+          "character": 15,
+          "line": 18,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "list-element-type-mismatch",
+      "evidence": undefined,
+      "message": "List expects 'string' values but contains 'number'.",
+      "range": {
+        "end": {
+          "character": 28,
+          "line": 12,
+        },
+        "start": {
+          "character": 4,
+          "line": 11,
+        },
+      },
+      "severity": "moderate",
+      "suggestion": undefined,
+    },
+    {
+      "code": "non-numeric-list-index",
+      "evidence": undefined,
+      "message": "List index must be numeric, not 'string'.",
+      "range": {
+        "end": {
+          "character": 40,
+          "line": 18,
+        },
+        "start": {
+          "character": 15,
+          "line": 18,
+        },
+      },
+      "severity": "moderate",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [
+    {
+      "code": "variable-default-type-mismatch",
+      "data": {
+        "actualType": "list",
+        "expectedType": "list[string]",
+      },
+      "message": "Type mismatch: variable 'names' is declared as 'list[string]' but default value is 'list'",
+      "range": {
+        "end": {
+          "character": 45,
+          "line": 11,
+        },
+        "start": {
+          "character": 34,
+          "line": 11,
+        },
+      },
+      "severity": 2,
+      "source": "agentscript-lint",
+    },
+  ],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'planner action input type mismatch' 1`] = `
+{
+  "execution_context": "planner-selected reasoning.actions binding",
+  "local_diagnostics": [],
+  "upstream": [
+    {
+      "code": "type-mismatch",
+      "data": {
+        "actualType": "boolean",
+        "expectedType": "string",
+      },
+      "message": "Type mismatch: input 'query' expects 'string' but got 'boolean'",
+      "range": {
+        "end": {
+          "character": 48,
+          "line": 27,
+        },
+        "start": {
+          "character": 16,
+          "line": 27,
+        },
+      },
+      "severity": 2,
+      "source": "agentscript-lint",
+    },
+  ],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'planner action missing input' 1`] = `
+{
+  "execution_context": "planner-selected reasoning.actions binding",
+  "local_diagnostics": [],
+  "upstream": [
+    {
+      "code": "action-missing-input",
+      "data": undefined,
+      "message": "Input 'query' on action 'lookup' has no \`with\` clause and will be filled by the LLM at runtime",
+      "range": {
+        "end": {
+          "character": 34,
+          "line": 22,
+        },
+        "start": {
+          "character": 19,
+          "line": 22,
+        },
+      },
+      "severity": 3,
+      "source": "agentscript-lint",
+    },
+  ],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'planner action unknown input' 1`] = `
+{
+  "execution_context": "planner-selected reasoning.actions binding",
+  "local_diagnostics": [],
+  "upstream": [
+    {
+      "code": "action-missing-input",
+      "data": undefined,
+      "message": "Input 'query' on action 'lookup' has no \`with\` clause and will be filled by the LLM at runtime",
+      "range": {
+        "end": {
+          "character": 34,
+          "line": 22,
+        },
+        "start": {
+          "character": 19,
+          "line": 22,
+        },
+      },
+      "severity": 3,
+      "source": "agentscript-lint",
+    },
+    {
+      "code": "action-unknown-input",
+      "data": {
+        "suggestion": "query",
+      },
+      "message": "'qury' is not a defined input of action 'lookup'",
+      "range": {
+        "end": {
+          "character": 25,
+          "line": 23,
+        },
+        "start": {
+          "character": 21,
+          "line": 23,
+        },
+      },
+      "severity": 1,
+      "source": "agentscript-lint",
+    },
+  ],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'prompt and action before transition' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "procedure statements before guaranteed transition",
+  "local_diagnostics": [
+    {
+      "code": "discarded-prompt-before-transition",
+      "data": {
+        "qualitySeverity": "moderate",
+        "ruleName": "Discarded Prompt",
+      },
+      "message": "Prompt content is discarded by a guaranteed transition later on the same path.",
+      "range": {
+        "end": {
+          "character": 39,
+          "line": 20,
+        },
+        "start": {
+          "character": 12,
+          "line": 20,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+    {
+      "code": "action-before-transition",
+      "data": {
+        "qualitySeverity": "low",
+        "ruleName": "Action Before Transition",
+      },
+      "message": "This action runs before a guaranteed transition; confirm its cost or side effect is intentional.",
+      "range": {
+        "end": {
+          "character": 30,
+          "line": 21,
+        },
+        "start": {
+          "character": 12,
+          "line": 21,
+        },
+      },
+      "severity": 3,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "discarded-prompt-before-transition",
+      "evidence": undefined,
+      "message": "Prompt content is discarded by a guaranteed transition later on the same path.",
+      "range": {
+        "end": {
+          "character": 39,
+          "line": 20,
+        },
+        "start": {
+          "character": 12,
+          "line": 20,
+        },
+      },
+      "severity": "moderate",
+      "suggestion": undefined,
+    },
+    {
+      "code": "action-before-transition",
+      "evidence": undefined,
+      "message": "This action runs before a guaranteed transition; confirm its cost or side effect is intentional.",
+      "range": {
+        "end": {
+          "character": 30,
+          "line": 21,
+        },
+        "start": {
+          "character": 12,
+          "line": 21,
+        },
+      },
+      "severity": "low",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'prompt template output flags' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "prompt-response action output declaration",
+  "local_diagnostics": [
+    {
+      "code": "prompt-template-output-flags",
+      "data": {
+        "qualitySeverity": "moderate",
+        "ruleName": "Prompt Template Output Flags",
+      },
+      "message": "Prompt response should set is_used_by_planner: True and is_displayable: False for planner-only intermediate output.",
+      "range": {
+        "end": {
+          "character": 38,
+          "line": 16,
+        },
+        "start": {
+          "character": 16,
+          "line": 16,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "prompt-template-output-flags",
+      "evidence": undefined,
+      "message": "Prompt response should set is_used_by_planner: True and is_displayable: False for planner-only intermediate output.",
+      "range": {
+        "end": {
+          "character": 38,
+          "line": 16,
+        },
+        "start": {
+          "character": 16,
+          "line": 16,
+        },
+      },
+      "severity": "moderate",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'slot-filled variable description' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "planner-selected setVariables binding",
+  "local_diagnostics": [
+    {
+      "code": "slot-filled-variable-missing-description",
+      "data": {
+        "qualitySeverity": "moderate",
+        "ruleName": "Slot-Filled Variable Needs a Description",
+      },
+      "message": "Slot-filled variable 'reference' needs a description that tells the LLM what to capture.",
+      "range": {
+        "end": {
+          "character": 29,
+          "line": 11,
+        },
+        "start": {
+          "character": 4,
+          "line": 11,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "slot-filled-variable-missing-description",
+      "evidence": undefined,
+      "message": "Slot-filled variable 'reference' needs a description that tells the LLM what to capture.",
+      "range": {
+        "end": {
+          "character": 29,
+          "line": 11,
+        },
+        "start": {
+          "character": 4,
+          "line": 11,
+        },
+      },
+      "severity": "moderate",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [
+    {
+      "code": "unused-variable",
+      "data": {
+        "removalRange": {
+          "end": {
+            "character": 29,
+            "line": 11,
+          },
+          "start": {
+            "character": 4,
+            "line": 11,
+          },
+        },
+      },
+      "message": "Variable 'reference' is declared but never used",
+      "range": {
+        "end": {
+          "character": 29,
+          "line": 11,
+        },
+        "start": {
+          "character": 4,
+          "line": 11,
+        },
+      },
+      "severity": 3,
+      "source": "agentscript-lint",
+    },
+  ],
+  "upstream_quick_fixes": [
+    {
+      "diagnostic_code": "unused-variable",
+      "diagnostic_line": 11,
+      "edits": [
+        {
+          "newText": "",
+          "range": {
+            "end": {
+              "character": 0,
+              "line": 12,
+            },
+            "start": {
+              "character": 0,
+              "line": 11,
+            },
+          },
+        },
+      ],
+      "preferred": true,
+      "title": "Remove unused variable",
+    },
+  ],
+}
+`;
+
+exports[`quality upstream strict parity > 'unconditional transition cycle' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "component graph with unconditional deterministic transitions",
+  "local_diagnostics": [
+    {
+      "code": "unconditional-transition-cycle",
+      "data": {
+        "evidence": [
+          "subagent.b",
+          "subagent.a",
+          "subagent.b",
+        ],
+        "qualitySeverity": "high",
+        "ruleName": "Endless Transition Loop",
+      },
+      "message": "Endless Transition Loop: subagent.b → subagent.a → subagent.b.",
+      "range": {
+        "end": {
+          "character": 33,
+          "line": 21,
+        },
+        "start": {
+          "character": 0,
+          "line": 18,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "unconditional-transition-cycle",
+      "evidence": [
+        "subagent.b",
+        "subagent.a",
+        "subagent.b",
+      ],
+      "message": "Endless Transition Loop: subagent.b → subagent.a → subagent.b.",
+      "range": {
+        "end": {
+          "character": 33,
+          "line": 21,
+        },
+        "start": {
+          "character": 0,
+          "line": 18,
+        },
+      },
+      "severity": "high",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'unused action' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "scoped action declaration without invocation",
+  "local_diagnostics": [
+    {
+      "code": "unused-action",
+      "data": {
+        "qualitySeverity": "moderate",
+        "ruleName": "Unused Action",
+      },
+      "message": "Action 'unused' is defined but never invoked in 'main'.",
+      "range": {
+        "end": {
+          "character": 35,
+          "line": 17,
+        },
+        "start": {
+          "character": 8,
+          "line": 13,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "unused-action",
+      "evidence": undefined,
+      "message": "Action 'unused' is defined but never invoked in 'main'.",
+      "range": {
+        "end": {
+          "character": 35,
+          "line": 17,
+        },
+        "start": {
+          "character": 8,
+          "line": 13,
+        },
+      },
+      "severity": "moderate",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;

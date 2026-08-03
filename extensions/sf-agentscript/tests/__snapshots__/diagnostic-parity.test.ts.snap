@@ -1,0 +1,367 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`local hardening diagnostic parity > '@inputs reference outside action with…' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "@inputs reference in deterministic post-action set",
+  "local": [
+    {
+      "code": "inputs-out-of-scope",
+      "data": undefined,
+      "message": "@inputs is only available in action with-bindings.",
+      "range": {
+        "end": {
+          "character": 61,
+          "line": 22,
+        },
+        "start": {
+          "character": 41,
+          "line": 22,
+        },
+      },
+      "severity": 1,
+      "source": "sf-agentscript-local",
+    },
+  ],
+  "upstream": [
+    {
+      "code": "action-missing-input",
+      "data": undefined,
+      "message": "Input 'station_name' on action 'get_status' has no \`with\` clause and will be filled by the LLM at runtime",
+      "range": {
+        "end": {
+          "character": 37,
+          "line": 21,
+        },
+        "start": {
+          "character": 18,
+          "line": 21,
+        },
+      },
+      "severity": 3,
+      "source": "agentscript-lint",
+    },
+    {
+      "code": undefined,
+      "data": undefined,
+      "message": "Connection input 'station_name' not in a connection context, defaulting to empty namespace",
+      "range": {
+        "end": {
+          "character": 61,
+          "line": 22,
+        },
+        "start": {
+          "character": 41,
+          "line": 22,
+        },
+      },
+      "severity": 2,
+      "source": "compiler",
+    },
+  ],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`local hardening diagnostic parity > '@outputs reference outside post-actio…' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "@outputs reference in deterministic action with-binding",
+  "local": [
+    {
+      "code": "outputs-out-of-scope",
+      "data": undefined,
+      "message": "@outputs is only available in a set/if callback immediately after an action invocation.",
+      "range": {
+        "end": {
+          "character": 54,
+          "line": 24,
+        },
+        "start": {
+          "character": 39,
+          "line": 24,
+        },
+      },
+      "severity": 1,
+      "source": "sf-agentscript-local",
+    },
+  ],
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`local hardening diagnostic parity > 'Apex target with method suffix' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "Apex action target declaration",
+  "local": [
+    {
+      "code": "apex-target-method-suffix",
+      "data": {
+        "action": "update_order",
+        "target": "apex://OrderController.updateOrder",
+      },
+      "message": "apex:// targets must reference the invocable class API name, not Class.method.",
+      "range": {
+        "end": {
+          "character": 56,
+          "line": 16,
+        },
+        "start": {
+          "character": 20,
+          "line": 16,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-local",
+    },
+  ],
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`local hardening diagnostic parity > 'Employee Agent with Service-Agent-onl…' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "Employee Agent with messaging connection and escalation utility",
+  "local": [
+    {
+      "code": "employee-agent-connection-messaging",
+      "data": undefined,
+      "message": "Employee Agents must not include a connection messaging block.",
+      "range": {
+        "end": {
+          "character": 35,
+          "line": 11,
+        },
+        "start": {
+          "character": 0,
+          "line": 10,
+        },
+      },
+      "severity": 1,
+      "source": "sf-agentscript-local",
+    },
+    {
+      "code": "employee-agent-escalate",
+      "data": undefined,
+      "message": "@utils.escalate is Service-Agent-only. Employee Agents should use a help subagent or target-backed action.",
+      "range": {
+        "end": {
+          "character": 37,
+          "line": 17,
+        },
+        "start": {
+          "character": 22,
+          "line": 17,
+        },
+      },
+      "severity": 1,
+      "source": "sf-agentscript-local",
+    },
+  ],
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`local hardening diagnostic parity > 'bare numeric action inputs and outputs' 1`] = `
+{
+  "decision": "historical-no-local-projection",
+  "execution_context": "planner-selected numeric action binding",
+  "local": [],
+  "upstream": [
+    {
+      "code": "action-missing-input",
+      "data": undefined,
+      "message": "Input 'amount' on action 'calc' has no \`with\` clause and will be filled by the LLM at runtime",
+      "range": {
+        "end": {
+          "character": 31,
+          "line": 21,
+        },
+        "start": {
+          "character": 18,
+          "line": 21,
+        },
+      },
+      "severity": 3,
+      "source": "agentscript-lint",
+    },
+  ],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`local hardening diagnostic parity > 'object action I/O without contract hi…' 1`] = `
+{
+  "decision": "completed-upstream-handoff",
+  "execution_context": "planner-selected object action binding",
+  "local": [],
+  "upstream": [
+    {
+      "code": "object-type-missing-schema",
+      "data": undefined,
+      "message": "Action input 'filter' in 'find_order' has type 'object' but lacks 'complex_data_type_name' or 'schema'. Consider specifying the object schema for better type validation.",
+      "range": {
+        "end": {
+          "character": 30,
+          "line": 15,
+        },
+        "start": {
+          "character": 16,
+          "line": 15,
+        },
+      },
+      "severity": 2,
+      "source": "agentscript-lint",
+    },
+    {
+      "code": "object-type-missing-schema",
+      "data": undefined,
+      "message": "Action output 'order_data' in 'find_order' has type 'object' but lacks 'complex_data_type_name'. Consider specifying the object schema for better type validation.",
+      "range": {
+        "end": {
+          "character": 34,
+          "line": 17,
+        },
+        "start": {
+          "character": 16,
+          "line": 17,
+        },
+      },
+      "severity": 2,
+      "source": "agentscript-lint",
+    },
+    {
+      "code": "action-missing-input",
+      "data": undefined,
+      "message": "Input 'filter' on action 'find_order' has no \`with\` clause and will be filled by the LLM at runtime",
+      "range": {
+        "end": {
+          "character": 37,
+          "line": 21,
+        },
+        "start": {
+          "character": 18,
+          "line": 21,
+        },
+      },
+      "severity": 3,
+      "source": "agentscript-lint",
+    },
+  ],
+  "upstream_quick_fixes": [],
+}
+`;
+
+exports[`local hardening diagnostic parity > 'procedural statements inside literal …' 1`] = `
+{
+  "decision": "completed-upstream-handoff",
+  "execution_context": "procedural-looking content in literal instructions",
+  "local": [],
+  "upstream": [
+    {
+      "code": "unused-variable",
+      "data": {
+        "removalRange": {
+          "end": {
+            "character": 29,
+            "line": 10,
+          },
+          "start": {
+            "character": 4,
+            "line": 10,
+          },
+        },
+      },
+      "message": "Variable 'verified' is declared but never used",
+      "range": {
+        "end": {
+          "character": 29,
+          "line": 10,
+        },
+        "start": {
+          "character": 4,
+          "line": 10,
+        },
+      },
+      "severity": 3,
+      "source": "agentscript-lint",
+    },
+    {
+      "code": "instruction-template-syntax",
+      "data": undefined,
+      "message": "'verified' looks like a variable name — did you mean {!@variables.verified}? Variable references require template syntax to be interpolated.",
+      "range": {
+        "end": {
+          "character": 45,
+          "line": 15,
+        },
+        "start": {
+          "character": 37,
+          "line": 15,
+        },
+      },
+      "severity": 3,
+      "source": "agentscript-lint",
+    },
+  ],
+  "upstream_quick_fixes": [
+    {
+      "diagnostic_code": "unused-variable",
+      "diagnostic_line": 10,
+      "edits": [
+        {
+          "newText": "",
+          "range": {
+            "end": {
+              "character": 0,
+              "line": 11,
+            },
+            "start": {
+              "character": 0,
+              "line": 10,
+            },
+          },
+        },
+      ],
+      "preferred": true,
+      "title": "Remove unused variable",
+    },
+  ],
+}
+`;
+
+exports[`local hardening diagnostic parity > 'target reference that looks like a Sa…' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "Flow action target declaration",
+  "local": [
+    {
+      "code": "target-ref-looks-like-id",
+      "data": {
+        "action": "weather",
+        "target": "flow://300WX000001ABCD",
+      },
+      "message": "Action target 'flow://300WX000001ABCD' looks like a Salesforce record id. Use a stable API name.",
+      "range": {
+        "end": {
+          "character": 44,
+          "line": 16,
+        },
+        "start": {
+          "character": 20,
+          "line": 16,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-local",
+    },
+  ],
+  "upstream": [],
+  "upstream_quick_fixes": [],
+}
+`;

@@ -236,52 +236,63 @@ async function runEvalBatches(options: RunEvalBatchesOptions): Promise<RunEvalBa
   const results: Array<EvalApiResponse["results"]> = new Array(batches.length).fill(null);
   const batchFailures: EvalBatchFailure[] = [];
   const sema = makeSemaphore(options.concurrency);
+  let stopped = false;
+  let firstError: unknown;
   const execute = async (): Promise<void> => {
-    const settled = await Promise.allSettled(
+    await Promise.all(
       batches.map((batch, index) =>
         sema(async () => {
-          log(`  batch ${index + 1}/${batches.length}: started (${batch.length} test(s))`);
-          throwIfAborted(options.signal);
-          const response = await callEval(options.conn, batch, options.headers, {
-            timeoutMs: options.batchTimeoutMs,
-            signal: options.signal,
-          });
-          if (response.status === 499) {
+          if (stopped) throw firstError;
+          try {
+            log(`  batch ${index + 1}/${batches.length}: started (${batch.length} test(s))`);
             throwIfAborted(options.signal);
-            throw new EvalRunCancelledError();
-          }
-          if (timings) {
-            timings.add("sfap_endpoint_cache", 0, {
-              cache: response.endpoint_cache,
-              endpoint: response.endpoint,
+            const response = await callEval(options.conn, batch, options.headers, {
+              timeoutMs: options.batchTimeoutMs,
+              signal: options.signal,
             });
-          }
-          if (response.status >= 200 && response.status < 300) {
-            results[index] = response.body.results ?? [];
-            if (batches.length > 1) {
-              log(
-                `  batch ${index + 1}/${batches.length}: ${(results[index] ?? []).length} tests complete`,
-              );
+            // Another concurrent batch may already have failed while this
+            // request was in flight. Do not emit timings, logs, results, or
+            // progress after the Run has started terminalization.
+            if (stopped) throw firstError;
+            if (response.status === 499) {
+              throwIfAborted(options.signal);
+              throw new EvalRunCancelledError();
             }
-          } else {
-            batchFailures.push({
-              batch_index: index,
-              status: response.status,
-              test_ids: batch.map((test) => test.id),
-              body: response.body,
-            });
-            const snippet = JSON.stringify(response.body).slice(0, 1500);
-            log(`  batch ${index + 1}/${batches.length}: HTTP ${response.status}  ${snippet}`);
-            results[index] = [];
+            if (timings) {
+              timings.add("sfap_endpoint_cache", 0, {
+                cache: response.endpoint_cache,
+                endpoint: response.endpoint,
+              });
+            }
+            if (response.status >= 200 && response.status < 300) {
+              results[index] = response.body.results ?? [];
+              if (batches.length > 1) {
+                log(
+                  `  batch ${index + 1}/${batches.length}: ${(results[index] ?? []).length} tests complete`,
+                );
+              }
+            } else {
+              batchFailures.push({
+                batch_index: index,
+                status: response.status,
+                test_ids: batch.map((test) => test.id),
+                body: response.body,
+              });
+              const snippet = JSON.stringify(response.body).slice(0, 1500);
+              log(`  batch ${index + 1}/${batches.length}: HTTP ${response.status}  ${snippet}`);
+              results[index] = [];
+            }
+            await options.recordProgress((results[index] ?? []).length);
+          } catch (error) {
+            if (!stopped) {
+              stopped = true;
+              firstError = error;
+            }
+            throw error;
           }
-          await options.recordProgress((results[index] ?? []).length);
         }),
       ),
     );
-    const rejected = settled.find(
-      (outcome): outcome is PromiseRejectedResult => outcome.status === "rejected",
-    );
-    if (rejected) throw rejected.reason;
   };
 
   if (timings) await timings.time("eval_batches", execute);
@@ -337,6 +348,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
   let statusPhase = "preflight";
   let runBegun = false;
   let terminalStatusWritten = false;
+  let statusQueue = Promise.resolve();
   const writeStatus = async (
     status: EvalRunStatus,
     phase: string,
@@ -621,7 +633,6 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
 
     let completedBatches = 0;
     let returnedTests = 0;
-    let statusQueue = Promise.resolve();
     const recordBatchProgress = (returned: number): Promise<void> => {
       completedBatches++;
       returnedTests += returned;
@@ -892,15 +903,32 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
         err instanceof EvalRunInterruptedError || opts.signal?.reason === "interrupted";
       const cancelled =
         !interrupted && (err instanceof EvalRunCancelledError || opts.signal?.aborted);
-      await writeStatus(
-        interrupted ? "interrupted" : cancelled ? "cancelled" : "infrastructure_failed",
-        statusPhase,
-        {
-          testsCount: opts.spec.tests?.length ?? 0,
-          error: err,
-          completed: new Date(),
-        },
-      );
+      try {
+        await statusQueue;
+      } catch (statusError) {
+        log(
+          `Failed to drain eval progress status writes: ${
+            statusError instanceof Error ? statusError.message : String(statusError)
+          }`,
+        );
+      }
+      try {
+        await writeStatus(
+          interrupted ? "interrupted" : cancelled ? "cancelled" : "infrastructure_failed",
+          statusPhase,
+          {
+            testsCount: opts.spec.tests?.length ?? 0,
+            error: err,
+            completed: new Date(),
+          },
+        );
+      } catch (statusError) {
+        log(
+          `Failed to persist terminal eval status: ${
+            statusError instanceof Error ? statusError.message : String(statusError)
+          }`,
+        );
+      }
     }
     throw err;
   }

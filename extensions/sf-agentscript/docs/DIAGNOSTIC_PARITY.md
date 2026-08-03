@@ -1,44 +1,97 @@
 # Agent Script diagnostic parity
 
-This file records the current boundary between upstream AgentScript diagnostics
-and SF Pi's local **Agent Script Hardening Adapter** diagnostics. Keep it in
-sync with `extensions/sf-agentscript/tests/diagnostic-parity.test.ts`.
+This file records the released-package boundary between official Agent Script
+diagnostics and SF Pi's local **Agent Script Hardening Adapter** and native
+quality catalog. Keep it synchronized with:
+
+- `tests/diagnostic-parity.test.ts` for hardening diagnostics;
+- `tests/quality-upstream-parity.test.ts` for all 18 quality rules.
+
+## Evidence baseline
+
+Fixture evidence was refreshed on 2026-08-03 against these exact installed
+packages:
+
+| Package                               |  Version |
+| ------------------------------------- | -------: |
+| `@sf-agentscript/agentforce`          | `2.9.27` |
+| `@sf-agentscript/language`            | `2.20.0` |
+| `@sf-agentscript/lsp`                 | `2.5.24` |
+| `@sf-agentscript/agentscript-dialect` | `2.23.0` |
+| `@sf-agentscript/agentforce-dialect`  | `2.37.0` |
+| `@sf-agentscript/compiler`            | `2.41.1` |
+
+The snapshot tests compare execution context, diagnostic code, source, severity,
+complete range, message, data, multiplicity, suggestions, and quick fixes.
+Similar names or shared helper functions are not parity.
 
 ## Parity tiers
 
-- **Strict parity**: upstream points to the same source construct, gives the
-  same actionable meaning or risk, and supplies equivalent quick-fix data when
-  SF Pi currently offers a fix. Strict parity is required before deleting an SF
-  Pi local diagnostic.
-- **Moderate parity**: upstream catches the fixture with a related diagnostic,
-  but the message, action, risk, or quick-fix data is not equivalent. Moderate
-  parity is evidence for a future review, not deletion by itself.
-- **SF Pi-owned**: upstream emits no equivalent diagnostic for the fixture. The
-  diagnostic remains local hardening.
+- **Strict parity**: the official diagnostic covers the same construct in the
+  same execution context, with equivalent code mapping, range, severity/risk,
+  message/actionability, data, and quick-fix behavior.
+- **Adjacent only**: the fixture produces an official diagnostic, but for a
+  different construct, execution context, risk, or repair. It cannot authorize
+  deletion.
+- **SF Pi-owned**: the fixture produces no equivalent official diagnostic.
 
-## Current parity map
+Only strict parity permits deleting a local evaluator. A released package
+upgrade requires rerunning the fixtures before changing a decision.
 
-| SF Pi diagnostic                         | Upstream diagnostic(s) on parity fixture             | Tier             | Current decision                                                                                 |
-| ---------------------------------------- | ---------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------ |
-| `unused-variable`                        | `unused-variable` + `removalRange`                   | Strict           | Upstream-owned. Local scanner removed.                                                           |
-| `action-missing-outputs`                 | none                                                 | SF Pi-owned      | Keep local. Publish/server contract hardening.                                                   |
-| `apex-target-method-suffix`              | none                                                 | SF Pi-owned      | Keep local. Salesforce target hygiene.                                                           |
-| `target-ref-looks-like-id`               | none                                                 | SF Pi-owned      | Keep local. Stable metadata-name guidance.                                                       |
-| `complex-action-io`                      | `object-type-missing-schema`, `action-missing-input` | Strict by policy | Upstream-owned. Local diagnostic removed; publish-binding nuance remains documented here.        |
-| `numeric-action-io`                      | `action-missing-input`                               | SF Pi-owned      | Keep local. Numeric Flow/Apex publish-binding guidance is Salesforce-specific.                   |
-| `connection-messaging-incomplete-route`  | none                                                 | SF Pi-owned      | Keep local. Channel routing config hardening.                                                    |
-| `connection-messaging-route-name-prefix` | none                                                 | SF Pi-owned      | Keep local. Channel routing target format hardening.                                             |
-| `inputs-out-of-scope`                    | `action-missing-input`                               | SF Pi-owned      | Keep local. Upstream misses the `@inputs` scope mistake.                                         |
-| `outputs-out-of-scope`                   | none                                                 | SF Pi-owned      | Keep local. Upstream does not catch clean `@outputs` scope misuse.                               |
-| `literal-mode-procedural-text`           | `unused-variable` on fixture setup                   | SF Pi-owned      | Keep local. Upstream does not detect executable-looking text in literal mode.                    |
-| `run-in-after-reasoning`                 | none                                                 | SF Pi-owned      | Keep local. Runtime behavior hardening.                                                          |
-| `prompt-template-output-flags`           | none                                                 | SF Pi-owned      | Keep local. Planner/display behavior hardening.                                                  |
-| `employee-agent-default-user`            | `config-ignored-default-agent-user`                  | Strict by policy | Upstream-owned. Local diagnostic removed; SF Pi keeps a removal quick fix for the upstream code. |
-| `employee-agent-connection-messaging`    | none                                                 | SF Pi-owned      | Keep local. Employee-vs-Service Agent surface hardening.                                         |
-| `employee-agent-escalate`                | none                                                 | SF Pi-owned      | Keep local. Employee-vs-Service Agent utility hardening.                                         |
+## Current hardening diagnostics
+
+| SF Pi diagnostic                      | Official fixture evidence                                                                          | Tier          | Decision                                             |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------- |
+| `apex-target-method-suffix`           | none                                                                                               | SF Pi-owned   | Retain Salesforce target hygiene.                    |
+| `target-ref-looks-like-id`            | none                                                                                               | SF Pi-owned   | Retain stable API-name guidance.                     |
+| `employee-agent-connection-messaging` | none                                                                                               | SF Pi-owned   | Retain Employee-versus-Service Agent surface policy. |
+| `employee-agent-escalate`             | none                                                                                               | SF Pi-owned   | Retain Employee-versus-Service Agent utility policy. |
+| `inputs-out-of-scope`                 | `action-missing-input` plus an uncoded cascade on the fixture; neither identifies the scope misuse | Adjacent only | Retain exact `@inputs` scope diagnostic.             |
+| `outputs-out-of-scope`                | none                                                                                               | SF Pi-owned   | Retain exact `@outputs` callback-scope diagnostic.   |
+
+## Current quality catalog
+
+| SF Pi quality rule                          | Official fixture evidence                                                                        | Tier          | Decision                                                                                                               |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `unconditional-transition-cycle`            | none                                                                                             | SF Pi-owned   | Retain local graph analysis.                                                                                           |
+| `slot-filling-in-deterministic-action`      | none for deterministic `run`                                                                     | SF Pi-owned   | Retain local High policy. Planner-action LLM filling is a different context.                                           |
+| `deterministic-action-missing-input`        | none for deterministic `run`                                                                     | SF Pi-owned   | Retain local High policy. Official planner-action omission is informational and allows LLM filling.                    |
+| `deterministic-action-unknown-input`        | none for deterministic `run`                                                                     | SF Pi-owned   | Retain. Official `action-unknown-input` applies to planner-selected action bindings, not this execution context.       |
+| `action-chain-too-deep`                     | none                                                                                             | SF Pi-owned   | Retain local chain-depth contract.                                                                                     |
+| `unreachable-subagent`                      | none                                                                                             | SF Pi-owned   | Retain component-graph reachability. Official `unreachable-code` is statement-level and not parity.                    |
+| `unused-action`                             | none                                                                                             | SF Pi-owned   | Retain scoped action-use analysis. Official `unused-variable` is a different declaration kind.                         |
+| `discarded-prompt-before-transition`        | none                                                                                             | SF Pi-owned   | Retain prompt-before-transition analysis. Official `unreachable-code` examines statements after a terminal transition. |
+| `list-element-type-mismatch`                | `variable-default-type-mismatch` on the representative list fixture, over the whole list default | Adjacent only | Retain element-level type and range evidence.                                                                          |
+| `non-numeric-list-index`                    | none                                                                                             | SF Pi-owned   | Retain statically known list-index analysis.                                                                           |
+| `slot-filled-variable-missing-description`  | `unused-variable` on the declaration, with a removal fix                                         | Adjacent only | Retain slot-filling description guidance; removing the variable is not an equivalent repair.                           |
+| `deterministic-action-input-type-mismatch`  | none for deterministic `run`                                                                     | SF Pi-owned   | Retain. Official type checks use similar inference only for planner action bindings.                                   |
+| `deterministic-action-output-type-mismatch` | none for deterministic `run`                                                                     | SF Pi-owned   | Retain. Official type checks do not cover this deterministic callback fixture.                                         |
+| `prompt-template-output-flags`              | none                                                                                             | SF Pi-owned   | Retain planner/display guidance.                                                                                       |
+| `action-before-transition`                  | none                                                                                             | SF Pi-owned   | Retain cost/side-effect advisory before a transition.                                                                  |
+| `conditional-transition-cycle`              | none                                                                                             | SF Pi-owned   | Retain conditional graph evidence.                                                                                     |
+| `subagent-delegation-cycle`                 | none                                                                                             | SF Pi-owned   | Retain returning-delegation graph evidence.                                                                            |
+| `cyclomatic-complexity`                     | none                                                                                             | SF Pi-owned   | Retain report-only per-procedure metric.                                                                               |
+
+**Milestone 4 result:** zero current evaluators meet strict parity at this
+package baseline, so zero current evaluators are deleted. This is the required
+fail-closed outcome, not an incomplete migration.
+
+Disabling a local quality rule still disables only its policy projection. The
+quality parity suite proves that an adjacent official compiler diagnostic, when
+present, remains visible.
+
+## Completed historical handoffs
+
+Earlier work already removed local projections where released official behavior
+became authoritative, including official unused-variable handling, object action
+I/O diagnostics, instruction-template syntax, and ignored Employee Agent default
+user configuration. Those completed handoffs are not evidence for deleting any
+current rule; their fixtures remain in `diagnostic-parity.test.ts` as regression
+coverage.
 
 ## Deletion rule
 
-Do not delete a local hardening diagnostic just because the parity fixture has
-an upstream error or warning. Delete only after the parity test proves strict
-parity and the replacement keeps or improves the user action.
+Do not delete a local diagnostic or quality evaluator because an official pass
+has a similar name or imports the same type-inference helper. Delete only after
+a current released-package fixture proves strict parity and public quality,
+review, edit-time, and publication behavior remains intact.

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EvalTest } from "../lib/eval/types.ts";
+import { createTimingCollector } from "../lib/timings.ts";
 
 const mockState = vi.hoisted(() => ({
   mode: "success" as
@@ -18,6 +19,8 @@ const mockState = vi.hoisted(() => ({
     | "terminal_persistence_failure",
   controller: undefined as AbortController | undefined,
   runDir: undefined as string | undefined,
+  delayedBatchGate: undefined as Promise<void> | undefined,
+  delayedBatchCompleted: undefined as (() => void) | undefined,
   lastCallOptions: undefined as { timeoutMs?: number; signal?: AbortSignal } | undefined,
 }));
 
@@ -46,7 +49,8 @@ vi.mock("../lib/eval/eval-client.ts", async (importOriginal) => {
           throw error;
         }
         if (mockState.mode === "concurrent_timeout") {
-          await new Promise((resolve) => setTimeout(resolve, 20));
+          await mockState.delayedBatchGate;
+          mockState.delayedBatchCompleted?.();
         }
         if (mockState.mode === "cancelled" || mockState.mode === "interrupted") {
           mockState.controller?.abort(
@@ -155,6 +159,8 @@ beforeEach(async () => {
   mockState.mode = "success";
   mockState.controller = undefined;
   mockState.runDir = undefined;
+  mockState.delayedBatchGate = undefined;
+  mockState.delayedBatchCompleted = undefined;
   mockState.lastCallOptions = undefined;
 });
 
@@ -241,37 +247,69 @@ describe("eval Run failure boundaries", () => {
     await expect(access(path.join(base, "timeout", "evidence.json"))).rejects.toThrow();
   });
 
-  it("drains delayed batches before persisting terminal timeout status", async () => {
+  it("returns on the first timeout without allowing a delayed batch to overwrite terminal status", async () => {
     mockState.mode = "concurrent_timeout";
+    let releaseDelayedBatch!: () => void;
+    mockState.delayedBatchGate = new Promise<void>((resolve) => {
+      releaseDelayedBatch = resolve;
+    });
+    let markDelayedBatchComplete!: () => void;
+    const delayedBatchComplete = new Promise<void>((resolve) => {
+      markDelayedBatchComplete = resolve;
+    });
+    mockState.delayedBatchCompleted = markDelayedBatchComplete;
     const tests = Array.from({ length: 6 }, (_, index) => ({
       ...spec().tests[0],
       id: `scenario-${index + 1}`,
     }));
-    await expect(
-      runEval({
-        conn: conn as never,
-        targetOrg: "test-org",
-        cwd: base,
-        runBase: base,
-        runId: "concurrent-timeout",
-        concurrency: 2,
-        batchTimeoutMs: 1000,
-        tracesMode: "off",
-        spec: { tests },
-      }),
-    ).rejects.toMatchObject({ name: "TimeoutError" });
+    const logs: string[] = [];
+    const timings = createTimingCollector();
+    const outcome = runEval({
+      conn: conn as never,
+      targetOrg: "test-org",
+      cwd: base,
+      runBase: base,
+      runId: "concurrent-timeout",
+      concurrency: 2,
+      batchTimeoutMs: 1000,
+      tracesMode: "off",
+      log: (message) => logs.push(message),
+      timings,
+      spec: { tests },
+    }).then(
+      () => new Error("Expected runEval to reject."),
+      (error: unknown) => error,
+    );
 
-    const statusPath = path.join(base, "concurrent-timeout", "status.json");
-    expect(await readJson(statusPath)).toMatchObject({
-      status: "infrastructure_failed",
-      phase: "running_batches",
-      error: { name: "TimeoutError" },
-    });
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(await readJson(statusPath)).toMatchObject({
-      status: "infrastructure_failed",
-      phase: "running_batches",
-    });
+    let error: unknown;
+    try {
+      error = await Promise.race([
+        outcome,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("runEval waited for a delayed batch.")), 1000),
+        ),
+      ]);
+      expect(error).toMatchObject({ name: "TimeoutError" });
+
+      const statusPath = path.join(base, "concurrent-timeout", "status.json");
+      expect(await readJson(statusPath)).toMatchObject({
+        status: "infrastructure_failed",
+        phase: "running_batches",
+        error: { name: "TimeoutError" },
+      });
+      const phasesBeforeRelease = timings.snapshot().phases;
+      releaseDelayedBatch();
+      await delayedBatchComplete;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(timings.snapshot().phases).toEqual(phasesBeforeRelease);
+      expect(logs.some((message) => message.includes("tests complete"))).toBe(false);
+      expect(await readJson(statusPath)).toMatchObject({
+        status: "infrastructure_failed",
+        phase: "running_batches",
+      });
+    } finally {
+      releaseDelayedBatch();
+    }
   });
 
   it.each([

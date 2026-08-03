@@ -9,6 +9,7 @@
 
 import { describe, expect, test } from "vitest";
 import { analyzeAgentScriptSource } from "../lib/agentforce-document.ts";
+import { buildQuickFixes } from "../lib/code-actions.ts";
 import { checkAgentScriptSource } from "../lib/diagnostics.ts";
 
 interface ParityCase {
@@ -16,7 +17,8 @@ interface ParityCase {
   source: string;
   localCodes: string[];
   upstreamCodes: string[];
-  classification: "upstream-owned" | "sf-pi-owned" | "possible-future-deletion";
+  decision: "retain-local" | "completed-upstream-handoff" | "historical-no-local-projection";
+  executionContext: string;
 }
 
 const baseHead = [
@@ -57,7 +59,8 @@ const cases: ParityCase[] = [
     name: "Apex target with method suffix",
     localCodes: ["apex-target-method-suffix"],
     upstreamCodes: [],
-    classification: "sf-pi-owned",
+    decision: "retain-local",
+    executionContext: "Apex action target declaration",
     source: withStart(
       action(
         "update_order",
@@ -70,7 +73,8 @@ const cases: ParityCase[] = [
     name: "target reference that looks like a Salesforce id",
     localCodes: ["target-ref-looks-like-id"],
     upstreamCodes: [],
-    classification: "sf-pi-owned",
+    decision: "retain-local",
+    executionContext: "Flow action target declaration",
     source: withStart(
       action(
         "weather",
@@ -87,7 +91,8 @@ const cases: ParityCase[] = [
       "object-type-missing-schema",
       "action-missing-input",
     ],
-    classification: "upstream-owned",
+    decision: "completed-upstream-handoff",
+    executionContext: "planner-selected object action binding",
     source: withStart(
       action("find_order", [
         "            inputs:",
@@ -101,7 +106,8 @@ const cases: ParityCase[] = [
     name: "bare numeric action inputs and outputs",
     localCodes: [],
     upstreamCodes: ["action-missing-input"],
-    classification: "upstream-owned",
+    decision: "historical-no-local-projection",
+    executionContext: "planner-selected numeric action binding",
     source: withStart(
       action(
         "calc",
@@ -119,7 +125,8 @@ const cases: ParityCase[] = [
     name: "@inputs reference outside action with-bindings",
     localCodes: ["inputs-out-of-scope"],
     upstreamCodes: ["action-missing-input", "(no-code)"],
-    classification: "sf-pi-owned",
+    decision: "retain-local",
+    executionContext: "@inputs reference in deterministic post-action set",
     source: withStart([
       ...action("get_status", [
         "            inputs:",
@@ -134,7 +141,8 @@ const cases: ParityCase[] = [
     name: "@outputs reference outside post-action set/if statements",
     localCodes: ["outputs-out-of-scope"],
     upstreamCodes: [],
-    classification: "sf-pi-owned",
+    decision: "retain-local",
+    executionContext: "@outputs reference in deterministic action with-binding",
     source: withStart([
       ...action("get_status", [
         "            inputs:",
@@ -152,7 +160,8 @@ const cases: ParityCase[] = [
     name: "procedural statements inside literal instructions",
     localCodes: [],
     upstreamCodes: ["unused-variable", "instruction-template-syntax"],
-    classification: "upstream-owned",
+    decision: "completed-upstream-handoff",
+    executionContext: "procedural-looking content in literal instructions",
     source: agent([
       ...baseHead,
       "variables:",
@@ -176,7 +185,8 @@ const cases: ParityCase[] = [
     name: "Employee Agent with Service-Agent-only wiring",
     localCodes: ["employee-agent-connection-messaging", "employee-agent-escalate"],
     upstreamCodes: [],
-    classification: "sf-pi-owned",
+    decision: "retain-local",
+    executionContext: "Employee Agent with messaging connection and escalation utility",
     source: agent([
       "system:",
       '    instructions: "You are helpful."',
@@ -201,29 +211,68 @@ const cases: ParityCase[] = [
 ];
 
 describe("local hardening diagnostic parity", () => {
-  test.each(cases)("$name", async ({ source, localCodes, upstreamCodes }) => {
-    const upstream = await analyzeAgentScriptSource(source);
-    expect(upstream.ok).toBe(true);
-    if (!upstream.ok) return;
+  test.each(cases)(
+    "$name",
+    async ({ source, localCodes, upstreamCodes, decision, executionContext }) => {
+      const upstream = await analyzeAgentScriptSource(source);
+      expect(upstream.ok).toBe(true);
+      if (!upstream.ok) return;
 
-    const sfPi = await checkAgentScriptSource(source);
-    const allLocalCodes = sfPi.diagnostics.map((diagnostic) => diagnostic.code);
+      const sfPi = await checkAgentScriptSource(source);
+      const allLocalCodes = sfPi.diagnostics.map((diagnostic) => diagnostic.code);
 
-    for (const code of localCodes) {
-      expect(allLocalCodes, `expected SF Pi diagnostic ${code}`).toContain(code);
-    }
+      for (const code of localCodes) {
+        expect(allLocalCodes, `expected SF Pi diagnostic ${code}`).toContain(code);
+      }
 
-    const actualUpstreamCodes = upstream.analysis.compileDiagnostics.map(
-      (diagnostic) => diagnostic.code ?? "(no-code)",
-    );
-    expect(actualUpstreamCodes).toEqual(upstreamCodes);
-
-    for (const code of localCodes) {
-      expect(actualUpstreamCodes, `${code} is not currently an upstream-owned code`).not.toContain(
-        code,
+      const actualUpstreamCodes = upstream.analysis.compileDiagnostics.map(
+        (diagnostic) => diagnostic.code ?? "(no-code)",
       );
-    }
-  });
+      expect(actualUpstreamCodes).toEqual(upstreamCodes);
+
+      for (const code of localCodes) {
+        expect(
+          actualUpstreamCodes,
+          `${code} is not currently an upstream-owned code`,
+        ).not.toContain(code);
+      }
+
+      const quickFixes = await buildQuickFixes(
+        source,
+        upstream.analysis.compileDiagnostics,
+        upstream.analysis.documentState,
+      );
+      expect({
+        decision,
+        execution_context: executionContext,
+        local: sfPi.diagnostics
+          .filter((diagnostic) => localCodes.includes(String(diagnostic.code ?? "")))
+          .map((diagnostic) => ({
+            code: diagnostic.code,
+            severity: diagnostic.severity,
+            source: diagnostic.source,
+            message: diagnostic.message,
+            range: diagnostic.range,
+            data: diagnostic.data,
+          })),
+        upstream: upstream.analysis.compileDiagnostics.map((diagnostic) => ({
+          code: diagnostic.code,
+          severity: diagnostic.severity,
+          source: diagnostic.source,
+          message: diagnostic.message,
+          range: diagnostic.range,
+          data: diagnostic.data,
+        })),
+        upstream_quick_fixes: quickFixes.map((fix) => ({
+          title: fix.title,
+          preferred: fix.preferred,
+          diagnostic_line: fix.diagnosticLine,
+          diagnostic_code: fix.diagnosticCode,
+          edits: fix.edits,
+        })),
+      }).toMatchSnapshot();
+    },
+  );
 
   test("classification table covers every remaining local diagnostic code", () => {
     const covered = new Set(cases.flatMap((entry) => entry.localCodes));

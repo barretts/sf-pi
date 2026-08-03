@@ -181,6 +181,10 @@ Before adding the v1 catalog, clean up the existing source-text hardening layer.
 
 Delete the text scanner only after every retained diagnostic has source-range and malformed-source parity evidence.
 
+## Released-package parity handoff
+
+The Milestone 4 matrix in `docs/DIAGNOSTIC_PARITY.md` compares every current quality rule and hardening diagnostic against the installed official package set using full diagnostic and quick-fix snapshots. At the 2026-08-03 baseline, no current evaluator has strict parity, so no current evaluator is deleted. Similar planner-action diagnostics do not replace deterministic-`run` policy.
+
 ## Deferred candidates
 
 - direct list/object assignment restrictions, pending reproducible current runtime evidence;
