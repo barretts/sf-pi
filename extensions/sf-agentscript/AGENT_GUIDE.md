@@ -73,7 +73,7 @@ Use before inspecting deeply, mutating, previewing, or publishing.
 
 Use `fallback="server"` only when local severity-1 diagnostics look like dialect-version skew. It requires `target_org` and costs a network call.
 
-Explicit compile/check returns every upstream diagnostic severity. `clean=true` means no severity-1 errors; warnings, information, and hints remain visible evidence. The detailed human result shows every diagnostic and its full message; the LLM-facing summary remains compact. Automatic compile-on-save feedback stays limited to errors and warnings.
+Explicit compile/check composes both official upstream results: `compileSource` supplies compiler output, ranges, and the mutable document, while `processDocument` supplies dialect/LSP state, indexes, navigation, and code actions. Shared diagnostics are deduplicated by code, full range, and message; diagnostics unique to either result remain visible, and `clean=true` means no severity-1 diagnostic exists in the combined set. Detailed diagnostics remain position-first, the compact summary remains severity-first, and automatic compile-on-save feedback stays limited to errors and warnings.
 
 `mode="format"` writes canonical SDK formatting and refuses parse errors.
 

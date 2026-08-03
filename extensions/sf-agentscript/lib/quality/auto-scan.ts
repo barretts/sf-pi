@@ -6,9 +6,8 @@ import type {
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import { isEditToolResult, isWriteToolResult } from "@earendil-works/pi-coding-agent";
-import { readFile } from "node:fs/promises";
+import { getAgentScriptAnalysis } from "../analysis-snapshot.ts";
 import { isAgentScriptFile, resolveToolPath } from "../file-classify.ts";
-import { runAgentScriptQuality } from "./engine.ts";
 import { readEffectiveAgentScriptQualitySettings } from "./settings.ts";
 import {
   AGENT_SCRIPT_QUALITY_REPAIR_MESSAGE_TYPE,
@@ -129,7 +128,7 @@ function collectFile(event: ToolResultEvent, ctx: ExtensionContext, pending: Set
 }
 
 async function runFile(file: string): Promise<AgentScriptQualityResult> {
-  return runAgentScriptQuality(await readFile(file, "utf8"));
+  return (await getAgentScriptAnalysis(file)).getQuality();
 }
 
 function emitQualityCard(

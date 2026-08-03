@@ -413,9 +413,7 @@ export async function publishAgent(opts: PublishOptions): Promise<PublishResult>
     const compile = opts.timings
       ? await opts.timings.time("sdk_compile_guard", () => sdk.compileSource(opts.agentSource))
       : sdk.compileSource(opts.agentSource);
-    const sev1 = compile.diagnostics
-      .filter((d): d is { severity?: number } => typeof d === "object" && d !== null)
-      .filter((d) => (d as { severity?: number }).severity === 1);
+    const sev1 = compile.diagnostics.filter((diagnostic) => diagnostic.severity === 1);
     if (sev1.length > 0) {
       throw new Error(
         `Local compile rejected the source (${sev1.length} severity-1 errors). ` +

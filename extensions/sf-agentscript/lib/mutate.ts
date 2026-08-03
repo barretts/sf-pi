@@ -14,10 +14,10 @@
 
 import fs from "node:fs/promises";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
+import type { DocumentState } from "@sf-agentscript/lsp";
+import type { AgentforceSourceAnalysisResult } from "./agentforce-document.ts";
 import { loadAgentforceSDK, getSdkLoadError } from "./sdk.ts";
-import { invalidateAgentScriptAnalysis } from "./analysis-snapshot.ts";
-import { checkAgentScriptFile } from "./diagnostics.ts";
-import { buildQuickFixes } from "./code-actions.ts";
+import { getAgentScriptAnalysis, invalidateAgentScriptAnalysis } from "./analysis-snapshot.ts";
 import {
   convertTopicToSubagent,
   findAgentforceDefinitions,
@@ -119,8 +119,14 @@ async function applyMutationQueued(op: MutateOp): Promise<MutateResult> {
       return applyCoordFallback(op, sourceBefore);
     case "set_field":
       return applyAstSetField(op, sourceBefore, sdk);
-    case "rename":
-      return applyAstRename(op, sourceBefore, sdk);
+    case "rename": {
+      let snapshot = await getAgentScriptAnalysis(op.path);
+      if (snapshot.source !== sourceBefore) {
+        invalidateAgentScriptAnalysis(op.path);
+        snapshot = await getAgentScriptAnalysis(op.path);
+      }
+      return applyAstRename(op, sourceBefore, await snapshot.getUpstream());
+    }
     case "insert":
     case "delete":
       return guidanceForGenericEdit(op);
@@ -137,7 +143,7 @@ async function applyCoordFallback(
 ): Promise<MutateResult> {
   // Re-compile to get the live diagnostic + its TextEdits. We don't trust
   // a stale fix passed in — line numbers may have shifted.
-  const compile = await checkAgentScriptFile(op.path);
+  const compile = await (await getAgentScriptAnalysis(op.path)).getCompile();
   if (!compile.ok) {
     return {
       ok: false,
@@ -157,7 +163,9 @@ async function applyCoordFallback(
       reason_detail: `No '${op.diagnostic_code}' diagnostic at line ${op.line}. Re-run agentscript_authoring compile/check to get current diagnostics.`,
     };
   }
-  const fixes = await buildQuickFixes(sourceBefore, candidates);
+  const fixes = compile.quickFixes.filter(
+    (fix) => fix.diagnosticCode === op.diagnostic_code && fix.diagnosticLine === lineZero,
+  );
   const fix = fixes[op.fix_index ?? 0];
   if (!fix) {
     return {
@@ -240,7 +248,7 @@ async function commitOrPreview(
 
   await fs.writeFile(op.path, after, "utf8");
   invalidateAgentScriptAnalysis(op.path);
-  const recompile = await checkAgentScriptFile(op.path);
+  const recompile = await (await getAgentScriptAnalysis(op.path)).getCompile();
   return {
     ok: true,
     applied_via: appliedVia,
@@ -501,7 +509,7 @@ async function applyAstSetField(
 async function applyAstRename(
   op: Extract<MutateOp, { op: "rename" }>,
   sourceBefore: string,
-  sdk: unknown,
+  upstream: AgentforceSourceAnalysisResult,
 ): Promise<MutateResult> {
   const from = normalizeRenameSymbol(op.from);
   const to = normalizeRenameSymbol(op.to);
@@ -524,14 +532,29 @@ async function applyAstRename(
     );
   }
 
-  const parsed = parseDocument(sourceBefore, sdk);
-  if (parsed.ok === false) return parsed.error;
+  if (upstream.ok === false) {
+    return {
+      ok: false,
+      reason: upstream.failureKind,
+      reason_detail: upstream.unavailableReason,
+    };
+  }
+  const compilerDocument = upstream.analysis.compileResult.document;
+  if (compilerDocument.hasErrors) {
+    return {
+      ok: false,
+      reason: "has_parse_errors",
+      reason_detail:
+        "Refusing to mutate a file with existing parse errors. Run agentscript_authoring compile/check and fix severity-1 issues first.",
+    };
+  }
+  const state = upstream.analysis.documentState;
 
   const after = await (from.symbol.namespace === to.symbol.namespace
-    ? renameWithinNamespace(sourceBefore, from.symbol, to.symbol)
+    ? renameWithinNamespace(sourceBefore, from.symbol, to.symbol, state)
     : from.symbol.namespace === "topic"
-      ? renameTopicToSubagent(sourceBefore, from.symbol, to.symbol)
-      : renameSubagentToTopic(sourceBefore, from.symbol, to.symbol));
+      ? renameTopicToSubagent(sourceBefore, from.symbol, to.symbol, state)
+      : renameSubagentToTopic(sourceBefore, from.symbol, to.symbol, state));
 
   if (after.ok === false) return after.error;
   if (after.source === sourceBefore) {
@@ -594,13 +617,14 @@ async function renameWithinNamespace(
   source: string,
   from: RenameSymbol,
   to: RenameSymbol,
+  state: DocumentState,
 ): Promise<{ ok: true; source: string } | { ok: false; error: MutateResult }> {
   if (from.name === to.name) return { ok: true, source };
 
-  const resolved = await resolveSymbol(source, from);
+  const resolved = await resolveSymbol(source, from, state);
   if (resolved.ok === false) return resolved;
 
-  const collision = await findRenameCollision(source, to, resolved.scope);
+  const collision = await findRenameCollision(source, to, resolved.scope, state);
   if (collision.ok === false) return collision;
   if (collision.exists) {
     return {
@@ -614,7 +638,7 @@ async function renameWithinNamespace(
   }
 
   try {
-    const edits = await renameAgentforceSymbol(source, from, to.name);
+    const edits = await renameAgentforceSymbol(source, from, to.name, state);
     if (edits.length === 0) {
       return {
         ok: false,
@@ -640,11 +664,12 @@ async function renameTopicToSubagent(
   source: string,
   from: RenameSymbol,
   to: RenameSymbol,
+  state: DocumentState,
 ): Promise<{ ok: true; source: string } | { ok: false; error: MutateResult }> {
-  const resolved = await resolveSymbol(source, from);
+  const resolved = await resolveSymbol(source, from, state);
   if (resolved.ok === false) return resolved;
 
-  const collision = await findRenameCollision(source, to, resolved.scope);
+  const collision = await findRenameCollision(source, to, resolved.scope, state);
   if (collision.ok === false) return collision;
   if (collision.exists) {
     return {
@@ -658,7 +683,7 @@ async function renameTopicToSubagent(
   }
 
   try {
-    const edits = await convertTopicToSubagent(source, from);
+    const edits = await convertTopicToSubagent(source, from, state);
     if (edits.length === 0) {
       return {
         ok: false,
@@ -684,11 +709,12 @@ async function renameSubagentToTopic(
   source: string,
   from: RenameSymbol,
   to: RenameSymbol,
+  state: DocumentState,
 ): Promise<{ ok: true; source: string } | { ok: false; error: MutateResult }> {
-  const resolved = await resolveSymbol(source, from);
+  const resolved = await resolveSymbol(source, from, state);
   if (resolved.ok === false) return resolved;
 
-  const collision = await findRenameCollision(source, to, resolved.scope);
+  const collision = await findRenameCollision(source, to, resolved.scope, state);
   if (collision.ok === false) return collision;
   if (collision.exists) {
     return {
@@ -716,7 +742,12 @@ async function renameSubagentToTopic(
   }
 
   try {
-    const referenceEdits = await findAgentforceReferenceEdits(source, from, formatSymbol(to));
+    const referenceEdits = await findAgentforceReferenceEdits(
+      source,
+      from,
+      formatSymbol(to),
+      state,
+    );
     return { ok: true, source: applyTextEdits(source, [declarationEdit, ...referenceEdits]) };
   } catch (err) {
     return {
@@ -739,9 +770,10 @@ interface ResolvedRenameSymbol {
 async function resolveSymbol(
   source: string,
   symbol: RenameSymbol,
+  state: DocumentState,
 ): Promise<ResolvedRenameSymbol | { ok: false; error: MutateResult }> {
   try {
-    const definitions = await findAgentforceDefinitions(source, symbol);
+    const definitions = await findAgentforceDefinitions(source, symbol, state);
     if (definitions.length === 0) {
       return {
         ok: false,
@@ -791,9 +823,10 @@ async function findRenameCollision(
   source: string,
   target: RenameSymbol,
   sourceScope: Record<string, string>,
+  state: DocumentState,
 ): Promise<{ ok: true; exists: boolean } | { ok: false; error: MutateResult }> {
   try {
-    const definitions = await findAgentforceDefinitions(source, target);
+    const definitions = await findAgentforceDefinitions(source, target, state);
     return {
       ok: true,
       exists:

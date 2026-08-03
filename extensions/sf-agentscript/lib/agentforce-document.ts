@@ -9,6 +9,7 @@
  * AgentScript toolchain until a `.agent` workflow needs it.
  */
 
+import type { AgentforceCompileResult } from "@sf-agentscript/agentforce";
 import type { DocumentState, LspParser } from "@sf-agentscript/lsp";
 import { getSdkLoadError, loadAgentforceSDK, type AgentforceSDK } from "./sdk.ts";
 import type {
@@ -20,15 +21,17 @@ import type {
 export const AGENTFORCE_DOCUMENT_URI = "file:///sf-pi/agent.agent";
 
 export interface AgentforceSourceAnalysis {
+  source: string;
   sdk: AgentforceSDK;
   dialect?: AgentScriptDialectInfo;
   compileDiagnostics: AgentScriptDiagnostic[];
-  compileOutput?: unknown;
+  compileResult: AgentforceCompileResult;
   documentState: DocumentState;
 }
 
 export type AgentforceSourceAnalysisFailure = {
   ok: false;
+  source: string;
   failureKind: "sdk_unavailable" | "compile_threw";
   unavailableReason: string;
   dialect?: AgentScriptDialectInfo;
@@ -48,21 +51,19 @@ export async function processAgentforceDocument(
   const agentforceDialect =
     agentforce.agentforceDialect as unknown as (typeof lsp.defaultDialects)[number];
 
-  return suppressAgentforceSchemaDebugLog(() =>
-    lsp.processDocument(uri, source, {
-      dialects: [agentforceDialect],
-      defaultDialect: agentforceDialect.name,
-      parser: agentforce.getParser() as unknown as LspParser,
-      compile: options.compile
-        ? (dialectName) =>
-            dialectName === "agentforce"
-              ? {
-                  compile: (ast) => agentforce.compile(ast as never),
-                }
-              : undefined
-        : undefined,
-    }),
-  );
+  return lsp.processDocument(uri, source, {
+    dialects: [agentforceDialect],
+    defaultDialect: agentforceDialect.name,
+    parser: agentforce.getParser() as unknown as LspParser,
+    compile: options.compile
+      ? (dialectName) =>
+          dialectName === "agentforce"
+            ? {
+                compile: (ast) => agentforce.compile(ast as never),
+              }
+            : undefined
+      : undefined,
+  });
 }
 
 /**
@@ -70,13 +71,17 @@ export async function processAgentforceDocument(
  * source string. Callers can layer SF Pi filtering, local hardening diagnostics,
  * quick-fix rendering, or structural projections on the returned facts.
  */
+export type AgentforceSourceAnalysisResult =
+  { ok: true; analysis: AgentforceSourceAnalysis } | AgentforceSourceAnalysisFailure;
+
 export async function analyzeAgentScriptSource(
   source: string,
-): Promise<{ ok: true; analysis: AgentforceSourceAnalysis } | AgentforceSourceAnalysisFailure> {
+): Promise<AgentforceSourceAnalysisResult> {
   const sdk = await loadAgentforceSDK();
   if (!sdk) {
     return {
       ok: false,
+      source,
       failureKind: "sdk_unavailable",
       unavailableReason:
         getSdkLoadError() ?? "The official @sf-agentscript/agentforce SDK failed to load.",
@@ -85,34 +90,77 @@ export async function analyzeAgentScriptSource(
 
   const dialect = resolveDialectInfo(source, sdk);
 
+  let compileResult: AgentforceCompileResult;
   let documentState: DocumentState;
   try {
+    compileResult = sdk.compileSource(source);
     documentState = await processAgentforceDocument(source, AGENTFORCE_DOCUMENT_URI, {
       compile: true,
     });
   } catch (error) {
     return {
       ok: false,
+      source,
       dialect,
       failureKind: "compile_threw",
       unavailableReason: `Agent Script SDK threw during analysis: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 
-  const compileDiagnostics = documentState.diagnostics
-    .map((raw) => toAgentScriptDiagnostic(raw))
-    .filter((diagnostic): diagnostic is AgentScriptDiagnostic => diagnostic !== null);
+  const compileDiagnostics = combineAgentScriptDiagnostics(
+    documentState.diagnostics,
+    compileResult.diagnostics,
+  );
 
   return {
     ok: true,
     analysis: {
+      source,
       sdk,
       dialect,
       compileDiagnostics,
-      compileOutput: documentState.compileOutput,
+      compileResult,
       documentState,
     },
   };
+}
+
+export function combineAgentScriptDiagnostics(
+  ...sources: ReadonlyArray<readonly unknown[]>
+): AgentScriptDiagnostic[] {
+  const combined = new Map<string, AgentScriptDiagnostic>();
+  for (const raw of sources.flat()) {
+    const diagnostic = toAgentScriptDiagnostic(raw);
+    if (!diagnostic) continue;
+    const key = [
+      diagnostic.code ?? "",
+      `${diagnostic.range.start.line}:${diagnostic.range.start.character}`,
+      `${diagnostic.range.end.line}:${diagnostic.range.end.character}`,
+      diagnostic.message,
+    ].join("|");
+    const previous = combined.get(key);
+    if (!previous) {
+      combined.set(key, diagnostic);
+      continue;
+    }
+    const tags = Array.from(new Set([...(previous.tags ?? []), ...(diagnostic.tags ?? [])]));
+    combined.set(key, {
+      ...previous,
+      severity: Math.min(previous.severity, diagnostic.severity) as AgentScriptSeverity,
+      ...(tags.length > 0 ? { tags } : {}),
+      data:
+        previous.data || diagnostic.data
+          ? { ...(diagnostic.data ?? {}), ...(previous.data ?? {}) }
+          : undefined,
+    });
+  }
+  return [...combined.values()].sort(
+    (left, right) =>
+      left.range.start.line - right.range.start.line ||
+      left.range.start.character - right.range.start.character ||
+      left.severity - right.severity ||
+      String(left.code ?? "").localeCompare(String(right.code ?? "")),
+  );
 }
 
 /** Coerce an official SDK/LSP diagnostic into the local stable shape. */
@@ -139,40 +187,6 @@ export function toAgentScriptDiagnostic(raw: unknown): AgentScriptDiagnostic | n
     tags: Array.isArray(value.tags) ? (value.tags as (1 | 2)[]) : undefined,
     data: (value.data ?? undefined) as Record<string, unknown> | undefined,
   };
-}
-
-function suppressAgentforceSchemaDebugLog<T>(run: () => T): T {
-  const runtimeConsole = globalThis.console;
-  const originalLog = runtimeConsole.log;
-  const restore = () => {
-    runtimeConsole.log = originalLog;
-  };
-  runtimeConsole.log = (...args: Parameters<typeof runtimeConsole.log>) => {
-    // The current AgentScript dialect linter emits this debug line while
-    // checking complex action I/O contracts. Keep normal logs visible, but
-    // suppress this package noise so preview/compile/test output stays clean.
-    if (args.length === 2 && args[0] === "Schema: " && typeof args[1] === "boolean") return;
-    originalLog.apply(runtimeConsole, args);
-  };
-  try {
-    const result = run();
-    if (isPromiseLike(result)) {
-      return Promise.resolve(result).finally(restore) as T;
-    }
-    restore();
-    return result;
-  } catch (error) {
-    restore();
-    throw error;
-  }
-}
-
-function isPromiseLike(value: unknown): value is Promise<unknown> {
-  return (
-    !!value &&
-    (typeof value === "object" || typeof value === "function") &&
-    typeof (value as { then?: unknown }).then === "function"
-  );
 }
 
 export function resolveDialectInfo(

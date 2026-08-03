@@ -8,6 +8,8 @@
  * resolution fails.
  */
 
+import type { AgentforceCompileResult } from "@sf-agentscript/agentforce";
+
 // -------------------------------------------------------------------------------------------------
 // Shape of the official SDK we depend on
 // -------------------------------------------------------------------------------------------------
@@ -17,10 +19,7 @@ export interface AgentforceSDK {
     hasErrors: boolean;
     diagnostics: readonly unknown[];
   };
-  compileSource: (source: string) => {
-    output: unknown;
-    diagnostics: unknown[];
-  };
+  compileSource: (source: string) => AgentforceCompileResult;
   resolveDialect: (
     source: string,
     config: { dialects: unknown[]; defaultDialect?: string },

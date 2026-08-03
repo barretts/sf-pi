@@ -156,10 +156,37 @@ async function actionContextProfile(agentFile: string, timings?: TimingCollector
   );
 }
 
+function analysisFailureResult(
+  agentFile: string,
+  failure: { failureKind: string; unavailableReason: string },
+) {
+  const sdkUnavailable = failure.failureKind === "sdk_unavailable";
+  return toolError(
+    sdkUnavailable
+      ? `Agent Script SDK unavailable: ${failure.unavailableReason}.`
+      : `Agent Script analysis failed: ${failure.unavailableReason}.`,
+    sdkUnavailable
+      ? "Run /sf-agentscript doctor to diagnose the official SDK package."
+      : "Run agentscript_authoring compile/check to inspect the source diagnostics.",
+    sdkUnavailable
+      ? { tool: "sf-agentscript", params: { action: "doctor" } }
+      : {
+          tool: "agentscript_authoring",
+          params: { verb: "compile", mode: "check", agent_file: agentFile },
+        },
+  );
+}
+
 async function actionFindReferences(agentFile: string, symbol: string, timings?: TimingCollector) {
-  const result = timings
-    ? await timings.time("find_references", () => findReferences(agentFile, symbol))
-    : await findReferences(agentFile, symbol);
+  const analysis = await getAgentScriptAnalysis(agentFile);
+  const upstream = await analysis.getUpstream();
+  if (upstream.ok === false) return analysisFailureResult(agentFile, upstream);
+  const run = () =>
+    findReferences(agentFile, symbol, {
+      source: analysis.source,
+      state: upstream.analysis.documentState,
+    });
+  const result = timings ? await timings.time("find_references", run) : await run();
   if (!result.ok) {
     if (result.reason === "sdk_unavailable") {
       return toolError(
@@ -199,9 +226,15 @@ async function actionFindReferences(agentFile: string, symbol: string, timings?:
 }
 
 async function actionDefinition(agentFile: string, symbol: string, timings?: TimingCollector) {
-  const result = timings
-    ? await timings.time("find_definition", () => findDefinition(agentFile, symbol))
-    : await findDefinition(agentFile, symbol);
+  const analysis = await getAgentScriptAnalysis(agentFile);
+  const upstream = await analysis.getUpstream();
+  if (upstream.ok === false) return analysisFailureResult(agentFile, upstream);
+  const run = () =>
+    findDefinition(agentFile, symbol, {
+      source: analysis.source,
+      state: upstream.analysis.documentState,
+    });
+  const result = timings ? await timings.time("find_definition", run) : await run();
   if (!result.ok) {
     if (result.reason === "sdk_unavailable") {
       return toolError(

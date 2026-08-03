@@ -37,7 +37,7 @@ import type {
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import { isEditToolResult, isWriteToolResult } from "@earendil-works/pi-coding-agent";
-import { checkAgentScriptFile, isAgentScriptCompileValid } from "./lib/diagnostics.ts";
+import { isAgentScriptCompileValid } from "./lib/diagnostics.ts";
 import { isAgentScriptFile, resolveToolPath } from "./lib/file-classify.ts";
 import {
   buildToolResultUpdate,
@@ -80,6 +80,7 @@ import { clearConnectionCache } from "../../lib/common/sf-conn/connection.ts";
 import { clearAgentApiAuthCache } from "./lib/agent-api-auth.ts";
 import {
   clearAgentScriptAnalysisCache,
+  getAgentScriptAnalysis,
   invalidateAgentScriptAnalysis,
 } from "./lib/analysis-snapshot.ts";
 import { clearSfapEndpointCache } from "./lib/eval/sfap.ts";
@@ -422,7 +423,7 @@ async function handleCheckSubcommand(
     return;
   }
 
-  const result = await checkAgentScriptFile(filePath);
+  const result = await (await getAgentScriptAnalysis(filePath)).getCompile();
   if (!result.ok) {
     if (ctx.hasUI) {
       ctx.ui.notify(
@@ -493,7 +494,7 @@ async function handleToolResult(
   if (!isAgentScriptFile(filePath)) return undefined;
 
   invalidateAgentScriptAnalysis(filePath);
-  const checkResult = await checkAgentScriptFile(filePath);
+  const checkResult = await (await getAgentScriptAnalysis(filePath)).getCompile();
   const existingContent: ToolResultContentPart[] = Array.isArray(event.content)
     ? event.content
     : [];

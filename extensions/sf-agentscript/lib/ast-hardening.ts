@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** SF Pi-owned AST hardening diagnostics not yet owned by the official dialect. */
-import { agentforceSchemaContext, parse } from "@sf-agentscript/agentforce";
+import { agentforceSchemaContext } from "@sf-agentscript/agentforce";
 import {
   LintEngine,
   attachDiagnostic,
@@ -18,13 +18,10 @@ const SOURCE = "sf-agentscript-local";
 const SALESFORCE_ID_RE =
   /^(?:00D|005|001|003|500|301|300|01p|0X9|0Xx|0Mw|0Af)[A-Za-z0-9]{12}(?:[A-Za-z0-9]{3})?$/;
 
-export async function buildAstHardeningDiagnostics(
-  source: string,
-): Promise<AgentScriptDiagnostic[]> {
-  const document = parse(source);
+export function buildAstHardeningDiagnosticsFromAst(ast: AstRoot): AgentScriptDiagnostic[] {
   const engine = new LintEngine({ passes: [new SfPiHardeningPass()], source: SOURCE });
   return engine
-    .run(document.ast as unknown as AstRoot, agentforceSchemaContext as unknown as SchemaContext)
+    .run(ast, agentforceSchemaContext as unknown as SchemaContext)
     .diagnostics.filter((diagnostic) => diagnostic.source === SOURCE) as AgentScriptDiagnostic[];
 }
 

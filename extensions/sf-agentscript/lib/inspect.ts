@@ -8,13 +8,17 @@
  */
 
 import fs from "node:fs/promises";
+import type { DocumentState } from "@sf-agentscript/lsp";
 import {
   findAgentforceReferences,
   isDeclarableNavigationNamespace,
   parseAgentforceSymbol,
   resolveAgentforceSymbol,
 } from "./agentforce-navigation.ts";
-import { loadAgentforceSDK, getSdkLoadError } from "./sdk.ts";
+import {
+  analyzeAgentScriptSource,
+  type AgentforceSourceAnalysisResult,
+} from "./agentforce-document.ts";
 import { projectInspectStructure, type InspectResult } from "./inspect-structure.ts";
 
 export type {
@@ -50,22 +54,26 @@ export async function inspectFile(filePath: string): Promise<InspectResult> {
   return inspectSource(source);
 }
 
-export async function inspectSource(source: string): Promise<InspectResult> {
-  const sdk = await loadAgentforceSDK();
-  if (!sdk) {
-    return { ok: false, reason: "sdk_unavailable", reason_detail: getSdkLoadError() };
+export async function inspectSource(
+  source: string,
+  existingAnalysis?: AgentforceSourceAnalysisResult,
+): Promise<InspectResult> {
+  let result: AgentforceSourceAnalysisResult | undefined;
+  if (existingAnalysis?.ok === true && existingAnalysis.analysis.source === source) {
+    result = existingAnalysis;
+  } else if (existingAnalysis?.ok === false && existingAnalysis.source === source) {
+    result = existingAnalysis;
   }
-
-  let doc: { ast: unknown; hasErrors: boolean; diagnostics: readonly unknown[] };
-  try {
-    doc = (sdk as unknown as { parse: (s: string) => typeof doc }).parse(source);
-  } catch (err) {
+  result ??= await analyzeAgentScriptSource(source);
+  if (result.ok === false) {
     return {
       ok: false,
-      reason: "parse_failed",
-      reason_detail: err instanceof Error ? err.message : String(err),
+      reason: result.failureKind === "sdk_unavailable" ? "sdk_unavailable" : "parse_failed",
+      reason_detail: result.unavailableReason,
     };
   }
+  const analysis = result.analysis;
+  const doc = analysis.compileResult.document;
 
   // Count severity-1 diagnostics so the LLM knows whether the structural
   // result is trustworthy. Don't fail — the SDK is error-tolerant on purpose.
@@ -78,7 +86,7 @@ export async function inspectSource(source: string): Promise<InspectResult> {
     await import("@sf-agentscript/language");
   return projectInspectStructure({
     ast: doc.ast,
-    dialect: resolveDialectInfo(source, sdk),
+    dialect: analysis.dialect,
     hasParseErrors: sev1Count > 0,
     parseErrorCount: sev1Count,
     walkAstExpressions,
@@ -115,16 +123,22 @@ export interface DefinitionResult {
   file?: string;
 }
 
+interface ExistingNavigationAnalysis {
+  source: string;
+  state: DocumentState;
+}
+
 export async function findReferences(
   filePath: string,
   symbol: string,
+  existing?: ExistingNavigationAnalysis,
 ): Promise<FindReferencesResult> {
   const sym = parseAgentforceSymbol(symbol, { requireAt: true });
   if (sym.ok === false) return { ok: false, reason: "bad_symbol", reason_detail: sym.reason };
 
   let source: string;
   try {
-    source = await fs.readFile(filePath, "utf8");
+    source = existing?.source ?? (await fs.readFile(filePath, "utf8"));
   } catch (err) {
     return {
       ok: false,
@@ -136,15 +150,17 @@ export async function findReferences(
   const lines = source.split("\n");
   let refs: ReferenceHit[];
   try {
-    refs = (await findAgentforceReferences(source, sym.symbol, true)).map((ref) => {
-      const lineIdx = ref.range.start.line;
-      return {
-        line: lineIdx + 1,
-        character: ref.range.start.character,
-        context: (lines[lineIdx] ?? "").trim().slice(0, 120),
-        is_declaration: ref.isDefinition,
-      };
-    });
+    refs = (await findAgentforceReferences(source, sym.symbol, true, existing?.state)).map(
+      (ref) => {
+        const lineIdx = ref.range.start.line;
+        return {
+          line: lineIdx + 1,
+          character: ref.range.start.character,
+          context: (lines[lineIdx] ?? "").trim().slice(0, 120),
+          is_declaration: ref.isDefinition,
+        };
+      },
+    );
   } catch (err) {
     return {
       ok: false,
@@ -158,7 +174,11 @@ export async function findReferences(
   return { ok: true, symbol, references: refs, total: refs.length };
 }
 
-export async function findDefinition(filePath: string, symbol: string): Promise<DefinitionResult> {
+export async function findDefinition(
+  filePath: string,
+  symbol: string,
+  existing?: ExistingNavigationAnalysis,
+): Promise<DefinitionResult> {
   const sym = parseAgentforceSymbol(symbol, { requireAt: true });
   if (sym.ok === false) return { ok: false, reason: "bad_symbol", reason_detail: sym.reason };
 
@@ -172,7 +192,7 @@ export async function findDefinition(filePath: string, symbol: string): Promise<
 
   let source: string;
   try {
-    source = await fs.readFile(filePath, "utf8");
+    source = existing?.source ?? (await fs.readFile(filePath, "utf8"));
   } catch (err) {
     return {
       ok: false,
@@ -183,7 +203,7 @@ export async function findDefinition(filePath: string, symbol: string): Promise<
 
   let definition: Awaited<ReturnType<typeof resolveAgentforceSymbol>>;
   try {
-    definition = await resolveAgentforceSymbol(source, sym.symbol);
+    definition = await resolveAgentforceSymbol(source, sym.symbol, existing?.state);
   } catch (err) {
     return {
       ok: false,
@@ -204,36 +224,4 @@ export async function findDefinition(filePath: string, symbol: string): Promise<
     character: start.character ?? 0,
     file: filePath,
   };
-}
-function resolveDialectInfo(source: string, sdk: unknown): InspectResult["dialect"] | undefined {
-  const s = sdk as {
-    parseDialectAnnotation?: (src: string) => { name?: string; version?: string } | null;
-    resolveDialect?: (
-      src: string,
-      cfg: { dialects: unknown[] },
-    ) => {
-      dialect?: { name?: string };
-      unknownDialect?: { name?: string };
-    };
-    agentforceDialect?: unknown;
-  };
-
-  try {
-    const ann = s.parseDialectAnnotation?.(source);
-    if (ann?.name) {
-      const out: { name: string; version?: string } = { name: ann.name };
-      if (ann.version) out.version = ann.version;
-      return out;
-    }
-    if (s.resolveDialect && s.agentforceDialect) {
-      const r = s.resolveDialect(source, { dialects: [s.agentforceDialect] });
-      if (r.unknownDialect?.name) {
-        return { name: r.unknownDialect.name, unknown: true };
-      }
-      if (r.dialect?.name) return { name: r.dialect.name };
-    }
-  } catch {
-    /* fall through — dialect info is best-effort */
-  }
-  return undefined;
 }

@@ -101,19 +101,29 @@ async function resolveDefinitionInState(
   return matches.length === 1 ? matches[0] : null;
 }
 
+async function stateForSource(
+  source: string,
+  existingState?: DocumentState,
+  uri = AGENTFORCE_DOCUMENT_URI,
+): Promise<DocumentState> {
+  return existingState?.source === source ? existingState : processAgentforceDocument(source, uri);
+}
+
 export async function findAgentforceDefinitions(
   source: string,
   symbol: AgentforceSymbol,
+  existingState?: DocumentState,
 ): Promise<AgentforceDefinition[]> {
-  const state = await processAgentforceDocument(source);
+  const state = await stateForSource(source, existingState);
   return definitionsInState(state, symbol);
 }
 
 export async function resolveAgentforceSymbol(
   source: string,
   symbol: AgentforceSymbol,
+  existingState?: DocumentState,
 ): Promise<AgentforceDefinition | null> {
-  const state = await processAgentforceDocument(source);
+  const state = await stateForSource(source, existingState);
   if (!state.ast) return null;
 
   return resolveDefinitionInState(state, symbol);
@@ -141,8 +151,9 @@ export async function findAgentforceReferences(
   source: string,
   symbol: AgentforceSymbol,
   includeDeclaration = true,
+  existingState?: DocumentState,
 ): Promise<AgentforceReferenceOccurrence[]> {
-  const state = await processAgentforceDocument(source);
+  const state = await stateForSource(source, existingState);
   return findReferencesInState(state, symbol, includeDeclaration);
 }
 
@@ -150,8 +161,9 @@ export async function findAgentforceReferenceEdits(
   source: string,
   from: AgentforceSymbol,
   newText: string,
+  existingState?: DocumentState,
 ): Promise<AgentforceTextEdit[]> {
-  const state = await processAgentforceDocument(source, AGENTFORCE_DOCUMENT_URI);
+  const state = await stateForSource(source, existingState);
   const refs = await findReferencesInState(state, from, true);
   const semantic = refs
     .filter((ref) => !ref.isDefinition)
@@ -167,8 +179,9 @@ export async function renameAgentforceSymbol(
   source: string,
   symbol: AgentforceSymbol,
   newName: string,
+  existingState?: DocumentState,
 ): Promise<AgentforceTextEdit[]> {
-  const state = await processAgentforceDocument(source, AGENTFORCE_DOCUMENT_URI);
+  const state = await stateForSource(source, existingState);
   if (!state.ast) return [];
 
   const definition = await resolveDefinitionInState(state, symbol);
@@ -295,8 +308,9 @@ function comparePosition(
 export async function convertTopicToSubagent(
   source: string,
   symbol: AgentforceSymbol,
+  existingState?: DocumentState,
 ): Promise<AgentforceTextEdit[]> {
-  const state = await processAgentforceDocument(source, AGENTFORCE_DOCUMENT_URI);
+  const state = await stateForSource(source, existingState);
   if (!state.ast) return [];
 
   const definition = await resolveDefinitionInState(state, symbol);

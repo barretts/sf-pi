@@ -10,6 +10,7 @@
  */
 
 import { readFile, stat } from "node:fs/promises";
+import { analyzeAgentScriptSource } from "./agentforce-document.ts";
 import { buildFeatureProfile, type AgentFeatureProfile } from "./feature-profile.ts";
 import { checkAgentScriptSource } from "./diagnostics.ts";
 import { inspectSource, type InspectResult } from "./inspect.ts";
@@ -28,6 +29,7 @@ export interface AgentScriptAnalysisFileKey {
 export interface AgentScriptAnalysisSnapshot {
   source: string;
   fileKey: AgentScriptAnalysisFileKey;
+  getUpstream: () => ReturnType<typeof analyzeAgentScriptSource>;
   getCompile: () => Promise<AgentScriptCheckResult>;
   getInspect: () => Promise<InspectResult>;
   getQuality: () => Promise<AgentScriptQualityResult>;
@@ -53,24 +55,38 @@ export async function getAgentScriptAnalysis(
   }
 
   const source = await readFile(filePath, "utf8");
+  let upstreamPromise: ReturnType<typeof analyzeAgentScriptSource> | undefined;
   let compilePromise: Promise<AgentScriptCheckResult> | undefined;
   let inspectPromise: Promise<InspectResult> | undefined;
   let qualityPromise: Promise<AgentScriptQualityResult> | undefined;
   let featureProfilePromise: Promise<AgentFeatureProfile | undefined> | undefined;
 
+  const getUpstream = () => (upstreamPromise ??= analyzeAgentScriptSource(source));
+
   const snapshot: AgentScriptAnalysisSnapshot = {
     source,
     fileKey,
+    getUpstream,
     getCompile() {
-      compilePromise ??= checkAgentScriptSource(source);
+      compilePromise ??= getUpstream().then((result) => checkAgentScriptSource(source, result));
       return compilePromise;
     },
     getInspect() {
-      inspectPromise ??= inspectSource(source);
+      inspectPromise ??= getUpstream().then((result) => inspectSource(source, result));
       return inspectPromise;
     },
     getQuality() {
-      qualityPromise ??= runAgentScriptQuality(source);
+      qualityPromise ??= getUpstream().then((result) =>
+        result.ok === true
+          ? runAgentScriptQuality(source, {
+              document: {
+                source,
+                ast: result.analysis.compileResult.document.ast,
+                hasErrors: result.analysis.compileResult.document.hasErrors,
+              },
+            })
+          : runAgentScriptQuality(source, { analysisFailure: result.unavailableReason }),
+      );
       return qualityPromise;
     },
     async getFeatureProfile() {

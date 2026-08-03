@@ -1,6 +1,6 @@
 # Agent Script Upstream Adoption and Simplification Plan
 
-Status: approved; Milestones 0 and 1 implemented, independently reviewed, and validated on 2026-08-03; Milestone 0 is merged; Milestone 2 requires separate approval
+Status: approved; Milestones 0 and 1 are merged; Milestone 2 is implemented, independently reviewed, and validated on 2026-08-03; Milestone 3 requires separate approval
 
 ## Goal
 
@@ -227,6 +227,7 @@ Adopt both official upstream results as one deep local analysis Interface and re
 ### Work
 
 - Extend `AgentScriptAnalysisSnapshot` to lazily cache `compileSource` and `processDocument` results by immutable source identity.
+- Apply the narrowly scoped production lockfile repair from `fast-uri@3.1.4` to `3.1.5` when the required audit identifies GHSA-7p8r-x3mc-p8w7; do not add a direct dependency or broaden package updates.
 - Introduce deterministic diagnostic normalization, deduplication, and ordering.
 - Preserve all severity, code, range, message, tags, and useful diagnostic data.
 - Expose compiler output/ranges/document and LSP state/indexes through the private snapshot Interface.

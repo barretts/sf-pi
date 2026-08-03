@@ -25,6 +25,8 @@ import type {
 export interface RunAgentScriptQualityOptions {
   ruleOverrides?: Partial<Record<AgentScriptQualityRuleId, boolean>>;
   editTimeOnly?: boolean;
+  document?: { source: string; ast: unknown; hasErrors: boolean };
+  analysisFailure?: string;
 }
 
 export async function runAgentScriptQuality(
@@ -47,9 +49,24 @@ export async function runAgentScriptQuality(
           : ("global" as const),
     }),
   );
+  const failed = (reason: string): AgentScriptQualityResult => ({
+    ok: false,
+    status: "failed",
+    findings: [],
+    summary: { high: 0, moderate: 0, low: 0, info: 0 },
+    metrics: { cyclomatic_complexity: [] },
+    coverage: {
+      total_rules: AGENT_SCRIPT_QUALITY_RULES.length,
+      enabled_rules: enabledDefinitions.length,
+      disabled_rules: disabled,
+    },
+    suppressions: { applied: [], invalid: [], unused: [] },
+    failure_reason: reason,
+  });
+  if (options.analysisFailure) return failed(options.analysisFailure);
 
   try {
-    const document = parse(source);
+    const document = options.document?.source === source ? options.document : parse(source);
     const passes = [
       new QualityFactsPass(),
       ...enabledDefinitions
@@ -103,20 +120,7 @@ export async function runAgentScriptQuality(
       },
     };
   } catch (error) {
-    return {
-      ok: false,
-      status: "failed",
-      findings: [],
-      summary: { high: 0, moderate: 0, low: 0, info: 0 },
-      metrics: { cyclomatic_complexity: [] },
-      coverage: {
-        total_rules: AGENT_SCRIPT_QUALITY_RULES.length,
-        enabled_rules: enabledDefinitions.length,
-        disabled_rules: disabled,
-      },
-      suppressions: { applied: [], invalid: [], unused: [] },
-      failure_reason: error instanceof Error ? error.message : String(error),
-    };
+    return failed(error instanceof Error ? error.message : String(error));
   }
 }
 

@@ -10,9 +10,12 @@
  */
 
 import fs from "node:fs/promises";
-import { analyzeAgentScriptSource } from "./agentforce-document.ts";
+import {
+  analyzeAgentScriptSource,
+  type AgentforceSourceAnalysisResult,
+} from "./agentforce-document.ts";
 import { buildQuickFixes } from "./code-actions.ts";
-import { buildAstHardeningDiagnostics } from "./ast-hardening.ts";
+import { buildAstHardeningDiagnosticsFromAst } from "./ast-hardening.ts";
 import { runAgentScriptQuality } from "./quality/engine.ts";
 import type { AgentScriptCheckResult, AgentScriptDiagnostic } from "./types.ts";
 
@@ -47,8 +50,17 @@ export async function checkAgentScriptFile(filePath: string): Promise<AgentScrip
   return checkAgentScriptSource(source);
 }
 
-export async function checkAgentScriptSource(source: string): Promise<AgentScriptCheckResult> {
-  const analysis = await analyzeAgentScriptSource(source);
+export async function checkAgentScriptSource(
+  source: string,
+  existingAnalysis?: AgentforceSourceAnalysisResult,
+): Promise<AgentScriptCheckResult> {
+  let analysis: AgentforceSourceAnalysisResult | undefined;
+  if (existingAnalysis?.ok === true && existingAnalysis.analysis.source === source) {
+    analysis = existingAnalysis;
+  } else if (existingAnalysis?.ok === false && existingAnalysis.source === source) {
+    analysis = existingAnalysis;
+  }
+  analysis ??= await analyzeAgentScriptSource(source);
   if (analysis.ok === false) {
     return {
       ok: false,
@@ -60,8 +72,12 @@ export async function checkAgentScriptSource(source: string): Promise<AgentScrip
     };
   }
 
-  const localDiagnostics = await buildAstHardeningDiagnostics(source);
-  const quality = await runAgentScriptQuality(source, { editTimeOnly: true });
+  const compilerDocument = analysis.analysis.compileResult.document;
+  const localDiagnostics = buildAstHardeningDiagnosticsFromAst(compilerDocument.ast as never);
+  const quality = await runAgentScriptQuality(source, {
+    editTimeOnly: true,
+    document: { source, ast: compilerDocument.ast, hasErrors: compilerDocument.hasErrors },
+  });
   const qualityDiagnostics: AgentScriptDiagnostic[] = quality.findings
     .filter((finding) => finding.severity === "high")
     .map((finding) => ({

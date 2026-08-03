@@ -155,7 +155,105 @@ describe("Agent Script public-seam parser-call baseline", () => {
         expect(result.details).toMatchObject({ ok: true });
       });
 
-      expect({ compileCalls, reviewCalls }).toEqual({ compileCalls: 3, reviewCalls: 5 });
+      expect({ compileCalls, reviewCalls }).toEqual({ compileCalls: 2, reviewCalls: 2 });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("reuses one dual analysis across compile, navigation, dry-run rename, and quality", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "sf-agentscript-parse-baseline-"));
+    try {
+      const file = path.join(cwd, "Workflow.agent");
+      await writeFile(file, RENAME_SOURCE, "utf8");
+      const tool = captureAuthoringTool();
+
+      const calls = await countParserCalls(async () => {
+        const compile = await tool.execute(
+          "compile-shared",
+          { verb: "compile", mode: "check", agent_file: file },
+          undefined,
+          undefined,
+          context(cwd),
+        );
+        expect(compile.details).toMatchObject({ ok: true, clean: true });
+
+        const definition = await tool.execute(
+          "definition-shared",
+          {
+            verb: "inspect",
+            mode: "definition",
+            agent_file: file,
+            symbol: "@subagent.billing",
+          },
+          undefined,
+          undefined,
+          context(cwd),
+        );
+        expect(definition.details).toMatchObject({ ok: true, symbol: "@subagent.billing" });
+
+        const rename = await tool.execute(
+          "rename-shared",
+          {
+            verb: "mutate",
+            mode: "rename",
+            agent_file: file,
+            from: "@subagent.billing",
+            to: "@subagent.account_billing",
+            dry_run: true,
+          },
+          undefined,
+          undefined,
+          context(cwd),
+        );
+        expect(rename.details).toMatchObject({ ok: true, was_dry_run: true });
+
+        const quality = await tool.execute(
+          "quality-shared",
+          { verb: "inspect", mode: "quality", agent_file: file },
+          undefined,
+          undefined,
+          context(cwd),
+        );
+        expect(quality.details).toMatchObject({ ok: true });
+      });
+
+      expect(calls).toBe(2);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("reuses cached code actions for dry-run quick-fix mutation", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "sf-agentscript-parse-baseline-"));
+    try {
+      const file = path.join(cwd, "QuickFix.agent");
+      await writeFile(
+        file,
+        `config:\n  agent_name: "Quick_Fix"\ntopic billing:\n  description: "Billing"\nstart_agent main:\n  description: "Main"\n  before_reasoning:\n    transition to @topic.billing\n`,
+        "utf8",
+      );
+
+      const calls = await countParserCalls(async () => {
+        const result = await captureAuthoringTool().execute(
+          "quick-fix",
+          {
+            verb: "mutate",
+            mode: "apply_quick_fix",
+            agent_file: file,
+            diagnostic_code: "deprecated-field",
+            line: 3,
+            fix_index: 0,
+            dry_run: true,
+          },
+          undefined,
+          undefined,
+          context(cwd),
+        );
+        expect(result.details).toMatchObject({ ok: true, was_dry_run: true });
+      });
+
+      expect(calls).toBe(2);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -199,8 +297,8 @@ describe("Agent Script public-seam parser-call baseline", () => {
       });
 
       expect({ renameCalls, publicationPreflightCalls }).toEqual({
-        renameCalls: 4,
-        publicationPreflightCalls: 4,
+        renameCalls: 2,
+        publicationPreflightCalls: 2,
       });
     } finally {
       await rm(cwd, { recursive: true, force: true });
