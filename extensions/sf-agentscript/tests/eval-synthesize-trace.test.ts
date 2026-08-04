@@ -206,6 +206,34 @@ describe("synthesizeTracesForTest", () => {
     });
   });
 
+  test("surface mirrors include the complete parsed LLM response sequence", () => {
+    const test = sampleTest();
+    const lastExecution = (
+      test.outputs![2].response as {
+        planner_response: { lastExecution: { llmEvents: unknown[]; agentResponse: string } };
+      }
+    ).planner_response.lastExecution;
+    lastExecution.llmEvents = [
+      [
+        {
+          agent_name: "Router",
+          prompt_response: JSON.stringify({
+            content: "",
+            tool_invocations: [{ function: { name: "continue_flow" } }],
+          }),
+        },
+        { agent_name: "Router", prompt_response: JSON.stringify({ content: "intermediate" }) },
+      ],
+      [{ agent_name: "Service", prompt_response: JSON.stringify({ content: "final" }) }],
+    ];
+    lastExecution.agentResponse = "final";
+
+    const t = synthesizeTracesForTest(test)[0];
+    expect(t.responseSequence.events).toHaveLength(3);
+    expect(t.responseSequence.non_empty_content_count).toBe(2);
+    expect(t.responseSequence.final_response_event_index).toBe(2);
+  });
+
   test("surface mirrors are populated at the top level (topic, agentResponse, latency)", () => {
     const t = synthesizeTracesForTest(sampleTest())[0];
     expect(t.topic).toBe("account_validation");

@@ -140,6 +140,8 @@ Generated specs compile an internal stateful scenario model into the existing Ev
 
 Eval-created sessions usually disappear before the live planner trace endpoint can read them, so eval runs synthesize trace artifacts from inline Evaluation API data by default; use `agentscript_eval action="trace"` for explicit live trace drill-down when the session is known to be resident. The Evaluation API does not expose `RelatedAgentStep`, so eval digests report connected-agent call evidence as unavailable rather than zero or inferred; preview remains authoritative for direct invocation counts.
 
+For each paired `agent.send_message` and `agent.get_state`, `transcript.jsonl`, failure records, and synthesized traces retain a parsed `response_sequence` built from every `lastExecution.llmEvents` entry. The sequence stores response content, tool names, ordering, timing, and final-response matching without duplicating full prompt bodies. A turn without `get_state` evidence is recorded as `unavailable`, never as a passing zero-event turn. `raw.json` remains the authoritative unmodified API payload.
+
 ## Eval-Gated Release Sequence
 
 `agentscript_lifecycle action="publish"` always creates an inactive BotVersion. `agentscript_eval action="run_release"` generates the current baseline from `agent_file`, runs it against the exact latest inactive version, and then runs `tests/agentforce/<AgentApiName>.eval.json` when present or an explicit `release_spec_path`. Complete passing metadata records the org id, BotVersion id, baseline identity, and spec digest.
@@ -352,6 +354,7 @@ extensions/sf-agentscript/
     lifecycle-divergence.ts ← implementation module
     lifecycle-tool.ts       ← implementation module
     lifecycle.ts            ← implementation module
+    llm-response-sequence.ts← implementation module
     manager-action-panels.ts← implementation module
     mutate.ts               ← implementation module
     mutation-policy.ts      ← implementation module
@@ -434,6 +437,7 @@ extensions/sf-agentscript/
     lifecycle-list-versions.test.ts← unit / smoke test
     lifecycle-quality-gate.test.ts← unit / smoke test
     lifecycle-sdr-layout.test.ts← unit / smoke test
+    llm-response-sequence.test.ts← unit / smoke test
     mutate-dry-run.test.ts  ← unit / smoke test
     mutate-emit-regression.test.ts← unit / smoke test
     mutate.test.ts          ← unit / smoke test

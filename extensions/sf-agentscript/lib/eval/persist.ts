@@ -33,6 +33,7 @@ import type {
   RunMetadata,
   SessionContext,
 } from "./types.ts";
+import { buildLlmResponseSequence } from "../llm-response-sequence.ts";
 
 export const DEFAULT_RUN_BASE_REL = path.join(".pi", "state", "sf-agentscript", "runs");
 
@@ -287,6 +288,7 @@ export async function writeRun(input: PersistInput): Promise<void> {
           plan_id: planIdForTurn,
           errors: le.errors ?? [],
           state_variables: sc.stateVariables ?? {},
+          response_sequence: buildLlmResponseSequence(le.llmEvents, reply),
         }),
       );
     }

@@ -205,6 +205,8 @@ export interface TurnSummary {
     prompt_response?: string;
     execution_latency_ms?: number;
   }>;
+  /** Full parsed sequence of every LLM completion returned for this turn. */
+  response_sequence: import("../llm-response-sequence.ts").TurnResponseSequence;
   /**
    * Compact LLM-friendly digest of this turn synthesized from the eval
    * API's `lastExecution` (the eval API does not expose a step-level

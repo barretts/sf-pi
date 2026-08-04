@@ -105,6 +105,73 @@ describe("send_message ↔ get_state pairing by execution order", () => {
     expect(lines[1].latency_ms).toBe(1067);
   });
 
+  test("persists and exposes every parsed LLM response without the first-three truncation", async () => {
+    const llmEvents = [
+      [
+        {
+          agent_name: "Router",
+          prompt_response: JSON.stringify({
+            content: "",
+            tool_invocations: [{ function: { name: "continue_flow" } }],
+          }),
+        },
+        {
+          agent_name: "Router",
+          prompt_response: JSON.stringify({ content: "Intermediate response" }),
+        },
+      ],
+      [
+        {
+          agent_name: "Service",
+          prompt_response: JSON.stringify({
+            content: "",
+            tool_invocations: [{ function: { name: "resolve_issue" } }],
+          }),
+        },
+        {
+          agent_name: "Service",
+          prompt_response: JSON.stringify({ content: "Final response" }),
+        },
+      ],
+    ];
+    const state = STATE_OUTPUT("service", "plan-sequence", 500);
+    const lastExecution = state.response.planner_response
+      .lastExecution as typeof state.response.planner_response.lastExecution & {
+      llmEvents?: unknown[];
+    };
+    lastExecution.llmEvents = llmEvents;
+    lastExecution.agentResponse = "Final response";
+    const test: TestResult = {
+      id: "response_sequence",
+      outputs: [{ type: "agent.send_message", id: "turn", response: "Final response" }, state],
+      evaluation_results: [],
+      errors: [],
+    };
+    const merged: EvalApiResponse = { results: [test] };
+
+    await writeRun({
+      runDir: workDir,
+      merged,
+      traces: new Map(),
+      metadata: META,
+      failures: [],
+    });
+
+    const transcript = JSON.parse(
+      (await readFile(path.join(workDir, "transcript.jsonl"), "utf8")).trim(),
+    );
+    expect(transcript.response_sequence.events).toHaveLength(4);
+    expect(transcript.response_sequence.non_empty_content_count).toBe(2);
+    expect(transcript.response_sequence.events[3]).toMatchObject({
+      content: "Final response",
+      matches_final_response: true,
+    });
+
+    const failure = buildFailureRecord(test, []);
+    expect(failure.turns[0].response_sequence.events).toHaveLength(4);
+    expect(failure.turns[0].response_sequence.integrity.status).toBe("warning");
+  });
+
   test("legacy turn1/state1 naming still works", async () => {
     const merged: EvalApiResponse = {
       results: [

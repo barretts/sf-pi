@@ -29,6 +29,7 @@ import type {
 } from "./types.ts";
 import { groupEvaluators } from "./threshold.ts";
 import { summarizeLastExecution } from "../preview/trace-digest.ts";
+import { buildLlmResponseSequence } from "../llm-response-sequence.ts";
 
 /**
  * State variable keys that carry signal for the a representative service agent. Add to
@@ -184,6 +185,7 @@ export function buildTurnSummary(
     execution_history_last5: executionHistoryLast5(sc),
     plugins: pluginNames(sc),
     llm_events,
+    response_sequence: buildLlmResponseSequence(le.llmEvents, agentResponse),
     digest,
   };
 }

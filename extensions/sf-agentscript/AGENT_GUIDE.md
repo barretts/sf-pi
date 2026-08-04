@@ -144,6 +144,8 @@ For long or exploratory local runs, pass `batch_timeout_ms` to cap each Evaluati
 
 Eval runs synthesize trace artifacts from inline Evaluation API data by default. Eval does not expose `RelatedAgentStep`; connected-agent call counts are therefore unavailable, not zero and not inferred from LLM events. Use `agentscript_preview` for authoritative connected-call telemetry, and use `agentscript_eval action="trace"` only when you explicitly need a live planner trace and have a known resident `session_id`/`plan_id`.
 
+Each paired `send_message` and `get_state` turn persists a complete parsed `response_sequence` from `lastExecution.llmEvents` in transcript, failure, and synthesized-trace artifacts. It retains every response event and tool name without copying full prompt bodies. Missing `get_state` evidence is `unavailable`, never a passing zero. `raw.json` remains the authoritative untouched API response.
+
 Use `$latest_*` placeholders or `version_resolution="latest"` only for the publish → eval → activate loop, and pass `acknowledge_inactive_version=true` when deliberately testing a non-Active version.
 
 Use `get_failure` after large runs. If exactly one failed completed run exists on the current branch, `run_id` may be omitted; otherwise pass it explicitly.

@@ -62,6 +62,7 @@ import type {
   SessionContext,
   TestResult,
 } from "./types.ts";
+import { buildLlmResponseSequence, type TurnResponseSequence } from "../llm-response-sequence.ts";
 
 // -------------------------------------------------------------------------------------------------
 // Public types
@@ -88,6 +89,7 @@ export interface SynthesizedTrace {
   invokedActions?: unknown[];
   errors?: unknown[];
   llmEvents?: unknown[];
+  responseSequence: TurnResponseSequence;
   executionHistory?: ExecutionHistoryEntry[];
   stateVariables?: Record<string, unknown>;
   message?: Record<string, unknown>;
@@ -326,6 +328,7 @@ function buildSynthesizedTrace(opts: BuildOptions): SynthesizedTrace {
     invokedActions: le.invokedActions,
     errors: le.errors,
     llmEvents: le.llmEvents,
+    responseSequence: buildLlmResponseSequence(le.llmEvents, le.agentResponse),
     executionHistory: sc.executionHistory,
     stateVariables: sc.stateVariables,
     message: msg as Record<string, unknown>,
