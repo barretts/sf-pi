@@ -12,6 +12,7 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { UiGlyphs } from "../../../../lib/common/ui-glyphs.ts";
 import { renderStudioTable, type StudioTableColumn } from "./layout.ts";
 import { redactStudioValue } from "./redaction.ts";
+import { responseSequenceLines } from "../render/response-sequence.ts";
 import type {
   StudioEvaluator,
   StudioInventory,
@@ -879,6 +880,18 @@ export class EvalStudioComponent implements Focusable {
                 `   ${this.theme.fg("accent", `${this.glyphs.actions} Actions`)}   ${actual.invoked_actions.join(", ")}`,
               ]
             : []),
+          ...(actual?.response_sequence
+            ? [
+                `   ${this.theme.fg("accent", "LLM")}       ${actual.response_sequence.llm_call_count} calls · ${actual.response_sequence.non_empty_content_count} candidate · ${this.theme.fg(actual.response_sequence.integrity.status === "pass" ? "success" : "warning", actual.response_sequence.integrity.status)}`,
+                ...(selected
+                  ? responseSequenceLines(actual.response_sequence, this.theme).map(
+                      (line) => `   ${line}`,
+                    )
+                  : []),
+              ]
+            : actual
+              ? [`   ${this.theme.fg("muted", "LLM")}       response-sequence evidence unavailable`]
+              : []),
           this.theme.fg("dim", "─".repeat(Math.max(1, Math.min(width, 72)))),
         ];
       }),

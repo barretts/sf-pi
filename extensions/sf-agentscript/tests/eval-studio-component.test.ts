@@ -3,6 +3,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
 import { EvalStudioComponent } from "../lib/eval-studio/component.ts";
 import type { StudioInventory } from "../lib/eval-studio/types.ts";
+import { buildLlmResponseSequence } from "../lib/llm-response-sequence.ts";
 
 const theme = {
   fg: (_name: string, value: string) => value,
@@ -194,6 +195,64 @@ describe("Eval Studio component", () => {
     const rendered = component.render(120).join("\n");
     expect(rendered).toContain("Selected Run  run-old");
     expect(rendered).toContain("Digest        old-source");
+  });
+
+  it("shows response-integrity counts and expands the selected turn sequence", () => {
+    const data = inventory();
+    data.suites[0].runs = [
+      {
+        run_id: "run-sequence",
+        run_dir: "/runs/run-sequence",
+        classification: "current",
+        scope: "suite",
+        execution_state: "completed",
+        recorded_verdict: "passed",
+        current_verdict: "passed",
+        turns: [
+          {
+            scenario_id: "greeting",
+            turn_id: "turn",
+            utterance: "Hello",
+            agent_response: "Final greeting",
+            topic: "welcome",
+            response_sequence: buildLlmResponseSequence(
+              [
+                [
+                  {
+                    agent_name: "Router",
+                    prompt_response: JSON.stringify({
+                      content: "",
+                      tool_invocations: [{ function: { name: "continue_flow" } }],
+                    }),
+                  },
+                  {
+                    agent_name: "Router",
+                    prompt_response: JSON.stringify({ content: "Intermediate greeting" }),
+                  },
+                  {
+                    agent_name: "Welcome",
+                    prompt_response: JSON.stringify({ content: "Final greeting" }),
+                  },
+                ],
+              ],
+              "Final greeting",
+            ),
+          },
+        ],
+      },
+    ];
+
+    const component = new EvalStudioComponent(theme, data, glyphs, vi.fn());
+    component.handleInput("\r");
+    component.handleInput("\r");
+    const rendered = component.render(120).join("\n");
+    expect(rendered).toContain("LLM");
+    expect(rendered).toContain("3 calls");
+    expect(rendered).toContain("2 candidate");
+    expect(rendered).toContain("warning");
+    expect(rendered).toContain("LLM Response Sequence");
+    expect(rendered).toContain("Intermediate greeting");
+    expect(rendered).toContain("Final greeting");
   });
 
   it("uses Pi Input for focused Unicode filtering", () => {

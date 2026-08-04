@@ -11,6 +11,85 @@ afterEach(async () => {
 });
 
 describe("Eval Studio artifact reader", () => {
+  it("reconstructs legacy transcript response sequences from raw eval evidence", async () => {
+    const base = await mkdtemp(path.join(tmpdir(), "eval-studio-legacy-sequence-"));
+    dirs.push(base);
+    const runId = "run-legacy-sequence";
+    const runDir = path.join(base, runId);
+    await mkdir(runDir);
+    const spec = {
+      tests: [
+        {
+          id: "scenario",
+          steps: [{ type: "evaluator.string_assertion", id: "ok" }],
+        },
+      ],
+    };
+    await writeFile(
+      path.join(runDir, "manifest.json"),
+      JSON.stringify({
+        schema_version: 2,
+        run_id: runId,
+        created: "2026-08-04T00:00:00.000Z",
+        scope: "suite",
+        org: "sandbox",
+        org_id: "00D000000000001",
+        source_digest: "source",
+        executed_digest: "executed",
+        source_snapshot: "spec.source.snapshot.json",
+        executed_snapshot: "spec.executed.snapshot.json",
+        expected: { scenarios: [{ id: "scenario", evaluator_ids: ["ok"] }] },
+      }),
+    );
+    await writeFile(path.join(runDir, "spec.source.snapshot.json"), JSON.stringify(spec));
+    await writeFile(path.join(runDir, "spec.executed.snapshot.json"), JSON.stringify(spec));
+    await writeFile(
+      path.join(runDir, "transcript.jsonl"),
+      `${JSON.stringify({
+        test_id: "scenario",
+        turn_id: "turn1",
+        agent_response: "Final response",
+      })}\n`,
+    );
+    await writeFile(
+      path.join(runDir, "raw.json"),
+      JSON.stringify({
+        results: [
+          {
+            id: "scenario",
+            outputs: [
+              { type: "agent.send_message", id: "turn1", response: "Final response" },
+              {
+                type: "agent.get_state",
+                id: "state1",
+                response: {
+                  planner_response: {
+                    lastExecution: {
+                      agentResponse: "Final response",
+                      llmEvents: [
+                        [
+                          {
+                            prompt_response: JSON.stringify({ content: "Intermediate response" }),
+                          },
+                          { prompt_response: JSON.stringify({ content: "Final response" }) },
+                        ],
+                      ],
+                    },
+                  },
+                },
+              },
+            ],
+            evaluation_results: [{ id: "ok", is_pass: true }],
+          },
+        ],
+      }),
+    );
+
+    const artifact = await readEvalRunArtifact(runDir, { details: true });
+    expect(artifact.summary.turns?.[0]?.response_sequence?.events).toHaveLength(2);
+    expect(artifact.summary.turns?.[0]?.response_sequence?.non_empty_content_count).toBe(2);
+  });
+
   it("preserves recorded verdict while deriving the current interpretation from immutable evidence", async () => {
     const base = await mkdtemp(path.join(tmpdir(), "eval-studio-artifact-"));
     dirs.push(base);
@@ -190,6 +269,45 @@ describe("Eval Studio artifact reader", () => {
         turn_id: "turn1",
         agent_response: "Account 001SECRET is ready",
         state_variables: { customer_id: "001SECRET", safe_state: "visible" },
+        response_sequence: {
+          events: [
+            {
+              index: 0,
+              batch_index: 0,
+              event_index: 0,
+              agent_name: "Router",
+              content: "Intermediate account 001SECRET response",
+              content_chars: 39,
+              tool_calls: [],
+              kind: "content",
+              response_format: "json",
+              matches_final_response: false,
+            },
+            {
+              index: 1,
+              batch_index: 0,
+              event_index: 1,
+              agent_name: "Service",
+              content: "Account 001SECRET is ready",
+              content_chars: 26,
+              tool_calls: [],
+              kind: "content",
+              response_format: "json",
+              matches_final_response: true,
+            },
+          ],
+          llm_call_count: 2,
+          non_empty_content_count: 2,
+          tool_only_count: 0,
+          malformed_count: 0,
+          final_response: "Account 001SECRET is ready",
+          final_response_event_index: 1,
+          integrity: {
+            status: "warning",
+            max_non_empty_contents: 1,
+            message: "2 non-empty LLM completions exceed the configured maximum of 1.",
+          },
+        },
       })}\n`,
     );
 
@@ -204,6 +322,11 @@ describe("Eval Studio artifact reader", () => {
       safe_state: "visible",
     });
     expect(artifact.summary.turns?.[0]?.agent_response).toContain("[REDACTED]");
+    expect(artifact.summary.turns?.[0]?.response_sequence?.events).toHaveLength(2);
+    expect(artifact.summary.turns?.[0]?.response_sequence?.events[0].content).toContain(
+      "[REDACTED]",
+    );
+    expect(artifact.summary.turns?.[0]?.response_sequence?.integrity.status).toBe("warning");
     expect(artifact.summary.evaluators?.[0]?.actual_value).toContain("[REDACTED]");
   });
 });

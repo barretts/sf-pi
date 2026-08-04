@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import type { EvaluatorCapability } from "../eval/evaluator-catalog.ts";
 import type { EvidenceVerdict, EvalExecutionState } from "../eval/verdict.ts";
+import type { TurnResponseSequence } from "../llm-response-sequence.ts";
 
 export interface StudioSeed {
   name: string;
@@ -88,6 +89,7 @@ export interface StudioRunSummary {
     topic?: string;
     invoked_actions?: string[];
     state_variables?: Record<string, unknown>;
+    response_sequence?: TurnResponseSequence;
   }>;
   error?: string;
 }

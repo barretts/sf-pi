@@ -13,6 +13,8 @@ import {
 } from "../eval/verdict.ts";
 import { redactStudioValue, type StudioRedactionContext } from "./redaction.ts";
 import type { StudioRunSummary } from "./types.ts";
+import type { TurnResponseSequence } from "../llm-response-sequence.ts";
+import { extractEvalTurnResponseSequences } from "../eval/response-integrity.ts";
 
 export interface ReadRunArtifact {
   summary: StudioRunSummary;
@@ -133,6 +135,7 @@ async function evaluatorRows(
 async function transcript(
   runDir: string,
   redaction: StudioRedactionContext,
+  fallbackSequences: Map<string, TurnResponseSequence> = new Map(),
 ): Promise<StudioRunSummary["turns"]> {
   try {
     const raw = await readFile(path.join(runDir, "transcript.jsonl"), "utf8");
@@ -142,9 +145,18 @@ async function transcript(
       .slice(0, 200)
       .map((line) => {
         const row = redactStudioValue(JSON.parse(line), "", redaction) as Record<string, unknown>;
+        const scenarioId = String(row.test_id ?? "");
+        const turnId = String(row.turn_id ?? "");
+        const fallback = fallbackSequences.get(`${scenarioId}::${turnId}`);
+        const responseSequence =
+          row.response_sequence && typeof row.response_sequence === "object"
+            ? (row.response_sequence as TurnResponseSequence)
+            : fallback
+              ? (redactStudioValue(fallback, "", redaction) as TurnResponseSequence)
+              : undefined;
         return {
-          scenario_id: String(row.test_id ?? ""),
-          turn_id: String(row.turn_id ?? ""),
+          scenario_id: scenarioId,
+          turn_id: turnId,
           ...(typeof row.utterance === "string" ? { utterance: row.utterance } : {}),
           ...(typeof row.agent_response === "string" ? { agent_response: row.agent_response } : {}),
           ...(typeof row.topic === "string" ? { topic: row.topic } : {}),
@@ -154,6 +166,7 @@ async function transcript(
           ...(row.state_variables && typeof row.state_variables === "object"
             ? { state_variables: row.state_variables as Record<string, unknown> }
             : {}),
+          ...(responseSequence ? { response_sequence: responseSequence } : {}),
         };
       });
   } catch {
@@ -220,9 +233,17 @@ export async function readEvalRunArtifact(
     json<EvalRunStatusArtifact>(path.join(runDir, "status.json")),
   ]);
   const redaction = await seedRedactionContext(runDir, manifestValue);
+  const rawResponse = options.details
+    ? await json<EvalApiResponse>(path.join(runDir, "raw.json"))
+    : undefined;
+  const fallbackSequences = rawResponse
+    ? extractEvalTurnResponseSequences(rawResponse)
+    : new Map<string, TurnResponseSequence>();
   const [turns, evaluators, interpretedVerdict, sourceSnapshot, executedSnapshot] =
     await Promise.all([
-      options.details ? transcript(runDir, redaction) : Promise.resolve(undefined),
+      options.details
+        ? transcript(runDir, redaction, fallbackSequences)
+        : Promise.resolve(undefined),
       options.details || options.evidence
         ? evaluatorRows(runDir, options.details === true, redaction)
         : Promise.resolve(undefined),

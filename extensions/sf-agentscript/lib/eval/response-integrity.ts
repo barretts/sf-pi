@@ -23,10 +23,10 @@ export interface EvalResponseIntegritySummary {
   observations: ResponseIntegrityObservation[];
 }
 
-export function summarizeEvalResponseIntegrity(
+export function extractEvalTurnResponseSequences(
   response: EvalApiResponse,
-): EvalResponseIntegritySummary {
-  const observations: ResponseIntegrityObservation[] = [];
+): Map<string, ReturnType<typeof buildLlmResponseSequence>> {
+  const sequences = new Map<string, ReturnType<typeof buildLlmResponseSequence>>();
   for (const test of response.results ?? []) {
     const outputs = test.outputs ?? [];
     const stateAfter = pairSendAndState(outputs);
@@ -39,10 +39,37 @@ export function summarizeEvalResponseIntegrity(
         state?.response as { planner_response?: PlannerResponse } | undefined
       )?.planner_response;
       const lastExecution = plannerResponse?.lastExecution;
-      const sequence = buildLlmResponseSequence(
-        lastExecution?.llmEvents,
-        finalResponse(send.response) ?? lastExecution?.agentResponse,
+      sequences.set(
+        `${String(test.id ?? "?")}::${String(send.id ?? "")}`,
+        buildLlmResponseSequence(
+          lastExecution?.llmEvents,
+          finalResponse(send.response) ?? lastExecution?.agentResponse,
+        ),
       );
+    }
+  }
+  return sequences;
+}
+
+export function summarizeEvalResponseIntegrity(
+  response: EvalApiResponse,
+): EvalResponseIntegritySummary {
+  const observations: ResponseIntegrityObservation[] = [];
+  const sequences = extractEvalTurnResponseSequences(response);
+  for (const test of response.results ?? []) {
+    const outputs = test.outputs ?? [];
+    const stateAfter = pairSendAndState(outputs);
+    for (let index = 0; index < outputs.length; index++) {
+      const send = outputs[index];
+      if (send.type !== "agent.send_message") continue;
+      const stateIndex = stateAfter.get(index);
+      const state = stateIndex === undefined ? undefined : outputs[stateIndex];
+      const plannerResponse = (
+        state?.response as { planner_response?: PlannerResponse } | undefined
+      )?.planner_response;
+      const sequence =
+        sequences.get(`${String(test.id ?? "?")}::${String(send.id ?? "")}`) ??
+        buildLlmResponseSequence(undefined, finalResponse(send.response));
       observations.push({
         test_id: String(test.id ?? "?"),
         turn_id: String(send.id ?? ""),
