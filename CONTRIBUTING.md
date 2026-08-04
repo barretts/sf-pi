@@ -207,8 +207,8 @@ Do not edit these manually:
 - `docs/extensions.md`
 - `docs/commands.md`
 - `docs/agent-orientation.md`
-- generated sections in `README.md`: bundled extensions, command reference,
-  troubleshooting index
+- generated sections in `README.md`: bundled extensions and command reference
+- generated troubleshooting index in `docs/troubleshooting.md`
 - generated folder layout in `ARCHITECTURE.md`
 - generated file-structure blocks in `extensions/*/README.md`
 - normalized `catalog/announcements.json`
@@ -280,7 +280,7 @@ Extension READMEs should include these sections when relevant:
 - **Behavior Matrix** — event/trigger → condition → result table.
 - **File Structure** — tree listing `lib/` + `tests/`.
 - **Troubleshooting** — bolded `**Symptom:**` entries with fixes. The
-  catalog generator picks these up and builds the root README's
+  catalog generator picks these up and builds the documentation site's
   troubleshooting index automatically, so every entry you add shows up
   with a jump link.
 

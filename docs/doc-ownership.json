@@ -41,6 +41,15 @@
     "generated": true,
     "checks": ["npm run generate-catalog:check", "npm run docs:build"]
   },
+  "docs/install.md": {
+    "source": ["package.json", "README.md", "official Pi and Salesforce CLI install docs"],
+    "checks": ["npm run docs:health:check", "npm run docs:build"]
+  },
+  "docs/troubleshooting.md": {
+    "source": ["extensions/*/README.md", "repo-wide recovery guidance"],
+    "partiallyGenerated": ["GENERATED:extension-troubleshooting-index"],
+    "checks": ["npm run generate-catalog:check", "npm run docs:build"]
+  },
   "docs/pi-081-runtime-adoption-plan.md": {
     "source": [
       "Pi 0.80.7-0.81 release documentation",

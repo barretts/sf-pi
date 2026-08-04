@@ -289,23 +289,24 @@ Several doc sections are **generated** from `extensions/*/manifest.json`
 to prevent drift. Never edit inside these marker pairs; edit the
 manifest instead and rerun `npm run generate-catalog`.
 
-| File                        | Generated section                                                  |
-| --------------------------- | ------------------------------------------------------------------ |
-| `catalog/registry.ts`       | entire file                                                        |
-| `catalog/index.json`        | entire file                                                        |
-| `README.md`                 | bundled-extensions table, command reference, troubleshooting index |
-| `ARCHITECTURE.md`           | folder layout                                                      |
-| `docs/extensions.md`        | entire file                                                        |
-| `docs/extensions/*.md`      | entire file                                                        |
-| `docs/commands.md`          | entire file                                                        |
-| `docs/agent-orientation.md` | entire file                                                        |
-| `extensions/*/README.md`    | file-structure marker block                                        |
+| File                        | Generated section                           |
+| --------------------------- | ------------------------------------------- |
+| `catalog/registry.ts`       | entire file                                 |
+| `catalog/index.json`        | entire file                                 |
+| `README.md`                 | bundled-extensions table, command reference |
+| `ARCHITECTURE.md`           | folder layout                               |
+| `docs/troubleshooting.md`   | extension troubleshooting index             |
+| `docs/extensions.md`        | entire file                                 |
+| `docs/extensions/*.md`      | entire file                                 |
+| `docs/commands.md`          | entire file                                 |
+| `docs/agent-orientation.md` | entire file                                 |
+| `extensions/*/README.md`    | file-structure marker block                 |
 
-The root README troubleshooting index is auto-built from each extension's
-`## Troubleshooting` section by scanning for bolded question entries
-(lines shaped like `**Symptom...:**` or `**Symptom...?**`). Add a new
+The documentation-site troubleshooting index is auto-built from each
+extension's `## Troubleshooting` section by scanning for bolded question
+entries (lines shaped like `**Symptom...:**` or `**Symptom...?**`). Add a new
 bullet under that heading in any extension README and it will appear in
-the root index after `npm run generate-catalog`.
+`docs/troubleshooting.md` after `npm run generate-catalog`.
 
 Marker format:
 

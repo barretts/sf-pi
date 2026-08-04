@@ -124,7 +124,7 @@ When an agent (or human) needs to change something, start here:
 | Generated bundled-extension table               | Inside `README.md` between `GENERATED:bundled-extensions` markers             |
 | Generated command-reference block               | Inside `README.md` between `GENERATED:command-reference` markers              |
 | Generated folder layout                         | Inside `ARCHITECTURE.md` between `GENERATED:folder-layout` markers            |
-| Generated troubleshooting index                 | Inside `README.md` between `GENERATED:troubleshooting-index` markers          |
+| Generated troubleshooting index                 | Inside `docs/troubleshooting.md` generated marker block                       |
 | Generated extension file maps                   | Inside `extensions/*/README.md` between `GENERATED:file-structure` markers    |
 | Hand-maintained registry types                  | `catalog/types.ts`                                                            |
 | Recommended external extensions (curated list)  | `catalog/recommendations.json` — hand-maintained, validated by generator      |

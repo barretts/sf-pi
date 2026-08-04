@@ -42,9 +42,10 @@ user—not only Pi. See npm's
 [`min-release-age` documentation](https://docs.npmjs.com/cli/v11/using-npm/config/#min-release-age)
 for details.
 
-## 3. Install Pi and SF Pi
+## 3. Install the latest Pi and SF Pi
 
-Install Pi, verify it, and then install SF Pi globally from GitHub:
+These unpinned commands install the latest available releases. Install Pi,
+verify it, and then install SF Pi globally from GitHub:
 
 ```bash
 npm install --global --ignore-scripts @earendil-works/pi-coding-agent
@@ -52,8 +53,8 @@ pi --version
 pi install git:github.com/salesforce/sf-pi
 ```
 
-SF Pi's supported Pi range is `>=0.82.0 <1.0.0`. Pi 0.83.0 is the current
-audited runtime.
+SF Pi's supported Pi range is `>=0.82.0 <1.0.0`. `/sf-pi doctor` reports
+whether the installed Pi and SF Pi versions are current.
 
 ## 4. Install or update Salesforce CLI
 
@@ -68,7 +69,7 @@ See the official
 [Salesforce CLI installation guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_install_cli.htm)
 for platform support and verification details.
 
-## 5. Start Pi and finish setup
+## 5. Start Pi and verify the installation
 
 Run Pi from the project directory where you want to work:
 
@@ -81,18 +82,33 @@ Then enter:
 ```text
 /reload
 /sf-pi doctor
+```
+
+## 6. Install Salesforce skills
+
+`sf-skills` is already bundled with SF Pi. Install the managed Salesforce skill
+library globally so it is available in every project:
+
+```text
 /sf-skills defaults install global
 /sf-skills summary
 ```
 
-`sf-skills` is already bundled with SF Pi. The `defaults install global`
-command installs the managed Salesforce skill library for all projects.
+## 7. Install the recommended extensions
+
+Install the complete curated package bundle:
+
+```text
+/sf-pi recommended install bundle:default
+/sf-pi recommended status
+```
 
 A successful setup has:
 
 - `/sf-pi doctor` reporting no blocking installation problem;
-- `sf --version` printing the installed Salesforce CLI version; and
-- `/sf-skills summary` showing the managed Salesforce skills.
+- `sf --version` printing the installed Salesforce CLI version;
+- `/sf-skills summary` showing the managed Salesforce skills; and
+- `/sf-pi recommended status` showing the curated bundle decisions.
 
 <details>
 <summary><strong>Advanced setup and manual updates</strong></summary>
@@ -115,14 +131,6 @@ If terminal glyphs appear as `?`, run:
 ```
 
 Then select **MesloLGM Nerd Font Mono** in your terminal and reopen it.
-
-### Recommended community packages
-
-Install the curated community package bundle with:
-
-```text
-/sf-pi recommended install bundle:default
-```
 
 ### Manual updates
 

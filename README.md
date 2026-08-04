@@ -63,7 +63,9 @@ npm config get min-release-age
 The final command must print `0`. This changes the npm policy for every install
 run by your user, not only Pi.
 
-### 3. Install Pi and SF Pi
+### 3. Install the latest Pi and SF Pi
+
+These unpinned commands install the latest available releases:
 
 ```bash
 npm install --global --ignore-scripts @earendil-works/pi-coding-agent
@@ -78,19 +80,33 @@ npm install --global @salesforce/cli@latest
 sf --version
 ```
 
-### 5. Start Pi and finish setup
+### 5. Start Pi and verify the installation
 
 Run `pi`, then enter:
 
 ```text
 /reload
 /sf-pi doctor
+```
+
+### 6. Install Salesforce skills
+
+`sf-skills` is already bundled with SF Pi. Install the managed Salesforce skill
+library globally so it is available in every project:
+
+```text
 /sf-skills defaults install global
 /sf-skills summary
 ```
 
-`sf-skills` is already bundled with SF Pi. The `defaults install global`
-command installs the managed Salesforce skill library for all projects.
+### 7. Install the recommended extensions
+
+Install the complete curated package bundle:
+
+```text
+/sf-pi recommended install bundle:default
+/sf-pi recommended status
+```
 
 <details>
 <summary><strong>Advanced setup and manual updates</strong></summary>
@@ -99,8 +115,6 @@ command installs the managed Salesforce skill library for all projects.
   `pi install -l git:github.com/salesforce/sf-pi`.
 - If terminal glyphs appear as `?`, run `/sf-setup-fonts` and select
   **MesloLGM Nerd Font Mono** in your terminal.
-- Install the recommended community package bundle with
-  `/sf-pi recommended install bundle:default`.
 - Update the three core installations with:
 
   ```bash
@@ -112,7 +126,8 @@ command installs the managed Salesforce skill library for all projects.
 macOS, Linux, and WSL are the primary targets. Native Windows is supported,
 with WSL recommended for parity with Unix shell tooling. SF Pi's stable Pi
 range is currently
-`>=0.82.0 <1.0.0`; Pi 0.83.0 is the current audited runtime.
+`>=0.82.0 <1.0.0`. `/sf-pi doctor` reports whether the installed Pi and SF Pi
+versions are current.
 
 </details>
 
@@ -362,9 +377,6 @@ place and Claude Code continues to use them unchanged.
 Browse extensions in the interactive `/sf-pi` manager or the generated
 [extension catalog](./docs/extensions.md).
 
-<details>
-<summary><strong>Show the complete bundled extension table</strong></summary>
-
 <!-- GENERATED:bundled-extensions:start -->
 
 For the canonical machine-readable bundle list, see [`catalog/index.json`](./catalog/index.json).
@@ -398,8 +410,6 @@ For the canonical machine-readable bundle list, see [`catalog/index.json`](./cat
 
 <!-- GENERATED:bundled-extensions:end -->
 
-</details>
-
 ## Access-controlled integrations
 
 SF LLM Gateway, SF Docs, and SF Slack require organization-provided access and
@@ -431,186 +441,6 @@ Start with `/sf-pi doctor`. Common repairs:
   run `/sf-pi doctor`.
 
 See the [troubleshooting guide](./docs/troubleshooting.md) for more help.
-
-<details>
-<summary><strong>Per-extension troubleshooting index</strong></summary>
-
-### Per-extension index
-
-<!-- GENERATED:troubleshooting-index:start -->
-
-Jump to an extension's Troubleshooting section to see the full fix. This index is generated from the `## Troubleshooting` section in each extension README, so it never drifts.
-
-**[SF Pi Manager](./extensions/sf-pi-manager/#troubleshooting)**
-
-- `/sf-pi` says "package not found in settings"
-- `pi --version` is newer than SF Pi's audited runtime range
-- Disabling an extension through the manager doesn't take effect
-- `/sf-pi enable-all` still leaves some extensions disabled
-- Auto Update is on but Herdr was not updated
-- Auto Update says it is waiting for `agent_settled`
-- Project-scoped changes aren't sticking
-- Display profile change doesn't affect any output
-- `/sf-pi recommended` shows no items or the opposite — too many
-- `/sf-pi skills` says "No external skill directories detected"
-- `/sf-pi skills` added a root but pi still doesn't load the skills
-
-**[SF LLM Gateway](./extensions/sf-llm-gateway-internal/#troubleshooting)**
-
-- Startup warning `No models match pattern "sf-llm-gateway-internal/*"`
-- Model discovery only returns `no-default-models`
-- Gateway fails on startup or tool calls error out immediately
-- Claude responses appear to truncate and the agent asks you to type "continue"
-- Opus 4.7/4.8 returns `api_error: Internal server error` on heavy turns
-- GPT-5-family models fail with a message asking to use `/v1/responses`
-- Footer shows `⚠` badge after a 429 or 5xx
-- I set `/thinking` to a different level but subsequent model switches reset it
-- Monthly-usage footer is stale or missing
-- Old and new gateway keys are confusing status or tests
-- Doctor reports `WARN: fetch failed` on macOS even though `curl` works
-- `/sf-llm-gateway onboard` says `not configured`
-
-**[SF Apex](./extensions/sf-apex/#troubleshooting)**
-
-- `sf_apex` cannot resolve the org
-- No log appears during `log.watch`
-- Anonymous Apex is refused as mutating
-
-**[SF Browser](./extensions/sf-browser/#troubleshooting)**
-
-- `agent-browser` is missing
-- Chrome/Chromium cannot launch in a container or CI runner
-- Snapshot refs fail
-- Screenshots are too heavy
-- A browser action is outside the hot path
-
-**[SF Code Analyzer](./extensions/sf-code-analyzer/#troubleshooting)**
-
-- `code_analyzer doctor` says the plugin is missing
-- PMD, CPD, or SFGE rules fail
-- Flow Scanner rules fail
-- A scan wrote files I did not expect
-
-**[SF Data 360](./extensions/sf-data360/#troubleshooting)**
-
-- A simple DMO list returns too much data
-- Metadata search fails but DMO/DLO lists work
-- Connector detail returns `NOT_FOUND`
-- `data360_*` tools are missing
-- A mutating call is blocked in headless mode
-- The wrong API version appears in my path
-
-**[SF Docs](./extensions/sf-docs/#troubleshooting)**
-
-- SF Docs says it is not connected
-- Collections look stale
-- A fetch returned the wrong locale or version
-
-**[SF Herdr](./extensions/sf-herdr/#troubleshooting)**
-
-- `/sf-herdr` is not available in the slash-command list
-- `sf_herdr_plan` says generic workflow
-- Herdr is not available
-- A lane stayed open
-- The main pane was shrunk too much
-
-**[SF Slack](./extensions/sf-slack/#troubleshooting)**
-
-- No Slack footer pill appears and no tools are available
-- Footer shows `✓ Connected` with fewer known scopes than expected
-- `slack_send action=dm` says `im:write` is missing
-- A Slack user or channel reference resolves to the wrong target
-- `slack_canvas read` says "canvas not found"
-- `slack_canvas read` criteria returns invalid arguments
-- `slack_canvas read` returns section IDs but no metadata
-- Search returns nothing from DMs or multi-party IMs
-- `slack_send` refuses to run in `pi -p` / CI mode
-- I need to see what `slack_send` posted (or attempted to post)
-
-**[SF tldraw](./extensions/sf-tldraw/#troubleshooting)**
-
-- The tool says no tldraw document is open
-- Status reports a stale server configuration
-- Status says the tldraw-offline Pi skill is missing, stale, or unmanaged
-- A render says the document may have reached its page limit
-- A render is blocked by readiness checks
-
-**[SF Guardrail](./extensions/sf-guardrail/#troubleshooting)**
-
-- All production confirms are firing on my sandbox
-- I cannot write to `destructiveChanges.xml` even though my rule is supposed to be off
-- Headless CI fails with "Blocked by sf-guardrail in headless mode"
-- `/sf-guardrail audit` is empty after /resume
-
-**[SF Brain](./extensions/sf-brain/#troubleshooting)**
-
-- The constitution never appears in model context
-- My user guidance does not take effect
-- The Instruction Surface baseline is not comparable
-
-**[SF Feedback](./extensions/sf-feedback/#troubleshooting)**
-
-- `/sf-feedback` opens a browser URL instead of creating the issue
-- GitHub says the account cannot create issues
-- Diagnostics show `unknown` or `unavailable`
-- A private value appears in the preview
-
-**[SF LSP](./extensions/sf-lsp/#troubleshooting)**
-
-- Top-bar LSP glyph legend
-- The sf-devbar top-bar LSP segment stays `◌` (dotted circle) after a while
-- Transcript rows feel too chatty / too quiet
-- Working indicator keeps saying `LSP Apex…` after the turn ends
-- `LSP setup note:` appears once per file type and then stays silent
-- Apex diagnostics never appear, even on obviously broken code
-- LWC diagnostics never appear
-- First-boot install prompt didn't appear
-- Top-bar dots are green but the install prompt says "not installed"
-- Install appears to hang
-- Diagnostics take >6 seconds to arrive
-- `.agent` files show no feedback or unexpected subprocess output
-- Diagnostics keep firing against files I've closed
-
-**[SF Data Explorer](./extensions/sf-data-explorer/#troubleshooting)**
-
-- `/sf-data-explorer` reports the transport could not be initialized
-- Catalog never finishes loading
-- Query refuses to run
-- Exports are not where I expect
-
-**[SF DevBar](./extensions/sf-devbar/#troubleshooting)**
-
-- Bars don't appear at all
-- Org segment shows `…` or takes a long time
-- Context bar is hidden or says `unknown`
-- Gateway badge color is wrong when using sf-llm-gateway-internal
-- `img:Nc` pill appears unexpectedly
-
-**[SF Ohana Spinner](./extensions/sf-ohana-spinner/#troubleshooting)**
-
-- Spinner colors look dim, washed-out, or garbled
-- No spinner appears during LLM thinking
-
-**[SF Skills](./extensions/sf-skills/#troubleshooting)**
-
-- My skills look duplicated — a wall of conflicts, and some show "Unknown source"
-- Can I disable a globally-enabled skill for just one project
-- A conflict shows REPORT-ONLY and `w` does nothing
-- I added a custom path but it vanished after reload
-- The funnel feels slow to open
-
-**[SF Welcome](./extensions/sf-welcome/#troubleshooting)**
-
-- Splash shows `?` boxes (tofu) where glyphs should be
-- Herdr says the upstream package or Pi state integration is missing
-- Splash feels too busy, stuck, or setup warnings are noisy
-- Splash content gets truncated in a narrow terminal
-- `/sf-setup-fonts` says everything is already installed but the splash still shows ASCII
-- I was asked to install the font once and declined — how do I get the prompt back
-
-<!-- GENERATED:troubleshooting-index:end -->
-
-</details>
 
 ## Contributing
 

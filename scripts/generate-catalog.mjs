@@ -34,6 +34,7 @@ const README_PATH = path.join(ROOT, "README.md");
 const ARCHITECTURE_PATH = path.join(ROOT, "ARCHITECTURE.md");
 const COMMANDS_DOC_PATH = path.join(DOCS_DIR, "commands.md");
 const EXTENSIONS_DOC_PATH = path.join(DOCS_DIR, "extensions.md");
+const TROUBLESHOOTING_DOC_PATH = path.join(DOCS_DIR, "troubleshooting.md");
 const EXTENSION_COPY_PATH = path.join(DOCS_DIR, "extension-copy.json");
 const EXTENSION_DOCS_DIR = path.join(DOCS_DIR, "extensions");
 const EXTENSION_SIDEBAR_PATH = path.join(DOCS_DIR, ".vitepress", "generated-extension-sidebar.ts");
@@ -61,8 +62,9 @@ const README_COMMANDS_START_MARKER = "<!-- GENERATED:command-reference:start -->
 const README_COMMANDS_END_MARKER = "<!-- GENERATED:command-reference:end -->";
 const ARCH_FOLDER_START_MARKER = "<!-- GENERATED:folder-layout:start -->";
 const ARCH_FOLDER_END_MARKER = "<!-- GENERATED:folder-layout:end -->";
-const README_TROUBLESHOOTING_START_MARKER = "<!-- GENERATED:troubleshooting-index:start -->";
-const README_TROUBLESHOOTING_END_MARKER = "<!-- GENERATED:troubleshooting-index:end -->";
+const TROUBLESHOOTING_INDEX_START_MARKER =
+  "<!-- GENERATED:extension-troubleshooting-index:start -->";
+const TROUBLESHOOTING_INDEX_END_MARKER = "<!-- GENERATED:extension-troubleshooting-index:end -->";
 const EXT_FILE_STRUCTURE_START_MARKER = "<!-- GENERATED:file-structure:start -->";
 const EXT_FILE_STRUCTURE_END_MARKER = "<!-- GENERATED:file-structure:end -->";
 const README_CATEGORY_ORDER = ["manager", "provider", "agent-tool", "safety", "assistive", "ui"];
@@ -679,13 +681,13 @@ function generateExtensionSidebar(manifests, extensionCopy) {
 }
 
 // -------------------------------------------------------------------------------------------------
-// Troubleshooting index (root README block)
+// Troubleshooting index (docs/troubleshooting.md block)
 //
 // Each extension's README may include a `## Troubleshooting` section. When it
 // does, the section is parsed for its bolded question entries (lines that
-// start with `**...:**` or `**...?**`) and surfaced in the root README
-// through an auto-generated table of contents. This lets users land on a
-// specific symptom quickly without knowing which extension owns it.
+// start with `**...:**` or `**...?**`) and surfaced in the documentation site's
+// troubleshooting page. This keeps the root README concise while preserving a
+// drift-proof symptom index.
 // -------------------------------------------------------------------------------------------------
 
 function extractTroubleshootingEntries(readmePath) {
@@ -726,7 +728,7 @@ function extractTroubleshootingEntries(readmePath) {
 function generateTroubleshootingIndex(manifests) {
   const sorted = sortByCategoryThenName(manifests);
   const lines = [
-    README_TROUBLESHOOTING_START_MARKER,
+    TROUBLESHOOTING_INDEX_START_MARKER,
     "Jump to an extension's Troubleshooting section to see the full fix. This index is generated from the `## Troubleshooting` section in each extension README, so it never drifts.",
     "",
   ];
@@ -738,7 +740,7 @@ function generateTroubleshootingIndex(manifests) {
     if (entries.length === 0) continue;
 
     anyEntries = true;
-    lines.push(`**[${manifest.name}](./extensions/${dir}/#troubleshooting)**`);
+    lines.push(`**[${manifest.name}](./extensions/${dir}.md#troubleshooting)**`);
     lines.push("");
     for (const entry of entries) {
       lines.push(`- ${entry}`);
@@ -753,7 +755,7 @@ function generateTroubleshootingIndex(manifests) {
     lines.push("");
   }
 
-  lines.push(README_TROUBLESHOOTING_END_MARKER);
+  lines.push(TROUBLESHOOTING_INDEX_END_MARKER);
   return lines.join("\n");
 }
 
@@ -1099,7 +1101,7 @@ async function replaceMarkedBlock(filePath, label, startMarker, endMarker, rawBl
   writeOrCheck(filePath, next, label);
 }
 
-async function writeOrCheckReadme(manifests) {
+async function writeOrCheckGeneratedMarkdownBlocks(manifests) {
   await replaceMarkedBlock(
     README_PATH,
     "README.md bundled extensions section",
@@ -1117,10 +1119,10 @@ async function writeOrCheckReadme(manifests) {
   );
 
   await replaceMarkedBlock(
-    README_PATH,
-    "README.md troubleshooting index",
-    README_TROUBLESHOOTING_START_MARKER,
-    README_TROUBLESHOOTING_END_MARKER,
+    TROUBLESHOOTING_DOC_PATH,
+    "docs/troubleshooting.md extension troubleshooting index",
+    TROUBLESHOOTING_INDEX_START_MARKER,
+    TROUBLESHOOTING_INDEX_END_MARKER,
     generateTroubleshootingIndex(manifests),
   );
 }
@@ -1205,7 +1207,7 @@ writeOrCheck(
   `catalog/index.json — ${manifests.length} extension(s)`,
 );
 
-await writeOrCheckReadme(manifests);
+await writeOrCheckGeneratedMarkdownBlocks(manifests);
 
 await writeOrCheckArchitecture(manifests);
 
