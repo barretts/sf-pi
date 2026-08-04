@@ -27,6 +27,7 @@ import { collectPlanKeys, fetchTracesConcurrent, type PlanKey } from "./trace-cl
 import { synthesizeTracesFromMerged } from "./synthesize-trace.ts";
 import {
   summarizeEvalResponseIntegrity,
+  validateEvalResponseIntegrityPolicy,
   type EvalResponseIntegritySummary,
 } from "./response-integrity.ts";
 import { deepDecode } from "./decode.ts";
@@ -48,7 +49,7 @@ import {
   resolveEvalSeedProfiles,
   type EvalSeedProvenance,
 } from "./seeds.ts";
-import { deriveEvalVerdict } from "./verdict.ts";
+import { deriveEvalVerdict, type ResponseIntegrityEvidence } from "./verdict.ts";
 import {
   detectPlaceholderUsage,
   injectResolvedAgentIds,
@@ -162,6 +163,7 @@ export interface RunEvalResult {
   batch_failures: EvalBatchFailure[];
   /** Advisory only in this release; does not alter Evaluation API verdicts. */
   response_integrity: EvalResponseIntegritySummary;
+  response_integrity_evidence?: ResponseIntegrityEvidence;
 }
 
 function enforceLatestAcknowledgement(ids: ResolvedAgentIds, opts: RunEvalOptions): void {
@@ -394,6 +396,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
   };
   try {
     throwIfAborted(opts.signal);
+    validateEvalResponseIntegrityPolicy(opts.spec);
 
     // 1. Resolve $active_* / $latest_* placeholders + apply spec normalization
     let spec = opts.spec;
@@ -902,7 +905,12 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       metadata,
       failed_batches: failedBatches,
       batch_failures: publicBatchFailures,
-      response_integrity: summarizeEvalResponseIntegrity(merged),
+      response_integrity: summarizeEvalResponseIntegrity(merged, {
+        maxNonEmptyContents: spec.sf_pi?.turn_response_integrity?.max_nonempty_llm_contents,
+      }),
+      ...(strictVerdict.response_integrity
+        ? { response_integrity_evidence: strictVerdict.response_integrity }
+        : {}),
     };
   } catch (err) {
     if (!terminalStatusWritten) {

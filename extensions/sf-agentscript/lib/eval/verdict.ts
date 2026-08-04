@@ -3,9 +3,13 @@
 
 import { evaluatorCatalogEntry, type EvaluatorCapability } from "./evaluator-catalog.ts";
 import { applyScoreThreshold } from "./threshold.ts";
+import {
+  summarizeEvalResponseIntegrity,
+  type EvalResponseIntegritySummary,
+} from "./response-integrity.ts";
 import type { EvalApiResponse, EvalResult, EvalSpec, EvalTest, TestResult } from "./types.ts";
 
-export const EVAL_VERDICT_SEMANTICS_VERSION = 1;
+export const EVAL_VERDICT_SEMANTICS_VERSION = 2;
 
 export type EvidenceVerdict = "passed" | "failed" | "incomplete" | "unverified";
 export type EvalExecutionState =
@@ -32,11 +36,19 @@ export interface ScenarioEvidence {
   issues: string[];
 }
 
+export interface ResponseIntegrityEvidence {
+  policy: NonNullable<NonNullable<EvalSpec["sf_pi"]>["turn_response_integrity"]>;
+  verdict: EvidenceVerdict;
+  summary: EvalResponseIntegritySummary;
+  issues: string[];
+}
+
 export interface EvalVerdictResult {
   semantics_version: number;
   verdict: EvidenceVerdict;
   scenarios: ScenarioEvidence[];
   issues: string[];
+  response_integrity?: ResponseIntegrityEvidence;
 }
 
 interface VerdictOptions {
@@ -224,6 +236,26 @@ function scenarioEvidence(expected: EvalTest, returned: TestResult | undefined):
   return { id: expected.id, verdict, evaluators, issues };
 }
 
+function responseIntegrityEvidence(
+  spec: EvalSpec,
+  response: EvalApiResponse,
+): ResponseIntegrityEvidence | undefined {
+  const policy = spec.sf_pi?.turn_response_integrity;
+  if (!policy) return undefined;
+  const summary = summarizeEvalResponseIntegrity(response, {
+    maxNonEmptyContents: policy.max_nonempty_llm_contents,
+  });
+  const issues = summary.observations
+    .filter((observation) => observation.status !== "pass")
+    .map(
+      (observation) =>
+        `${observation.test_id}/${observation.turn_id}: ${observation.message ?? observation.status}`,
+    );
+  const verdict: EvidenceVerdict =
+    summary.turns_unavailable > 0 ? "incomplete" : summary.turns_warning > 0 ? "failed" : "passed";
+  return { policy, verdict, summary, issues };
+}
+
 export function deriveEvalVerdict(
   spec: EvalSpec,
   response: EvalApiResponse,
@@ -250,14 +282,20 @@ export function deriveEvalVerdict(
   const scenarios = (spec.tests ?? []).map((test) =>
     scenarioEvidence(test, actualById.get(test.id)?.[0]),
   );
-  const verdict =
+  const scenarioVerdict =
     issues.length > 0
       ? "incomplete"
       : verdictPrecedence(scenarios.map((scenario) => scenario.verdict));
+  const responseIntegrity = responseIntegrityEvidence(spec, response);
+  const verdict =
+    responseIntegrity?.policy.severity === "error"
+      ? verdictPrecedence([scenarioVerdict, responseIntegrity.verdict])
+      : scenarioVerdict;
   return {
     semantics_version: EVAL_VERDICT_SEMANTICS_VERSION,
     verdict,
     scenarios,
     issues,
+    ...(responseIntegrity ? { response_integrity: responseIntegrity } : {}),
   };
 }

@@ -101,3 +101,4 @@ or accidentally contradicted in extension READMEs.
 - [0096: Setting Scope Policy Is Declared per Setting](./0096-setting-scope-policy-is-per-setting.md)
 - [0097: Agent Script Eval Studio Is a Local-First EvalSpec Workspace](./0097-agent-script-eval-studio-local-first-workspace.md)
 - [0098: Agent Script Eval Uses Bounded SOQL Seed Profiles](./0098-agentscript-eval-soql-seed-profiles.md)
+- [0099: Agent Script Eval Supports Deterministic Turn Response Integrity](./0099-agentscript-turn-response-integrity-policy.md)

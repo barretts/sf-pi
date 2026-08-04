@@ -19,6 +19,7 @@ import { clipLine, fmtMs, padRightVisible, rowDetail, styleForStep, stepLabel } 
 import type { TraceDigest } from "../preview/trace-digest.ts";
 import type { TurnResponseSequence } from "../llm-response-sequence.ts";
 import type { EvalResponseIntegritySummary } from "../eval/response-integrity.ts";
+import type { ResponseIntegrityEvidence } from "../eval/verdict.ts";
 import { responseSequenceLines } from "./response-sequence.ts";
 import { redactDisplayText } from "../../../../lib/common/redaction.ts";
 
@@ -76,6 +77,7 @@ export interface EvalRunDetails {
   latency?: LatencySummary;
   failed_test_ids?: string[];
   response_integrity?: EvalResponseIntegritySummary;
+  response_integrity_evidence?: ResponseIntegrityEvidence;
   // The text payload (which the LLM consumes) embeds the failure JSON when
   // small. The renderer parses that for inline failure cards.
 }
@@ -253,15 +255,23 @@ function formatRunBody(
   }
 
   const responseIntegrity = details.response_integrity;
+  const responseIntegrityEvidence = details.response_integrity_evidence;
   if (responseIntegrity && responseIntegrity.turns_total > 0) {
+    const policyLabel =
+      responseIntegrityEvidence?.policy.severity === "error" ? "release gate" : "advisory only";
     lines.push("");
     lines.push(
       dim(
         ansi
-          ? "─── 🗣 LLM Response Integrity (advisory only) ───"
-          : "**🗣 LLM Response Integrity (advisory only)**",
+          ? `─── 🗣 LLM Response Integrity (${policyLabel}) ───`
+          : `**🗣 LLM Response Integrity (${policyLabel})**`,
       ),
     );
+    if (responseIntegrityEvidence) {
+      lines.push(
+        `  ${dim("policy")} max ${responseIntegrityEvidence.policy.max_nonempty_llm_contents} non-empty · severity ${responseIntegrityEvidence.policy.severity} · evidence ${responseIntegrityEvidence.verdict}`,
+      );
+    }
     lines.push(
       `  ${ok(`✓ ${responseIntegrity.turns_pass} pass`)}  ${
         responseIntegrity.turns_warning > 0

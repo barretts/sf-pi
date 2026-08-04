@@ -335,6 +335,38 @@ describe("resolveEvalSeedProfiles", () => {
     });
   });
 
+  test("preserves response-integrity policy through baseline, seed, and Scenario projections", async () => {
+    const policy = {
+      turn_response_integrity: {
+        max_nonempty_llm_contents: 1,
+        severity: "error" as const,
+      },
+    };
+    const source = {
+      sf_pi: policy,
+      tests: [
+        {
+          id: "one",
+          steps: [
+            { type: "agent.create_session", id: "session" },
+            { type: "agent.send_message", id: "turn", utterance: "hello" },
+            { type: "agent.get_state", id: "state" },
+            { type: "evaluator.string_assertion", id: "ok" },
+          ],
+        },
+      ],
+    } satisfies EvalSpec;
+
+    expect((await resolveEvalSeedProfiles(source, { query: vi.fn() })).spec.sf_pi).toEqual(policy);
+    expect(selectScenarioSpec(source, "one").sf_pi).toEqual(policy);
+    expect(
+      applyGeneratedBaselineSeedConfig(
+        { tests: [{ id: "one", steps: [] }] },
+        { ...source, generated_baseline: {} },
+      ).sf_pi,
+    ).toEqual(policy);
+  });
+
   test("rejects duplicate scenario and step ids before resolving org data", async () => {
     const duplicateScenario = {
       tests: [testUsingProfile("duplicate", "missing"), testUsingProfile("duplicate", "missing")],

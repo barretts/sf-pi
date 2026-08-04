@@ -181,6 +181,130 @@ describe("deriveEvalVerdict", () => {
     expect(result.verdict).toBe("passed");
   });
 
+  it("enforces deterministic turn response integrity when suite severity is error", () => {
+    const strict: EvalSpec = {
+      ...spec(),
+      sf_pi: {
+        turn_response_integrity: {
+          max_nonempty_llm_contents: 1,
+          severity: "error",
+        },
+      },
+    };
+    strict.tests[0].steps.splice(2, 0, { type: "agent.get_state", id: "state1" });
+    const result = deriveEvalVerdict(
+      strict,
+      response([
+        {
+          id: "scenario",
+          outputs: [
+            { type: "agent.send_message", id: "turn1", response: "Final" },
+            {
+              type: "agent.get_state",
+              id: "state1",
+              response: {
+                planner_response: {
+                  lastExecution: {
+                    agentResponse: "Final",
+                    llmEvents: [
+                      [
+                        { prompt_response: JSON.stringify({ content: "Intermediate" }) },
+                        { prompt_response: JSON.stringify({ content: "Final" }) },
+                      ],
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+          evaluation_results: [
+            { id: "response_ok", type: "evaluator.string_assertion", is_pass: true },
+          ],
+        },
+      ]),
+    );
+
+    expect(result.verdict).toBe("failed");
+    expect(result.response_integrity).toMatchObject({
+      verdict: "failed",
+      policy: { max_nonempty_llm_contents: 1, severity: "error" },
+    });
+    expect(result.response_integrity?.summary.turns_warning).toBe(1);
+  });
+
+  it("marks missing strict response-integrity evidence incomplete", () => {
+    const strict: EvalSpec = {
+      ...spec(),
+      sf_pi: {
+        turn_response_integrity: {
+          max_nonempty_llm_contents: 1,
+          severity: "error",
+        },
+      },
+    };
+    const result = deriveEvalVerdict(
+      strict,
+      response([
+        {
+          id: "scenario",
+          outputs: [{ type: "agent.send_message", id: "turn1", response: "Final" }],
+          evaluation_results: [
+            { id: "response_ok", type: "evaluator.string_assertion", is_pass: true },
+          ],
+        },
+      ]),
+    );
+
+    expect(result.verdict).toBe("incomplete");
+    expect(result.response_integrity?.verdict).toBe("incomplete");
+  });
+
+  it("keeps warning response-integrity policy advisory", () => {
+    const advisory: EvalSpec = {
+      ...spec(),
+      sf_pi: {
+        turn_response_integrity: {
+          max_nonempty_llm_contents: 1,
+          severity: "warning",
+        },
+      },
+    };
+    const result = deriveEvalVerdict(
+      advisory,
+      response([
+        {
+          id: "scenario",
+          outputs: [
+            { type: "agent.send_message", id: "turn1", response: "Final" },
+            {
+              type: "agent.get_state",
+              id: "state1",
+              response: {
+                planner_response: {
+                  lastExecution: {
+                    agentResponse: "Final",
+                    llmEvents: [
+                      [
+                        { prompt_response: JSON.stringify({ content: "Intermediate" }) },
+                        { prompt_response: JSON.stringify({ content: "Final" }) },
+                      ],
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+          evaluation_results: [
+            { id: "response_ok", type: "evaluator.string_assertion", is_pass: true },
+          ],
+        },
+      ]),
+    );
+
+    expect(result.response_integrity?.verdict).toBe("failed");
+    expect(result.verdict).toBe("passed");
+  });
+
   it("marks duplicate/extra results and failed batches incomplete", () => {
     const duplicate = response([
       {

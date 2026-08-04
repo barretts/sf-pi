@@ -146,6 +146,53 @@ describe("evalRunMarkdown", () => {
     expect(md).toMatch(/2 non-empty/);
   });
 
+  it("labels strict response-integrity policy as a release gate", () => {
+    const summary = {
+      turns_total: 1,
+      turns_pass: 0,
+      turns_warning: 1,
+      turns_unavailable: 0,
+      max_non_empty_content_count: 2,
+      observations: [
+        {
+          test_id: "voice_flow",
+          turn_id: "turn1",
+          status: "warning" as const,
+          llm_call_count: 3,
+          non_empty_content_count: 2,
+        },
+      ],
+    };
+    const md = evalRunMarkdown(
+      {
+        ok: false,
+        run_id: "strict-integrity",
+        totals: {
+          tests: 1,
+          test_pass: 1,
+          test_fail: 0,
+          evals: 1,
+          ev_pass: 1,
+          ev_fail: 0,
+          errors: 0,
+        },
+        latency: { count: 1 },
+        response_integrity: summary,
+        response_integrity_evidence: {
+          policy: { max_nonempty_llm_contents: 1, severity: "error" },
+          verdict: "failed",
+          summary,
+          issues: ["voice_flow/turn1: response integrity failed"],
+        },
+      },
+      [],
+    );
+
+    expect(md).toMatch(/LLM Response Integrity \(release gate\)/);
+    expect(md).toMatch(/severity error/);
+    expect(md).toMatch(/evidence failed/);
+  });
+
   it("renders partial progress text when provided", () => {
     const rendered = renderEvalRunResult(
       { content: [{ type: "text", text: "Running 18 tests across 4 batch(es)" }] },

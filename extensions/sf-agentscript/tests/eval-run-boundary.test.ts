@@ -51,6 +51,7 @@ vi.mock("../lib/eval/eval-client.ts", async (importOriginal) => {
 });
 
 import { readFailures, runEval } from "../lib/eval/orchestrator.ts";
+import { EVAL_VERDICT_SEMANTICS_VERSION } from "../lib/eval/verdict.ts";
 import { createTimingCollector } from "../lib/timings.ts";
 
 let base: string;
@@ -95,6 +96,38 @@ describe("eval Run boundary", () => {
         spec: { tests: [] },
       }),
     ).rejects.toThrow("no tests");
+    expect(await readdir(base)).toEqual([]);
+  });
+
+  it("creates no Run when strict response integrity lacks get_state evidence", async () => {
+    await expect(
+      runEval({
+        conn: conn as never,
+        targetOrg: "test-org",
+        cwd: base,
+        runBase: base,
+        runId: "missing-response-evidence",
+        tracesMode: "off",
+        spec: {
+          sf_pi: {
+            turn_response_integrity: {
+              max_nonempty_llm_contents: 1,
+              severity: "error",
+            },
+          },
+          tests: [
+            {
+              id: "scenario",
+              steps: [
+                { type: "agent.create_session", id: "session" },
+                { type: "agent.send_message", id: "turn1", utterance: "hello" },
+                { type: "evaluator.string_assertion", id: "ok" },
+              ],
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow("response-integrity policy invalid");
     expect(await readdir(base)).toEqual([]);
   });
 
@@ -241,7 +274,7 @@ describe("eval Run boundary", () => {
     expect(result.metadata).toMatchObject({
       execution_state: "completed",
       evidence_verdict: "passed",
-      verdict_semantics_version: 1,
+      verdict_semantics_version: EVAL_VERDICT_SEMANTICS_VERSION,
     });
     expect(await readFailures(base, "run-fixed", base)).toEqual([]);
   });

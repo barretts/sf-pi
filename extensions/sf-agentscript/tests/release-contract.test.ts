@@ -10,6 +10,7 @@ import {
   hashEvalSpec,
   rewriteReleaseSpecForLatest,
 } from "../lib/release-contract.ts";
+import { EVAL_VERDICT_SEMANTICS_VERSION } from "../lib/eval/verdict.ts";
 
 const dirs: string[] = [];
 function tempCwd(): string {
@@ -250,7 +251,7 @@ function writeRun(
       run_id: runId,
       execution_state: "completed",
       evidence_verdict: "passed",
-      verdict_semantics_version: 1,
+      verdict_semantics_version: EVAL_VERDICT_SEMANTICS_VERSION,
       org_id: "00D000000000001",
       agent_api_name: "BillingAgent",
       bot_version_id: "0X9000000000001",

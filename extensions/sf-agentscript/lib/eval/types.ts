@@ -14,8 +14,17 @@
 // Spec (what we POST)
 // -------------------------------------------------------------------------------------------------
 
+export interface TurnResponseIntegrityPolicy {
+  max_nonempty_llm_contents: number;
+  severity: "warning" | "error";
+}
+
 export interface EvalSpec {
   tests: EvalTest[];
+  /** Extension-owned policy metadata. Never sent to the Salesforce Evaluation API. */
+  sf_pi?: {
+    turn_response_integrity?: TurnResponseIntegrityPolicy;
+  };
   /** Extension-owned, source-only org-data seeds. Stripped before Evaluation API POST. */
   seed_profiles?: Record<string, EvalSeedProfile>;
   /** Optional profile assignment copied into the generated release baseline. */

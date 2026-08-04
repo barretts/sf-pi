@@ -143,7 +143,22 @@ Eval-created sessions usually disappear before the live planner trace endpoint c
 
 For each paired `agent.send_message` and `agent.get_state`, `transcript.jsonl`, failure records, and synthesized traces retain a parsed `response_sequence` built from every `lastExecution.llmEvents` entry. The sequence stores response content, tool names, ordering, timing, and final-response matching without duplicating full prompt bodies. A turn without `get_state` evidence is recorded as `unavailable`, never as a passing zero-event turn. `raw.json` remains the authoritative unmodified API payload.
 
-Eval run results aggregate this evidence as a human-facing, advisory-only LLM Response Integrity summary, including pass, warning, and unavailable turn counts. Eval failure cards render the full response sequence for each turn. These advisories do not change Evaluation API verdicts or release evidence in this phase.
+Eval run results aggregate this evidence as a human-facing LLM Response Integrity summary, including pass, warning, and unavailable turn counts. Eval failure cards render the full response sequence for each turn. Without a suite policy this remains advisory.
+
+Suites can opt into a deterministic release gate:
+
+```json
+{
+  "sf_pi": {
+    "turn_response_integrity": {
+      "max_nonempty_llm_contents": 1,
+      "severity": "error"
+    }
+  }
+}
+```
+
+`warning` records advisory evidence without changing the run verdict. `error` makes excess non-empty completions fail evidence and missing response-sequence evidence incomplete. Strict policy requires exactly one `agent.get_state` after every `agent.send_message`; invalid suites fail local preflight before org calls or Run creation. The policy remains source-only, is preserved in snapshots and release digests, and is never sent as an Evaluation API step. See [ADR 0099](../../docs/adr/0099-agentscript-turn-response-integrity-policy.md).
 
 ## Eval-Gated Release Sequence
 

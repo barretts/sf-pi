@@ -105,6 +105,32 @@ describe("Eval Studio projectability", () => {
     );
   });
 
+  it("blocks strict response-integrity scenarios with missing turn evidence", () => {
+    const result = projectEvalSuite({
+      sf_pi: {
+        turn_response_integrity: {
+          max_nonempty_llm_contents: 1,
+          severity: "error",
+        },
+      },
+      tests: [
+        {
+          id: "missing_state",
+          steps: [
+            { type: "agent.create_session", id: "session" },
+            { type: "agent.send_message", id: "turn1", utterance: "hello" },
+            { type: "evaluator.string_assertion", id: "ok" },
+          ],
+        },
+      ],
+    });
+
+    expect(result.projectable).toBe(false);
+    expect(result.scenarios[0]?.blocking_issues).toContain(
+      "Strict response integrity requires exactly one agent.get_state after turn 'turn1'; found 0.",
+    );
+  });
+
   it("selects one Scenario without mutating the source Suite", () => {
     const source = { ...valid, tests: [...valid.tests, { ...valid.tests[0], id: "other" }] };
     const selected = selectScenarioSpec(source, "other");

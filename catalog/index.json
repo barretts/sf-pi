@@ -80,7 +80,7 @@
         "Eval Studio inventories repository EvalSpec JSON and local Run artifacts without Salesforce calls; org/version resolution occurs only after an explicit Run or Release Contract action.",
         "Eval runs synthesize trace artifacts from inline Evaluation API data by default; explicit trace fetches are idempotent GETs.",
         "Eval turn artifacts preserve a parsed response sequence for every lastExecution.llmEvents entry without duplicating full prompt bodies; missing get_state evidence is unavailable, never a passing zero.",
-        "Preview, eval reports, and Eval Studio expose every parsed LLM completion and advisory response-integrity warnings while keeping verdict and release semantics unchanged.",
+        "Preview, eval reports, and Eval Studio expose every parsed LLM completion; source-controlled turn-response policy can deterministically fail exact-version evidence when explicitly enabled.",
         "Publication always creates an inactive version; activation requires complete exact-org, exact-BotVersion generated-baseline evidence plus the current designated release suite when configured.",
         "Untested activation is a distinct Guardrail Safety Envelope; acknowledge_untested_activation is intent, never approval.",
         "5xx-only retry on POST avoids amplifying server-side overload (no Retry-After contract on the Eval API); client-side Eval API batch timeouts are terminal and configurable through batch_timeout_ms.",
@@ -90,7 +90,7 @@
     "entry": "extensions/sf-agentscript/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 36095
+    "srcLoc": 36250
   },
   {
     "id": "sf-apex",

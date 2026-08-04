@@ -2,7 +2,17 @@
 /** Conservative inverse projection from raw EvalSpec JSON into Studio concepts. */
 
 import { evaluatorCatalogEntry } from "../eval/evaluator-catalog.ts";
-import type { EvalSeedProfile, EvalSpec, EvalStep, EvalTest } from "../eval/types.ts";
+import type {
+  EvalSeedProfile,
+  EvalSpec,
+  EvalStep,
+  EvalTest,
+  TurnResponseIntegrityPolicy,
+} from "../eval/types.ts";
+import {
+  evalResponseIntegrityPolicyIssues,
+  responseIntegrityScenarioIssues,
+} from "../eval/response-integrity.ts";
 import type {
   StudioEvaluator,
   StudioScenario,
@@ -75,6 +85,7 @@ function projectScenario(
   test: EvalTest,
   sourceIndex: number,
   seedProfiles: Record<string, EvalSeedProfile>,
+  responseIntegrityPolicy?: TurnResponseIntegrityPolicy,
 ): StudioScenario {
   const blocking: string[] = [];
   const profileName = test.seed_profile;
@@ -127,6 +138,8 @@ function projectScenario(
       }
     }
   }
+  blocking.push(...responseIntegrityScenarioIssues(test, responseIntegrityPolicy));
+
   const evaluators: StudioEvaluator[] = steps
     .filter((step) => step.type.startsWith("evaluator."))
     .map((step) => {
@@ -200,7 +213,9 @@ export function projectEvalSuite(value: unknown): StudioSuiteProjection {
       scenarios: [],
     };
   }
-  const issues: string[] = [];
+  const issues: string[] = evalResponseIntegrityPolicyIssues(spec).filter((issue) =>
+    issue.startsWith("sf_pi.turn_response_integrity"),
+  );
   const ids = spec.tests.map((test) => String(test?.id ?? ""));
   for (const id of new Set(ids)) {
     if (!id) issues.push("Every Scenario requires a non-empty id.");
@@ -209,7 +224,7 @@ export function projectEvalSuite(value: unknown): StudioSuiteProjection {
     }
   }
   const scenarios = spec.tests.map((test, index) =>
-    projectScenario(test, index, spec.seed_profiles ?? {}),
+    projectScenario(test, index, spec.seed_profiles ?? {}, spec.sf_pi?.turn_response_integrity),
   );
   return {
     projectable:
@@ -228,6 +243,7 @@ export function selectScenarioSpec(spec: EvalSpec, scenarioId: string): EvalSpec
     throw new Error(`Scenario '${scenarioId}' references unknown seed profile '${profileName}'.`);
   }
   return {
+    ...(spec.sf_pi ? { sf_pi: structuredClone(spec.sf_pi) } : {}),
     ...(profileName && profile
       ? { seed_profiles: { [profileName]: structuredClone(profile) } }
       : {}),

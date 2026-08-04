@@ -146,7 +146,7 @@ Eval runs synthesize trace artifacts from inline Evaluation API data by default.
 
 Each paired `send_message` and `get_state` turn persists a complete parsed `response_sequence` from `lastExecution.llmEvents` in transcript, failure, and synthesized-trace artifacts. It retains every response event and tool name without copying full prompt bodies. Missing `get_state` evidence is `unavailable`, never a passing zero. `raw.json` remains the authoritative untouched API response.
 
-Eval run output aggregates response integrity as an advisory-only pass/warning/unavailable summary, and failure cards show every parsed completion for each turn. This presentation does not alter Evaluation API evaluator results, strict verdicts, or release gating.
+Eval run output aggregates response integrity as a pass/warning/unavailable summary, and failure cards show every parsed completion for each turn. It is advisory unless the Suite declares `sf_pi.turn_response_integrity`. `severity: "warning"` preserves the server verdict; `severity: "error"` makes excess non-empty completions Failed and unavailable evidence Incomplete. Strict policy requires exactly one `agent.get_state` after each `agent.send_message` and fails preflight before org calls or Run creation when that proof is missing. The source-only policy is preserved in Suite/Scenario snapshots, generated baselines, and release digests but is never sent as an Evaluation API step.
 
 Use `$latest_*` placeholders or `version_resolution="latest"` only for the publish → eval → activate loop, and pass `acknowledge_inactive_version=true` when deliberately testing a non-Active version.
 

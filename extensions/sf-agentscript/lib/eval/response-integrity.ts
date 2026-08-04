@@ -2,7 +2,13 @@
 /** Advisory aggregate of per-turn LLM response-sequence evidence. */
 
 import { buildLlmResponseSequence } from "../llm-response-sequence.ts";
-import type { EvalApiResponse, PlannerResponse } from "./types.ts";
+import type {
+  EvalApiResponse,
+  EvalSpec,
+  EvalTest,
+  PlannerResponse,
+  TurnResponseIntegrityPolicy,
+} from "./types.ts";
 
 export interface ResponseIntegrityObservation {
   test_id: string;
@@ -23,8 +29,72 @@ export interface EvalResponseIntegritySummary {
   observations: ResponseIntegrityObservation[];
 }
 
+export function responseIntegrityScenarioIssues(
+  test: EvalTest,
+  policy: TurnResponseIntegrityPolicy | undefined,
+): string[] {
+  if (!policy || policy.severity !== "error") return [];
+  const issues: string[] = [];
+  let currentTurn: string | undefined;
+  let stateCount = 0;
+  const finishTurn = (): void => {
+    if (currentTurn !== undefined && stateCount !== 1) {
+      issues.push(
+        `Strict response integrity requires exactly one agent.get_state after turn '${currentTurn}'; found ${stateCount}.`,
+      );
+    }
+  };
+  for (const step of test.steps ?? []) {
+    if (step.type === "agent.send_message") {
+      finishTurn();
+      currentTurn = String(step.id ?? "");
+      stateCount = 0;
+    } else if (step.type === "agent.get_state" && currentTurn !== undefined) {
+      stateCount++;
+    }
+  }
+  finishTurn();
+  return issues;
+}
+
+export function evalResponseIntegrityPolicyIssues(spec: EvalSpec): string[] {
+  const policy = spec.sf_pi?.turn_response_integrity;
+  if (!policy) return [];
+  const issues: string[] = [];
+  if (
+    !Number.isInteger(policy.max_nonempty_llm_contents) ||
+    policy.max_nonempty_llm_contents < 1 ||
+    policy.max_nonempty_llm_contents > 100
+  ) {
+    issues.push(
+      "sf_pi.turn_response_integrity.max_nonempty_llm_contents must be an integer from 1 through 100.",
+    );
+  }
+  if (policy.severity !== "warning" && policy.severity !== "error") {
+    issues.push("sf_pi.turn_response_integrity.severity must be 'warning' or 'error'.");
+  }
+  if (issues.length === 0) {
+    for (const test of spec.tests ?? []) {
+      issues.push(
+        ...responseIntegrityScenarioIssues(test, policy).map(
+          (issue) => `${String(test.id ?? "?")}/${issue}`,
+        ),
+      );
+    }
+  }
+  return issues;
+}
+
+export function validateEvalResponseIntegrityPolicy(spec: EvalSpec): void {
+  const issues = evalResponseIntegrityPolicyIssues(spec);
+  if (issues.length > 0) {
+    throw new Error(`Eval response-integrity policy invalid:\n- ${issues.join("\n- ")}`);
+  }
+}
+
 export function extractEvalTurnResponseSequences(
   response: EvalApiResponse,
+  options: { maxNonEmptyContents?: number } = {},
 ): Map<string, ReturnType<typeof buildLlmResponseSequence>> {
   const sequences = new Map<string, ReturnType<typeof buildLlmResponseSequence>>();
   for (const test of response.results ?? []) {
@@ -44,6 +114,7 @@ export function extractEvalTurnResponseSequences(
         buildLlmResponseSequence(
           lastExecution?.llmEvents,
           finalResponse(send.response) ?? lastExecution?.agentResponse,
+          options,
         ),
       );
     }
@@ -53,9 +124,10 @@ export function extractEvalTurnResponseSequences(
 
 export function summarizeEvalResponseIntegrity(
   response: EvalApiResponse,
+  options: { maxNonEmptyContents?: number } = {},
 ): EvalResponseIntegritySummary {
   const observations: ResponseIntegrityObservation[] = [];
-  const sequences = extractEvalTurnResponseSequences(response);
+  const sequences = extractEvalTurnResponseSequences(response, options);
   for (const test of response.results ?? []) {
     const outputs = test.outputs ?? [];
     const stateAfter = pairSendAndState(outputs);
@@ -69,7 +141,7 @@ export function summarizeEvalResponseIntegrity(
       )?.planner_response;
       const sequence =
         sequences.get(`${String(test.id ?? "?")}::${String(send.id ?? "")}`) ??
-        buildLlmResponseSequence(undefined, finalResponse(send.response));
+        buildLlmResponseSequence(undefined, finalResponse(send.response), options);
       observations.push({
         test_id: String(test.id ?? "?"),
         turn_id: String(send.id ?? ""),

@@ -66,6 +66,7 @@ export function applyGeneratedBaselineSeedConfig(
     ]),
   );
   return {
+    ...(designated.sf_pi ? { sf_pi: structuredClone(designated.sf_pi) } : {}),
     ...(referencedProfiles.size > 0 ? { seed_profiles: selectedProfiles } : {}),
     tests,
   };
@@ -105,7 +106,13 @@ export async function resolveEvalSeedProfiles(
   }
 
   const tests = source.tests.map((test) => resolveTest(test, valuesByProfile));
-  return { spec: { tests }, provenance };
+  return {
+    spec: {
+      ...(source.sf_pi ? { sf_pi: structuredClone(source.sf_pi) } : {}),
+      tests,
+    },
+    provenance,
+  };
 }
 
 export function redactResolvedSeedValues<T>(
