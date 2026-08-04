@@ -16,10 +16,9 @@
 `sf-pi` is a bundle of opinionated extensions for the
 [pi coding agent](https://pi.dev) aimed at developers who work on
 Salesforce and Salesforce-adjacent codebases. It ships Apex/LWC LSP
-diagnostics, an in-process Agent Script authoring companion, a Slack
-research tool, a Salesforce-aware status bar, a splash screen, and a
-central manager for enabling or disabling any of them per project or
-globally.
+diagnostics, Agent Script authoring, Salesforce-aware tools and status
+surfaces, and a central manager for enabling or disabling extensions per
+project or globally.
 
 ![sf-pi updated screenshot 1](https://github.com/user-attachments/assets/cbf2db6b-939c-4c66-8dab-fc505749fc77)
 
@@ -38,111 +37,93 @@ extensions — see [Credits](#credits) at the bottom of this README.
 
 ## Getting started
 
-sf-pi runs inside pi. If you're brand new, install the runtime first,
-then add sf-pi.
+Follow this one-time setup in order.
 
-### Step 1 — Install Node.js
+### 1. Install Node.js and npm
 
-pi and sf-pi need **Node.js `>=22.19`**.
-
-- **macOS (recommended):** `brew install node`
-- **Linux / WSL:** use your distro's package manager, or
-  [`nvm`](https://github.com/nvm-sh/nvm) for version management
-- **Windows:** installer from [nodejs.org](https://nodejs.org/), then
-  use WSL for the best experience
-
-If you use `nvm`, switch before installing pi:
+Install [Node.js](https://nodejs.org/) **22.19 or newer**, then use npm 11:
 
 ```bash
-nvm install 22
-nvm use 22
-nvm alias default 22
-```
-
-Verify:
-
-```bash
-node --version    # v22.19.0 or newer
+node --version
+npm install --global npm@11
 npm --version
 ```
 
-### Step 2 — Install the pi coding agent
+### 2. Allow immediate package updates
+
+Some managed npm configurations delay newly published packages for seven days.
+Set the user-level release age to zero so Pi and its packages can update
+immediately:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+npm config set min-release-age 0 --location=user
+npm config get min-release-age
 ```
 
-Then run `pi` in any folder to launch the TUI. Full docs, tutorials, and
-extension authoring guides live at **[pi.dev](https://pi.dev)**.
+The final command must print `0`. This changes the npm policy for every install
+run by your user, not only Pi.
 
-> **New to pi?** Spend five minutes with the
-> [pi.dev overview](https://pi.dev) before adding sf-pi. The `pi install`,
-> `pi settings`, and `/reload` commands referenced below are all
-> pi-native.
-
-### Step 3 — Install sf-pi
+### 3. Install Pi and SF Pi
 
 ```bash
-# Install globally (visible in every pi session on your machine)
+npm install --global --ignore-scripts @earendil-works/pi-coding-agent
+pi --version
 pi install git:github.com/salesforce/sf-pi
-
-# Or install for a specific project (only active in that folder)
-pi install -l git:github.com/salesforce/sf-pi
 ```
 
-Restart pi or run `/reload`. Every extension ships enabled by default
-— see the **Default** column in the [Bundled Extensions](#bundled-extensions)
-table for exact per-extension defaults.
+### 4. Install or update Salesforce CLI
 
-Users who do not use a compatible LLM gateway can disable that provider with
-`/sf-pi disable sf-llm-gateway-internal`; all other bundled extensions continue
-to work independently.
+```bash
+npm install --global @salesforce/cli@latest
+sf --version
+```
 
-### Step 4 — Set up the terminal font (one-time)
+### 5. Start Pi and finish setup
 
-The splash and status bars use
-[Nerd Font](https://www.nerdfonts.com/) glyphs. If you see `?` or
-plain-ASCII fallbacks, run:
+Run `pi`, then enter:
 
 ```text
-/sf-setup-fonts
+/reload
+/sf-pi doctor
+/sf-skills defaults install global
+/sf-skills summary
 ```
 
-Then set your terminal font to **MesloLGM Nerd Font Mono** and reopen
-the terminal.
+`sf-skills` is already bundled with SF Pi. The `defaults install global`
+command installs the managed Salesforce skill library for all projects.
 
-### Step 5 — (Recommended) install the community extension bundle
+<details>
+<summary><strong>Advanced setup and manual updates</strong></summary>
 
-sf-pi expects a handful of community pi extensions (web search, tool
-display, etc.) to be present for the best experience. Install the
-curated bundle once:
+- Install SF Pi only for the current project with
+  `pi install -l git:github.com/salesforce/sf-pi`.
+- If terminal glyphs appear as `?`, run `/sf-setup-fonts` and select
+  **MesloLGM Nerd Font Mono** in your terminal.
+- Install the recommended community package bundle with
+  `/sf-pi recommended install bundle:default`.
+- Update the three core installations with:
 
-```text
-/sf-pi recommended install bundle:default
-```
+  ```bash
+  pi update --self
+  pi update git:github.com/salesforce/sf-pi
+  npm install --global @salesforce/cli@latest
+  ```
 
-See [Recommended Extensions](#recommended-extensions) for per-package
-details and why each one is worth it.
+macOS, Linux, and WSL are the primary targets. Native Windows is supported,
+with WSL recommended for parity with Unix shell tooling. SF Pi's stable Pi
+range is currently
+`>=0.82.0 <1.0.0`; Pi 0.83.0 is the current audited runtime.
 
-### Supported platforms
-
-macOS, Linux, and WSL are the primary targets. Native Windows works on
-x64 and ARM64 once the `sf` CLI is installed, but WSL is recommended for
-parity with Linux/macOS shell tooling. The loadable Pi range tracks the
-`peerDependencies` range in [`package.json`](./package.json) (currently
-`>=0.82.0 <1.0.0`). Required compatibility CI audits `>=0.82.0 <0.84.0`, with
-Pi 0.83.0 recommended. Newer stable Pi 0.x releases load in
-forward-compatibility mode with one warning; older, prerelease, and Pi 1.x
-runtimes remain blocked by [`lib/common/pi-compat.ts`](./lib/common/pi-compat.ts).
-SF Docs, Slack, and the Gateway use
-one shared SF Pi fixed-mask provider component for interactive TUI login while
-Pi alone owns credential persistence and logout.
+</details>
 
 ## Telemetry and aggregate metrics
 
 sf-pi does **not** collect active runtime telemetry. No bundled extension sends
 prompts, responses, tool calls, file paths, Salesforce org identifiers, Slack
 identifiers, environment variables, or command usage from your machine.
+
+<details>
+<summary><strong>Privacy settings and aggregate metrics</strong></summary>
 
 ### Pi runtime defaults
 
@@ -179,7 +160,12 @@ without adding client-side telemetry.
 See [`docs/telemetry.md`](./docs/telemetry.md) for the full privacy policy and
 future telemetry requirements.
 
+</details>
+
 ## Announcements
+
+<details>
+<summary><strong>Announcement controls</strong></summary>
 
 The startup splash can show a small **Announcements** panel for sf-pi
 maintainer notes and update nudges. Announcements come from the bundled
@@ -208,7 +194,15 @@ Or keep bundled/update notices while disabling only the hosted feed:
 { "sfPi": { "announcements": { "feedEnabled": false } } }
 ```
 
+</details>
+
 ## Command Reference
+
+See the generated [`docs/commands.md`](./docs/commands.md) for the complete
+command reference.
+
+<details>
+<summary><strong>Show all bundled slash commands</strong></summary>
 
 Every slash command lives inside a bundled extension. This table is the
 fastest way to map a command to the extension that owns it. For subcommands
@@ -247,43 +241,21 @@ Every slash command exposed by a bundled extension. See each extension README fo
 
 <!-- GENERATED:command-reference:end -->
 
+</details>
+
 ## Managing Extensions
 
-Use the `/sf-pi` command to manage extensions interactively or via subcommands:
+Open `/sf-pi` for the interactive manager. The essential commands are:
 
 ```text
-/sf-pi                          # Open interactive TUI overlay
-/sf-pi list                     # List extensions with status
-/sf-pi enable <id>              # Enable an extension
-/sf-pi disable <id>             # Disable an extension
-/sf-pi enable-all               # Enable all extensions
-/sf-pi disable-all              # Disable all (except manager)
-/sf-pi status                   # Show summary
-/sf-pi display                  # Show effective display profile
-/sf-pi display compact          # Use terse summaries/minimal previews
-/sf-pi display balanced         # Use concise defaults with useful previews
-/sf-pi display verbose          # Use richer previews/full detail by default
-/sf-pi recommended              # Open the recommended-extensions checklist
-/sf-pi recommended list         # Print recommended extensions + your decisions
-/sf-pi recommended install <id> # Install one recommended extension (or bundle:<name>)
-/sf-pi recommended remove  <id> # Remove a recommended extension
-/sf-pi recommended status       # Show revision + install/decline counts
-/sf-pi skills                   # Wire Claude Code / Codex / Cursor skill dirs
-/sf-pi skills list              # List detected external skill roots
-/sf-pi skills link <path|label> # Add a root to settings.skills[]
-/sf-pi skills unlink <path|label> # Remove a root from settings.skills[]
-/sf-pi doctor                   # Diagnose startup, skill, and package setup
-/sf-pi doctor fix startup       # Switch to quiet/header startup
-/sf-pi doctor fix skills        # Quarantine duplicate sf-* skills and repair skill paths
-/sf-pi help                     # Show available commands
+/sf-pi doctor
+/sf-pi status
+/sf-pi enable <id> global
+/sf-pi disable <id> global
 ```
 
-Add `global` or `project` to target a specific settings scope:
-
-```text
-/sf-pi disable sf-ohana-spinner project
-/sf-pi enable-all global
-```
+Use `/sf-pi help` or the [command reference](./docs/commands.md) for advanced
+settings, project scope, recommendations, and repair commands.
 
 ## Recommended Extensions
 
@@ -298,7 +270,10 @@ Install them all in one shot:
 /sf-pi recommended install bundle:default
 ```
 
-Or cherry-pick individual packages with `/sf-pi recommended install <id>`.
+Or inspect individual packages with `/sf-pi recommended`.
+
+<details>
+<summary><strong>Default bundle contents and checklist behavior</strong></summary>
 
 ### The default bundle
 
@@ -341,7 +316,12 @@ First-run behavior:
 Proposing a new recommendation: see
 [CONTRIBUTING.md](./CONTRIBUTING.md#proposing-a-recommended-extension).
 
+</details>
+
 ## Using Skills from Claude Code, Codex, or Cursor
+
+<details>
+<summary><strong>Advanced: connect existing skill directories</strong></summary>
 
 Pi natively loads skills from `~/.pi/agent/skills/` and `~/.agents/skills/`.
 Skill libraries from other harnesses — Claude Code (`~/.claude/skills`),
@@ -375,7 +355,15 @@ Skills work side-by-side across harnesses — wiring a Claude Code directory
 here does not copy, move, or touch the files in any way. Pi reads them in
 place and Claude Code continues to use them unchanged.
 
+</details>
+
 ## Bundled Extensions
+
+Browse extensions in the interactive `/sf-pi` manager or the generated
+[extension catalog](./docs/extensions.md).
+
+<details>
+<summary><strong>Show the complete bundled extension table</strong></summary>
 
 <!-- GENERATED:bundled-extensions:start -->
 
@@ -410,178 +398,42 @@ For the canonical machine-readable bundle list, see [`catalog/index.json`](./cat
 
 <!-- GENERATED:bundled-extensions:end -->
 
-> **Note on `sf-llm-gateway-internal`:** this optional provider ships with no
-> default endpoint or credentials. If you do not use a compatible LLM gateway,
-> disable it with `/sf-pi disable sf-llm-gateway-internal`; otherwise configure
-> your gateway with `/sf-llm-gateway`.
+</details>
 
-## SF LLM Gateway Quick Start
+## Access-controlled integrations
 
-The normal setup path is inside pi. Run the built-in setup wizard and paste your
-organization's gateway root URL plus API key:
+SF LLM Gateway, SF Docs, and SF Slack require organization-provided access and
+credentials. Their onboarding instructions are maintained separately from this
+public README.
 
-Run `/sf-llm-gateway` with no args to open the setup/settings page. From there
-you can enter the gateway root URL, paste a token, open the gateway in your
-browser to create a token, or import a cleansed URL/token from local Claude Code
-settings. The retired `/sf-llm-gateway-internal` slash command is no longer
-registered; `/sf-llm-gateway` is the single command entry point.
-
-For headless or copy-paste use, the canonical subcommands are:
+If your organization does not provide these services, disable them globally:
 
 ```text
-# Setup
-/sf-llm-gateway setup                        # Setup form (Manager action page in UI)
-/sf-llm-gateway open-token                   # Open gateway root in browser for token creation
-/sf-llm-gateway import-claude                # Import cleansed URL + token from Claude Code settings
-/sf-llm-gateway on                           # Enable provider + set default model
-/sf-llm-gateway off                          # Disable provider + restore previous default
-/sf-llm-gateway set-default                  # Set the scoped default model
-
-# Discovery & diagnostics
-/sf-llm-gateway refresh                      # Re-discover models + refresh budget
-/sf-llm-gateway models                       # List discovered gateway models
-/sf-llm-gateway doctor                       # Diagnose gateway connectivity + scope drift
-/sf-llm-gateway usage-probe                  # Force a read-only key/user spend probe
-/sf-llm-gateway debug <model>                # Inspect transformed upstream payload
-
-# Utilities
-/sf-llm-gateway tokens                       # Count prompt tokens + zero-cost note for current model
-/sf-llm-gateway onboard                      # Print SSO onboarding link / paste-token instructions
-/sf-llm-gateway beta                         # Show beta header state
-/sf-llm-gateway beta context-1m off          # Toggle a beta header
-
-# Reference
-/sf-llm-gateway status                       # Full text status report
-/sf-llm-gateway help                         # Command reference
+/sf-pi disable sf-llm-gateway-internal global
+/sf-pi disable sf-docs global
+/sf-pi disable sf-slack global
 ```
 
-See the extension's [Command Surface](./extensions/sf-llm-gateway-internal/#command-surface)
-section for the canonical grouping with descriptions.
-
-The extension stores setup in pi's saved config. Env vars are still supported as
-an automation fallback when saved config is blank, but they are no longer the
-recommended onboarding path and cannot override a saved key. Known pasted URL
-suffixes such as `/v1` or model-specific route suffixes are canonicalized to
-the gateway root automatically.
-
-### Session storage location
-
-pi stores session transcripts in a default location (`~/.pi/agent/sessions`).
-To relocate them — for example, onto a shared drive, an encrypted volume, or
-a per-project folder — set `PI_CODING_AGENT_SESSION_DIR` in your environment
-(pi ≥ 0.71.0). It is equivalent to passing `--session-dir` on every
-invocation and is picked up by all sf-pi commands without any sf-pi change.
-
-```bash
-export PI_CODING_AGENT_SESSION_DIR="$HOME/.pi-sessions"
-```
-
-sf-pi loads stable pi `>=0.82.0 <1.0.0`, so compatible installations honor the
-env var. Pi 0.83.0 is the recommended and latest required-CI runtime.
-
-## Adding a New Extension
-
-The fastest way is with scaffolding:
-
-```bash
-npm run scaffold -- --id sf-my-extension --category ui --name "My Extension"
-```
-
-This creates the full directory structure with boilerplate and regenerates the catalog.
-
-Or manually:
-
-1. Create `extensions/<id>/` with `index.ts` and `manifest.json`
-2. Run `npm run generate-catalog` to regenerate the catalog
-3. Run `npm run check` to verify types
-
-See [AGENTS.md](./AGENTS.md) for contributor rules and
-[ARCHITECTURE.md](./ARCHITECTURE.md) for the full repo guide, and
-[CONTRIBUTING.md](./CONTRIBUTING.md) for the contributor workflow.
-
-## Development
-
-```bash
-git clone https://github.com/salesforce/sf-pi.git
-cd sf-pi
-npm install
-
-# Install locally for development
-pi install .
-
-# Scaffold a new extension
-npm run scaffold -- --id sf-my-ext --category ui
-
-# Regenerate catalog after editing manifest.json
-npm run generate-catalog
-
-# Format check
-npm run format:check
-
-# Type check
-npm run check
-
-# Run tests
-npm test
-
-# Full local validation (generate + docs health/build + SPDX + format + check + test)
-npm run validate
-
-# CI-like local validation, including ESLint and the LLM-artifact guard
-npm run validate:ci
-
-# Documentation site and drift helpers
-npm run docs:dev
-npm run docs:build
-npm run docs:health:check
-npm run docs:changed
-```
-
-## How Enable/Disable Works
-
-`sf-pi` uses pi's native
-[package filtering](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/packages.md#package-filtering)
-in `settings.json`. When you disable an extension, the manager writes an
-exclusion pattern (e.g., `!extensions/sf-ohana-spinner/index.ts`) to the
-package entry and triggers a reload. Disabled extensions have zero runtime
-cost — they are not loaded at all.
+For extension internals and command references, use the generated
+[extension catalog](./docs/extensions.md).
 
 ## Troubleshooting
 
-Repo-wide tips first, then a per-extension index auto-generated from every
-extension's `## Troubleshooting` section.
+Start with `/sf-pi doctor`. Common repairs:
 
-**Startup splash feels stuck or skill collisions keep appearing:**
-Launch once with `SF_PI_SAFE_START=1 pi`, then run `/sf-pi doctor`. For the
-common duplicate-skill case, `/sf-pi doctor fix skills` keeps the preferred
-skill root active and moves duplicate `sf-*` skills from pi-owned roots into a
-timestamped quarantine folder instead of deleting them. `/sf-pi doctor fix
-startup` sets quiet/header startup so the full overlay no longer blocks input.
+- **Package not found:** run `pi install git:github.com/salesforce/sf-pi`.
+- **Updates are seven days behind:** run
+  `npm config set min-release-age 0 --location=user` and verify with
+  `npm config get min-release-age`.
+- **Node or engine warning:** install Node.js `>=22.19`, then repeat the
+  [Getting started](#getting-started) commands.
+- **Startup or skill collision:** launch once with `SF_PI_SAFE_START=1 pi`, then
+  run `/sf-pi doctor`.
 
-**`/sf-pi` commands say "package not found in settings":**
-Run `pi install .` from the repo root, or `pi install git:github.com/salesforce/sf-pi`
-to register the package in your pi settings.
+See the [troubleshooting guide](./docs/troubleshooting.md) for more help.
 
-**Install warns about Node 20, `EBADENGINE`, or `husky: command not found`:**
-Use Node.js `>=22.19`, then reinstall pi and sf-pi from the same shell:
-
-```bash
-nvm install 22
-nvm use 22
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent
-pi install git:github.com/salesforce/sf-pi
-```
-
-sf-pi's install scripts skip development-only Husky setup during pi package
-installs, so end users should not need Husky installed globally.
-
-**Tests fail locally but pass in CI:**
-Delete `node_modules` and reinstall with `npm ci`.
-
-**Generated docs say they're out of date (`npm run generate-catalog:check` fails):**
-Run `npm run generate-catalog` and commit the refreshed `catalog/*`,
-`docs/commands.md`, `docs/agent-orientation.md`, and the generated marker
-blocks inside `README.md` / `ARCHITECTURE.md` / `extensions/*/README.md`.
+<details>
+<summary><strong>Per-extension troubleshooting index</strong></summary>
 
 ### Per-extension index
 
@@ -757,6 +609,8 @@ Jump to an extension's Troubleshooting section to see the full fix. This index i
 - I was asked to install the font once and declined — how do I get the prompt back
 
 <!-- GENERATED:troubleshooting-index:end -->
+
+</details>
 
 ## Contributing
 

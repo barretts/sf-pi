@@ -1,112 +1,147 @@
 ---
 title: Install SF Pi
-description: Install pi, add sf-pi from GitHub, and verify the bundled extensions.
+description: Install Node.js, npm, pi, SF Pi, Salesforce CLI, and the managed Salesforce skill library.
 ---
 
 # Install SF Pi
 
-SF Pi runs inside the [pi coding agent](https://pi.dev). Install the runtime
-first, then add this repository as a pi package.
+SF Pi runs inside the [pi coding agent](https://pi.dev). Follow this one-time
+setup in order.
 
 ## Requirements
 
 - Node.js `>=22.19`
-- pi coding agent `>=0.75.4`
-- macOS, Linux, or WSL for the best-supported shell experience
-- Salesforce CLI if you plan to use Salesforce org-aware workflows
+- npm 11
+- pi coding agent `>=0.82.0 <1.0.0`
+- macOS, Linux, WSL, or native Windows
 
-## 1. Install Node.js
+## 1. Install Node.js and npm
+
+Install [Node.js](https://nodejs.org/) **22.19 or newer**, then use npm 11:
 
 ```bash
 node --version
+npm install --global npm@11
 npm --version
 ```
 
-If Node.js is missing or too old, install a current Node 22 release. With
-`nvm`:
+## 2. Allow immediate package updates
+
+Some managed npm configurations delay newly published packages for seven days.
+Set the user-level release age to zero so Pi and its packages can update
+immediately:
 
 ```bash
-nvm install 22
-nvm use 22
-nvm alias default 22
+npm config set min-release-age 0 --location=user
+npm config get min-release-age
 ```
 
-## 2. Install pi
+The final command must print `0`. This writes to the user npm configuration,
+normally `~/.npmrc`, and changes the policy for every npm install run by your
+user—not only Pi. See npm's
+[`min-release-age` documentation](https://docs.npmjs.com/cli/v11/using-npm/config/#min-release-age)
+for details.
+
+## 3. Install Pi and SF Pi
+
+Install Pi, verify it, and then install SF Pi globally from GitHub:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent
-```
-
-Run `pi` in a project folder to launch the terminal UI.
-
-## 3. Install SF Pi
-
-Install globally so the extensions are available in every pi session:
-
-```bash
+npm install --global --ignore-scripts @earendil-works/pi-coding-agent
+pi --version
 pi install git:github.com/salesforce/sf-pi
 ```
 
-Or install only for the current project:
+SF Pi's supported Pi range is `>=0.82.0 <1.0.0`. Pi 0.83.0 is the current
+audited runtime.
+
+## 4. Install or update Salesforce CLI
+
+Use npm as the single installation and update path:
+
+```bash
+npm install --global @salesforce/cli@latest
+sf --version
+```
+
+See the official
+[Salesforce CLI installation guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_install_cli.htm)
+for platform support and verification details.
+
+## 5. Start Pi and finish setup
+
+Run Pi from the project directory where you want to work:
+
+```bash
+pi
+```
+
+Then enter:
+
+```text
+/reload
+/sf-pi doctor
+/sf-skills defaults install global
+/sf-skills summary
+```
+
+`sf-skills` is already bundled with SF Pi. The `defaults install global`
+command installs the managed Salesforce skill library for all projects.
+
+A successful setup has:
+
+- `/sf-pi doctor` reporting no blocking installation problem;
+- `sf --version` printing the installed Salesforce CLI version; and
+- `/sf-skills summary` showing the managed Salesforce skills.
+
+<details>
+<summary><strong>Advanced setup and manual updates</strong></summary>
+
+### Project-only SF Pi installation
+
+The standard installation is global. To make SF Pi available only in the
+current project, use:
 
 ```bash
 pi install -l git:github.com/salesforce/sf-pi
 ```
 
-Restart pi or run:
+### Terminal font
 
-```text
-/reload
-```
-
-## 4. Verify the package
-
-Open the manager panel:
-
-```text
-/sf-pi
-```
-
-Useful follow-up checks:
-
-```text
-/sf-pi status
-/sf-org
-/sf-devbar
-/sf-guardrail
-```
-
-## 5. Set up the terminal font
-
-Some SF Pi surfaces use Nerd Font glyphs. If symbols render as `?` or blank
-boxes, run:
+If terminal glyphs appear as `?`, run:
 
 ```text
 /sf-setup-fonts
 ```
 
-Then set your terminal font to **MesloLGM Nerd Font Mono** and reopen the
-terminal.
+Then select **MesloLGM Nerd Font Mono** in your terminal and reopen it.
 
-## 6. Install recommended community extensions
+### Recommended community packages
 
-SF Pi works on its own, but the recommended pi extension bundle improves web
-search, tool display, and day-to-day agent ergonomics:
+Install the curated community package bundle with:
 
 ```text
 /sf-pi recommended install bundle:default
 ```
 
-You can inspect or remove recommendations from the same manager surface:
+### Manual updates
 
-```text
-/sf-pi recommended
+Update the three core installations with:
+
+```bash
+pi update --self
+pi update git:github.com/salesforce/sf-pi
+npm install --global @salesforce/cli@latest
 ```
 
-## Updating
+Restart Pi or run `/reload`, then verify with `/sf-pi doctor`.
 
-Use pi's package update flow for installed Git packages. After updating,
-restart pi or run `/reload`, then check `/sf-pi status`.
+### Platform notes
+
+macOS, Linux, and WSL are the primary targets. Native Windows is supported,
+with WSL recommended for parity with Unix shell tooling.
+
+</details>
 
 ## Next step
 
