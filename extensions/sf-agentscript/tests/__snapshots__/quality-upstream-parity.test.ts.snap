@@ -567,6 +567,105 @@ exports[`quality upstream strict parity > 'deterministic unknown input' 1`] = `
 }
 `;
 
+exports[`quality upstream strict parity > 'instruction template syntax' 1`] = `
+{
+  "decision": "reuse-upstream",
+  "execution_context": "official instruction interpolation diagnostic projected into quality",
+  "local_diagnostics": [],
+  "local_findings": [
+    {
+      "code": "instruction-template-syntax",
+      "evidence": undefined,
+      "message": "'current_step' looks like a variable name — did you mean {!@variables.current_step}? Variable references require template syntax to be interpolated.",
+      "range": {
+        "end": {
+          "character": 39,
+          "line": 17,
+        },
+        "start": {
+          "character": 27,
+          "line": 17,
+        },
+      },
+      "severity": "moderate",
+      "suggestion": undefined,
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [
+    {
+      "code": "unused-variable",
+      "data": {
+        "removalRange": {
+          "end": {
+            "character": 35,
+            "line": 12,
+          },
+          "start": {
+            "character": 4,
+            "line": 11,
+          },
+        },
+      },
+      "message": "Variable 'current_step' is declared but never used",
+      "range": {
+        "end": {
+          "character": 35,
+          "line": 12,
+        },
+        "start": {
+          "character": 4,
+          "line": 11,
+        },
+      },
+      "severity": 3,
+      "source": "agentscript-lint",
+    },
+    {
+      "code": "instruction-template-syntax",
+      "data": undefined,
+      "message": "'current_step' looks like a variable name — did you mean {!@variables.current_step}? Variable references require template syntax to be interpolated.",
+      "range": {
+        "end": {
+          "character": 39,
+          "line": 17,
+        },
+        "start": {
+          "character": 27,
+          "line": 17,
+        },
+      },
+      "severity": 3,
+      "source": "agentscript-lint",
+    },
+  ],
+  "upstream_quick_fixes": [
+    {
+      "diagnostic_code": "unused-variable",
+      "diagnostic_line": 11,
+      "edits": [
+        {
+          "newText": "",
+          "range": {
+            "end": {
+              "character": 0,
+              "line": 13,
+            },
+            "start": {
+              "character": 0,
+              "line": 11,
+            },
+          },
+        },
+      ],
+      "preferred": true,
+      "title": "Remove unused variable",
+    },
+  ],
+}
+`;
+
 exports[`quality upstream strict parity > 'list element and index types' 1`] = `
 {
   "decision": "retain-local",
@@ -1134,5 +1233,109 @@ exports[`quality upstream strict parity > 'unused action' 1`] = `
   "strict_parity": false,
   "upstream": [],
   "upstream_quick_fixes": [],
+}
+`;
+
+exports[`quality upstream strict parity > 'variable description max length' 1`] = `
+{
+  "decision": "retain-local",
+  "execution_context": "variable declaration with a description over the publish limit",
+  "local_diagnostics": [
+    {
+      "code": "variable-description-max-length",
+      "data": {
+        "qualitySeverity": "high",
+        "ruleName": "Variable Description Is Too Long",
+        "suggestion": "Shorten the description to 255 characters or fewer.",
+      },
+      "message": "Variable 'current_step' description is 256 characters; Salesforce allows at most 255.",
+      "range": {
+        "end": {
+          "character": 279,
+          "line": 12,
+        },
+        "start": {
+          "character": 4,
+          "line": 11,
+        },
+      },
+      "severity": 2,
+      "source": "sf-agentscript-quality",
+    },
+  ],
+  "local_findings": [
+    {
+      "code": "variable-description-max-length",
+      "evidence": undefined,
+      "message": "Variable 'current_step' description is 256 characters; Salesforce allows at most 255.",
+      "range": {
+        "end": {
+          "character": 279,
+          "line": 12,
+        },
+        "start": {
+          "character": 4,
+          "line": 11,
+        },
+      },
+      "severity": "high",
+      "suggestion": "Shorten the description to 255 characters or fewer.",
+    },
+  ],
+  "metrics": [],
+  "strict_parity": false,
+  "upstream": [
+    {
+      "code": "unused-variable",
+      "data": {
+        "removalRange": {
+          "end": {
+            "character": 279,
+            "line": 12,
+          },
+          "start": {
+            "character": 4,
+            "line": 11,
+          },
+        },
+      },
+      "message": "Variable 'current_step' is declared but never used",
+      "range": {
+        "end": {
+          "character": 279,
+          "line": 12,
+        },
+        "start": {
+          "character": 4,
+          "line": 11,
+        },
+      },
+      "severity": 3,
+      "source": "agentscript-lint",
+    },
+  ],
+  "upstream_quick_fixes": [
+    {
+      "diagnostic_code": "unused-variable",
+      "diagnostic_line": 11,
+      "edits": [
+        {
+          "newText": "",
+          "range": {
+            "end": {
+              "character": 0,
+              "line": 13,
+            },
+            "start": {
+              "character": 0,
+              "line": 11,
+            },
+          },
+        },
+      ],
+      "preferred": true,
+      "title": "Remove unused variable",
+    },
+  ],
 }
 `;

@@ -39,4 +39,36 @@ start_agent main:
     );
     expect(isAgentScriptCompileValid(result.diagnostics)).toBe(true);
   });
+
+  it("surfaces overlong variable descriptions during compile-on-save", async () => {
+    const result = await checkAgentScriptSource(`system:
+    instructions: "Help"
+    messages:
+        welcome: "Hi"
+        error: "Error"
+config:
+    agent_name: "Edit_Time_Description"
+    agent_type: "AgentforceEmployeeAgent"
+variables:
+    current_step: mutable string = "start"
+        description: "${"a".repeat(256)}"
+start_agent main:
+    description: "Main"
+    reasoning:
+        instructions: ->
+            | Help
+`);
+
+    expect(result.ok).toBe(true);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "variable-description-max-length",
+          severity: 2,
+          source: "sf-agentscript-quality",
+        }),
+      ]),
+    );
+    expect(isAgentScriptCompileValid(result.diagnostics)).toBe(true);
+  });
 });

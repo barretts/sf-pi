@@ -83,7 +83,7 @@ afterEach(() => {
 });
 
 describe("Agent Script Analysis Snapshot", () => {
-  test("reuses one snapshot and lazy analysis promises for an unchanged file", async () => {
+  test("reuses stable analysis while recomputing settings-dependent projections", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "sf-agentscript-analysis-"));
     const file = path.join(dir, "Agent.agent");
     try {
@@ -100,9 +100,9 @@ describe("Agent Script Analysis Snapshot", () => {
       await Promise.all([one.getFeatureProfile(), two.getFeatureProfile()]);
 
       expect(analyzeAgentScriptSource).toHaveBeenCalledTimes(1);
-      expect(checkAgentScriptSource).toHaveBeenCalledTimes(1);
+      expect(checkAgentScriptSource).toHaveBeenCalledTimes(2);
       expect(inspectSource).toHaveBeenCalledTimes(1);
-      expect(runAgentScriptQuality).toHaveBeenCalledTimes(1);
+      expect(runAgentScriptQuality).toHaveBeenCalledTimes(2);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

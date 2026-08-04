@@ -170,6 +170,19 @@ export async function actionPublish(
     );
   }
 
+  const actionableQualityFindings = quality.findings.filter(
+    (finding) => finding.severity === "high" || finding.severity === "moderate",
+  );
+  const qualityAdvisory =
+    actionableQualityFindings.length > 0
+      ? {
+          count: actionableQualityFindings.length,
+          rule_ids: Array.from(
+            new Set(actionableQualityFindings.map((finding) => finding.rule_id)),
+          ),
+        }
+      : undefined;
+
   let featureProfile: AgentFeatureProfile | undefined;
   try {
     const inspect = timings
@@ -300,6 +313,7 @@ export async function actionPublish(
           was_new_agent: result.was_new_agent,
           activated: result.activated,
           authoring_bundle: result.authoring_bundle,
+          ...(qualityAdvisory ? { quality_advisory: qualityAdvisory } : {}),
           ...(result.preflight ? { preflight: result.preflight } : {}),
           ...(featureProfile?.publish_risks.length
             ? { publish_risks: featureProfile.publish_risks }
@@ -320,6 +334,11 @@ export async function actionPublish(
         `  • Agent API publish succeeded: bot_version_id=${result.bot_version_id}`,
         bundleLine,
         "  • published inactive; run agentscript_eval action='run_release' against this exact version before activation",
+        ...(qualityAdvisory
+          ? [
+              `  ⚠️ ${qualityAdvisory.count} quality recommendation(s) remain (${qualityAdvisory.rule_ids.join(", ")}); resolve them before activation`,
+            ]
+          : []),
         ...preflightLines,
       ]
         .filter(Boolean)

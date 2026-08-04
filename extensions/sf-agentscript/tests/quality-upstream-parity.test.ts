@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /**
- * Strict fixture parity for the 18-rule native quality catalog.
+ * Strict fixture parity for the 20-rule native quality catalog.
  *
  * Similar diagnostic names are not sufficient for deletion. These snapshots
  * pin code, source, severity, complete range, message, data, quick fixes, and
@@ -272,6 +272,34 @@ subagent next:
     ),
   },
   {
+    name: "variable description max length",
+    ruleIds: ["variable-description-max-length"],
+    executionContext: "variable declaration with a description over the publish limit",
+    source: agentSource(
+      `start_agent main:
+    description: "Main"
+    reasoning:
+        instructions: ->
+            | Help`,
+      `    current_step: mutable string = "start"
+        description: "${"a".repeat(256)}"`,
+    ),
+  },
+  {
+    name: "instruction template syntax",
+    ruleIds: ["instruction-template-syntax"],
+    executionContext: "official instruction interpolation diagnostic projected into quality",
+    source: agentSource(
+      `start_agent main:
+    description: "Main"
+    reasoning:
+        instructions: |
+            Use current_step to decide what to do next.`,
+      `    current_step: mutable string = "start"
+        description: "Current step"`,
+    ),
+  },
+  {
     name: "prompt template output flags",
     ruleIds: ["prompt-template-output-flags"],
     executionContext: "prompt-response action output declaration",
@@ -377,9 +405,9 @@ function rawQualityDiagnostics(source: string) {
     source: QUALITY_SOURCE,
     passes: [
       new QualityFactsPass(),
-      ...AGENT_SCRIPT_QUALITY_RULES.filter((definition) => definition.severity !== "metric").map(
-        (definition) => createQualityRulePass(definition.id),
-      ),
+      ...AGENT_SCRIPT_QUALITY_RULES.filter(
+        (definition) => definition.severity !== "metric" && !definition.upstreamDiagnosticCode,
+      ).map((definition) => createQualityRulePass(definition.id)),
     ],
   });
   return engine
@@ -417,10 +445,12 @@ function compactQuickFix(fix: Awaited<ReturnType<typeof buildQuickFixes>>[number
 
 describe("quality upstream strict parity", () => {
   test.each(cases)("$name", async (fixture) => {
-    const local = await runAgentScriptQuality(fixture.source);
     const upstream = await analyzeAgentScriptSource(fixture.source);
     expect(upstream.ok).toBe(true);
     if (!upstream.ok) return;
+    const local = await runAgentScriptQuality(fixture.source, {
+      upstreamDiagnostics: upstream.analysis.compileDiagnostics,
+    });
 
     for (const ruleId of fixture.ruleIds) {
       if (ruleId === "cyclomatic-complexity") {
@@ -454,7 +484,9 @@ describe("quality upstream strict parity", () => {
       upstream: upstream.analysis.compileDiagnostics.map(compactDiagnostic),
       upstream_quick_fixes: quickFixes.map(compactQuickFix),
       strict_parity: false,
-      decision: "retain-local",
+      decision: fixture.ruleIds.includes("instruction-template-syntax")
+        ? "reuse-upstream"
+        : "retain-local",
     }).toMatchSnapshot();
   });
 

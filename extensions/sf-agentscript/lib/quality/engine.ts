@@ -16,6 +16,7 @@ import {
   createQualityRulePass,
   qualityFactsKey,
 } from "./rules.ts";
+import type { AgentScriptDiagnostic } from "../types.ts";
 import type {
   AgentScriptQualityFinding,
   AgentScriptQualityResult,
@@ -26,6 +27,7 @@ export interface RunAgentScriptQualityOptions {
   ruleOverrides?: Partial<Record<AgentScriptQualityRuleId, boolean>>;
   editTimeOnly?: boolean;
   document?: { source: string; ast: unknown; hasErrors: boolean };
+  upstreamDiagnostics?: readonly AgentScriptDiagnostic[];
   analysisFailure?: string;
 }
 
@@ -66,11 +68,22 @@ export async function runAgentScriptQuality(
   if (options.analysisFailure) return failed(options.analysisFailure);
 
   try {
-    const document = options.document?.source === source ? options.document : parse(source);
+    const reusedDocument = options.document?.source === source;
+    const document = reusedDocument && options.document ? options.document : parse(source);
+    const upstreamDiagnostics =
+      options.upstreamDiagnostics ?? (reusedDocument ? undefined : diagnosticsFrom(document));
+    if (
+      upstreamDiagnostics === undefined &&
+      enabledDefinitions.some((definition) => definition.upstreamDiagnosticCode)
+    ) {
+      return failed("Official Agent Script diagnostics were unavailable for quality analysis.");
+    }
     const passes = [
       new QualityFactsPass(),
       ...enabledDefinitions
-        .filter((definition) => definition.severity !== "metric")
+        .filter(
+          (definition) => definition.severity !== "metric" && !definition.upstreamDiagnosticCode,
+        )
         .map((definition) => createQualityRulePass(definition.id)),
     ];
     const engine = new LintEngine({ passes, source: QUALITY_SOURCE });
@@ -81,11 +94,13 @@ export async function runAgentScriptQuality(
     const facts = run.store.get(qualityFactsKey);
     if (!facts) throw new Error("Agent Script quality facts were not produced.");
 
-    const findings = run.diagnostics
-      .filter((diagnostic) => diagnostic.source === QUALITY_SOURCE)
-      .map(toFinding)
-      .filter((finding): finding is AgentScriptQualityFinding => finding !== undefined)
-      .sort(compareFindings);
+    const findings = [
+      ...run.diagnostics
+        .filter((diagnostic) => diagnostic.source === QUALITY_SOURCE)
+        .map(toFinding)
+        .filter((finding): finding is AgentScriptQualityFinding => finding !== undefined),
+      ...projectUpstreamFindings(upstreamDiagnostics ?? [], enabledDefinitions),
+    ].sort(compareFindings);
     const suppressed = applySuppressions(source, findings);
     const metrics = effective["cyclomatic-complexity"] ? calculateCyclomaticComplexity(facts) : [];
     const summary = {
@@ -122,6 +137,37 @@ export async function runAgentScriptQuality(
   } catch (error) {
     return failed(error instanceof Error ? error.message : String(error));
   }
+}
+
+function diagnosticsFrom(document: unknown): readonly AgentScriptDiagnostic[] | undefined {
+  if (!document || typeof document !== "object" || !("diagnostics" in document)) return undefined;
+  const diagnostics = (document as { diagnostics?: unknown }).diagnostics;
+  return Array.isArray(diagnostics) ? (diagnostics as AgentScriptDiagnostic[]) : undefined;
+}
+
+function projectUpstreamFindings(
+  diagnostics: readonly AgentScriptDiagnostic[],
+  enabledDefinitions: readonly (typeof AGENT_SCRIPT_QUALITY_RULES)[number][],
+): AgentScriptQualityFinding[] {
+  const ruleByDiagnosticCode = new Map(
+    enabledDefinitions
+      .filter((definition) => definition.upstreamDiagnosticCode)
+      .map((definition) => [definition.upstreamDiagnosticCode, definition] as const),
+  );
+  return diagnostics.flatMap((diagnostic) => {
+    const definition = ruleByDiagnosticCode.get(String(diagnostic.code ?? ""));
+    if (!definition) return [];
+    const finding = toFinding({
+      ...diagnostic,
+      code: definition.id,
+      data: {
+        ...(diagnostic.data ?? {}),
+        qualitySeverity: definition.severity,
+        ruleName: definition.name,
+      },
+    });
+    return finding ? [finding] : [];
+  });
 }
 
 function toFinding(diagnostic: {

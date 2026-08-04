@@ -44,10 +44,10 @@ afterEach(() => {
 });
 
 describe("global Agent Script quality settings", () => {
-  it("defaults all 18 v1 rules on with auto-run enabled", () => {
+  it("defaults all 20 stable rules on with auto-run enabled", () => {
     const settings = readEffectiveAgentScriptQualitySettings();
     expect(settings.autoRun).toBe(true);
-    expect(Object.values(settings.rules).filter(Boolean)).toHaveLength(18);
+    expect(Object.values(settings.rules).filter(Boolean)).toHaveLength(20);
     expect(settings.disabledRules).toEqual([]);
   });
 
@@ -86,7 +86,7 @@ describe("global Agent Script quality settings", () => {
     setGlobalAgentScriptQualityAutoRun(false);
     const settings = readEffectiveAgentScriptQualitySettings();
     expect(settings.autoRun).toBe(false);
-    expect(Object.values(settings.rules).filter(Boolean)).toHaveLength(18);
+    expect(Object.values(settings.rules).filter(Boolean)).toHaveLength(20);
   });
 
   it("preserves unrelated Agent Script and Pi settings", () => {

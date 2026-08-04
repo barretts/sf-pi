@@ -70,6 +70,7 @@
       "safety": [
         "Compile-on-save stays silent on unsupported files and on failed write/edit results; only enabled edit-time High hardening rules join that feedback.",
         "Global per-rule quality toggles dynamically control reporting, repair, metrics, and local-file publication gating without a reload.",
+        "Quality cards show every finding header by default; overlong variable descriptions gate publication, while official instruction-template diagnostics remain pre-activation recommendations.",
         "Eval, trace, preview, and lifecycle calls reuse @salesforce/core / SF CLI auth context; timeout-sensitive HTTP may use bounded native fetch and never logs or persists tokens.",
         "Local-first: compile and validate run via official @sf-agentscript packages before any network call.",
         "Apex action preflight uses Salesforce's registered action description for authoritative primitive and wrapper input/output contracts; failed target rows are never hidden behind resolved samples.",
@@ -84,7 +85,7 @@
     "entry": "extensions/sf-agentscript/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 35431
+    "srcLoc": 35546
   },
   {
     "id": "sf-apex",

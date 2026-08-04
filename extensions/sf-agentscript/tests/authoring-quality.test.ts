@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ExtensionContext, Theme, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { registerAuthoringTool } from "../lib/authoring-tool.ts";
+import { AGENT_SCRIPT_QUALITY_RULES } from "../lib/quality/catalog.ts";
 import { validateAuthoringParams } from "../lib/authoring/params.ts";
 
 let workDir: string;
@@ -75,7 +76,10 @@ start_agent main:
     };
     expect(details.action).toBe("inspect.quality");
     expect(details.quality?.status).toBe("findings");
-    expect(details.quality?.coverage).toMatchObject({ total_rules: 18, enabled_rules: 18 });
+    expect(details.quality?.coverage).toMatchObject({
+      total_rules: AGENT_SCRIPT_QUALITY_RULES.length,
+      enabled_rules: AGENT_SCRIPT_QUALITY_RULES.length,
+    });
     expect(details.quality?.findings).toEqual(
       expect.arrayContaining([expect.objectContaining({ rule_id: "unused-action" })]),
     );
@@ -86,5 +90,48 @@ start_agent main:
     const rendered = component?.render(120).join("\n") ?? "";
     expect(rendered).toContain("Agent Script Quality");
     expect(rendered).toContain("Unused Action");
+  });
+
+  it("promotes upstream instruction template diagnostics into quality findings", async () => {
+    const file = path.join(workDir, "InstructionSyntax.agent");
+    await writeFile(
+      file,
+      `system:
+    instructions: "Help"
+    messages:
+        welcome: "Hi"
+        error: "Error"
+config:
+    agent_name: "InstructionSyntax"
+    agent_type: "AgentforceEmployeeAgent"
+variables:
+    conversation_step: mutable string = "start"
+        description: "Current step"
+start_agent main:
+    description: "Main"
+    reasoning:
+        instructions: |
+            Use conversation_step to decide what to do next.
+`,
+    );
+
+    const result = await captureTool().execute(
+      "call-instruction-syntax",
+      { verb: "inspect", mode: "quality", agent_file: file },
+      undefined,
+      undefined,
+      ctx(),
+    );
+    const details = result.details as {
+      quality?: { findings?: Array<{ rule_id?: string; severity?: string }> };
+    };
+    expect(details.quality?.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          rule_id: "instruction-template-syntax",
+          severity: "moderate",
+        }),
+      ]),
+    );
   });
 });

@@ -69,6 +69,24 @@ describe("publishMarkdown", () => {
     expect(md).toMatch(/release eval contract/);
     expect(md).not.toMatch(/activate=true/);
   });
+
+  it("recommends resolving remaining quality findings before activation", () => {
+    const md = publishMarkdown({
+      ok: true,
+      agent_api_name: "x",
+      bot_version_id: "y",
+      was_new_agent: false,
+      activated: false,
+      quality_advisory: {
+        count: 2,
+        rule_ids: ["instruction-template-syntax", "unused-action"],
+      },
+    });
+
+    expect(md).toContain("2 quality recommendation(s) remain");
+    expect(md).toContain("instruction-template-syntax, unused-action");
+    expect(md).toContain("resolve them before activation");
+  });
 });
 
 describe("versionsTableMarkdown", () => {

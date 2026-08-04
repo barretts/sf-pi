@@ -6,7 +6,8 @@
  * from a `.agent` file: source text, diagnostics, structural inspection, and
  * feature profile. It is an optimization only — never persisted to branch
  * state or disk, never used for org facts, and always keyed by local file
- * facts so edits naturally produce a new snapshot.
+ * facts so edits naturally produce a new snapshot. Compile and quality reuse
+ * the cached upstream analysis but recompute settings-dependent projections per call.
  */
 
 import { readFile, stat } from "node:fs/promises";
@@ -56,9 +57,7 @@ export async function getAgentScriptAnalysis(
 
   const source = await readFile(filePath, "utf8");
   let upstreamPromise: ReturnType<typeof analyzeAgentScriptSource> | undefined;
-  let compilePromise: Promise<AgentScriptCheckResult> | undefined;
   let inspectPromise: Promise<InspectResult> | undefined;
-  let qualityPromise: Promise<AgentScriptQualityResult> | undefined;
   let featureProfilePromise: Promise<AgentFeatureProfile | undefined> | undefined;
 
   const getUpstream = () => (upstreamPromise ??= analyzeAgentScriptSource(source));
@@ -67,27 +66,25 @@ export async function getAgentScriptAnalysis(
     source,
     fileKey,
     getUpstream,
-    getCompile() {
-      compilePromise ??= getUpstream().then((result) => checkAgentScriptSource(source, result));
-      return compilePromise;
+    async getCompile() {
+      return checkAgentScriptSource(source, await getUpstream());
     },
     getInspect() {
       inspectPromise ??= getUpstream().then((result) => inspectSource(source, result));
       return inspectPromise;
     },
-    getQuality() {
-      qualityPromise ??= getUpstream().then((result) =>
-        result.ok === true
-          ? runAgentScriptQuality(source, {
-              document: {
-                source,
-                ast: result.analysis.compileResult.document.ast,
-                hasErrors: result.analysis.compileResult.document.hasErrors,
-              },
-            })
-          : runAgentScriptQuality(source, { analysisFailure: result.unavailableReason }),
-      );
-      return qualityPromise;
+    async getQuality() {
+      const result = await getUpstream();
+      return result.ok === true
+        ? runAgentScriptQuality(source, {
+            document: {
+              source,
+              ast: result.analysis.compileResult.document.ast,
+              hasErrors: result.analysis.compileResult.document.hasErrors,
+            },
+            upstreamDiagnostics: result.analysis.compileDiagnostics,
+          })
+        : runAgentScriptQuality(source, { analysisFailure: result.unavailableReason });
     },
     async getFeatureProfile() {
       featureProfilePromise ??= (async () => {

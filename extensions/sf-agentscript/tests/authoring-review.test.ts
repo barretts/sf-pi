@@ -84,6 +84,53 @@ describe("agentscript_authoring inspect/review", () => {
     ).not.toMatch(/^Endless Transition Loop: Endless Transition Loop:/);
   });
 
+  test("keeps instruction template syntax as a pre-activation warning", async () => {
+    const agentFile = path.join(workDir, "instruction-syntax.agent");
+    await writeFile(
+      agentFile,
+      [
+        "system:",
+        '    instructions: "Help"',
+        "    messages:",
+        '        welcome: "Hi"',
+        '        error: "Error"',
+        "config:",
+        '    agent_name: "InstructionSyntax"',
+        '    agent_type: "AgentforceEmployeeAgent"',
+        "variables:",
+        '    current_step: mutable string = "start"',
+        '        description: "Current step"',
+        "start_agent main:",
+        '    description: "Main"',
+        "    reasoning:",
+        "        instructions: |",
+        "            Use current_step to decide what to do next.",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await captureAuthoringTool().execute(
+      "call-instruction-syntax",
+      { verb: "inspect", mode: "review", agent_file: agentFile },
+      undefined,
+      undefined,
+      ctx(),
+    );
+    const details = result.details as {
+      readiness?: string;
+      findings?: Array<{ id: string; severity: string }>;
+    };
+    expect(details.readiness).toBe("ready_with_warnings");
+    expect(details.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: expect.stringContaining("instruction-template-syntax"),
+          severity: "warning",
+        }),
+      ]),
+    );
+  });
+
   test("blocks files missing the system prompt block", async () => {
     const agentFile = path.join(workDir, "minimal.agent");
     await writeFile(

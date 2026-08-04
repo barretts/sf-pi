@@ -37,7 +37,7 @@ lifecycle publish from local file
   → publish
 ```
 
-Clean, Low, Info, and metric-only settled results remain human-visible as durable quality cards without entering LLM context. New High/Moderate signatures send a separate hidden `sf-agentscript-quality-repair` custom message with compact structured repair instructions; the visual card is never parsed back into an LLM prompt.
+Clean, Low, Info, and metric-only settled results remain human-visible as durable quality cards without entering LLM context. New High/Moderate signatures send a separate hidden `sf-agentscript-quality-repair` custom message with compact structured repair instructions; the visual card is never parsed back into an LLM prompt. Collapsed cards show every finding header by default, while expansion adds messages, suggestions, and evidence. High and Moderate findings are explicitly recommended for resolution before activation.
 
 ## Flow projection
 
@@ -52,7 +52,7 @@ The SF Pi flow projection derives these edge classes from the official AST.
 
 Every edge records its source component, destination, edge class, condition/gate when statically available, and source range. Graph algorithms use `@dagrejs/graphlib`.
 
-## V1 catalog (18 items)
+## V1 catalog (20 items)
 
 ### High
 
@@ -65,6 +65,7 @@ High rules participate in the publication gate and cannot be suppressed inline.
 | Required Action Input Is Missing             | `deterministic-action-missing-input`   | A deterministic run must bind every input that is required, has no declaration default, and is known from the scoped action signature.                                            |
 | Unknown Action Input                         | `deterministic-action-unknown-input`   | Every deterministic `with` parameter must exist in the scoped action signature. Safe typo suggestions are allowed; cascade reporting is controlled.                               |
 | Action Chain Is Too Deep                     | `action-chain-too-deep`                | Allow one follow-up action in an action callback; reject a further nested `run`. Report only the first unsupported nested level.                                                  |
+| Variable Description Is Too Long             | `variable-description-max-length`      | Report variable descriptions over Salesforce's 255-character publication limit. A description of exactly 255 characters is valid.                                                 |
 
 ### Moderate
 
@@ -78,6 +79,7 @@ High rules participate in the publication gate and cannot be suppressed inline.
 | Slot-Filled Variable Needs a Description | `slot-filled-variable-missing-description`  | A variable targeted for LLM assignment through `@utils.setVariables` must have a description. Do not require descriptions for every variable.                                               |
 | Wrong Action Input Type                  | `deterministic-action-input-type-mismatch`  | Apply the official conservative action-input compatibility behavior to deterministic runs, using only known literal and variable types.                                                     |
 | Wrong Action Output Type                 | `deterministic-action-output-type-mismatch` | Apply the official conservative output-to-variable compatibility behavior to deterministic runs; leave undefined-output diagnostics to upstream reference resolution.                       |
+| Instruction Template Syntax              | `instruction-template-syntax`               | Promote the official compiler/LSP instruction interpolation diagnostic into quality without duplicating its evaluator.                                                                      |
 | Prompt Template Output Flags             | `prompt-template-output-flags`              | Advise when a prompt-response output lacks the planner/display flags needed for the common planner-consumes/intermediate-output pattern. This is quality guidance, not edit-time hardening. |
 
 ### Low
@@ -115,7 +117,7 @@ PMD's published orientation bands can be displayed for context—1–4 low, 5–
 
 ## Suppression
 
-Moderate, Low, and Info findings can be suppressed for the next applicable source element:
+Rules marked suppressible can be suppressed for the next applicable source element. `instruction-template-syntax` remains non-suppressible because its official compiler/LSP diagnostic would still be present:
 
 ```agentscript
 # sf-agentscript-ignore-next-line action-before-transition: audit side effect is required before handoff

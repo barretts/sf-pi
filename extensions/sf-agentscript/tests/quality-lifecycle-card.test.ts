@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { describe, expect, it } from "vitest";
 import type { Theme } from "@earendil-works/pi-coding-agent";
+import { AGENT_SCRIPT_QUALITY_RULES } from "../lib/quality/catalog.ts";
 import { renderLifecycleResult } from "../lib/render/lifecycle.ts";
 import type { AgentScriptQualityResult } from "../lib/quality/types.ts";
 
@@ -24,7 +25,11 @@ const quality: AgentScriptQualityResult = {
     },
   ],
   summary: { high: 1, moderate: 0, low: 0, info: 0 },
-  coverage: { total_rules: 18, enabled_rules: 18, disabled_rules: [] },
+  coverage: {
+    total_rules: AGENT_SCRIPT_QUALITY_RULES.length,
+    enabled_rules: AGENT_SCRIPT_QUALITY_RULES.length,
+    disabled_rules: [],
+  },
   metrics: { cyclomatic_complexity: [] },
   suppressions: { applied: [], invalid: [], unused: [] },
 };

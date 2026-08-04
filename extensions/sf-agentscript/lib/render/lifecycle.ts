@@ -31,6 +31,10 @@ export interface PublishDetails {
   authoring_bundle?: AuthoringBundleResult | null;
   /** Studio URL — populated when we can derive it from the connection. */
   studio_url?: string;
+  quality_advisory?: {
+    count: number;
+    rule_ids: string[];
+  };
   /** Pre-flight findings (action targets, etc.). */
   preflight?: {
     actions_inspected?: number;
@@ -224,6 +228,14 @@ function formatPublishBody(
   lines.push(
     `  ${dim("·")} Published ${code(verLabel)} inactive ${dim("(run the release eval contract, then activate separately)")}`,
   );
+
+  const qualityAdvisory = details.quality_advisory;
+  if (qualityAdvisory && qualityAdvisory.count > 0) {
+    lines.push(
+      `  ${fg("warning", "⚠")} ${qualityAdvisory.count} quality recommendation(s) remain: ${code(qualityAdvisory.rule_ids.join(", "))}`,
+      `     ${fg("warning", "Recommended: resolve them before activation.")}`,
+    );
+  }
 
   // Pre-flight: surface missing action targets as a clear card so the user
   // sees them on a successful publish (publish itself doesn't block on

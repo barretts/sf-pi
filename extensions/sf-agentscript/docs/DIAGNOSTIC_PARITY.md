@@ -5,7 +5,7 @@ diagnostics and SF Pi's local **Agent Script Hardening Adapter** and native
 quality catalog. Keep it synchronized with:
 
 - `tests/diagnostic-parity.test.ts` for hardening diagnostics;
-- `tests/quality-upstream-parity.test.ts` for all 18 quality rules.
+- `tests/quality-upstream-parity.test.ts` for all 20 quality rules.
 
 ## Evidence baseline
 
@@ -58,6 +58,7 @@ upgrade requires rerunning the fixtures before changing a decision.
 | `deterministic-action-missing-input`        | none for deterministic `run`                                                                     | SF Pi-owned   | Retain local High policy. Official planner-action omission is informational and allows LLM filling.                    |
 | `deterministic-action-unknown-input`        | none for deterministic `run`                                                                     | SF Pi-owned   | Retain. Official `action-unknown-input` applies to planner-selected action bindings, not this execution context.       |
 | `action-chain-too-deep`                     | none                                                                                             | SF Pi-owned   | Retain local chain-depth contract.                                                                                     |
+| `variable-description-max-length`           | none                                                                                             | SF Pi-owned   | Retain the local High guard for the Salesforce publication limit.                                                      |
 | `unreachable-subagent`                      | none                                                                                             | SF Pi-owned   | Retain component-graph reachability. Official `unreachable-code` is statement-level and not parity.                    |
 | `unused-action`                             | none                                                                                             | SF Pi-owned   | Retain scoped action-use analysis. Official `unused-variable` is a different declaration kind.                         |
 | `discarded-prompt-before-transition`        | none                                                                                             | SF Pi-owned   | Retain prompt-before-transition analysis. Official `unreachable-code` examines statements after a terminal transition. |
@@ -66,15 +67,17 @@ upgrade requires rerunning the fixtures before changing a decision.
 | `slot-filled-variable-missing-description`  | `unused-variable` on the declaration, with a removal fix                                         | Adjacent only | Retain slot-filling description guidance; removing the variable is not an equivalent repair.                           |
 | `deterministic-action-input-type-mismatch`  | none for deterministic `run`                                                                     | SF Pi-owned   | Retain. Official type checks use similar inference only for planner action bindings.                                   |
 | `deterministic-action-output-type-mismatch` | none for deterministic `run`                                                                     | SF Pi-owned   | Retain. Official type checks do not cover this deterministic callback fixture.                                         |
+| `instruction-template-syntax`               | exact official `instruction-template-syntax` diagnostic                                          | Strict parity | Reuse the official diagnostic as a Moderate quality projection; maintain no local evaluator.                           |
 | `prompt-template-output-flags`              | none                                                                                             | SF Pi-owned   | Retain planner/display guidance.                                                                                       |
 | `action-before-transition`                  | none                                                                                             | SF Pi-owned   | Retain cost/side-effect advisory before a transition.                                                                  |
 | `conditional-transition-cycle`              | none                                                                                             | SF Pi-owned   | Retain conditional graph evidence.                                                                                     |
 | `subagent-delegation-cycle`                 | none                                                                                             | SF Pi-owned   | Retain returning-delegation graph evidence.                                                                            |
 | `cyclomatic-complexity`                     | none                                                                                             | SF Pi-owned   | Retain report-only per-procedure metric.                                                                               |
 
-**Milestone 4 result:** zero current evaluators meet strict parity at this
-package baseline, so zero current evaluators are deleted. This is the required
-fail-closed outcome, not an incomplete migration.
+**Milestone 4 result:** zero local evaluators meet strict parity at this package
+baseline, so zero local evaluators are deleted. Instruction-template syntax is a
+projection of its strict-parity official diagnostic and has no local evaluator.
+This is the required fail-closed outcome, not an incomplete migration.
 
 Disabling a local quality rule still disables only its policy projection. The
 quality parity suite proves that an adjacent official compiler diagnostic, when
@@ -82,12 +85,13 @@ present, remains visible.
 
 ## Completed historical handoffs
 
-Earlier work already removed local projections where released official behavior
-became authoritative, including official unused-variable handling, object action
-I/O diagnostics, instruction-template syntax, and ignored Employee Agent default
-user configuration. Those completed handoffs are not evidence for deleting any
-current rule; their fixtures remain in `diagnostic-parity.test.ts` as regression
-coverage.
+Earlier work already removed duplicated evaluators where released official
+behavior became authoritative, including official unused-variable handling,
+object action I/O diagnostics, instruction-template syntax, and ignored Employee
+Agent default user configuration. Instruction-template syntax is now projected
+into quality from the official diagnostic rather than reimplemented. Those
+completed handoffs are not evidence for deleting any current local evaluator;
+their fixtures remain in `diagnostic-parity.test.ts` as regression coverage.
 
 ## Deletion rule
 

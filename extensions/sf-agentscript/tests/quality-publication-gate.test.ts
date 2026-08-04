@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { describe, expect, it } from "vitest";
+import { AGENT_SCRIPT_QUALITY_RULES } from "../lib/quality/catalog.ts";
 import {
   createQualityOverrideLedger,
   evaluateQualityPublicationGate,
@@ -20,7 +21,11 @@ function result(ruleIds: string[], status: AgentScriptQualityResult["status"] = 
     })),
     summary: { high: ruleIds.length, moderate: 0, low: 0, info: 0 },
     metrics: { cyclomatic_complexity: [] },
-    coverage: { total_rules: 18, enabled_rules: 18, disabled_rules: [] },
+    coverage: {
+      total_rules: AGENT_SCRIPT_QUALITY_RULES.length,
+      enabled_rules: AGENT_SCRIPT_QUALITY_RULES.length,
+      disabled_rules: [],
+    },
     suppressions: { applied: [], invalid: [], unused: [] },
     ...(status === "failed" ? { failure_reason: "boom" } : {}),
   } as AgentScriptQualityResult;

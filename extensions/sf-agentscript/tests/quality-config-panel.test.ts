@@ -57,13 +57,13 @@ describe("Agent Script quality settings panel", () => {
     const rendered = panel("global").renderContent(120).join("\n");
     expect(rendered).toContain("Quality auto-run");
     expect(rendered).toContain("Quality rules");
-    expect(rendered).toContain("18/18 enabled");
+    expect(rendered).toContain("20/20 enabled");
   });
 
   it("keeps project settings focused on existing tool defaults", () => {
     const rendered = panel("project").renderContent(120).join("\n");
     expect(rendered).toContain("Quality rule controls are global-only");
-    expect(rendered).not.toContain("18/18 enabled");
+    expect(rendered).not.toContain("20/20 enabled");
   });
 
   it("opens the global rules page and saves an individual toggle", () => {

@@ -86,4 +86,44 @@ subagent b:
       ]),
     );
   });
+
+  it("stops overlong variable descriptions before any org call", async () => {
+    const file = path.join(cwd, "DescriptionGate.agent");
+    await writeFile(
+      file,
+      `system:
+    instructions: "Help"
+    messages:
+        welcome: "Hi"
+        error: "Error"
+config:
+    agent_name: "DescriptionGate"
+    agent_type: "AgentforceEmployeeAgent"
+variables:
+    current_step: mutable string = "start"
+        description: "${"a".repeat(256)}"
+start_agent main:
+    description: "Main"
+    reasoning:
+        instructions: ->
+            | Help
+`,
+    );
+
+    const result = await captureTool().execute(
+      "description-gate",
+      { action: "publish", agent_file: file, agent_api_name: "DescriptionGate" },
+      undefined,
+      undefined,
+      ctx(),
+    );
+    const details = result.details as {
+      action?: string;
+      quality_gate?: { risk_ids?: string[] };
+    };
+    expect(details).toMatchObject({
+      action: "publish.quality_gate",
+      quality_gate: { risk_ids: ["variable-description-max-length"] },
+    });
+  });
 });

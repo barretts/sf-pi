@@ -218,7 +218,7 @@ class AgentScriptConfigPanel implements Focusable {
         ...this.row(
           4,
           "Quality rules",
-          `${this.enabledRuleCount()}/18 enabled`,
+          `${this.enabledRuleCount()}/${AGENT_SCRIPT_QUALITY_RULES.length} enabled`,
           "Open the global per-rule On/Off controls.",
         ),
       );
@@ -247,7 +247,7 @@ class AgentScriptConfigPanel implements Focusable {
     const dirty = this.isQualityDirty();
     const lines = [
       ` ${t.fg("accent", t.bold("Agent Script Quality Rules"))}`,
-      ` ${t.fg("dim", `${this.enabledRuleCount()}/18 enabled · ${dirty ? "unsaved changes" : "saved"}`)}`,
+      ` ${t.fg("dim", `${this.enabledRuleCount()}/${AGENT_SCRIPT_QUALITY_RULES.length} enabled · ${dirty ? "unsaved changes" : "saved"}`)}`,
       ...(this.page.kind === "rules" && this.page.filter
         ? [` ${t.fg("muted", "Filter:")} ${t.fg("accent", this.page.filter)}`]
         : []),

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { describe, expect, it } from "vitest";
+import { AGENT_SCRIPT_QUALITY_RULES } from "../lib/quality/catalog.ts";
 import { runAgentScriptQuality } from "../lib/quality/engine.ts";
 
 function source(body: string, variables = ""): string {
@@ -31,7 +32,10 @@ describe("Agent Script quality engine", () => {
             | Respond helpfully.`),
     );
     expect(result.status).toBe("clean");
-    expect(result.coverage).toMatchObject({ total_rules: 18, enabled_rules: 18 });
+    expect(result.coverage).toMatchObject({
+      total_rules: AGENT_SCRIPT_QUALITY_RULES.length,
+      enabled_rules: AGENT_SCRIPT_QUALITY_RULES.length,
+    });
   });
 
   it("does not report empty or header-only source as quality-clean", async () => {
@@ -299,6 +303,65 @@ subagent next:
       ),
     );
     expect(codes(result)).toContain("slot-filled-variable-missing-description");
+  });
+
+  it("rejects variable descriptions over 255 characters at the exact boundary", async () => {
+    const atLimit = await runAgentScriptQuality(
+      source(
+        `start_agent main:
+    description: "Main"`,
+        `    reference: mutable string
+        description: "${"a".repeat(255)}"`,
+      ),
+    );
+    const overLimit = await runAgentScriptQuality(
+      source(
+        `start_agent main:
+    description: "Main"`,
+        `    reference: mutable string
+        description: "${"a".repeat(256)}"`,
+      ),
+    );
+
+    expect(codes(atLimit)).not.toContain("variable-description-max-length");
+    expect(overLimit.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          rule_id: "variable-description-max-length",
+          severity: "high",
+          message: expect.stringContaining("256"),
+        }),
+      ]),
+    );
+  });
+
+  it("projects official instruction syntax diagnostics and honors rule overrides", async () => {
+    const instructionSource = source(
+      `start_agent main:
+    description: "Main"
+    reasoning:
+        instructions: |
+            Use current_step to decide what to do next.`,
+      `    current_step: mutable string = "start"
+        description: "Current step"`,
+    );
+    const enabled = await runAgentScriptQuality(instructionSource);
+    const disabled = await runAgentScriptQuality(instructionSource, {
+      ruleOverrides: { "instruction-template-syntax": false },
+    });
+
+    expect(enabled.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          rule_id: "instruction-template-syntax",
+          severity: "moderate",
+        }),
+      ]),
+    );
+    expect(codes(disabled)).not.toContain("instruction-template-syntax");
+    expect(disabled.coverage.disabled_rules).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "instruction-template-syntax" })]),
+    );
   });
 
   it("advises on prompt response flags", async () => {

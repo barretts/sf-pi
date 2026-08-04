@@ -72,6 +72,9 @@ export function evaluateRule(ruleId: AgentScriptQualityRuleId, facts: QualityFac
     case "subagent-delegation-cycle":
       addCycleFindings(facts, ruleId, (edge) => edge.kind === "subagent_delegation");
       return;
+    case "variable-description-max-length":
+      addVariableDescriptionLengthFindings(facts);
+      return;
     case "unreachable-subagent":
       addUnreachableFindings(facts);
       return;
@@ -100,6 +103,9 @@ export function evaluateRule(ruleId: AgentScriptQualityRuleId, facts: QualityFac
       return;
     case "slot-filled-variable-missing-description":
       addSlotDescriptionFindings(facts);
+      return;
+    case "instruction-template-syntax":
+      // Projected from the official compiler/LSP diagnostics by the quality engine.
       return;
     case "prompt-template-output-flags":
       addPromptFlagFindings(facts);
@@ -174,6 +180,21 @@ function cycleSignature(cycle: string[]): string {
     [...cycle.slice(index), ...cycle.slice(0, index)].join("|"),
   );
   return rotations.sort()[0] ?? "";
+}
+
+function addVariableDescriptionLengthFindings(facts: QualityFacts): void {
+  const maxLength = 255;
+  for (const variable of facts.variables.values()) {
+    if (!variable.description) continue;
+    const length = Array.from(variable.description).length;
+    if (length <= maxLength) continue;
+    addDiagnostic(
+      variable.node,
+      "variable-description-max-length",
+      `Variable '${variable.name}' description is ${length} characters; Salesforce allows at most ${maxLength}.`,
+      { suggestion: `Shorten the description to ${maxLength} characters or fewer.` },
+    );
+  }
 }
 
 function addUnreachableFindings(facts: QualityFacts): void {

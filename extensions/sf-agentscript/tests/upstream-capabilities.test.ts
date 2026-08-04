@@ -124,6 +124,7 @@ describe("upstream Agent Script capability contracts", () => {
             ast: upstream.analysis.compileResult.document.ast,
             hasErrors: upstream.analysis.compileResult.document.hasErrors,
           },
+          upstreamDiagnostics: upstream.analysis.compileDiagnostics,
         });
       const compile = () => checkAgentScriptSource(source, upstream);
       const inspect = () => inspectSource(source, upstream);
@@ -133,6 +134,27 @@ describe("upstream Agent Script capability contracts", () => {
     };
 
     expect(await evaluate(true)).toEqual(await evaluate(false));
+  });
+
+  test("fails closed when a reused document omits required upstream diagnostics", async () => {
+    const source = `${HEAD}start_agent main:\n  description: "Main"\n`;
+    const upstream = await analyzeAgentScriptSource(source);
+    expect(upstream.ok).toBe(true);
+    if (upstream.ok === false) throw new Error(upstream.unavailableReason);
+
+    await expect(
+      runAgentScriptQuality(source, {
+        document: {
+          source,
+          ast: upstream.analysis.compileResult.document.ast,
+          hasErrors: upstream.analysis.compileResult.document.hasErrors,
+        },
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      status: "failed",
+      failure_reason: "Official Agent Script diagnostics were unavailable for quality analysis.",
+    });
   });
 
   test("rejects mismatched reusable success, failure, and document identities", async () => {

@@ -17,6 +17,8 @@ export interface AgentScriptQualityRuleDefinition {
   participatesInRepair: boolean;
   participatesInPublishGate: boolean;
   suppressible: boolean;
+  /** Reuse an official compiler/LSP diagnostic instead of duplicating its evaluator. */
+  upstreamDiagnosticCode?: string;
 }
 
 function rule(
@@ -81,6 +83,17 @@ export const AGENT_SCRIPT_QUALITY_RULES = [
       "Detects action callback chains that exceed the supported one-level nesting limit.",
     severity: "high",
     category: "actions",
+    runsAtEditTime: true,
+    participatesInRepair: true,
+    participatesInPublishGate: true,
+    suppressible: false,
+  }),
+  rule({
+    id: "variable-description-max-length",
+    name: "Variable Description Is Too Long",
+    description: "Detects variable descriptions that exceed Salesforce's 255-character limit.",
+    severity: "high",
+    category: "types",
     runsAtEditTime: true,
     participatesInRepair: true,
     participatesInPublishGate: true,
@@ -174,6 +187,19 @@ export const AGENT_SCRIPT_QUALITY_RULES = [
     participatesInRepair: true,
     participatesInPublishGate: false,
     suppressible: true,
+  }),
+  rule({
+    id: "instruction-template-syntax",
+    name: "Instruction Template Syntax",
+    description:
+      "Promotes official instruction interpolation diagnostics into the quality workflow.",
+    severity: "moderate",
+    category: "maintainability",
+    runsAtEditTime: false,
+    participatesInRepair: true,
+    participatesInPublishGate: false,
+    suppressible: false,
+    upstreamDiagnosticCode: "instruction-template-syntax",
   }),
   rule({
     id: "prompt-template-output-flags",

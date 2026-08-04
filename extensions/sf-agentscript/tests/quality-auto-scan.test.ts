@@ -7,6 +7,7 @@ import {
   AGENT_SCRIPT_QUALITY_ENTRY_TYPE,
   registerDeferredAgentScriptQuality,
 } from "../lib/quality/auto-scan.ts";
+import { AGENT_SCRIPT_QUALITY_RULES } from "../lib/quality/catalog.ts";
 import type { AgentScriptQualityResult } from "../lib/quality/types.ts";
 
 let cwd: string;
@@ -42,7 +43,11 @@ function result(findings: AgentScriptQualityResult["findings"]): AgentScriptQual
       info: 0,
     },
     metrics: { cyclomatic_complexity: [] },
-    coverage: { total_rules: 18, enabled_rules: 18, disabled_rules: [] },
+    coverage: {
+      total_rules: AGENT_SCRIPT_QUALITY_RULES.length,
+      enabled_rules: AGENT_SCRIPT_QUALITY_RULES.length,
+      disabled_rules: [],
+    },
     suppressions: { applied: [], invalid: [], unused: [] },
   };
 }

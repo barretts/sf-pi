@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { AGENT_SCRIPT_QUALITY_RULES } from "../lib/quality/catalog.ts";
 import { qualityCardData, type AgentScriptQualityCardState } from "../lib/quality/presentation.ts";
 import { createAgentScriptQualityTranscriptRenderer } from "../lib/quality/transcript.ts";
 import type { AgentScriptQualityResult } from "../lib/quality/types.ts";
@@ -11,6 +12,8 @@ const theme = {
   bg: (_color: string, value: string) => value,
   bold: (value: string) => value,
 } as Theme;
+
+const totalRuleCount = AGENT_SCRIPT_QUALITY_RULES.length;
 
 const moderateFinding = {
   rule_id: "unused-action" as const,
@@ -36,10 +39,10 @@ function result(
       info: findings.filter((finding) => finding.severity === "info").length,
     },
     coverage: {
-      total_rules: 18,
-      enabled_rules: options.enabled ?? 18,
+      total_rules: totalRuleCount,
+      enabled_rules: options.enabled ?? totalRuleCount,
       disabled_rules:
-        options.enabled === 17
+        options.enabled === totalRuleCount - 1
           ? [{ id: "unused-action", name: "Unused Action", source: "global" }]
           : [],
     },
@@ -62,13 +65,14 @@ describe("Agent Script quality transcript card", () => {
   it("renders a green passed card with honest enabled-rule coverage", () => {
     const passed = render(qualityCardData("/tmp/A.agent", result()));
     expect(passed).toContain("✅ Agent Script Quality · A.agent");
-    expect(passed).toContain("All 18 enabled quality checks passed");
+    expect(passed).toContain(`All ${totalRuleCount} enabled quality checks passed`);
     expect(passed).toContain("☑ Quality passed");
     expect(passed).not.toContain("Compile clean");
 
-    const disabled = render(qualityCardData("/tmp/A.agent", result([], { enabled: 17 })));
-    expect(disabled).toContain("No findings from 17 enabled rules · 1 disabled");
-    expect(disabled).not.toContain("All 17 enabled quality checks passed");
+    const enabled = totalRuleCount - 1;
+    const disabled = render(qualityCardData("/tmp/A.agent", result([], { enabled })));
+    expect(disabled).toContain(`No findings from ${enabled} enabled rules · 1 disabled`);
+    expect(disabled).not.toContain(`All ${enabled} enabled quality checks passed`);
   });
 
   it("shows issue evidence and repair state", () => {
@@ -82,6 +86,24 @@ describe("Agent Script quality transcript card", () => {
     expect(rendered).toContain("▲ Unused Action L12");
     expect(rendered).toContain("Action 'lookup' is not referenced.");
     expect(rendered).toContain("Repair attempt 1");
+    expect(rendered).toContain(
+      "Recommended: resolve High and Moderate findings before activation.",
+    );
+  });
+
+  it("shows every finding in the collapsed card", () => {
+    const findings = Array.from({ length: 6 }, (_, index) => ({
+      ...moderateFinding,
+      message: `Finding ${index + 1}`,
+      line: index + 1,
+    }));
+    const rendered = render(qualityCardData("/tmp/A.agent", result(findings)), false);
+
+    for (let line = 1; line <= 6; line++) {
+      expect(rendered).toContain(`Unused Action L${line}`);
+    }
+    expect(rendered).not.toContain("more finding(s)");
+    expect(rendered).not.toContain("Finding 1");
   });
 
   it.each([

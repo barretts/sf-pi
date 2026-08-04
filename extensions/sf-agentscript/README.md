@@ -52,13 +52,13 @@ Auto-resolution validates referenced disk artifacts before use and proceeds only
 
 ## Native quality analysis
 
-`agentscript_authoring { "verb": "inspect", "mode": "quality" }` runs the global enabled 18-rule quality catalog for one `.agent` file. It returns High/Moderate/Low/Info findings, exact rule coverage, suppression evidence, and report-only per-procedure cyclomatic complexity. The same result is composed into review and local-file publication preflight.
+`agentscript_authoring { "verb": "inspect", "mode": "quality" }` runs the global enabled 20-rule quality catalog for one `.agent` file. It returns High/Moderate/Low/Info findings, exact rule coverage, suppression evidence, and report-only per-procedure cyclomatic complexity. The same result is composed into review and local-file publication preflight. Collapsed quality cards show every finding header by default; expansion adds messages, suggestions, and evidence.
 
 Quality settings are global-only. **SF Pi Manager → SF Agent Script → Settings → Quality Rules** shows one On/Off row per rule. All v1 rules default On; future experimental rules default Off. Disabled rules do not execute, report findings, steer repair, compute metrics, or gate publication.
 
 Human and LLM output use separate channels. Deferred results persist as theme-aware, expandable quality cards through `appendEntry`; those cards never enter LLM context. New High/Moderate signatures send a hidden `sf-agentscript-quality-repair` custom message containing compact JSON, while clean, Low, Info, and metric-only results remain human-only. Cards distinguish passed, issues, repairing, fixed, stopped, partial, failed, and publication-blocked states.
 
-High findings pause publication without changing compile validity and render as a blocked quality card. After reviewing the evidence, the user can retry with `acknowledge_quality_risk=true`; the approval applies only to that bundle, current session, and reviewed High rule IDs.
+High findings pause publication without changing compile validity and render as a blocked quality card. After reviewing the evidence, the user can retry with `acknowledge_quality_risk=true`; the approval applies only to that bundle, current session, and reviewed High rule IDs. High and Moderate findings are explicitly recommended for resolution before activation; successful inactive publication retains a compact advisory when recommendations remain.
 
 See [`QUALITY_RULES.md`](./QUALITY_RULES.md) for the stable catalog and lifecycle contract.
 
@@ -176,7 +176,7 @@ SF Agent Script has a Manager Settings page for low-risk tool defaults stored un
 - **Eval trace mode** (`evalTracesMode`) — default for `agentscript_eval` `run` when `traces_mode` is omitted: `failed`, `all`, or `off`.
 - **Eval concurrency** (`evalConcurrency`) — default concurrency for `agentscript_eval` `run` when omitted: `4`, `8`, or `16`.
 - **Quality auto-run** (`quality.autoRun`) — global toggle for the deferred post-agent quality pass.
-- **Quality rules** (`quality.rules.<rule-id>`) — sparse global per-rule overrides. All 18 stable v1 rules default On.
+- **Quality rules** (`quality.rules.<rule-id>`) — sparse global per-rule overrides. All 20 stable v1 rules default On.
 
 Quality controls are global-only; project settings cannot weaken or strengthen them. Changes are read dynamically and require no reload. Explicit tool parameters still win for a single call.
 

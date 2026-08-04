@@ -157,6 +157,12 @@ export function renderQualityCardText(
     lines.push(formatCounts(summary, theme));
   }
 
+  if (actionableCount(quality) > 0) {
+    lines.push(
+      theme.fg("warning", "Recommended: resolve High and Moderate findings before activation."),
+    );
+  }
+
   if (card.repair) {
     const repairStatus =
       card.state === "fixed"
@@ -171,8 +177,7 @@ export function renderQualityCardText(
   }
   if (card.message) lines.push(theme.fg("muted", card.message));
 
-  const visibleFindings = expanded ? quality.findings : quality.findings.slice(0, 3);
-  for (const finding of visibleFindings) {
+  for (const finding of quality.findings) {
     const findingVisual = severityVisual(finding.severity);
     lines.push(
       `${theme.fg(findingVisual.tone, findingVisual.icon)} ${theme.fg(findingVisual.tone, finding.rule_name)} ${theme.fg("dim", `L${finding.line}`)}`,
@@ -183,12 +188,6 @@ export function renderQualityCardText(
         lines.push(`  ${theme.fg("accent", `Suggestion: ${finding.suggestion}`)}`);
     }
   }
-  if (!expanded && quality.findings.length > visibleFindings.length) {
-    lines.push(
-      theme.fg("dim", `…and ${quality.findings.length - visibleFindings.length} more finding(s)`),
-    );
-  }
-
   const footer = [
     card.state === "passed" || card.state === "fixed"
       ? undefined

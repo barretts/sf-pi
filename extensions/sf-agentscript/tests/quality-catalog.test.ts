@@ -7,9 +7,9 @@ import {
 } from "../lib/quality/catalog.ts";
 
 describe("Agent Script quality rule catalog", () => {
-  it("defines the frozen 18-rule v1 catalog with unique ids", () => {
-    expect(AGENT_SCRIPT_QUALITY_RULES).toHaveLength(18);
-    expect(new Set(AGENT_SCRIPT_QUALITY_RULE_IDS).size).toBe(18);
+  it("defines the 20-rule stable catalog with unique ids", () => {
+    expect(AGENT_SCRIPT_QUALITY_RULES).toHaveLength(20);
+    expect(new Set(AGENT_SCRIPT_QUALITY_RULE_IDS).size).toBe(20);
   });
 
   it("defaults every v1 rule on and keeps High rules non-suppressible", () => {
@@ -26,6 +26,18 @@ describe("Agent Script quality rule catalog", () => {
       name: "Endless Transition Loop",
       severity: "high",
       category: "flow",
+    });
+    expect(qualityRuleById("variable-description-max-length")).toMatchObject({
+      severity: "high",
+      runsAtEditTime: true,
+      participatesInPublishGate: true,
+      suppressible: false,
+    });
+    expect(qualityRuleById("instruction-template-syntax")).toMatchObject({
+      severity: "moderate",
+      upstreamDiagnosticCode: "instruction-template-syntax",
+      participatesInRepair: true,
+      participatesInPublishGate: false,
     });
     expect(qualityRuleById("cyclomatic-complexity")).toMatchObject({
       name: "Cyclomatic Complexity",
