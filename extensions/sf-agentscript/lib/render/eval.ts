@@ -17,6 +17,9 @@ import { Text } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { clipLine, fmtMs, padRightVisible, rowDetail, styleForStep, stepLabel } from "./shared.ts";
 import type { TraceDigest } from "../preview/trace-digest.ts";
+import type { TurnResponseSequence } from "../llm-response-sequence.ts";
+import type { EvalResponseIntegritySummary } from "../eval/response-integrity.ts";
+import { responseSequenceLines } from "./response-sequence.ts";
 import { redactDisplayText } from "../../../../lib/common/redaction.ts";
 
 interface FailureRecord {
@@ -38,6 +41,7 @@ interface FailureRecord {
     latency_ms?: number;
     plan_id?: string;
     state_variables?: Record<string, unknown>;
+    response_sequence?: TurnResponseSequence;
     digest?: TraceDigest;
   }>;
   trace_files?: string[];
@@ -71,6 +75,7 @@ export interface EvalRunDetails {
   totals?: RunTotals;
   latency?: LatencySummary;
   failed_test_ids?: string[];
+  response_integrity?: EvalResponseIntegritySummary;
   // The text payload (which the LLM consumes) embeds the failure JSON when
   // small. The renderer parses that for inline failure cards.
 }
@@ -247,6 +252,41 @@ function formatRunBody(
     }
   }
 
+  const responseIntegrity = details.response_integrity;
+  if (responseIntegrity && responseIntegrity.turns_total > 0) {
+    lines.push("");
+    lines.push(
+      dim(
+        ansi
+          ? "─── 🗣 LLM Response Integrity (advisory only) ───"
+          : "**🗣 LLM Response Integrity (advisory only)**",
+      ),
+    );
+    lines.push(
+      `  ${ok(`✓ ${responseIntegrity.turns_pass} pass`)}  ${
+        responseIntegrity.turns_warning > 0
+          ? err(
+              `⚠ ${responseIntegrity.turns_warning} warning${responseIntegrity.turns_warning === 1 ? "" : "s"}`,
+            )
+          : dim("0 warnings")
+      }  ${
+        responseIntegrity.turns_unavailable > 0
+          ? fg("warning", `ⓘ ${responseIntegrity.turns_unavailable} unavailable`)
+          : dim("0 unavailable")
+      }`,
+    );
+    for (const observation of responseIntegrity.observations
+      .filter((row) => row.status !== "pass")
+      .slice(0, 5)) {
+      const glyph = observation.status === "warning" ? err("⚠") : dim("ⓘ");
+      lines.push(
+        `  ${glyph} ${code(`${observation.test_id} · ${observation.turn_id}`)}  ${dim(`${observation.llm_call_count} LLM calls · ${observation.non_empty_content_count} non-empty`)}${
+          observation.message ? ` · ${clipLine(observation.message, 100)}` : ""
+        }`,
+      );
+    }
+  }
+
   // Per-test rows (build from totals + failed_test_ids; we don't have a
   // per-test list in details, so we render inlineFailures as the failures
   // and assume the rest passed).
@@ -356,6 +396,11 @@ function formatFailureCard(failure: FailureRecord, theme: Theme | undefined): st
     }
     if (t.agent_response) {
       lines.push(`  ${ok("🤖")} ${clipLine(t.agent_response, 200)}`);
+    }
+    const responseSequence = responseSequenceLines(t.response_sequence, theme);
+    if (responseSequence.length > 0) {
+      lines.push("");
+      lines.push(...responseSequence);
     }
     // Mini timeline strip — reuse the digest.timeline rows from the eval
     // digest. Since the eval API doesn't expose a fine-grained timeline,

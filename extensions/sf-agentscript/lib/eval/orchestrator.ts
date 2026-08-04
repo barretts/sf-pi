@@ -25,6 +25,10 @@ import type { Connection } from "@salesforce/core";
 import { callEval, type EvalApiHeaders, splitIntoBatches } from "./eval-client.ts";
 import { collectPlanKeys, fetchTracesConcurrent, type PlanKey } from "./trace-client.ts";
 import { synthesizeTracesFromMerged } from "./synthesize-trace.ts";
+import {
+  summarizeEvalResponseIntegrity,
+  type EvalResponseIntegritySummary,
+} from "./response-integrity.ts";
 import { deepDecode } from "./decode.ts";
 import { latencySummary, summarize, type BuildOptions } from "./render.ts";
 import {
@@ -156,6 +160,8 @@ export interface RunEvalResult {
   /** Number of batches that returned non-200. */
   failed_batches: number;
   batch_failures: EvalBatchFailure[];
+  /** Advisory only in this release; does not alter Evaluation API verdicts. */
+  response_integrity: EvalResponseIntegritySummary;
 }
 
 function enforceLatestAcknowledgement(ids: ResolvedAgentIds, opts: RunEvalOptions): void {
@@ -896,6 +902,7 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
       metadata,
       failed_batches: failedBatches,
       batch_failures: publicBatchFailures,
+      response_integrity: summarizeEvalResponseIntegrity(merged),
     };
   } catch (err) {
     if (!terminalStatusWritten) {

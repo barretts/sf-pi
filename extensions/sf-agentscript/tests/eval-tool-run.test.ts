@@ -140,6 +140,14 @@ function result(): RunEvalResult {
     },
     failed_batches: 0,
     batch_failures: [],
+    response_integrity: {
+      turns_total: 0,
+      turns_pass: 0,
+      turns_warning: 0,
+      turns_unavailable: 0,
+      max_non_empty_content_count: 0,
+      observations: [],
+    },
   };
 }
 

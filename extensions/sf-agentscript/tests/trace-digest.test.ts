@@ -132,6 +132,42 @@ describe("summarizeTrace (preview source)", () => {
     }
   });
 
+  test("builds a complete preview response sequence from every LLM step", () => {
+    const plan = [
+      ...FAKE_PLAN.slice(0, 5),
+      {
+        type: "LLMStep",
+        startExecutionTime: 460,
+        endExecutionTime: 500,
+        data: {
+          agent_name: "Triage",
+          prompt_name: "Triage_prompt",
+          prompt_content: "follow-up",
+          prompt_response: JSON.stringify({ content: "Intermediate guidance" }),
+          execution_latency: 40,
+        },
+      },
+      {
+        type: "LLMStep",
+        startExecutionTime: 500,
+        endExecutionTime: 540,
+        data: {
+          agent_name: "AccountSecurity",
+          prompt_name: "AccountSecurity_prompt",
+          prompt_content: "final",
+          prompt_response: JSON.stringify({ content: "Final guidance" }),
+          execution_latency: 40,
+        },
+      },
+      ...FAKE_PLAN.slice(5),
+    ];
+    const d = summarizeTrace({ plan }, { agentResponse: "Final guidance" });
+    expect(d.response_sequence?.events).toHaveLength(3);
+    expect(d.response_sequence?.non_empty_content_count).toBe(2);
+    expect(d.response_sequence?.events[0].kind).toBe("tool_only");
+    expect(d.response_sequence?.final_response_event_index).toBe(2);
+  });
+
   test("LLMStep extracts prompt_chars, response_chars, and tool_calls", () => {
     const d = summarizeTrace({ plan: FAKE_PLAN });
     const llm = d.timeline.find((r) => r.t === "LLMStep");
@@ -400,9 +436,17 @@ describe("summarizeLastExecution (eval source)", () => {
             prompt_name: "Triage_prompt",
             prompt_content: "system + user",
             prompt_response: JSON.stringify({
+              content: "",
               tool_invocations: [{ function: { name: "go_password" } }],
             }),
             execution_latency: 320,
+          } as never,
+          {
+            agent_name: "Password Help",
+            prompt_name: "Password Help_prompt",
+            prompt_content: "final prompt",
+            prompt_response: JSON.stringify({ content: "Hello there!" }),
+            execution_latency: 200,
           } as never,
         ],
       ],
@@ -420,6 +464,9 @@ describe("summarizeLastExecution (eval source)", () => {
     expect(types).toContain("FunctionStep");
     const llm = d.timeline.find((r) => r.t === "LLMStep");
     expect(llm?.tool_calls).toEqual(["go_password"]);
+    expect(d.response_sequence?.events).toHaveLength(2);
+    expect(d.response_sequence?.non_empty_content_count).toBe(1);
+    expect(d.response_sequence?.final_response_event_index).toBe(1);
     expect(d.stats.related_agent_calls).toBeNull();
     expect(d.connected_agent_evidence).toEqual({
       status: "unavailable",
@@ -432,6 +479,7 @@ describe("summarizeLastExecution (eval source)", () => {
     const d = summarizeLastExecution(undefined);
     expect(d.source).toBe("eval");
     expect(d.timeline).toEqual([]);
+    expect(d.response_sequence?.integrity.status).toBe("unavailable");
     expect(d.stats.step_count).toBe(0);
     expect(d.stats.llm_calls).toBe(0);
   });

@@ -327,6 +327,7 @@ export async function actionRun(
     evidence_verdict: result.metadata.evidence_verdict,
     totals: result.metadata.totals,
     latency: result.latency,
+    response_integrity: result.response_integrity,
     failed_batches: result.failed_batches,
     returned_tests: result.metadata.returned_tests_count,
     expected_tests: result.metadata.tests_count,
@@ -377,6 +378,7 @@ export async function actionRun(
         evidence_verdict: result.metadata.evidence_verdict,
         totals: result.metadata.totals,
         latency: result.latency,
+        response_integrity: result.response_integrity,
         failed_test_ids: result.failures.map((f) => f.test_id),
       },
       evalRunEvents({

@@ -20,6 +20,7 @@ import type {
   VariableChangeDigest,
 } from "../preview/trace-digest.ts";
 import { fmtMs, stepLabel, styleForStep, padRightVisible, clipLine } from "./shared.ts";
+import { responseSequenceLines } from "./response-sequence.ts";
 
 // ─── Result shape we expect in `details` from preview-tool.ts ────────────────
 
@@ -150,6 +151,12 @@ function formatSendBody(
   const outcome = formatOutcome(digest);
   if (outcome)
     lines.push(sectionRow(outcome.startsWith("⚠") ? "⚠" : "✅", "Outcome", outcome, theme));
+
+  const responseSequence = responseSequenceLines(digest.response_sequence, theme);
+  if (responseSequence.length > 0) {
+    lines.push("");
+    lines.push(...responseSequence);
+  }
 
   const route = routePath(digest);
   if (route.length > 0) {
@@ -541,6 +548,36 @@ function timelineCells(row: TraceDigest["timeline"][number]): { actor: string; d
     }
     case "LLMStep":
     case "LLMExecutionStep": {
+      const responseKind = typeof row.response_kind === "string" ? row.response_kind : undefined;
+      const responsePreview =
+        typeof row.response_preview === "string" ? row.response_preview : undefined;
+      if (responseKind === "tool_only") {
+        const tools = Array.isArray(row.tool_calls)
+          ? ` · calls ${(row.tool_calls as string[]).join(", ")}`
+          : "";
+        return {
+          actor: typeof row.agent === "string" ? row.agent : "—",
+          details: `tool-only${tools}`,
+        };
+      }
+      if (responseKind === "content" && responsePreview) {
+        return {
+          actor: typeof row.agent === "string" ? row.agent : "—",
+          details: `${row.matches_final_response === true ? "final content" : "⚠ candidate content"} · “${clipLine(responsePreview.replace(/\s+/g, " "), 140)}”`,
+        };
+      }
+      if (responseKind === "malformed") {
+        return {
+          actor: typeof row.agent === "string" ? row.agent : "—",
+          details: `⚠ malformed response${responsePreview ? ` · “${clipLine(responsePreview, 120)}”` : ""}`,
+        };
+      }
+      if (responseKind === "empty") {
+        return {
+          actor: typeof row.agent === "string" ? row.agent : "—",
+          details: "empty completion",
+        };
+      }
       const prompt =
         typeof row.prompt_chars === "number"
           ? `${Math.round(row.prompt_chars / 100) / 10}k prompt`

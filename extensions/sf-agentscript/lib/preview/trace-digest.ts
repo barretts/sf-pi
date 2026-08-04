@@ -31,6 +31,11 @@
  */
 
 import type { LastExecution, PlannerResponse } from "../eval/types.ts";
+import {
+  buildLlmResponseSequence,
+  type LlmResponseEventEvidence,
+  type TurnResponseSequence,
+} from "../llm-response-sequence.ts";
 
 // -------------------------------------------------------------------------------------------------
 // Public types
@@ -153,6 +158,8 @@ export interface TraceDigest {
     status: "observed" | "unavailable";
     reason?: "eval_api_does_not_expose_related_agent_step" | "production_api_has_no_plan_trace";
   };
+  /** Every parsed LLM completion returned for this turn, in API order. */
+  response_sequence?: TurnResponseSequence;
   /** Rule-based preview findings. Render only when non-empty. */
   diagnostics?: TraceFindingDigest[];
   /** Step-level errors aggregated across the timeline. */
@@ -188,6 +195,15 @@ function asNumber(v: unknown): number | undefined {
 
 function asString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
+}
+
+function responseDigestFields(event: LlmResponseEventEvidence | undefined): Partial<DigestRow> {
+  if (!event) return {};
+  return {
+    response_kind: event.kind,
+    response_preview: clip(event.content, 240),
+    matches_final_response: event.matches_final_response || undefined,
+  };
 }
 
 function ms(start: unknown, end: unknown): number | undefined {
@@ -527,9 +543,35 @@ interface PreviewTraceLike {
 export function summarizeTrace(trace: unknown, opts: SummarizeOptions = {}): TraceDigest {
   const t = (trace ?? {}) as PreviewTraceLike;
   const stepsRaw = (t.plan ?? t.steps ?? []) as StepLike[];
+  const finalResponse =
+    opts.agentResponse ??
+    stepsRaw
+      .filter((step) => step.type === "PlannerResponseStep")
+      .map((step) => asString(step.message))
+      .filter((value): value is string => value !== undefined)
+      .at(-1);
+  const responseSequence = buildLlmResponseSequence(
+    [
+      stepsRaw
+        .filter((step) => step.type === "LLMStep" || step.type === "LLMExecutionStep")
+        .map((step) => {
+          const data = (step.data ?? {}) as Record<string, unknown>;
+          return {
+            agent_name: data.agent_name,
+            prompt_name: data.prompt_name,
+            prompt_response: data.prompt_response,
+            execution_latency: data.execution_latency ?? step.executionLatency,
+            startExecutionTime: step.startExecutionTime,
+            endExecutionTime: step.endExecutionTime,
+          };
+        }),
+    ],
+    finalResponse,
+  );
 
   const timeline: DigestRow[] = [];
   const errors: TraceDigest["errors"] = [];
+  let responseEventIndex = 0;
   let llmCalls = 0;
   let varsUpdated = 0;
   let topicChanges = 0;
@@ -549,11 +591,16 @@ export function summarizeTrace(trace: unknown, opts: SummarizeOptions = {}): Tra
     const type = step.type ?? "UnknownStep";
     const extractor = EXTRACTORS[type] ?? fallbackExtractor;
     const extracted = extractor(step);
+    const responseEvidence =
+      type === "LLMStep" || type === "LLMExecutionStep"
+        ? responseSequence.events[responseEventIndex++]
+        : undefined;
     const row: DigestRow = {
       i,
       t: type,
       ms: ms(step.startExecutionTime, step.endExecutionTime),
       ...extracted,
+      ...responseDigestFields(responseEvidence),
     };
     if (row.ms === undefined) delete row.ms;
     timeline.push(row);
@@ -671,6 +718,7 @@ export function summarizeTrace(trace: unknown, opts: SummarizeOptions = {}): Tra
     ...(variableChanges.length > 0 ? { variable_changes: variableChanges } : {}),
     ...(stateVariables ? { state_variables: stateVariables } : {}),
     ...(toolActivity ? { tool_activity: toolActivity } : {}),
+    response_sequence: responseSequence,
     connected_agent_evidence: { status: "observed" },
     ...(diagnostics.length > 0 ? { diagnostics } : {}),
     errors,
@@ -747,10 +795,12 @@ export function summarizeLastExecution(
     stateVariables?: Record<string, unknown>;
   } = {},
 ): TraceDigest {
+  const responseSequence = buildLlmResponseSequence(lastExec?.llmEvents, lastExec?.agentResponse);
   const timeline: DigestRow[] = [];
   const errors: TraceDigest["errors"] = [];
   let llmCalls = 0;
   let i = 0;
+  let responseEventIndex = 0;
 
   // userUtterance from the API often comes back blank; ctx.userInput
   // (sourced from the spec) wins.
@@ -790,6 +840,7 @@ export function summarizeLastExecution(
         prompt_chars: typeof ev.prompt_content === "string" ? ev.prompt_content.length : undefined,
         response_chars: responseStr.length || undefined,
         ...(toolCalls && toolCalls.length ? { tool_calls: toolCalls } : {}),
+        ...responseDigestFields(responseSequence.events[responseEventIndex++]),
       });
     }
   }
@@ -849,6 +900,7 @@ export function summarizeLastExecution(
     },
     timeline,
     ...(stateVariables ? { state_variables: stateVariables } : {}),
+    response_sequence: responseSequence,
     connected_agent_evidence: {
       status: "unavailable",
       reason: "eval_api_does_not_expose_related_agent_step",

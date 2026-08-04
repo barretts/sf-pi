@@ -122,7 +122,7 @@ After a single preview session is active on the branch, `send` and `end` may omi
 
 Use `context_variables` to seed deterministic session state for preview or per-turn sends.
 
-Preview send output uses two surfaces: the human renderer shows a rich Preview Trace Report (turn summary, route path, state changes, key state, function activity, connected-agent invocations, action I/O appendix, aligned planner timeline, diagnostics, stats, and drill pointers), while `content[0].text` stays compact for LLM context efficiency. `RelatedAgentStep` counts as a connected-agent invocation, not a function call. Use `details.digest` for structured signals and `agentscript_preview trace` with the returned `plan_id` when the full raw trace is needed.
+Preview send output uses two surfaces: the human renderer shows a rich Preview Trace Report (turn summary, complete parsed LLM response sequence, route path, state changes, key state, function activity, connected-agent invocations, action I/O appendix, aligned planner timeline, diagnostics, stats, and drill pointers), while `content[0].text` stays compact for LLM context efficiency. Response rows distinguish tool-only, intermediate candidate content, and final matching content; multiple non-empty completions are advisory and do not prove what TTS streamed. `RelatedAgentStep` counts as a connected-agent invocation, not a function call. Use `details.digest` for structured signals and `agentscript_preview trace` with the returned `plan_id` when the full raw trace is needed.
 
 ## Eval
 
@@ -145,6 +145,8 @@ For long or exploratory local runs, pass `batch_timeout_ms` to cap each Evaluati
 Eval runs synthesize trace artifacts from inline Evaluation API data by default. Eval does not expose `RelatedAgentStep`; connected-agent call counts are therefore unavailable, not zero and not inferred from LLM events. Use `agentscript_preview` for authoritative connected-call telemetry, and use `agentscript_eval action="trace"` only when you explicitly need a live planner trace and have a known resident `session_id`/`plan_id`.
 
 Each paired `send_message` and `get_state` turn persists a complete parsed `response_sequence` from `lastExecution.llmEvents` in transcript, failure, and synthesized-trace artifacts. It retains every response event and tool name without copying full prompt bodies. Missing `get_state` evidence is `unavailable`, never a passing zero. `raw.json` remains the authoritative untouched API response.
+
+Eval run output aggregates response integrity as an advisory-only pass/warning/unavailable summary, and failure cards show every parsed completion for each turn. This presentation does not alter Evaluation API evaluator results, strict verdicts, or release gating.
 
 Use `$latest_*` placeholders or `version_resolution="latest"` only for the publish → eval → activate loop, and pass `acknowledge_inactive_version=true` when deliberately testing a non-Active version.
 

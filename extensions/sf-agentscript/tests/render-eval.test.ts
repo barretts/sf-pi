@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { describe, expect, it } from "vitest";
 import { evalRunMarkdown, evalFailureMarkdown, renderEvalRunResult } from "../lib/render/eval.ts";
+import { buildLlmResponseSequence } from "../lib/llm-response-sequence.ts";
 
 const plainTheme = {
   fg: (_name: string, text: string) => text,
@@ -95,6 +96,56 @@ describe("evalRunMarkdown", () => {
     expect(md).toMatch(/agentscript_eval get_failure/);
   });
 
+  it("renders response-integrity advisories even when API evaluators pass", () => {
+    const md = evalRunMarkdown(
+      {
+        ok: true,
+        run_id: "response-integrity",
+        totals: {
+          tests: 1,
+          test_pass: 1,
+          test_fail: 0,
+          evals: 1,
+          ev_pass: 1,
+          ev_fail: 0,
+          errors: 0,
+        },
+        latency: { count: 1 },
+        response_integrity: {
+          turns_total: 2,
+          turns_pass: 1,
+          turns_warning: 1,
+          turns_unavailable: 0,
+          max_non_empty_content_count: 2,
+          observations: [
+            {
+              test_id: "voice_flow",
+              turn_id: "turn1",
+              status: "warning",
+              llm_call_count: 4,
+              non_empty_content_count: 2,
+              message: "2 non-empty LLM completions exceed the configured maximum of 1.",
+            },
+            {
+              test_id: "voice_flow",
+              turn_id: "turn2",
+              status: "pass",
+              llm_call_count: 2,
+              non_empty_content_count: 1,
+            },
+          ],
+        },
+      },
+      [],
+    );
+
+    expect(md).toMatch(/LLM Response Integrity/);
+    expect(md).toMatch(/advisory only/i);
+    expect(md).toMatch(/1 warning/);
+    expect(md).toMatch(/voice_flow · turn1/);
+    expect(md).toMatch(/2 non-empty/);
+  });
+
   it("renders partial progress text when provided", () => {
     const rendered = renderEvalRunResult(
       { content: [{ type: "text", text: "Running 18 tests across 4 batch(es)" }] },
@@ -150,6 +201,28 @@ describe("evalFailureMarkdown", () => {
           latency_ms: 1280,
           plan_id: "2c4d0000-aaaa-bbbb-cccc-dddddddddddd",
           state_variables: { verified_check: false },
+          response_sequence: buildLlmResponseSequence(
+            [
+              [
+                {
+                  agent_name: "Triage",
+                  prompt_response: JSON.stringify({
+                    content: "",
+                    tool_invocations: [{ function: { name: "route_request" } }],
+                  }),
+                },
+                {
+                  agent_name: "Triage",
+                  prompt_response: JSON.stringify({ content: "Intermediate guidance" }),
+                },
+                {
+                  agent_name: "NoMatch",
+                  prompt_response: JSON.stringify({ content: "I can't help…" }),
+                },
+              ],
+            ],
+            "I can't help…",
+          ),
           digest: {
             source: "eval",
             turn: { user_input: "x", agent_response: "y" },
@@ -185,6 +258,10 @@ describe("evalFailureMarkdown", () => {
     expect(md).toMatch(/1\.3s/); // fmtMs converts 1280ms to '1.3s'
     expect(md).toMatch(/Show me last month/);
     expect(md).toMatch(/verified_check/);
+    expect(md).toMatch(/🗣 LLM Response Sequence/);
+    expect(md).toMatch(/Intermediate guidance/);
+    expect(md).toMatch(/final content/);
+    expect(md).toMatch(/2 non-empty LLM completions exceed/);
     // mini timeline strip
     expect(md).toMatch(/▶/);
     expect(md).toMatch(/🧠/);

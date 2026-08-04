@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 import { previewSendMarkdown } from "../lib/render/timeline.ts";
 import type { TraceDigest } from "../lib/preview/trace-digest.ts";
+import { buildLlmResponseSequence } from "../lib/llm-response-sequence.ts";
 import {
   fmtMs,
   fmtChars,
@@ -172,6 +173,53 @@ describe("previewSendMarkdown", () => {
     expect(md).toMatch(/10 shown/);
     expect(md).toMatch(/1 internal hidden/);
     expect(md).not.toMatch(/__plannerScratch/);
+  });
+
+  it("renders every candidate LLM response and warns on multiple non-empty completions", () => {
+    const digest = fixtureDigest();
+    digest.response_sequence = buildLlmResponseSequence(
+      [
+        [
+          {
+            agent_name: "Triage",
+            prompt_response: JSON.stringify({
+              content: "",
+              tool_invocations: [{ function: { name: "transition_topic" } }],
+            }),
+          },
+          {
+            agent_name: "Triage",
+            prompt_response: JSON.stringify({ content: "Can you provide more details?" }),
+          },
+        ],
+        [
+          {
+            agent_name: "AccountSecurity",
+            prompt_response: JSON.stringify({
+              content: "",
+              tool_invocations: [{ function: { name: "reset_password" } }],
+            }),
+          },
+          {
+            agent_name: "AccountSecurity",
+            prompt_response: JSON.stringify({
+              content: "I'm sorry to hear that. Let me help you secure your account.",
+            }),
+          },
+        ],
+      ],
+      digest.turn.agent_response,
+    );
+
+    const md = previewSendMarkdown(digest, { ok: true });
+    expect(md).toMatch(/🗣 LLM Response Sequence/);
+    expect(md).toMatch(/tool-only/);
+    expect(md).toMatch(/transition_topic/);
+    expect(md).toMatch(/candidate content/);
+    expect(md).toMatch(/Can you provide more details/);
+    expect(md).toMatch(/final content/);
+    expect(md).toMatch(/Let me help you secure your account/);
+    expect(md).toMatch(/2 non-empty LLM completions exceed/);
   });
 
   it("renders one row per timeline step in order", () => {

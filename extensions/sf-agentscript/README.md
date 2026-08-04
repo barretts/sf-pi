@@ -82,7 +82,8 @@ Use `agentscript_authoring { "verb": "inspect", "mode": "runtime_smoke", "target
 
 `agentscript_preview action="send"` separates human readability from model context efficiency:
 
-- The TUI/report surface renders a rich Preview Trace Report with turn summary, route path, state changes, key state snapshot, tool activity, connected-agent invocations, action I/O appendix, aligned planner timeline, diagnostics, stats, and drill pointers.
+- The TUI/report surface renders a rich Preview Trace Report with turn summary, the complete parsed LLM response sequence, route path, state changes, key state snapshot, tool activity, connected-agent invocations, action I/O appendix, aligned planner timeline, diagnostics, stats, and drill pointers.
+- Response-sequence rows distinguish tool-only, empty, malformed, intermediate candidate content, and content matching the final planner response. Multiple non-empty completions are an explicit human advisory; preview does not claim that candidate text was definitely streamed by a voice surface.
 - The LLM-facing text remains compact: a response, short summary, counts, and pointers. Structured details live in `details.digest`; raw prompts, full state, and full action payloads stay in persisted trace artifacts.
 - Internal planner variable spam is hidden from the human timeline by default, while user-visible state changes show previous → new previews when available.
 - Action input/output previews are screenshot-friendly and bounded/redacted; use `agentscript_preview trace` with the returned `plan_id` for the full raw trace.
@@ -141,6 +142,8 @@ Generated specs compile an internal stateful scenario model into the existing Ev
 Eval-created sessions usually disappear before the live planner trace endpoint can read them, so eval runs synthesize trace artifacts from inline Evaluation API data by default; use `agentscript_eval action="trace"` for explicit live trace drill-down when the session is known to be resident. The Evaluation API does not expose `RelatedAgentStep`, so eval digests report connected-agent call evidence as unavailable rather than zero or inferred; preview remains authoritative for direct invocation counts.
 
 For each paired `agent.send_message` and `agent.get_state`, `transcript.jsonl`, failure records, and synthesized traces retain a parsed `response_sequence` built from every `lastExecution.llmEvents` entry. The sequence stores response content, tool names, ordering, timing, and final-response matching without duplicating full prompt bodies. A turn without `get_state` evidence is recorded as `unavailable`, never as a passing zero-event turn. `raw.json` remains the authoritative unmodified API payload.
+
+Eval run results aggregate this evidence as a human-facing, advisory-only LLM Response Integrity summary, including pass, warning, and unavailable turn counts. Eval failure cards render the full response sequence for each turn. These advisories do not change Evaluation API verdicts or release evidence in this phase.
 
 ## Eval-Gated Release Sequence
 
@@ -237,6 +240,7 @@ extensions/sf-agentscript/
       orchestrator.ts       ← implementation module
       persist.ts            ← implementation module
       render.ts             ← implementation module
+      response-integrity.ts ← implementation module
       safety-probes.ts      ← implementation module
       scenario.ts           ← implementation module
       seeds.ts              ← implementation module
@@ -322,6 +326,7 @@ extensions/sf-agentscript/
       lifecycle.ts          ← implementation module
       mutate.ts             ← implementation module
       report-writer.ts      ← implementation module
+      response-sequence.ts  ← implementation module
       shared.ts             ← implementation module
       timeline.ts           ← implementation module
     review/
@@ -401,6 +406,7 @@ extensions/sf-agentscript/
     eval-normalize.test.ts  ← unit / smoke test
     eval-persist-status.test.ts← unit / smoke test
     eval-plan-id-path.test.ts← unit / smoke test
+    eval-response-integrity.test.ts← unit / smoke test
     eval-run-boundary.test.ts← unit / smoke test
     eval-run-failure-boundary.test.ts← unit / smoke test
     eval-scenario.test.ts   ← unit / smoke test
