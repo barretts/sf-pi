@@ -17,7 +17,6 @@ import {
   BASE_URL_ENV,
   LEGACY_API_KEY_ENV,
   LEGACY_BASE_URL_ENV,
-  OFF_DEFAULT_MODEL_ID,
   getGatewayConfig,
   normalizeBaseUrl,
   projectGatewayConfigPath,
@@ -35,20 +34,6 @@ import {
   shouldCaptureExclusiveScopeSnapshot,
   snapshotEnabledModelsForExclusiveScope,
 } from "../index.ts";
-
-// -------------------------------------------------------------------------------------------------
-// model defaults
-// -------------------------------------------------------------------------------------------------
-
-describe("gateway model defaults", () => {
-  it("points the off-default at a model the gateway actually serves", () => {
-    // `gpt-5.5` used to be here but is not a published gateway model id.
-    // Live /v1/models returns gpt-4o, gpt-4o-mini, gpt-5, gpt-5-mini, and the
-    // Codex pair. We switch to the bundled openai provider's gpt-5 so the
-    // off-switch lands the user on a working model without gateway routing.
-    expect(OFF_DEFAULT_MODEL_ID).toBe("gpt-5");
-  });
-});
 
 // -------------------------------------------------------------------------------------------------
 // normalizeBaseUrl

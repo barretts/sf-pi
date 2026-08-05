@@ -57,7 +57,7 @@ export const DEFAULT_OPENAI_SERVICE_TIER = "priority";
 export type PiReasoningLevel = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 /**
- * @deprecated Use the model preset's maxTokens (128_000) directly.
+ * @deprecated Use the resolved model's maxTokens directly.
  * Kept for backwards-compatible imports.
  */
 export const OPUS_47_DEFAULT_MAX_TOKENS = 128_000;

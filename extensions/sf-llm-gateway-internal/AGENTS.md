@@ -11,7 +11,7 @@ Repo-level rules still apply; see root `AGENTS.md`.
 1. `extensions/sf-llm-gateway-internal/README.md` — unified-provider architecture + two-transport routing
 2. `extensions/sf-llm-gateway-internal/index.ts` header comment — configuration + behavior matrix
 3. `extensions/sf-llm-gateway-internal/lib/config.ts` — env vars, constants, saved-config schema
-4. `extensions/sf-llm-gateway-internal/lib/models.ts` — model presets and family inference
+4. `extensions/sf-llm-gateway-internal/lib/models.ts` — discovery metadata and family inference
 
 ## File map (what lives where)
 
@@ -20,7 +20,7 @@ Repo-level rules still apply; see root `AGENTS.md`.
 | Extension entry, lifecycle, command dispatch   | `index.ts`                         |
 | Env vars, constants, saved-config I/O          | `lib/config.ts`                    |
 | Gateway URL normalization                      | `lib/gateway-url.ts`               |
-| Model presets + family inference               | `lib/models.ts`                    |
+| Discovery metadata + family inference          | `lib/models.ts`                    |
 | Complete Provider + model discovery            | `lib/provider.ts`                  |
 | Provider auth + session context                | `lib/provider-auth.ts`             |
 | Masked API-key input                           | `common secure credential prompt`  |
@@ -28,7 +28,6 @@ Repo-level rules still apply; see root `AGENTS.md`.
 | Monthly usage / key info / health fetcher      | `lib/monthly-usage.ts`             |
 | Pi settings mutation (defaults, enabledModels) | `lib/pi-settings.ts`               |
 | Legacy provider-id settings migration          | `lib/migrate-unify-provider.ts`    |
-| GPT-5.6 default settings migration             | `lib/migrate-gpt56-default.ts`     |
 | Footer + status report formatting              | `lib/status.ts`                    |
 | Standard command metadata + completions        | `lib/command-surface.ts`           |
 | Standalone slash-command setup overlay         | `lib/setup-overlay.ts`             |
@@ -65,9 +64,10 @@ copy.
    from `lib/migrate-unify-provider.ts` (one-shot settings migration) and
    from `lib/pi-settings.ts` (legacy-pattern normalization).
    Do not re-introduce it as a real registration or add an ID-based dispatcher.
-2. **Static baseline plus Pi-owned overlay.** The Provider exposes a bootstrap
-   catalog synchronously. Pi restores/persists the dynamic overlay through its
-   provider-scoped ModelsStore. Startup is network-free; refresh is explicit.
+2. **Dynamic catalog with Pi-owned cache.** The Provider registers with no
+   static models. Authenticated discovery supplies callable IDs, and Pi restores
+   and persists the last successful catalog through its provider-scoped
+   ModelsStore. Startup is network-free; refresh is explicit.
 3. **Pi owns credentials.** `/login` stores the API key and default URL in
    Pi's credential store. SF Pi's custom component masks key input; project
    config may override only non-secret settings. Legacy global/project config
@@ -111,7 +111,7 @@ When adding a subcommand:
 
 - `tests/command-parsing.test.ts` — every new subcommand needs a parse case
 - `tests/config.test.ts` — settings mutations covered by the `apply*` / `restore*` helpers
-- `tests/models.test.ts` — family inference / new presets
+- `tests/models.test.ts` — family inference / discovered metadata
 - `tests/native-retry-lifecycle.test.ts` — exact-Pi agent retry lifecycle behavior
 - `tests/anthropic-transport.test.ts` — Gateway error normalization without local retries
 - `tests/codex-regression.test.ts` — gated live test; runs only when

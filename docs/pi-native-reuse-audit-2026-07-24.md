@@ -636,10 +636,9 @@ Migrate incrementally and require no loss in behavior coverage. Keep the current
 
 ### Candidates
 
-- Clearly one-shot Gateway migrations and tests: about **560 LOC** across:
-  - `migrate-unify-provider.ts`;
-  - `migrate-gpt56-default.ts`;
-  - their focused tests.
+- The remaining one-shot Gateway provider-id migration and its focused tests in
+  `migrate-unify-provider.ts`; the named-model default migration was removed
+  when ADR 0077 made the gateway catalog fully dynamic.
 - Apex/SOQL one-caller `operations.ts` barrels.
 - Data 360 `path.ts` and `target-org.ts` compatibility re-exports, if they are not a supported external Interface.
 - hard-coded `.pi` paths that should use Pi's exported `CONFIG_DIR_NAME`.

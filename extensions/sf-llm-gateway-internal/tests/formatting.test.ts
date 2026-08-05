@@ -78,27 +78,7 @@ describe("formatUsd", () => {
 // -------------------------------------------------------------------------------------------------
 
 describe("getShortModelLabel", () => {
-  it("returns short label for current default model", () => {
-    expect(getShortModelLabel("gpt-5.6-sol")).toBe("GPT-5.6 Sol [1M]");
-  });
-
-  it("returns short label for the former Opus 4.8 default", () => {
-    expect(getShortModelLabel("claude-opus-4-8")).toBe("Opus 4.8 [1M]");
-  });
-
-  it("returns short label for the legacy Opus 4.7 alias", () => {
-    expect(getShortModelLabel("claude-opus-4-7-v1")).toBe("Opus 4.7 [1M]");
-  });
-
-  it("returns short label for previous Opus model", () => {
-    expect(getShortModelLabel("claude-opus-4-6-v1")).toBe("Opus 4.6 [1M]");
-  });
-
-  it("returns short label for fallback model", () => {
-    expect(getShortModelLabel("claude-sonnet-5")).toBe("Sonnet 5");
-  });
-
-  it("returns the raw ID for unknown models", () => {
-    expect(getShortModelLabel("claude-custom")).toBe("claude-custom");
+  it("returns the discovered model ID without consulting a bundled label catalog", () => {
+    expect(getShortModelLabel("example-discovered-model")).toBe("example-discovered-model");
   });
 });

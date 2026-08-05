@@ -3,7 +3,7 @@
  * Tests for model identification, inference, and catalog building.
  *
  * Covers: getModelFamily, isAnthropicModelId, inferModelDefinition,
- * bootstrap/discovered catalog building, preferred-model resolution,
+ * discovered catalog building, preferred-model resolution,
  * and toProviderModelConfig.
  */
 import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
@@ -12,7 +12,6 @@ import { convertResponsesTools } from "@earendil-works/pi-ai/api/openai-response
 import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
 import {
-  buildBootstrapModelList,
   buildDiscoveredModelList,
   getModelFamily,
   inferModelDefinition,
@@ -167,38 +166,8 @@ describe("inferModelDefinition", () => {
 });
 
 // -------------------------------------------------------------------------------------------------
-// bootstrap/discovered catalog building
+// discovered catalog building
 // -------------------------------------------------------------------------------------------------
-
-describe("buildBootstrapModelList", () => {
-  it("includes the default, previous default, fallback, and curated static model IDs", () => {
-    const models = buildBootstrapModelList();
-    const ids = models.map((model) => model.id);
-    expect(ids).toContain("gpt-5.6-sol");
-    expect(ids).toContain("claude-opus-5");
-    expect(ids).toContain("claude-opus-4-8");
-    expect(ids).toContain("claude-opus-4-7");
-    expect(ids).toContain("claude-sonnet-5");
-    expect(ids).toContain("gpt-5.5");
-  });
-
-  it("puts the default model first", () => {
-    const models = buildBootstrapModelList();
-    expect(models[0]?.id).toBe("gpt-5.6-sol");
-  });
-
-  // Regression: before live discovery lands, the bootstrap must contain at
-  // least one non-Claude model so the `sf-llm-gateway-internal/*` wildcard
-  // in Pi's enabledModels resolves to something non-empty and does not emit
-  // `Warning: No models match pattern "sf-llm-gateway-internal/*"`.
-  it("includes at least one OpenAI-compat model so both provider wildcards resolve at startup", () => {
-    const models = buildBootstrapModelList();
-    const openAiCompat = models.filter((model) => model.api !== "anthropic-messages");
-    const anthropic = models.filter((model) => model.api === "anthropic-messages");
-    expect(openAiCompat.length).toBeGreaterThan(0);
-    expect(anthropic.length).toBeGreaterThan(0);
-  });
-});
 
 describe("buildDiscoveredModelList", () => {
   it("keeps only the model IDs returned by the gateway", () => {
@@ -218,10 +187,9 @@ describe("buildDiscoveredModelList", () => {
     expect(models.filter((model) => model.id === "claude-opus-4-7")).toHaveLength(1);
   });
 
-  it("keeps the fallback model ahead of later discovered families when both are returned", () => {
-    const models = buildDiscoveredModelList(["gemini-2.5-pro", "gpt-5", "claude-sonnet-5"]);
-    const ids = models.map((model) => model.id);
-    expect(ids.indexOf("claude-sonnet-5")).toBeLessThan(ids.indexOf("gemini-2.5-pro"));
+  it("uses stable ordering for discovered models without a bundled preference", () => {
+    const models = buildDiscoveredModelList(["example-model-b", "example-model-a"]);
+    expect(models.map((model) => model.id)).toEqual(["example-model-a", "example-model-b"]);
   });
 });
 
@@ -255,7 +223,7 @@ describe("resolvePreferredModelId", () => {
 // -------------------------------------------------------------------------------------------------
 
 describe("toProviderModelConfig", () => {
-  it("returns a valid config for a known preset model", () => {
+  it("returns a valid config from generic family inference", () => {
     const config = toProviderModelConfig("claude-opus-4-6-v1");
     expect(config.id).toBe("claude-opus-4-6-v1");
     expect(config.reasoning).toBe(true);
@@ -289,7 +257,7 @@ describe("toProviderModelConfig", () => {
     });
   });
 
-  it("does not let stale discovery metadata downgrade an Opus 5 alias", () => {
+  it("lets authenticated discovery override generic family inference", () => {
     const config = toProviderModelConfig("claude-opus-5-vertex", {
       id: "claude-opus-5-vertex",
       maxInputTokens: 200_000,
@@ -297,10 +265,10 @@ describe("toProviderModelConfig", () => {
       supportsReasoning: false,
       supportsVision: false,
     });
-    expect(config.contextWindow).toBe(1_000_000);
-    expect(config.maxTokens).toBe(128_000);
-    expect(config.reasoning).toBe(true);
-    expect(config.input).toEqual(["text", "image"]);
+    expect(config.contextWindow).toBe(200_000);
+    expect(config.maxTokens).toBe(32_768);
+    expect(config.reasoning).toBe(false);
+    expect(config.input).toEqual(["text"]);
     expect(config.thinkingLevelMap).toEqual({ xhigh: "xhigh", max: "max" });
   });
 
@@ -316,7 +284,7 @@ describe("toProviderModelConfig", () => {
     expect(config.headers).toBeUndefined();
   });
 
-  it("uses the same no-beta-header preset for unknown Opus 4.7 model IDs via inference", () => {
+  it("uses the same no-beta-header family inference for discovered variants", () => {
     const config = toProviderModelConfig("claude-opus-4-7-preview");
     expect(config.contextWindow).toBe(1_000_000);
     expect(config.maxTokens).toBe(128_000);
@@ -455,7 +423,7 @@ describe("toProviderModelConfig", () => {
     }
   });
 
-  it("uses the updated GPT-5 272K/128K preset", () => {
+  it("infers GPT-5 family token limits", () => {
     const gpt5 = toProviderModelConfig("gpt-5");
     expect(gpt5.contextWindow).toBe(272_000);
     expect(gpt5.maxTokens).toBe(128_000);
@@ -464,7 +432,7 @@ describe("toProviderModelConfig", () => {
     expect(gpt5Mini.maxTokens).toBe(128_000);
   });
 
-  it("uses GPT-5.6 Sol as the max-capable gateway default preset", () => {
+  it("infers max-capable metadata for a discovered GPT-5.6 family model", () => {
     const cfg = toProviderModelConfig("gpt-5.6-sol");
     expect(cfg.contextWindow).toBe(1_000_000);
     expect(cfg.maxTokens).toBe(128_000);
@@ -520,7 +488,7 @@ describe("toProviderModelConfig", () => {
     expect(tool).toMatchObject({ type: "function", strict: false });
   });
 
-  it("uses GPT-5.6 Bedrock presets with Bedrock-safe thinking and 272K context", () => {
+  it("infers Bedrock-safe thinking and context for the matching model family", () => {
     const cfg = toProviderModelConfig("gpt-5.6-sol-bedrock");
     expect(cfg.contextWindow).toBe(272_000);
     expect(cfg.maxTokens).toBe(128_000);
@@ -538,7 +506,7 @@ describe("toProviderModelConfig", () => {
 
   it("routes gpt-5.5 through the OpenAI Responses API with the clamped thinking map", () => {
     // Gateway /v1/model/info reports 1,050,000 / 128,000 for gpt-5.5. The
-    // preset rounds the context window to 1M so the selector math is clean.
+    // Generic family inference rounds the context window for selector math.
     // The complete Provider keeps the real `openai-responses` tag so Pi's
     // API map routes it through `POST /responses`.
     // `thinkingLevelMap` clamps pi's thinking scale to the {low, medium,
@@ -569,28 +537,25 @@ describe("toProviderModelConfig", () => {
     expect(codex.maxTokens).toBe(128_000);
   });
 
-  it("uses the updated Codex 272K/128K preset", () => {
+  it("infers Codex family token limits", () => {
     const codex = toProviderModelConfig("gpt-5.3-codex");
     expect(codex.contextWindow).toBe(272_000);
     expect(codex.maxTokens).toBe(128_000);
   });
 
-  it("preserves the preset when /v1/model/info reports a lower context window", () => {
-    // Some LiteLLM metadata snapshots reported max_input_tokens=200000 for
-    // Opus 4.7 even though the current gateway serves 1M natively. The
-    // preset must win so pi-ai does not silently treat 4.7 as a 200K model.
+  it("uses discovered limits over generic family inference", () => {
     const cfg = toProviderModelConfig("claude-opus-4-7", {
       id: "claude-opus-4-7",
       maxInputTokens: 200_000,
       maxOutputTokens: 64_000,
       supportsVision: true,
     });
-    expect(cfg.contextWindow).toBe(1_000_000);
-    expect(cfg.maxTokens).toBe(128_000);
+    expect(cfg.contextWindow).toBe(200_000);
+    expect(cfg.maxTokens).toBe(64_000);
     expect(cfg.compat).toMatchObject({ forceAdaptiveThinking: true });
   });
 
-  it("applies /v1/model/info to non-preset discovered models", () => {
+  it("applies /v1/model/info to newly discovered models", () => {
     const cfg = toProviderModelConfig("unknown-new-model-v42", {
       id: "unknown-new-model-v42",
       maxInputTokens: 500_000,

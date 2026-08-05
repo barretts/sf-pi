@@ -8,8 +8,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   API_KEY_ENV,
-  DEFAULT_MODEL_ID,
-  FALLBACK_MODEL_ID,
   LEGACY_API_KEY_ENV,
   PROVIDER_NAME,
   describeConfigValue,
@@ -116,8 +114,6 @@ export function buildStatusReport(
     "",
     ...buildProviderTelemetryReport(),
     ...buildWireTraceReport(),
-    `Default model: ${DEFAULT_MODEL_ID}`,
-    `Fallback model: ${FALLBACK_MODEL_ID}`,
   ].join("\n");
 }
 

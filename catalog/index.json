@@ -722,7 +722,7 @@
       "session_shutdown"
     ],
     "docs": {
-      "summary": "Complete Pi Provider for the Salesforce LLM Gateway. Pi-owned credential persistence and model storage, static baseline plus dynamic overlay, real mixed-API dispatch, Gateway-aware transport adapters, explicit refresh, diagnostics, and usage status.",
+      "summary": "Complete Pi Provider for the Salesforce LLM Gateway. Pi-owned credential persistence and model storage, authenticated dynamic discovery with offline cache restore, real mixed-API dispatch, Gateway-aware transport adapters, explicit refresh, diagnostics, and usage status.",
       "primaryFiles": [
         "index.ts",
         "lib/provider.ts",
@@ -750,7 +750,7 @@
     "entry": "extensions/sf-llm-gateway-internal/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 11983
+    "srcLoc": 11467
   },
   {
     "id": "sf-lsp",

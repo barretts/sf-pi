@@ -55,18 +55,6 @@ export const LEGACY_CA_BUNDLE_SOURCE_ENV = "SF_LLM_GATEWAY_INTERNAL_CA_BUNDLE_SO
 // no saved config exists.
 export const DEFAULT_BASE_URL = "";
 
-export const DEFAULT_MODEL_ID = "gpt-5.6-sol";
-export const FALLBACK_MODEL_ID = "claude-sonnet-5";
-
-/** Previous default kept as a named constant for backward compatibility in presets. */
-export const PREVIOUS_DEFAULT_MODEL_ID = "claude-opus-4-8";
-// When the user turns the gateway off, switch them to a model that actually
-// exists on the gateway. `openai-codex/gpt-5.5` used to be here but is not
-// a published model id on the gateway; use the real GPT-5 on the openai
-// provider bundled with pi instead.
-export const OFF_DEFAULT_PROVIDER = "openai";
-export const OFF_DEFAULT_MODEL_ID = "gpt-5";
-
 export const SAVED_CONFIG_FILE = `${PROVIDER_NAME}.json`;
 
 /**

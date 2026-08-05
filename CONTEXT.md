@@ -76,13 +76,17 @@ _Avoid_: mandatory live CI, prompt score, hidden reviewer, deterministic unit te
 A post-agent SF Pi check that runs only after Pi has no automatic retry, compaction retry, or queued follow-up left. It is for workflow completion evidence, not per-run streaming feedback.
 _Avoid_: agent_end hook, background scan, immediate lint pass, always-on watcher
 
+**Gateway Model Catalog**:
+The callable SF LLM Gateway models returned by authenticated discovery, with Pi's provider-scoped cache preserving the last successful result. SF Pi does not bundle a static gateway model inventory.
+_Avoid_: preset catalog, bootstrap model list, presumed model availability, source-controlled model inventory
+
 **Gateway Thinking Capability**:
-A model-specific SF LLM Gateway fact that says which Pi thinking levels a gateway model can safely expose. It must be proven by preset metadata, gateway discovery, or live behavior evidence before SF Pi offers the level to users.
-_Avoid_: global thinking level, default reasoning level, universal max support, silent remap
+A model-specific SF LLM Gateway fact that says which Pi thinking levels a gateway model can safely expose. It must come from gateway discovery or generic family inference before SF Pi offers the level to users.
+_Avoid_: global thinking level, default reasoning level, exact-ID preset, universal max support, silent remap
 
 **Gateway Default Model**:
-The SF LLM Gateway model SF Pi selects when gateway routing becomes the user's default model path. It must be backed by gateway discovery and static preset metadata so startup, model selection, status, and tests agree before live discovery finishes.
-_Avoid_: preferred model, discovered default, direct-provider default, temporary selector choice
+An available model chosen from the **Gateway Model Catalog** when gateway routing becomes the user's default model path. SF Pi preserves a still-available gateway choice and otherwise uses the catalog's stable first model; it does not bundle a default or fallback model ID.
+_Avoid_: bundled default, static fallback, direct-provider default, undiscovered model
 
 **Gateway Priority Traffic**:
 A model-specific SF LLM Gateway request mode for faster service-tier routing when the gateway model explicitly supports it. It is a capability assertion about the selected gateway route, not a universal OpenAI-family default.

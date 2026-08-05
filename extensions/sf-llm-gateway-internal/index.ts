@@ -8,10 +8,10 @@
  * - `/login` always reviews the non-secret gateway URL through Pi's text prompt,
  *   then collects the API key through SF Pi's fully masked custom component.
  *   The key never enters Pi's visible stock prompt or extension config.
- * - Registers a static bootstrap catalog synchronously, then lets Pi restore
- *   and overlay the previous provider-scoped dynamic catalog without network.
- * - Dynamic model discovery via `/v1/models` for all valid gateway model IDs
- * - Static presets for common models, generic family-aware inference for newly discovered ones
+ * - Registers with an empty static model list, then lets Pi restore the previous
+ *   provider-scoped dynamic catalog without network.
+ * - Authenticated model discovery via `/v1/models` supplies all callable model IDs
+ * - Gateway metadata plus generic family-aware inference defines discovered models
  * - Keeps `models.json` overrides above the registered Provider through Pi composition
  * - Shows an explicit SF LLM Gateway footer status when one of these models is active
  * - Footer status includes chosen model, current context usage, and monthly gateway usage
@@ -98,11 +98,6 @@ import {
   BASE_URL_ENV,
   API_KEY_ENV,
   DEFAULT_BASE_URL,
-  DEFAULT_MODEL_ID,
-  FALLBACK_MODEL_ID,
-  PREVIOUS_DEFAULT_MODEL_ID,
-  OFF_DEFAULT_PROVIDER,
-  OFF_DEFAULT_MODEL_ID,
   getGatewayConfig,
   readGatewaySavedConfig,
   writeGatewaySavedConfig,
@@ -124,13 +119,7 @@ function isGatewayProvider(provider: string | undefined): boolean {
   return provider === PROVIDER_NAME;
 }
 
-import {
-  MODEL_PRESETS,
-  getStaticGatewayModelIds,
-  inferModelDefinition,
-  getModelFamily,
-  findMatchingModelId,
-} from "./lib/models.ts";
+import { inferModelDefinition, getModelFamily, findMatchingModelId } from "./lib/models.ts";
 import { resolveGatewayDefaultModelWithPi } from "./lib/model-resolution.ts";
 import { GatewaySetupOverlayComponent, type SetupOverlayResult } from "./lib/setup-overlay.ts";
 import { GatewayConfigPanelComponent } from "./lib/config-panel.ts";
@@ -152,11 +141,6 @@ import {
 import { gatewayProviderRuntime } from "./lib/provider.ts";
 import { hasLegacyGatewayToken, removeLegacyGatewayToken } from "./lib/legacy-token-migration.ts";
 import { migrateGatewaySettings } from "./lib/migrate-unify-provider.ts";
-import {
-  isObsoleteGatewayDefaultModelId,
-  markGpt56DefaultMigration,
-  migrateGpt56DefaultSettings,
-} from "./lib/migrate-gpt56-default.ts";
 import { fetchTransformReport, formatTransformReport, type TransformProbe } from "./lib/debug.ts";
 import { fetchGatewayDoctorReport, formatGatewayDoctorReport } from "./lib/doctor.ts";
 import {
@@ -388,8 +372,6 @@ export default function sfLlmGatewayInternalExtension(pi: ExtensionAPI) {
     // factory time with process.cwd(), moved here for 0.68.0 compliance).
     await markBootStep("sf-llm-gateway.settings-repair", () => {
       repairGatewayEnabledModelSettings(ctx.cwd);
-      migrateGpt56DefaultSettings(ctx.cwd);
-      repairGatewayDefaultModelSettings(ctx.cwd, DEFAULT_MODEL_ID);
     });
 
     // Startup remains local-only. Registering the complete Provider restores
@@ -745,7 +727,7 @@ function getPanelDefaultModelId(ctx: ExtensionCommandContext): string {
   if (isGatewayProvider(ctx.model?.provider) && ctx.model?.id) {
     return ctx.model.id;
   }
-  return DEFAULT_MODEL_ID;
+  return getAvailableGatewayModelIds()[0] ?? "";
 }
 
 function bindGatewayProviderContext(ctx: ExtensionCommandContext): void {
@@ -782,11 +764,12 @@ async function handleModelsCommand(pi: ExtensionAPI, ctx: ExtensionCommandContex
     `Discovered at: ${state?.discoveredAt ?? "never"}`,
     "",
     "Registered models:",
-    ...(state?.modelIds ?? getStaticGatewayModelIds()).map((id) => {
-      const preset = MODEL_PRESETS[id];
-      const inferred = preset ? { id, ...preset } : inferModelDefinition(id);
-      return `- ${id}  ::  family=${getModelFamily(id)}  ::  ${inferred.name}`;
-    }),
+    ...(state.modelIds.length > 0
+      ? state.modelIds.map((id) => {
+          const inferred = inferModelDefinition(id);
+          return `- ${id}  ::  family=${getModelFamily(id)}  ::  ${inferred.name}`;
+        })
+      : ["- none (authenticate and refresh to discover models)"]),
   ];
   await emitCommandOutput(pi, ctx, "SF LLM Gateway Internal models.", lines.join("\n"), "info");
 }
@@ -1699,21 +1682,24 @@ async function applyGatewayDefault(
 
   await refreshGatewayProvider(ctx);
 
+  const configuredDefault = getEffectiveDefaultModelSetting(ctx.cwd);
   const resolvedDefault = resolveGatewayDefaultModel(ctx, [
-    DEFAULT_MODEL_ID,
-    PREVIOUS_DEFAULT_MODEL_ID,
-    FALLBACK_MODEL_ID,
+    isGatewayProvider(ctx.model?.provider) ? ctx.model?.id : undefined,
+    isGatewayProvider(configuredDefault.provider) ? configuredDefault.modelId : undefined,
   ]);
+  if (!resolvedDefault) {
+    return [
+      `Default unchanged in ${scope} settings.`,
+      "- No callable gateway models were discovered.",
+      `- Authenticate with /login ${PROVIDER_NAME}, then refresh and try again.`,
+    ];
+  }
   const effectiveModelId = resolvedDefault.modelId;
-  const effectivePreset = MODEL_PRESETS[effectiveModelId];
-  const effectiveModel = effectivePreset
-    ? { id: effectiveModelId, ...effectivePreset }
-    : inferModelDefinition(effectiveModelId);
+  const effectiveModel = inferModelDefinition(effectiveModelId);
   const effectiveProviderName = resolvedDefault.provider;
 
   const settings = readSettings(settingsPath);
   setDefaultModelSelection(settings, effectiveProviderName, effectiveModelId);
-  markGpt56DefaultMigration(settings);
   writeSettings(settingsPath, settings);
 
   const model =
@@ -1727,7 +1713,7 @@ async function applyGatewayDefault(
   return [
     `Default updated in ${scope} settings.`,
     `- Provider: ${effectiveProviderName}`,
-    `- Model: ${effectiveModelId}${effectiveModelId !== DEFAULT_MODEL_ID ? ` (resolved from ${DEFAULT_MODEL_ID})` : ""}`,
+    `- Model: ${effectiveModelId}`,
     "- Thinking: selected by Pi/user settings; Pi may clamp for model capabilities",
     `- Context: ${effectiveModel.contextWindow.toLocaleString()} tokens`,
     `- Max output: ${effectiveModel.maxTokens.toLocaleString()} tokens`,
@@ -1757,7 +1743,7 @@ async function handleHelpCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext)
     `Automation fallback env vars (used only when saved config is blank): ${BASE_URL_ENV}, ${API_KEY_ENV}`,
     `Setup also supports browser token generation, Claude Code import, and additive vs exclusive scoped model behavior.`,
     `Saved config file: ${globalGatewayConfigPath()} or ${projectGatewayConfigPath(ctx.cwd)}`,
-    `Disable fallback default: ${OFF_DEFAULT_PROVIDER}/${OFF_DEFAULT_MODEL_ID}`,
+    "Gateway models: discovered after authentication and cached by Pi",
   ].join("\n");
 
   await emitCommandOutput(pi, ctx, "SF LLM Gateway Internal help", help, "info");
@@ -1845,8 +1831,7 @@ function setEnabledModelsSetting(
 }
 
 function getAvailableGatewayModelIds(): string[] {
-  const discoveredIds = gatewayProviderRuntime.getLastDiscovery()?.modelIds;
-  return discoveredIds && discoveredIds.length > 0 ? discoveredIds : getStaticGatewayModelIds();
+  return gatewayProviderRuntime.getLastDiscovery().modelIds;
 }
 
 function resolveGatewayDefaultModel(
@@ -1858,7 +1843,6 @@ function resolveGatewayDefaultModel(
     providerName: PROVIDER_NAME,
     availableModelIds: getAvailableGatewayModelIds(),
     preferredModelIds: preferredIds,
-    fallbackModelId: FALLBACK_MODEL_ID,
   });
 }
 
@@ -2046,7 +2030,10 @@ async function enableGatewayOperation(
   const saved = readGatewaySavedConfig(configPath);
   const exclusiveScope = saved.exclusiveScope === true;
 
-  if (!isGatewayProvider(asOptionalString(settings.defaultProvider))) {
+  if (ctx.model && !isGatewayProvider(ctx.model.provider)) {
+    saved.previousDefaultProvider = ctx.model.provider;
+    saved.previousDefaultModel = ctx.model.id;
+  } else if (!isGatewayProvider(asOptionalString(settings.defaultProvider))) {
     saved.previousDefaultProvider = asOptionalString(settings.defaultProvider);
     saved.previousDefaultModel = asOptionalString(settings.defaultModel);
   }
@@ -2081,19 +2068,24 @@ async function enableGatewayOperation(
     ? asOptionalString(settings.defaultModel)
     : undefined;
   const resolvedDefault = resolveGatewayDefaultModel(ctx, [
-    existingGatewayDefault && !isObsoleteGatewayDefaultModelId(existingGatewayDefault)
-      ? existingGatewayDefault
-      : undefined,
-    DEFAULT_MODEL_ID,
-    PREVIOUS_DEFAULT_MODEL_ID,
-    FALLBACK_MODEL_ID,
+    isGatewayProvider(ctx.model?.provider) ? ctx.model?.id : undefined,
+    existingGatewayDefault,
   ]);
+  if (!resolvedDefault) {
+    return {
+      summary: "SF LLM Gateway Internal has no discovered models.",
+      details: [
+        `Discovery source: ${state.source}${state.error ? ` (${state.error})` : ""}`,
+        `Authenticate with /login ${PROVIDER_NAME}, then refresh and try again.`,
+      ].join("\n"),
+      level: "warning",
+    };
+  }
   const effectiveDefaultModelId = resolvedDefault.modelId;
   const effectiveProviderName = resolvedDefault.provider;
 
   setDefaultModelSelection(settings, effectiveProviderName, effectiveDefaultModelId);
   setEnabledModelsSetting(settings, applyGatewayModelScope(settings.enabledModels, exclusiveScope));
-  markGpt56DefaultMigration(settings);
   writeSettings(settingsPath, settings);
 
   const model =
@@ -2107,7 +2099,7 @@ async function enableGatewayOperation(
   const report = [
     `Enabled in ${scope} settings.`,
     `- Provider: ${effectiveProviderName}`,
-    `- Model: ${effectiveDefaultModelId}${effectiveDefaultModelId !== DEFAULT_MODEL_ID ? ` (resolved from ${DEFAULT_MODEL_ID})` : ""}`,
+    `- Model: ${effectiveDefaultModelId}`,
     "- Thinking: selected by Pi/user settings; Pi may clamp for model capabilities",
     `- Scoped model mode: ${exclusiveScope ? `exclusive (gateway-only: ${ENABLED_MODEL_PATTERN})` : `additive (prepended ${ENABLED_MODEL_PATTERN})`}`,
     `- Base URL: ${describeConfigValue(config.baseUrl, config.baseUrlSource)}`,
@@ -2151,16 +2143,32 @@ async function disableGatewayOperation(
   writeGatewaySavedConfig(configPath, saved);
 
   setEnabledModelsSetting(settings, restoredEnabledModels);
-  setDefaultModelSelection(settings, OFF_DEFAULT_PROVIDER, OFF_DEFAULT_MODEL_ID);
+  const savedProvider = asOptionalString(saved.previousDefaultProvider);
+  const savedModelId = asOptionalString(saved.previousDefaultModel);
+  const savedModel =
+    savedProvider && savedModelId ? ctx.modelRegistry.find(savedProvider, savedModelId) : undefined;
+  const nonGatewayModels = ctx.modelRegistry
+    .getAll()
+    .filter((model) => !isGatewayProvider(model.provider))
+    .sort((a, b) => `${a.provider}/${a.id}`.localeCompare(`${b.provider}/${b.id}`));
+  const configuredFallbacks = nonGatewayModels.filter(
+    (model) => ctx.modelRegistry.getProviderAuthStatus(model.provider).configured,
+  );
+  const restoredModel = savedModel ?? configuredFallbacks[0] ?? nonGatewayModels[0];
+  const restoredProvider = restoredModel?.provider;
+  const restoredModelId = restoredModel?.id;
+  if (restoredProvider && restoredModelId) {
+    setDefaultModelSelection(settings, restoredProvider, restoredModelId);
+  } else {
+    delete settings.defaultProvider;
+    delete settings.defaultModel;
+  }
 
   writeSettings(settingsPath, settings);
 
-  let switchedToOffDefault = false;
-  if (isGatewayProvider(ctx.model?.provider)) {
-    const offDefaultModel = ctx.modelRegistry.find(OFF_DEFAULT_PROVIDER, OFF_DEFAULT_MODEL_ID);
-    if (offDefaultModel) {
-      switchedToOffDefault = await pi.setModel(offDefaultModel);
-    }
+  let switchedToRestoredDefault = false;
+  if (isGatewayProvider(ctx.model?.provider) && restoredModel) {
+    switchedToRestoredDefault = await pi.setModel(restoredModel);
   }
 
   await refreshGatewayProvider(ctx);
@@ -2169,9 +2177,9 @@ async function disableGatewayOperation(
   const report = [
     `Disabled in ${scope} settings.`,
     `- Scoped models: ${exclusiveScope ? "restored the previous scoped model set" : `removed ${ENABLED_MODEL_PATTERN}`}`,
-    `- New default: ${OFF_DEFAULT_PROVIDER}/${OFF_DEFAULT_MODEL_ID}`,
+    `- Restored default: ${restoredProvider && restoredModelId ? `${restoredProvider}/${restoredModelId}` : "Pi fallback"}`,
     "- Thinking: selected by Pi/user settings; Pi may clamp for model capabilities",
-    `- Switched current session model: ${switchedToOffDefault ? "yes" : "no"}`,
+    `- Switched current session model: ${switchedToRestoredDefault ? "yes" : "no"}`,
     "- Pi credential remains stored; use /logout to remove it. Legacy config fields are unchanged.",
   ].join("\n");
 
@@ -2333,22 +2341,19 @@ async function syncGatewaySessionDefaults(
   const startupDefault = getEffectiveDefaultModelSetting(ctx.cwd);
   const startupDefaultIsGateway = isGatewayProvider(startupDefault.provider);
   if (startupDefaultIsGateway) {
-    const resolvedDefault = resolveGatewayDefaultModel(ctx, [
-      startupDefault.modelId,
-      DEFAULT_MODEL_ID,
-      PREVIOUS_DEFAULT_MODEL_ID,
-      FALLBACK_MODEL_ID,
-    ]);
-    const desiredModelId = resolvedDefault.modelId;
-    const desiredProvider = resolvedDefault.provider;
-    repairGatewayDefaultModelSettings(ctx.cwd, desiredModelId);
+    const resolvedDefault = resolveGatewayDefaultModel(ctx, [startupDefault.modelId]);
+    if (resolvedDefault) {
+      const desiredModelId = resolvedDefault.modelId;
+      const desiredProvider = resolvedDefault.provider;
+      repairGatewayDefaultModelSettings(ctx.cwd, desiredModelId);
 
-    if (options.allowModelSwitch !== false) {
-      if (ctx.model?.provider !== desiredProvider || ctx.model.id !== desiredModelId) {
-        const desiredModel =
-          resolvedDefault.model ?? ctx.modelRegistry.find(desiredProvider, desiredModelId);
-        if (desiredModel) {
-          await pi.setModel(desiredModel);
+      if (options.allowModelSwitch !== false) {
+        if (ctx.model?.provider !== desiredProvider || ctx.model.id !== desiredModelId) {
+          const desiredModel =
+            resolvedDefault.model ?? ctx.modelRegistry.find(desiredProvider, desiredModelId);
+          if (desiredModel) {
+            await pi.setModel(desiredModel);
+          }
         }
       }
     }

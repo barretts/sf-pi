@@ -19,8 +19,8 @@ diagnostics, spend, and telemetry.
 
 ## Key Architecture: One Complete Provider, Three APIs
 
-The Provider id remains `sf-llm-gateway-internal`, so `/login`, model settings,
-and existing defaults remain stable. Models retain their real API tag:
+The Provider id remains `sf-llm-gateway-internal`, so `/login` and existing
+model settings remain compatible. Discovered models retain their real API tag:
 
 | Model family                 | Registered API       | Gateway-aware adapter            | Request base URL                         |
 | ---------------------------- | -------------------- | -------------------------------- | ---------------------------------------- |
@@ -34,11 +34,12 @@ to the Responses adapter. Claude stays on native Anthropic Messages because the
 OpenAI-compatible translator can split thinking and text across choices and
 occasionally drop the final text delta.
 
-The Provider exposes a synchronous curated baseline. Pi restores and persists a
-provider-scoped dynamic overlay through `ModelsStore`; configured endpoints are
-materialized only at request time and are not copied into the model cache.
-Startup performs no model-discovery network request. `/sf-llm-gateway refresh`
-uses Pi's public model-registry refresh seam.
+The Provider registers with an empty static model list. Authenticated discovery
+supplies callable model IDs, and Pi restores and persists the last successful
+catalog through `ModelsStore`; configured endpoints are materialized only at
+request time and are not copied into the model cache. Startup performs no
+model-discovery network request. A fresh uncached provider exposes no models
+until login or `/sf-llm-gateway refresh` succeeds.
 
 ### Authentication
 
@@ -114,15 +115,13 @@ short-circuits subsequent sessions. Users see no prompt and no manual step.
    the generic adaptive-thinking payload through the model-level
    `compat.forceAdaptiveThinking` flag. The transport is now a single
    unified path for all Claude models:
-   - Opus 4.6+ and Opus 5 presets set `compat.forceAdaptiveThinking: true`, so
-     pi-ai sends `thinking: { type: "adaptive", display: "summarized" }` and
-     `output_config.effort`.
+   - Generic family inference sets `compat.forceAdaptiveThinking: true` for
+     applicable discovered models, so pi-ai sends the adaptive-thinking payload.
    - Opus 5 keeps its native `xhigh` and `max` effort levels distinct. The
      gateway's Opus 4.7/4.8 routes map pi's `xhigh` and `max` selectors to
      Anthropic `effort=max` based on their separately verified behavior.
-   - `max_tokens` is set to 128K by the model presets. Live probes confirmed
-     `max_tokens: 128000 + effort: max` on Opus 5 and on the existing Opus
-     4.7/4.8 routes.
+   - Output limits come from authenticated model metadata when available and
+     otherwise from generic family inference.
    - No transport-level payload shaping is needed — pi-ai handles adaptive
      thinking via model compat flags, and the gateway accepts the full
      effort range.
@@ -130,26 +129,19 @@ short-circuits subsequent sessions. Users see no prompt and no manual step.
    Older Claude models pass through the same pi-ai Anthropic transport; their
    model compat flags describe whether adaptive thinking is required.
 
-### Gateway-specific model metadata
+### Discovered model metadata
 
-Some model metadata intentionally differs from Pi's direct-provider defaults
-because the gateway route has separately verified limits. Opus 5 is advertised
-with its native 1M context window and 128K max output; discovered Opus 5 aliases
-inherit the same capability floor. Pre-Opus-5 provider-cache entries are
-repaired locally when models are exposed, so an offline startup cannot restore
-the old 200K/32K non-adaptive shape above the new preset. In addition,
-`gpt-5.5` and non-Bedrock `gpt-5.6` variants are advertised as 1M-context
-gateway models with 128K max output, while Codex-family and Bedrock GPT-5.6
-presets stay capped at 272K/128K. Keep larger-than-upstream metadata behind
-focused tests so it is clear the value is gateway-specific, not a stale copy of
-Pi Runtime model metadata.
+Authenticated model metadata overrides generic family inference for context,
+output, reasoning, and input capabilities. Generic inference fills only missing
+fields; SF Pi does not bundle an exact-ID gateway model catalog. Pi persists the
+last successful catalog so discovered models remain available offline.
 
 ## Runtime Flow
 
 ```
 Extension loads
   ├─ installWireTrace()                 ← opt-in, redacted gateway trace
-  ├─ registerProvider(completeProvider) ← static baseline + Pi cache restore
+  ├─ registerProvider(completeProvider) ← empty baseline + Pi cache restore
   ├─ registerEntryRenderer()            ← human-only headless report renderer
   ├─ registerCommand("sf-llm-gateway")
   ├─ on("session_start")               → bind cwd/UI/model registry; local settings repair
@@ -328,7 +320,6 @@ extensions/sf-llm-gateway-internal/
     models-internal/
       discovery-sentinels.ts← implementation module
       fetchers.ts           ← implementation module
-      presets.ts            ← implementation module
     transport-internal/
       anthropic.ts          ← implementation module
       openai-chat.ts        ← implementation module
@@ -347,7 +338,6 @@ extensions/sf-llm-gateway-internal/
     gateway-url.ts          ← implementation module
     latency-probe.ts        ← implementation module
     legacy-token-migration.ts← implementation module
-    migrate-gpt56-default.ts← implementation module
     migrate-unify-provider.ts← implementation module
     model-resolution.ts     ← implementation module
     models.ts               ← implementation module
@@ -394,7 +384,6 @@ extensions/sf-llm-gateway-internal/
     legacy-token-migration.test.ts← unit / smoke test
     lifecycle.test.ts       ← unit / smoke test
     manager-actions.test.ts ← unit / smoke test
-    migrate-gpt56-default.test.ts← unit / smoke test
     migrate-unify-provider.test.ts← unit / smoke test
     model-group-drift.test.ts← unit / smoke test
     model-resolution.test.ts← unit / smoke test
@@ -540,16 +529,15 @@ wouldn't show it. The raw body is ground truth from the gateway.
 ## Troubleshooting
 
 **Startup warning `No models match pattern "sf-llm-gateway-internal/*"`:**
-Your credentials aren't configured yet, or the async model discovery hasn't
-finished on this first run. The bootstrap catalog now seeds the curated static
-gateway model set synchronously, so this warning should not appear on a
-configured gateway. If it persists, run `/sf-llm-gateway refresh`.
+A fresh uncached provider has no models until authenticated discovery succeeds.
+Run `/login sf-llm-gateway-internal`, then `/sf-llm-gateway refresh`. Later
+offline starts restore the last successful catalog from Pi's model store.
 
 **Model discovery only returns `no-default-models`:**
 Some LiteLLM configurations use `no-default-models` as an access-control
 sentinel rather than a callable model id. The extension filters that sentinel
-from `/v1/models` and falls back to the static bootstrap catalog when the
-sentinel is the only returned entry. Verify the gateway with
+from `/v1/models`; when no callable peers remain, discovery fails without
+replacing the last successful cached catalog. Verify the gateway with
 `/sf-llm-gateway latency-probe <modelId>` or `/sf-llm-gateway debug <modelId>`;
 those commands exercise the inference routes instead of relying only on model
 listing metadata.
@@ -575,10 +563,9 @@ to the Gateway-aware Anthropic adapter. If you still see
 truncation, confirm the selected model is a Claude id in
 `/sf-llm-gateway models`.
 
-Opus 5 rejects legacy `thinking: { type: "enabled", budget_tokens: ... }`
-payloads. Its preset forces adaptive thinking, preserves distinct `xhigh` and
-`max` effort levels, requests summarized thinking output, and advertises the
-native 1M/128K limits.
+Modern adaptive-thinking models reject legacy fixed-budget payloads. Generic
+family inference selects adaptive thinking, while authenticated discovery
+supplies model limits when available.
 
 **Opus 4.7/4.8 returns `api_error: Internal server error` on heavy turns:**
 Pi owns retries through `retry.enabled`, `retry.maxRetries`, and

@@ -24,7 +24,6 @@
  */
 
 import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
-import { DEFAULT_MODEL_ID, FALLBACK_MODEL_ID, PREVIOUS_DEFAULT_MODEL_ID } from "./config.ts";
 
 import {
   isGpt5BedrockResponsesModelId,
@@ -43,22 +42,6 @@ import {
 
 // Model-discovery timeouts and id-validation regex live in
 // `./models-internal/fetchers.ts`, next to the fetchers that consume them.
-
-// Bootstrap defaults + the static catalog live in `./models-internal/presets.ts`.
-// Imported here under the same names so internal callers in this file
-// (buildBootstrapModelList, getModelMetadata, getActiveModelDefinition,
-// getShortModelLabel) keep referring to the same symbols, and re-exported
-// below so external consumers see them at this module's surface.
-import {
-  ALWAYS_INCLUDE_MODEL_IDS,
-  MODEL_PRESETS,
-  OPUS_5_THINKING_LEVEL_MAP,
-} from "./models-internal/presets.ts";
-export { ALWAYS_INCLUDE_MODEL_IDS, MODEL_PRESETS, OPUS_5_THINKING_LEVEL_MAP };
-
-export function getStaticGatewayModelIds(): string[] {
-  return sortModelIds([...new Set([...ALWAYS_INCLUDE_MODEL_IDS, ...Object.keys(MODEL_PRESETS)])]);
-}
 
 const ZERO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } as const;
 
@@ -116,8 +99,16 @@ const CODEX_THINKING_LEVEL_MAP: ProviderModelConfig["thinkingLevelMap"] = {
   max: "max",
 };
 
-// Opus 4.7 thinking-level map lives in `./models-internal/presets.ts` next
-// to the model entries that consume it.
+/** Generic family inference for models that expose distinct advanced effort levels. */
+export const OPUS_5_THINKING_LEVEL_MAP: ProviderModelConfig["thinkingLevelMap"] = {
+  xhigh: "xhigh",
+  max: "max",
+};
+
+const CLAUDE_MAX_THINKING_LEVEL_MAP: ProviderModelConfig["thinkingLevelMap"] = {
+  xhigh: "max",
+  max: "max",
+};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -187,7 +178,7 @@ export interface GatewayModelInfo {
 /**
  * Enrichment map built from `/v1/model/info`. Discovery passes this to
  * `buildDiscoveredModelList` so per-model pricing and capability flags can
- * override inference defaults when a preset does not already cover the model.
+ * override generic family inference when the gateway reports the field.
  */
 export type GatewayModelInfoMap = Record<string, GatewayModelInfo>;
 
@@ -205,9 +196,6 @@ export interface GatewayModelGroupInfo {
 }
 
 export type GatewayModelGroupInfoMap = Record<string, GatewayModelGroupInfo>;
-
-// MODEL_PRESETS source of truth lives in `./models-internal/presets.ts`
-// and is re-exported above next to ALWAYS_INCLUDE_MODEL_IDS.
 
 // -------------------------------------------------------------------------------------------------
 // Model list building
@@ -300,27 +288,12 @@ export const GPT5_BEDROCK_RESPONSES_THINKING_LEVEL_MAP: ProviderModelConfig["thi
 };
 
 /**
- * Build the startup bootstrap catalog only.
- *
- * These IDs are local fallback presets so Pi can resolve gateway defaults and
- * keep curated models selectable when live discovery is unavailable or returns
- * only non-callable sentinels. Once discovery succeeds, the provider is
- * re-registered with the exact gateway model IDs instead of this bootstrap.
- */
-export function buildBootstrapModelList(): TaggedGatewayModel[] {
-  return getStaticGatewayModelIds().map((id) => toProviderModelConfig(id));
-}
-
-/**
  * Build the post-discovery catalog using only model IDs the gateway actually
- * returned. Stale preset aliases will not appear in the selector.
+ * returned. Undiscovered aliases will not appear in the selector.
  *
  * The optional `modelInfoMap` supplies per-model metadata pulled from
- * `/v1/model/info`. When a model has no preset and the inference defaults are
- * missing or wrong, we fall back to the gateway's numbers. Presets and trusted
- * capability floors always win because we have verified cases where the
- * gateway's own metadata is stale (e.g. LiteLLM reports Claude
- * `max_input_tokens=200000` while the upstream Bedrock deployment serves 1M).
+ * `/v1/model/info`. Generic family inference fills only fields the gateway
+ * does not report; the repository carries no exact-ID model catalog.
  */
 export function buildDiscoveredModelList(
   discoveredIds: string[],
@@ -333,16 +306,9 @@ export function buildDiscoveredModelList(
 }
 
 export function toProviderModelConfig(id: string, info?: GatewayModelInfo): TaggedGatewayModel {
-  const preset = MODEL_PRESETS[id];
-  const hasPreset = Boolean(preset);
-  const hasTrustedCapabilities = hasPreset || isOpus5OrNewerModelId(id);
-  const def = preset ? { id, ...preset } : inferModelDefinition(id);
+  const def = inferModelDefinition(id);
 
-  // Apply /v1/model/info enrichment only when local capability knowledge is
-  // not stronger. Presets are hand-tuned, and discovered Opus 5 aliases share
-  // the canonical 1M/128K adaptive-thinking floor even when LiteLLM metadata
-  // is stale or incomplete.
-  if (!hasTrustedCapabilities && info) {
+  if (info) {
     if (typeof info.maxInputTokens === "number" && info.maxInputTokens > 0) {
       def.contextWindow = info.maxInputTokens;
     }
@@ -535,7 +501,7 @@ export function isHaiku45ModelId(id: string): boolean {
   return lower.includes("haiku-4-5") || lower.includes("haiku-4.5");
 }
 
-/** Infer reasonable defaults for a gateway model ID that has no preset. */
+/** Infer reasonable defaults when discovery omits model metadata. */
 export function inferModelDefinition(id: string): GatewayModelDefinition {
   const lower = id.toLowerCase();
   const family = getModelFamily(id);
@@ -579,15 +545,16 @@ export function inferModelDefinition(id: string): GatewayModelDefinition {
   if (family === "openai") {
     const isGpt5 = lower.includes("gpt-5");
     const is4o = lower.includes("4o");
+    const hasLargeContext =
+      isGpt55ModelId(id) ||
+      (isGpt56FamilyResponsesModelId(id) && !isGpt56BedrockResponsesModelId(id));
     return {
       id,
       family,
       name: `[SF LLM Gateway] ${id}`,
       reasoning: isGpt5,
       input: ["text", "image"],
-      // GPT-5 family: 272K/128K confirmed on the gateway.
-      // GPT-4o family: 128K/16K.
-      contextWindow: is4o ? 128_000 : isGpt5 ? 272_000 : 200_000,
+      contextWindow: is4o ? 128_000 : hasLargeContext ? 1_000_000 : isGpt5 ? 272_000 : 200_000,
       maxTokens:
         is4o || lower.includes("mini") ? (isGpt5 ? 128_000 : 16_384) : isGpt5 ? 128_000 : 32_768,
     };
@@ -599,7 +566,10 @@ export function inferModelDefinition(id: string): GatewayModelDefinition {
     const is47OrNewer = isOpus47OrNewerModelId(id);
     const is5OrNewer = isOpus5OrNewerModelId(id);
     const is46OrNewer =
-      isOpus46OrNewerModelId(id) || lower.includes("4-6") || lower.includes("4.6");
+      isOpus46OrNewerModelId(id) ||
+      lower.includes("4-6") ||
+      lower.includes("4.6") ||
+      lower.includes("sonnet-5");
     const has1m = is46OrNewer && isOpus;
     const reasoning =
       !isHaiku &&
@@ -628,7 +598,11 @@ export function inferModelDefinition(id: string): GatewayModelDefinition {
       input: ["text", "image"],
       contextWindow: has1m ? 1_000_000 : 200_000,
       maxTokens,
-      ...(is5OrNewer ? { thinkingLevelMap: OPUS_5_THINKING_LEVEL_MAP } : {}),
+      ...(is5OrNewer
+        ? { thinkingLevelMap: OPUS_5_THINKING_LEVEL_MAP }
+        : is46OrNewer
+          ? { thinkingLevelMap: CLAUDE_MAX_THINKING_LEVEL_MAP }
+          : {}),
     };
   }
 
@@ -647,11 +621,8 @@ export function getActiveModelDefinition(
   modelId: string | undefined,
   discoveredModelIds?: string[],
 ): GatewayModelDefinition | undefined {
-  if (!modelId) return undefined;
-  const preset = MODEL_PRESETS[modelId];
-  if (preset) return { id: modelId, ...preset };
-  if (discoveredModelIds?.includes(modelId)) return inferModelDefinition(modelId);
-  return undefined;
+  if (!modelId || !discoveredModelIds?.includes(modelId)) return undefined;
+  return inferModelDefinition(modelId);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -674,30 +645,6 @@ export {
 // -------------------------------------------------------------------------------------------------
 
 export function getShortModelLabel(modelId: string): string {
-  if (modelId === DEFAULT_MODEL_ID) {
-    return "GPT-5.6 Sol [1M]";
-  }
-  if (modelId === "claude-opus-5") {
-    return "Opus 5 [1M]";
-  }
-  if (modelId === PREVIOUS_DEFAULT_MODEL_ID) {
-    return "Opus 4.8 [1M]";
-  }
-  if (modelId === "claude-opus-4-7" || modelId === "claude-opus-4-7-v1") {
-    return "Opus 4.7 [1M]";
-  }
-  if (modelId === "claude-opus-4-6-v1") {
-    return "Opus 4.6 [1M]";
-  }
-  if (modelId === FALLBACK_MODEL_ID) {
-    return "Sonnet 5";
-  }
-
-  const preset = MODEL_PRESETS[modelId];
-  if (preset) {
-    return preset.name.replace(/^\[SF LLM Gateway\]\s*/, "");
-  }
-
   return modelId;
 }
 
@@ -730,10 +677,6 @@ export function formatUsd(value: number): string {
 
 export function sortModelIds(ids: string[]): string[] {
   const rank = (id: string): number => {
-    if (id === DEFAULT_MODEL_ID) return 0;
-    if (id === PREVIOUS_DEFAULT_MODEL_ID) return 1;
-    if (id === FALLBACK_MODEL_ID) return 2;
-
     const family = getModelFamily(id);
     const lower = id.toLowerCase();
 

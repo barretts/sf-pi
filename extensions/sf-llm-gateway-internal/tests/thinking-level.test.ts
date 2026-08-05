@@ -49,8 +49,5 @@ describe("Gateway thinking authority", () => {
 
   it("does not write Pi's defaultThinkingLevel setting", () => {
     expect(source("index.ts")).not.toMatch(/settings\.defaultThinkingLevel\s*=/u);
-    expect(source("lib/migrate-gpt56-default.ts")).not.toMatch(
-      /settings\.defaultThinkingLevel\s*=/u,
-    );
   });
 });

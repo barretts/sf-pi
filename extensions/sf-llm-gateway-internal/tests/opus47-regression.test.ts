@@ -63,7 +63,7 @@ describeLive("sf-llm-gateway-internal modern Opus live regression", () => {
       // xhigh maps to "max" via thinkingLevelMap; pi-ai sends output_config.effort=max
       expect(payload?.output_config).toEqual({ effort: "max" });
       expect(payload?.temperature).toBeUndefined();
-      // Transport no longer clamps max_tokens; pi-ai passes the preset value (128K)
+      // Transport no longer clamps max_tokens; pi-ai passes the resolved model value
       expect(payload?.max_tokens).toBe(128_000);
       expect(events.some((event) => event.type === "error")).toBe(false);
       expect(events.some((event) => event.type === "done")).toBe(true);

@@ -17,7 +17,6 @@ import type { ConfigPanelFactory, ConfigPanelResult } from "../../../catalog/reg
 import {
   type ConfigSource,
   PROVIDER_NAME,
-  DEFAULT_MODEL_ID,
   BASE_URL_ENV,
   LEGACY_BASE_URL_ENV,
   DEFAULT_BASE_URL,
@@ -267,8 +266,8 @@ export class GatewayConfigPanelComponent implements Focusable {
         ` ${theme.fg(
           "dim",
           this.options.lifecycleActions
-            ? `Enable sets ${PROVIDER_NAME}/${DEFAULT_MODEL_ID} without selecting thinking; Pi may clamp the current choice for model capabilities.`
-            : `Use the detail-page Enable action to set ${PROVIDER_NAME}/${DEFAULT_MODEL_ID}; Pi/user settings keep thinking authority and Pi may clamp for capabilities.`,
+            ? `Enable refreshes ${PROVIDER_NAME} and selects from discovered models without changing thinking.`
+            : `Use the detail-page Enable action to refresh ${PROVIDER_NAME}; Pi/user settings keep thinking authority.`,
         )}`,
       ),
     );

@@ -11,6 +11,8 @@ import {
   type Message,
   type Model,
 } from "@earendil-works/pi-ai";
+import { PROVIDER_NAME } from "../lib/config.ts";
+import { toProviderModelConfig } from "../lib/models.ts";
 import type { GatewayProviderAuthController } from "../lib/provider-auth.ts";
 import {
   createGatewayProviderRuntime,
@@ -105,9 +107,11 @@ describe("Pi compaction → complete Gateway Provider", () => {
       responsesSimple: simple as GatewayStreamImplementations["responsesSimple"],
     };
     const runtime = createGatewayProviderRuntime({ authController: authController(), streams });
-    const model = runtime.provider.getModels().find((entry) => entry.api === "openai-completions");
-    expect(model).toBeDefined();
-    if (!model) return;
+    const model = {
+      ...toProviderModelConfig("example-chat-model"),
+      provider: PROVIDER_NAME,
+      baseUrl: "https://gateway.invalid/v1",
+    } as Model<Api>;
 
     const summary = await generateSummary(
       userMessages(model),

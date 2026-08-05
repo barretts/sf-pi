@@ -249,12 +249,10 @@ modules under `lib/transport-internal/`:
 - `openai-chat.ts` (68 LOC) — `streamSfGatewayOpenAI`
 - `openai-responses.ts` (170 LOC) — `streamSfGatewayResponses` + chat fallback
 
-`models.ts` (1267 → 787 LOC) extracts:
-
-- `models-internal/presets.ts` (285 LOC) — `MODEL_PRESETS` table +
-  `ALWAYS_INCLUDE_MODEL_IDS` + Opus 4.7 thinking-level map
-- `models-internal/fetchers.ts` (222 LOC) — HTTP discovery (model ids,
-  info map, group info, provider drift, `fetchWithTimeout`)
+`models.ts` (1267 → 787 LOC) extracted HTTP discovery into
+`models-internal/fetchers.ts` (model ids, info map, group info, provider drift,
+and `fetchWithTimeout`). The former exact-ID catalog module was later removed by
+ADR 0077 when authenticated discovery became the only model-ID source.
 
 ### sf-slack send-tool split
 

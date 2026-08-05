@@ -3,8 +3,8 @@
  * Gateway model resolution helpers.
  *
  * This module is the narrow seam where SF Pi delegates generic provider/model
- * parsing to Pi's native resolver while retaining gateway-specific fallback
- * rules for static bootstrap + dynamic discovery timing. Keep scoped-model
+ * parsing to Pi's native resolver while retaining discovered-catalog selection
+ * rules. Keep scoped-model
  * enable/disable behavior in `pi-settings.ts`; that is SF Pi product logic,
  * not generic model parsing.
  */
@@ -15,7 +15,7 @@ import { findMatchingModelId, resolvePreferredModelId } from "./models.ts";
 export interface GatewayDefaultModelResolution {
   provider: string;
   modelId: string;
-  source: "pi" | "fallback";
+  source: "pi" | "discovered";
   model?: Model<Api>;
   warning?: string;
 }
@@ -25,14 +25,12 @@ export interface ResolveGatewayDefaultModelOptions {
   providerName: string;
   availableModelIds: string[];
   preferredModelIds: Array<string | undefined>;
-  fallbackModelId: string;
 }
 
 export function resolveGatewayDefaultModelWithPi(
   options: ResolveGatewayDefaultModelOptions,
-): GatewayDefaultModelResolution {
-  const { modelRegistry, providerName, availableModelIds, preferredModelIds, fallbackModelId } =
-    options;
+): GatewayDefaultModelResolution | undefined {
+  const { modelRegistry, providerName, availableModelIds, preferredModelIds } = options;
 
   for (const preferredId of preferredModelIds) {
     const candidateId = findMatchingModelId(preferredId, availableModelIds);
@@ -54,13 +52,14 @@ export function resolveGatewayDefaultModelWithPi(
     }
   }
 
-  const fallbackModelIdFromAvailable =
-    resolvePreferredModelId(availableModelIds, preferredModelIds) ?? fallbackModelId;
+  const discoveredModelId = resolvePreferredModelId(availableModelIds, preferredModelIds);
+  if (!discoveredModelId) return undefined;
+
   return {
     provider: providerName,
-    modelId: fallbackModelIdFromAvailable,
-    model: modelRegistry.find(providerName, fallbackModelIdFromAvailable),
-    source: "fallback",
+    modelId: discoveredModelId,
+    model: modelRegistry.find(providerName, discoveredModelId),
+    source: "discovered",
   };
 }
 

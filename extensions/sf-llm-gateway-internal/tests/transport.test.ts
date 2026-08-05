@@ -497,7 +497,7 @@ describe("applyOpus47GatewayPolicy", () => {
     expect(payload).toEqual(original);
   });
 
-  it("does not fill max_tokens — the preset handles that via pi-ai", () => {
+  it("does not fill max_tokens — the resolved model handles that via pi-ai", () => {
     const payload: Record<string, unknown> = {};
     applyOpus47MaxThinking(payload, "xhigh");
     expect(payload).toEqual({});

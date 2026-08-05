@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { RpcClient } from "@earendil-works/pi-coding-agent";
 
 import { API_KEY_ENV, PROVIDER_NAME } from "../lib/config.ts";
+import { toProviderModelConfig } from "../lib/models.ts";
 
 const tempDirs: string[] = [];
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
@@ -22,9 +23,13 @@ const cliPath = path.join(
 );
 const extensionPath = path.join(repoRoot, "extensions", "sf-llm-gateway-internal", "index.ts");
 
+const DISCOVERED_MAX_MODEL = "claude-opus-5-test";
+const DISCOVERED_HIGH_MODEL = "gpt-5-test";
+
 interface RuntimeHarness {
   client: RpcClient;
   settingsPath: string;
+  gatewayConfigPath: string;
   stop(): Promise<void>;
 }
 
@@ -54,25 +59,81 @@ async function startRuntime(
   writeFileSync(
     settingsPath,
     `${JSON.stringify({
-      defaultProvider: PROVIDER_NAME,
-      defaultModel: "gpt-5.6-sol",
+      defaultProvider: "openai",
+      defaultModel: "gpt-5",
       defaultThinkingLevel: thinkingLevel,
     })}\n`,
     "utf8",
   );
 
-  const server = createServer((_request, response) => {
+  const server = createServer((request, response) => {
     response.writeHead(200, { "content-type": "application/json" });
+    if (request.url === "/v1/models") {
+      response.end(
+        JSON.stringify({
+          data: [{ id: DISCOVERED_MAX_MODEL }, { id: DISCOVERED_HIGH_MODEL }],
+        }),
+      );
+      return;
+    }
+    if (request.url === "/v1/model/info") {
+      response.end(
+        JSON.stringify({
+          data: [
+            {
+              model_name: DISCOVERED_MAX_MODEL,
+              model_info: {
+                supports_reasoning: true,
+                max_input_tokens: 200_000,
+                max_output_tokens: 64_000,
+              },
+            },
+            {
+              model_name: DISCOVERED_HIGH_MODEL,
+              model_info: {
+                supports_reasoning: true,
+                max_input_tokens: 128_000,
+                max_output_tokens: 32_000,
+              },
+            },
+          ],
+        }),
+      );
+      return;
+    }
+    if (request.url === "/model_group/info") {
+      response.end(JSON.stringify({ data: [] }));
+      return;
+    }
     response.end("{}");
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const gatewayPort = (server.address() as AddressInfo).port;
+  const gatewayConfigPath = path.join(agentDir, "sf-llm-gateway-internal.json");
   writeFileSync(
-    path.join(agentDir, "sf-llm-gateway-internal.json"),
+    gatewayConfigPath,
     `${JSON.stringify({
       enabled: true,
       baseUrl: `http://127.0.0.1:${gatewayPort}`,
       apiKey: "inactive-legacy-test-key",
+    })}\n`,
+    "utf8",
+  );
+  const cachedModels = [DISCOVERED_MAX_MODEL, DISCOVERED_HIGH_MODEL].map((id) => {
+    const model = toProviderModelConfig(id);
+    return {
+      ...model,
+      provider: PROVIDER_NAME,
+      baseUrl:
+        model.api === "openai-completions"
+          ? "https://gateway.invalid/v1"
+          : "https://gateway.invalid",
+    };
+  });
+  writeFileSync(
+    path.join(agentDir, "models-store.json"),
+    `${JSON.stringify({
+      [PROVIDER_NAME]: { models: cachedModels, checkedAt: 1 },
     })}\n`,
     "utf8",
   );
@@ -83,10 +144,11 @@ async function startRuntime(
     env: {
       PI_CODING_AGENT_DIR: agentDir,
       [API_KEY_ENV]: "active-automation-test-key",
+      OPENAI_API_KEY: "test-openai-key",
       ...extraEnv,
     },
-    provider: PROVIDER_NAME,
-    model: "gpt-5.6-sol",
+    provider: "openai",
+    model: "gpt-5",
     args: [
       "--offline",
       "--no-extensions",
@@ -106,6 +168,7 @@ async function startRuntime(
   return {
     client,
     settingsPath,
+    gatewayConfigPath,
     async stop() {
       await client.stop();
       await closeServer(server);
@@ -123,9 +186,9 @@ describe("Gateway thinking ownership through real Pi", () => {
     const { client, settingsPath } = runtime;
     try {
       expect((await client.getState()).thinkingLevel).toBe("low");
-      expect(await client.getAvailableThinkingLevels()).toContain("max");
 
       for (const command of [
+        "/sf-llm-gateway on global",
         "/sf-llm-gateway set-default global",
         "/sf-llm-gateway off global",
         "/sf-llm-gateway on global",
@@ -135,13 +198,15 @@ describe("Gateway thinking ownership through real Pi", () => {
         expect(readSettings(settingsPath).defaultThinkingLevel, command).toBe("low");
       }
 
-      await client.setModel(PROVIDER_NAME, "gpt-5");
+      expect(await client.getAvailableThinkingLevels()).toContain("max");
+
+      await client.setModel(PROVIDER_NAME, DISCOVERED_HIGH_MODEL);
       expect((await client.getState()).thinkingLevel).toBe("low");
       const highCeilingLevels = await client.getAvailableThinkingLevels();
-      expect(highCeilingLevels).toContain("xhigh");
+      expect(highCeilingLevels).toContain("high");
       expect(highCeilingLevels).not.toContain("max");
 
-      await client.setModel(PROVIDER_NAME, "gpt-5.6-sol");
+      await client.setModel(PROVIDER_NAME, DISCOVERED_MAX_MODEL);
       expect((await client.getState()).thinkingLevel).toBe("low");
       expect(await client.getAvailableThinkingLevels()).toContain("max");
     } finally {
@@ -151,23 +216,46 @@ describe("Gateway thinking ownership through real Pi", () => {
     expect(readSettings(settingsPath).defaultThinkingLevel).toBe("low");
   }, 30_000);
 
-  it("allows Pi to clamp max when off switches to a lower-capability model", async () => {
-    const runtime = await startRuntime("max", { OPENAI_API_KEY: "test-openai-key" });
+  it("chooses a configured non-gateway fallback when no previous default was saved", async () => {
+    const runtime = await startRuntime("low");
+    const { client, settingsPath, gatewayConfigPath } = runtime;
+    try {
+      await client.prompt("/sf-llm-gateway on global");
+      expect((await client.getState()).model.provider).toBe(PROVIDER_NAME);
+
+      const saved = JSON.parse(readFileSync(gatewayConfigPath, "utf8")) as Record<string, unknown>;
+      delete saved.previousDefaultProvider;
+      delete saved.previousDefaultModel;
+      writeFileSync(gatewayConfigPath, `${JSON.stringify(saved)}\n`, "utf8");
+
+      await client.prompt("/sf-llm-gateway off global");
+      const offState = await client.getState();
+      expect(offState.model.provider).not.toBe(PROVIDER_NAME);
+      expect(readSettings(settingsPath)).toMatchObject({
+        defaultProvider: offState.model.provider,
+        defaultModel: offState.model.id,
+      });
+    } finally {
+      await runtime.stop();
+    }
+  }, 30_000);
+
+  it("restores the previous non-gateway default while leaving Pi's thinking setting user-owned", async () => {
+    const runtime = await startRuntime("max");
     const { client, settingsPath } = runtime;
     try {
-      expect((await client.getState()).thinkingLevel).toBe("max");
+      expect((await client.getState()).thinkingLevel).toBe("high");
+
+      await client.prompt("/sf-llm-gateway on global");
+      const onState = await client.getState();
+      expect(onState.model).toMatchObject({ provider: PROVIDER_NAME, id: DISCOVERED_MAX_MODEL });
+      expect(onState.thinkingLevel).toBe("high");
 
       await client.prompt("/sf-llm-gateway off global");
       const offState = await client.getState();
       expect(offState.model).toMatchObject({ provider: "openai", id: "gpt-5" });
       expect(offState.thinkingLevel).toBe("high");
-      expect(readSettings(settingsPath).defaultThinkingLevel).toBe("high");
-
-      await client.prompt("/sf-llm-gateway on global");
-      const onState = await client.getState();
-      expect(onState.model).toMatchObject({ provider: PROVIDER_NAME, id: "gpt-5.6-sol" });
-      expect(onState.thinkingLevel).toBe("high");
-      expect(readSettings(settingsPath).defaultThinkingLevel).toBe("high");
+      expect(readSettings(settingsPath).defaultThinkingLevel).toBe("max");
     } finally {
       await runtime.stop();
     }

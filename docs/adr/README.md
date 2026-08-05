@@ -79,7 +79,7 @@ or accidentally contradicted in extension READMEs.
 - [0074: SF Guardrail Mediates Native High-Value Durable Mutations](./0074-sf-guardrail-mediates-native-high-value-mutations.md)
 - [0075: SF Guardrail Adds Persisted Power Tool Mode](./0075-sf-guardrail-adds-persisted-power-tool-mode.md)
 - [0076: Pi 0.80.6 Runtime Delegation](./0076-pi-0806-runtime-delegation.md)
-- [0077: GPT-5.6 Sol as Gateway Default](./0077-gpt-56-sol-gateway-default.md)
+- [0077: Dynamic Gateway Model Catalog](./0077-dynamic-gateway-model-catalog.md)
 - [0078: Pi-Native Credential Ownership](./0078-pi-native-credential-ownership.md)
 - [0079: Pi Runtime Forward-Compatibility Policy](./0079-audited-pi-runtime-support-window.md)
 - [0080: Active-Branch Latest Context Projection](./0080-active-branch-latest-context-projection.md)

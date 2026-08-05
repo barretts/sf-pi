@@ -16,7 +16,6 @@ import type {
 import { PROVIDER_DISPLAY_NAME, PROVIDER_NAME } from "./config.ts";
 import { toGatewayOpenAiBaseUrl, toGatewayRootBaseUrl } from "./gateway-url.ts";
 import {
-  buildBootstrapModelList,
   buildDiscoveredModelList,
   diffModelGroupProviders,
   fetchGatewayModelGroupInfo,
@@ -52,7 +51,7 @@ const PLACEHOLDER_ROOT = "https://gateway.invalid";
 
 export interface GatewayNativeDiscoveryState {
   modelIds: string[];
-  source: "static" | "cache" | "gateway";
+  source: "empty" | "cache" | "gateway";
   discoveredAt?: string;
   error?: string;
   filteredModelIds?: string[];
@@ -241,10 +240,6 @@ function requireRefreshConfig(context: RefreshModelsContext): {
   return { apiKey, root: toGatewayRootBaseUrl(root) };
 }
 
-function sameIds(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((id, index) => id === right[index]);
-}
-
 function sanitizedRefreshError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (message === "Gateway returned zero callable models.") return message;
@@ -261,12 +256,11 @@ export function createGatewayProviderRuntime(
   const streams = dependencies.streams ?? defaultStreams();
   const now = dependencies.now ?? (() => new Date());
   const placeholderRoot = toGatewayRootBaseUrl(dependencies.placeholderRoot ?? PLACEHOLDER_ROOT);
-  const baseline = buildBootstrapModelList().map((model) => nativeModel(model, placeholderRoot));
-  const baselineIds = baseline.map((model) => model.id);
+  const baseline: Model<GatewayApi>[] = [];
 
   let lastDiscovery: GatewayNativeDiscoveryState = {
-    modelIds: [...baselineIds],
-    source: "static",
+    modelIds: [],
+    source: "empty",
   };
   let previousModelGroups: GatewayModelGroupInfoMap | undefined;
   let lastModelGroupDrift: ModelGroupDrift[] = [];
@@ -343,7 +337,7 @@ export function createGatewayProviderRuntime(
     const currentIds = provider.getModels().map((model) => model.id);
     lastDiscovery = {
       modelIds: currentIds,
-      source: sameIds(currentIds, baselineIds) ? "static" : "cache",
+      source: currentIds.length === 0 ? "empty" : "cache",
     };
   };
 
@@ -361,9 +355,7 @@ export function createGatewayProviderRuntime(
     getLastDiscovery() {
       const currentIds = provider.getModels().map((model) => model.id);
       const source =
-        lastDiscovery.source === "static" && !sameIds(currentIds, baselineIds)
-          ? "cache"
-          : lastDiscovery.source;
+        lastDiscovery.source === "empty" && currentIds.length > 0 ? "cache" : lastDiscovery.source;
       return {
         ...lastDiscovery,
         source,

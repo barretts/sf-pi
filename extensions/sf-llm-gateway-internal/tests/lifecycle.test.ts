@@ -47,7 +47,7 @@ const providerRuntimeMock = vi.hoisted(() => ({
   },
   bind: vi.fn(),
   clear: vi.fn(),
-  getLastDiscovery: vi.fn(() => ({ source: "static", modelIds: [] })),
+  getLastDiscovery: vi.fn(() => ({ source: "empty", modelIds: [] })),
   getLastModelGroupDrift: vi.fn(() => []),
 }));
 
@@ -214,17 +214,17 @@ describe("gateway extension lifecycle", () => {
   );
 
   it.each(["low", undefined])(
-    "preserves a %s Pi thinking default during Gateway startup repair",
+    "preserves a %s Pi thinking default without rewriting an undiscovered Gateway model",
     async (thinkingLevel) => {
       const settings: Record<string, unknown> = {
         defaultProvider: "sf-llm-gateway-internal",
-        defaultModel: "gpt-5.6-sol-v1",
+        defaultModel: "example-model-v1",
       };
       if (thinkingLevel !== undefined) settings.defaultThinkingLevel = thinkingLevel;
       piSettingsMock.readSettings.mockReturnValue(settings);
       piSettingsMock.getEffectiveDefaultModelSetting.mockReturnValue({
         provider: "sf-llm-gateway-internal",
-        modelId: "gpt-5.6-sol",
+        modelId: "example-model",
       });
 
       const { default: extension } = await import("../index.ts");
@@ -233,13 +233,13 @@ describe("gateway extension lifecycle", () => {
       const ctx = makeCtx(mkdtempSync(join(tmpdir(), "sf-pi-gateway-startup-thinking-")));
       (ctx as { model?: unknown }).model = {
         provider: "sf-llm-gateway-internal",
-        id: "gpt-5.6-sol",
+        id: "example-model",
       };
 
       await pi.handlers.session_start?.[0]?.({ type: "session_start", reason: "startup" }, ctx);
 
       expect(pi.setThinkingLevel).not.toHaveBeenCalled();
-      expect(settings.defaultModel).toBe("gpt-5.6-sol");
+      expect(settings.defaultModel).toBe("example-model-v1");
       if (thinkingLevel === undefined) {
         expect(settings).not.toHaveProperty("defaultThinkingLevel");
       } else {

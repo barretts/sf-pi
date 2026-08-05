@@ -213,7 +213,7 @@ function cachedModel(id = "cached-only"): Model<"openai-completions"> {
 }
 
 describe("complete native Gateway Provider", () => {
-  it("exposes a synchronous offline catalog with one provider id, real API tags, and no construction network", () => {
+  it("starts with an empty catalog and performs no construction network", () => {
     const network = fetchers();
     const controller = authController();
     const runtime = createGatewayProviderRuntime({
@@ -222,23 +222,12 @@ describe("complete native Gateway Provider", () => {
       now: () => new Date("2026-07-23T00:00:00.000Z"),
     });
 
-    const models = runtime.provider.getModels();
     expect(runtime.provider.id).toBe(PROVIDER_NAME);
     expect(runtime.provider.name).toBe("SF LLM Gateway");
-    expect(new Set(models.map((model) => model.provider))).toEqual(new Set([PROVIDER_NAME]));
-    expect(new Set(models.map((model) => model.api))).toEqual(
-      new Set(["anthropic-messages", "openai-completions", "openai-responses"]),
-    );
-    for (const model of models) {
-      expect(model.baseUrl).toBe(
-        model.api === "openai-completions"
-          ? "https://gateway.invalid/v1"
-          : "https://gateway.invalid",
-      );
-    }
+    expect(runtime.provider.getModels()).toEqual([]);
     expect(runtime.getLastDiscovery()).toEqual({
-      source: "static",
-      modelIds: models.map((model) => model.id),
+      source: "empty",
+      modelIds: [],
     });
     expect(network.modelIds).not.toHaveBeenCalled();
     expect(network.modelInfo).not.toHaveBeenCalled();
@@ -285,8 +274,12 @@ describe("complete native Gateway Provider", () => {
   });
 
   it("repairs strict-tool support on a stale cached GPT-5.6 Sol model", async () => {
-    const runtime = createGatewayProviderRuntime({ authController: authController() });
+    const runtime = createGatewayProviderRuntime({
+      authController: authController(),
+      fetchers: fetchers({ ids: ["gpt-5.6-sol"], filteredIds: [] }),
+    });
     const { models, modelsStore } = await configuredModels(runtime);
+    await models.refresh({ allowNetwork: true });
     const current = runtime.provider.getModels().find((model) => model.id === "gpt-5.6-sol");
     expect(current).toBeDefined();
     if (!current) return;
@@ -306,11 +299,16 @@ describe("complete native Gateway Provider", () => {
     });
   });
 
-  it("keeps models.json overrides above the registered native Provider", async () => {
+  it("keeps models.json overrides above the cached dynamic Provider catalog", async () => {
     const gateway = createGatewayProviderRuntime({ authController: authController() });
-    const baseline = gateway.provider.getModels()[0];
-    expect(baseline).toBeDefined();
-    if (!baseline) return;
+    const cached = cachedModel("example-discovered-model");
+    const modelsStore = new InMemoryModelsStore();
+    await modelsStore.write(PROVIDER_NAME, { models: [cached], checkedAt: 1 });
+    const credentials = new InMemoryCredentialStore();
+    await credentials.modify(PROVIDER_NAME, async () => ({ type: "api_key", key: "native-key" }));
+    const nativeModels = createModels({ credentials, modelsStore });
+    nativeModels.setProvider(gateway.provider);
+    await nativeModels.refresh({ allowNetwork: false });
     const dir = mkdtempSync(path.join(tmpdir(), "sf-pi-m3a-model-overrides-"));
     const modelsPath = path.join(dir, "models.json");
     writeFileSync(
@@ -319,7 +317,7 @@ describe("complete native Gateway Provider", () => {
         providers: {
           [PROVIDER_NAME]: {
             modelOverrides: {
-              [baseline.id]: { name: "User Override", maxTokens: 777 },
+              [cached.id]: { name: "User Override", maxTokens: 777 },
             },
           },
         },
@@ -327,14 +325,14 @@ describe("complete native Gateway Provider", () => {
     );
     const runtime = await ModelRuntime.create({
       credentials: new InMemoryCredentialStore(),
-      modelsStore: new InMemoryModelsStore(),
+      modelsStore,
       modelsPath,
       allowModelNetwork: false,
     });
 
     runtime.registerNativeProvider(gateway.provider);
 
-    expect(runtime.getModel(PROVIDER_NAME, baseline.id)).toMatchObject({
+    expect(runtime.getModel(PROVIDER_NAME, cached.id)).toMatchObject({
       name: "User Override",
       maxTokens: 777,
     });
@@ -348,6 +346,7 @@ describe("complete native Gateway Provider", () => {
       streams: streams(calls),
     });
     const { models } = await configuredModels(runtime);
+    await models.refresh({ allowNetwork: true });
     const byApi = new Map(runtime.provider.getModels().map((model) => [model.api, model]));
 
     for (const api of ["anthropic-messages", "openai-completions", "openai-responses"] as const) {
@@ -392,6 +391,7 @@ describe("complete native Gateway Provider", () => {
       streams: implementations,
     });
     const { models } = await configuredModels(runtime);
+    await models.refresh({ allowNetwork: true });
     const responseModel = runtime.provider
       .getModels()
       .find((model) => model.api === "openai-responses");
@@ -411,7 +411,7 @@ describe("complete native Gateway Provider", () => {
     ]);
   });
 
-  it("uses Pi's baseline plus dynamic overlay and retains the current overlay on failure", async () => {
+  it("restores Pi's cached catalog, replaces it on discovery, and retains it on failure", async () => {
     const network = fetchers({
       ids: ["gpt-5.5", "fresh-chat", "no-default-models"],
       filteredIds: ["no-default-models"],
@@ -421,7 +421,6 @@ describe("complete native Gateway Provider", () => {
       fetchers: network,
       now: () => new Date("2026-07-23T01:02:03.000Z"),
     });
-    const baselineIds = runtime.provider.getModels().map((model) => model.id);
     const { models, modelsStore } = await configuredModels(runtime);
     await modelsStore.write(PROVIDER_NAME, {
       models: [cachedModel(), { ...cachedModel("gpt-5.5"), name: "Cached GPT override" }],
@@ -462,7 +461,7 @@ describe("complete native Gateway Provider", () => {
     expect(models.getModels(PROVIDER_NAME).filter((model) => model.id === "gpt-5.5")).toHaveLength(
       1,
     );
-    expect(models.getModels(PROVIDER_NAME)).toHaveLength(baselineIds.length + 1);
+    expect(models.getModels(PROVIDER_NAME)).toHaveLength(2);
     expect(models.getModel(PROVIDER_NAME, "fresh-chat")).toMatchObject({
       provider: PROVIDER_NAME,
       api: "openai-completions",
@@ -560,7 +559,7 @@ describe("complete native Gateway Provider", () => {
     expect(runtime.getLastDiscovery().filteredModelIds).toEqual(["no-default-models"]);
   });
 
-  it("rejects missing refresh inputs and zero callable models without replacing the baseline", async () => {
+  it("rejects missing refresh inputs and leaves a fresh catalog empty when discovery has no callable models", async () => {
     const zero = fetchers({ ids: [], filteredIds: ["no-default-models"] });
     const runtime = createGatewayProviderRuntime({
       authController: authController(),
@@ -601,7 +600,7 @@ describe("complete native Gateway Provider", () => {
         allowNetwork: true,
       }),
     ).rejects.toThrow("zero callable models");
-    expect(runtime.provider.getModels().length).toBeGreaterThan(0);
+    expect(runtime.provider.getModels()).toEqual([]);
   });
 
   it("preserves the model-group baseline across unavailability and compares A to the next B", async () => {

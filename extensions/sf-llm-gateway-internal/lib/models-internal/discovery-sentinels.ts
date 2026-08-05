@@ -4,8 +4,8 @@
  *
  * These values describe access/listing state, not models that Pi can call.
  * Keep them out of the registered provider catalog and discovery cache so a
- * transient proxy-side listing regression cannot replace the bootstrap catalog
- * with a dead selector entry.
+ * transient proxy-side listing regression cannot replace the last successful
+ * catalog with a dead selector entry.
  */
 const NON_CALLABLE_DISCOVERY_MODEL_IDS = new Set(["no-default-models"]);
 
