@@ -339,7 +339,7 @@ Make display-only Gateway and Feedback command reports model-invisible.
 
 ### Likely files
 
-- `extensions/sf-llm-gateway-internal/index.ts`
+- `extensions/sf-llm-gateway/index.ts`
 - `extensions/sf-feedback/index.ts`
 - related message renderers and mode-behavior tests
 
@@ -421,7 +421,7 @@ Remove implicit thinking-level mutation while preserving proven model capability
 
 ### Red proofs
 
-Selecting, restoring, or switching Gateway models performs zero implicit `setThinkingLevel()` calls. Pi/user settings persist. Supported models expose `max`; unsupported models do not.
+Selecting, restoring, or switching Gateway models performs zero implicit `setThinkingLevel()` calls. Pi/user settings persist, and the public client does not infer advanced levels from model IDs.
 
 ### Deletion gate
 
@@ -429,14 +429,14 @@ Delete passive defaulting state, lifecycle calls, and test-only accessors.
 
 ### Required gate
 
-Mandatory gate at both runtime-window edges plus one live capability query per representative model family where available.
+Mandatory gate at both runtime-window edges using synthetic discovered-model fixtures.
 
 Implementation evidence:
 
-- SF Pi issues zero `ExtensionAPI.setThinkingLevel()` calls and writes no `defaultThinkingLevel`; model selection, startup repair, enable, disable, set-default, and GPT-5.6 migration preserve Pi/user thinking settings;
+- SF Pi issues zero `ExtensionAPI.setThinkingLevel()` calls and writes no `defaultThinkingLevel`; model selection, startup repair, enable, disable, and set-default preserve Pi/user thinking settings;
 - passive thinking state, Gateway default-thinking constants, resolver fields, saved previous-thinking state, and test-only accessors are deleted;
-- exact Pi 0.81.1 RPC tests preserve `low` through startup, Gateway commands, and model switches while Pi's real capability selector exposes `max` only on proven families;
-- read-only live probes cover Claude, Codex, GPT-5.5, GPT-5.6 direct/Bedrock, and a high-ceiling GPT-5 control without retaining endpoints, credentials, or payloads;
+- exact Pi RPC tests prove conservative discovered models expose no inferred advanced levels;
+- provider-neutral adapter tests use synthetic model identifiers and no deployment-routing fixtures;
 - the registry currently exposes only Pi 0.81.1 inside `>=0.81.1 <0.82.0`, so the floor and latest-window edge are the same exact package for this gate.
 
 ---
@@ -521,7 +521,7 @@ Replace generic Gateway runtime mechanics with one complete Pi Provider while pr
 
 ### Likely files
 
-- new `extensions/sf-llm-gateway-internal/lib/provider.ts`
+- new `extensions/sf-llm-gateway/lib/provider.ts`
 - Gateway discovery/config/models/transport/index/setup/status modules
 - provider, auth, catalog, model, transport, compaction, telemetry, and live tests
 
@@ -618,20 +618,19 @@ End the bounded compatibility read path after the announced migration window.
 
 ### Deletion gate
 
-Delete legacy token request precedence and execution use. Retain only non-secret detection needed for migration guidance until a later user-authorized cleanup.
+Delete config-token request precedence and execution use. ADR 0101 later removed compatibility aliases, detection, and cleanup surfaces entirely.
 
 ### Required gate
 
-Mandatory gate at both runtime-window edges plus sanitized migration artifacts.
+Mandatory gate at both runtime-window edges plus canonical identity and re-login proofs.
 
 Implementation evidence:
 
-- Provider authentication resolves only Pi-owned credentials, `SF_LLM_GATEWAY_API_KEY`, or its legacy environment alias; project/global saved `apiKey` fields never satisfy Pi auth checks or reach requests;
-- effective non-secret Gateway configuration no longer returns any API-key value or source, while saved-field presence remains available only to status, setup preservation, and explicit cleanup paths;
-- stale saved-vs-environment key-conflict hashing, persisted state, probe output, and Welcome rendering are deleted because the saved value is never active;
-- status and setup surfaces identify inactive legacy fields without values and direct users to `/login` plus verified `remove-legacy-token` cleanup;
-- native login/logout and environment fallback tests remain green, legacy-only project/global fixtures resolve no auth and remain byte-for-byte unchanged, and cleanup still requires native verification plus confirmation;
-- an exact Pi 0.81.1 RPC lifecycle keeps a distinct saved legacy field inactive while an environment credential remains usable across Gateway off/on transitions;
+- Provider authentication resolves only Pi-owned credentials or `SF_LLM_GATEWAY_API_KEY`; extension config contains no credential field;
+- ADR 0101 gives extension, provider, command, status, config, and documentation one canonical identity;
+- credentials and cached catalogs under prior identities are neither read nor copied, and users reconnect explicitly with `/login sf-llm-gateway`;
+- generic stale-suffix repair updates provider/model settings without retaining an exact retired identifier;
+- native login/logout, canonical environment fallback, and Gateway off/on lifecycle tests remain green;
 - Pi 0.81.1 is both the exact supported floor and latest release inside `>=0.81.1 <0.82.0`, so the runtime-window edge gate is one exact package;
 - aggregate validation passes 476 test files and 3,558 tests, with 5 test files and 8 tests skipped; sanitized evidence: `/tmp/sf-pi-m3b-evidence.json`.
 

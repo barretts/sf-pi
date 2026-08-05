@@ -121,7 +121,7 @@ describe("monthly-usage store", () => {
   it("backing state lives on globalThis so duplicate module instances share it", () => {
     // Regression test for the production bug where pi's jiti loader
     // (moduleCache: false) created one module instance per extension,
-    // giving sf-welcome and sf-llm-gateway-internal independent stores
+    // giving sf-welcome and sf-llm-gateway independent stores
     // that never saw each other's publishes. Parking the backing state
     // on globalThis makes every loaded copy of this module share the
     // same snapshot + listeners + refresher.

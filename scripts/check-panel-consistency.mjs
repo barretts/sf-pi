@@ -51,7 +51,7 @@ const EXEMPT_EXTENSIONS = new Map([
   ["sf-feedback", "no-args command deep-links to the Manager Surface; see ADR 0051"],
   ["sf-guardrail", "no-args command deep-links to the Manager Surface; see ADR 0051"],
   ["sf-herdr", "no-args command deep-links to the Manager Surface; see ADR 0051"],
-  ["sf-llm-gateway-internal", "no-args command deep-links to the Manager Surface; see ADR 0051"],
+  ["sf-llm-gateway", "no-args command deep-links to the Manager Surface; see ADR 0051"],
   ["sf-lsp", "no-args command deep-links to the Manager Surface; see ADR 0051"],
   ["sf-skills", "no-args command deep-links to the Manager Surface; see ADR 0051"],
   ["sf-slack", "no-args command deep-links to the Manager Surface; see ADR 0051"],
@@ -187,7 +187,7 @@ function checkExtension(ext) {
     };
   }
 
-  // Some extensions split their panel into a sibling file (sf-llm-gateway-internal,
+  // Some extensions split their panel into a sibling file (sf-llm-gateway,
   // sf-lsp). We grep the entry plus every .ts file under lib/ so the import does
   // not have to live in the entry itself.
   const libRoot = join(dirname(entryPath), "lib");

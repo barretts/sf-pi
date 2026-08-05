@@ -14,7 +14,7 @@ import { getDisabledExtensionFilesForCwd } from "../../../lib/common/sf-pi-exten
 import type { ExtensionHealthItem } from "./types.ts";
 
 const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
-  "sf-llm-gateway-internal": "LLM Gateway",
+  "sf-llm-gateway": "LLM Gateway",
   "sf-pi-manager": "Pi Manager",
 };
 

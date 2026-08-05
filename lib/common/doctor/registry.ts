@@ -37,7 +37,7 @@ export interface ExtensionDoctorCheck {
 }
 
 export interface ExtensionDoctorReport {
-  /** sf-pi extension id, e.g. `sf-llm-gateway-internal`. */
+  /** sf-pi extension id, e.g. `sf-llm-gateway`. */
   extensionId: string;
   /** Display title in the aggregated output. */
   title: string;

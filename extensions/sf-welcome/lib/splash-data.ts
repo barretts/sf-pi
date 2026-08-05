@@ -286,7 +286,7 @@ function shouldShowSlackStatus(cwd: string): boolean {
 }
 
 function shouldShowGatewayStatus(cwd: string, modelName: string, providerName: string): boolean {
-  if (!isSfPiExtensionEnabled(cwd, "sf-llm-gateway-internal")) return false;
+  if (!isSfPiExtensionEnabled(cwd, "sf-llm-gateway")) return false;
   const activeGateway =
     providerName.toLowerCase().includes("gateway") || modelName.toLowerCase().includes("gateway");
   const gatewayState = getMonthlyUsageState();

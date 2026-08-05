@@ -36,7 +36,7 @@ The accepted scope expands the original proposal:
 End users currently see 3+ different ways to configure credentials for both
 the SF LLM Gateway and SF Slack integrations. The slash menu also shows two
 adjacent rows for the gateway (`/sf-llm-gateway` and the legacy
-`/sf-llm-gateway-internal`). New users have to read the README to learn which
+`/sf-llm-gateway`). New users have to read the README to learn which
 path is canonical, and existing users sometimes configure one source while
 the runtime is reading from another — both are valid, neither is "wrong",
 but the result is "I configured it and it still says not connected".
@@ -51,15 +51,15 @@ fallbacks kept available for automation but not surfaced to new users.
 | #   | Where                                                         | Purpose                                      | Audience             |
 | --- | ------------------------------------------------------------- | -------------------------------------------- | -------------------- |
 | 1   | `/sf-llm-gateway` panel → **Open setup / settings**           | URL + token form, writes saved config JSON   | All users            |
-| 2   | `/sf-llm-gateway-internal` slash command                      | Backward-compatible alias of #1              | Legacy muscle memory |
-| 3   | `/login sf-llm-gateway-internal`                              | pi's standard provider login (OAuth/API key) | Standardized pi flow |
+| 2   | `/sf-llm-gateway` slash command                               | Backward-compatible alias of #1              | Legacy muscle memory |
+| 3   | `/login sf-llm-gateway`                                       | pi's standard provider login (OAuth/API key) | Standardized pi flow |
 | 4   | `SF_LLM_GATEWAY_BASE_URL` / `SF_LLM_GATEWAY_API_KEY` env vars | Per-shell automation override                | Automation / CI      |
 | 5   | Direct edit of saved JSON (global or project)                 | Provisioning by config management            | Power users          |
 
 Storage on disk:
 
-- Global: `~/.pi/agent/sf-llm-gateway-internal.json` (chmod 0600)
-- Project: `<repo>/.pi/sf-llm-gateway-internal.json` (chmod 0600)
+- Global: `~/.pi/agent/sf-llm-gateway.json` (chmod 0600)
+- Project: `<repo>/.pi/sf-llm-gateway.json` (chmod 0600)
 
 Resolution precedence today (see `lib/config.ts: getGatewayConfig`):
 **saved (project) > saved (global) > env > default**.
@@ -78,7 +78,7 @@ Resolution precedence today (see `lib/auth.ts: resolveTokenCandidates`):
 
 ### Why the duplication exists
 
-- The gateway's `/sf-llm-gateway-internal` slash command was renamed to the
+- The gateway's `/sf-llm-gateway` slash command was renamed to the
   friendlier `/sf-llm-gateway` and the original was kept as a back-compat
   alias. The alias has been around several minor releases and can now be
   retired.
@@ -130,13 +130,13 @@ panel; this ADR adds one required action row to that contract.
 
 ### Phase A — Slash menu de-duplication (1-file change)
 
-- Remove the registration of `/sf-llm-gateway-internal` from
-  `extensions/sf-llm-gateway-internal/index.ts`.
-- Keep the **provider id** `"sf-llm-gateway-internal"` (used by
+- Remove the registration of `/sf-llm-gateway` from
+  `extensions/sf-llm-gateway/index.ts`.
+- Keep the **provider id** `"sf-llm-gateway"` (used by
   `pi.registerProvider`, `/login`, settings keys, env var prefixes). The
   cleanup is purely the slash command surface.
 - Document the retirement in the panel help text and the extension's
-  README. If a user types `/sf-llm-gateway-internal`, pi's "unknown
+  README. If a user types `/sf-llm-gateway`, pi's "unknown
   command" message points them at `/sf-llm-gateway`.
 
 **Risk**: muscle memory. The alias has been deprecated in copy for

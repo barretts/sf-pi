@@ -51,7 +51,7 @@ describe("buildExtensionStates", () => {
     expect(spinner).toBeDefined();
     expect(spinner!.enabled).toBe(false);
 
-    const gateway = states.find((s) => s.id === "sf-llm-gateway-internal");
+    const gateway = states.find((s) => s.id === "sf-llm-gateway");
     expect(gateway).toBeDefined();
     expect(gateway!.enabled).toBe(true);
   });
@@ -106,17 +106,14 @@ describe("getDisabledExtensions", () => {
           extensions: [
             "extensions/*/index.ts",
             "!extensions/sf-ohana-spinner/index.ts",
-            "!extensions/sf-llm-gateway-internal/index.ts",
+            "!extensions/sf-llm-gateway/index.ts",
           ],
         },
       ],
     });
 
     expect(getDisabledExtensions(settingsPath)).toEqual(
-      new Set([
-        "extensions/sf-ohana-spinner/index.ts",
-        "extensions/sf-llm-gateway-internal/index.ts",
-      ]),
+      new Set(["extensions/sf-ohana-spinner/index.ts", "extensions/sf-llm-gateway/index.ts"]),
     );
   });
 
@@ -235,7 +232,7 @@ describe("applyExtensionState", () => {
     const disabled = new Set([
       "extensions/sf-data360/index.ts",
       "extensions/sf-ohana-spinner/index.ts",
-      "extensions/sf-llm-gateway-internal/index.ts",
+      "extensions/sf-llm-gateway/index.ts",
     ]);
 
     applyExtensionState(

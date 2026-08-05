@@ -51,7 +51,7 @@ describe("renderTopBar", () => {
       makeState({
         glyphMode: "ascii",
         modelName: "GPT-5.5",
-        modelProvider: "sf-llm-gateway-internal",
+        modelProvider: "sf-llm-gateway",
         gitBranch: "main",
       }),
       stubTheme,
@@ -75,7 +75,7 @@ describe("renderTopBar", () => {
   it("shows SF LLM Gateway badge when provider matches", () => {
     const [line] = renderTopBar(
       makeState({
-        modelProvider: "sf-llm-gateway-internal",
+        modelProvider: "sf-llm-gateway",
         modelName: "Claude Opus 4.7",
       }),
       stubTheme,
@@ -90,24 +90,6 @@ describe("renderTopBar", () => {
     expect(line).toContain("y");
     expect(line).toContain(ANSI_FG_PREFIX); // Rainbow ANSI codes
     expect(line).toContain("Claude Opus 4.7");
-  });
-
-  it("shows SF LLM Gateway badge when provider matches the Anthropic-native gateway", () => {
-    const [line] = renderTopBar(
-      makeState({
-        modelProvider: "sf-llm-gateway-internal-anthropic",
-        modelName: "Claude Opus 4.7",
-      }),
-      stubTheme,
-    );
-    // Gateway badge must render for Claude too. Rainbow ANSI + letter check.
-    expect(line).toContain("G");
-    expect(line).toContain("t");
-    expect(line).toContain("y");
-    expect(line).toContain(ANSI_FG_PREFIX);
-    expect(line).toContain("Claude Opus 4.7");
-    // Pink accent #d787af -> rgb(215,135,175) must apply to the model label.
-    expect(line).toContain(ansiFg(215, 135, 175));
   });
 
   it("shows plain model name for non-gateway providers", () => {
@@ -230,7 +212,7 @@ describe("renderTopBar", () => {
   it("uses pink accent on the gateway model label", () => {
     const [line] = renderTopBar(
       makeState({
-        modelProvider: "sf-llm-gateway-internal",
+        modelProvider: "sf-llm-gateway",
         modelName: "Claude Opus 4.7",
       }),
       stubTheme,
@@ -243,7 +225,7 @@ describe("renderTopBar", () => {
   it("uses custom model and folder colors when provided", () => {
     const [line] = renderTopBar(
       makeState({
-        modelProvider: "sf-llm-gateway-internal",
+        modelProvider: "sf-llm-gateway",
         modelName: "Claude Opus 4.7",
         colors: {
           folderPath: "#112233",
@@ -268,7 +250,7 @@ describe("renderTopBar", () => {
   it("colors gateway badge brackets as part of the gradient", () => {
     const [line] = renderTopBar(
       makeState({
-        modelProvider: "sf-llm-gateway-internal",
+        modelProvider: "sf-llm-gateway",
         modelName: "Claude Opus 4.7",
         colors: {
           folderPath: "#00afaf",
@@ -292,7 +274,7 @@ describe("renderTopBar", () => {
     const solidColor = ansiFg(95, 166, 184);
     const [line] = renderTopBar(
       makeState({
-        modelProvider: "sf-llm-gateway-internal",
+        modelProvider: "sf-llm-gateway",
         modelName: "Claude Opus 4.7",
         colors: {
           folderPath: "#00afaf",

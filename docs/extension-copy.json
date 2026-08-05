@@ -310,7 +310,7 @@
       "Branch-scoped workflow signal inference from recent tool calls and file edits."
     ]
   },
-  "sf-llm-gateway-internal": {
+  "sf-llm-gateway": {
     "shortName": "LLM Gateway",
     "intentGroup": "Personalize pi",
     "promise": "Connect pi to Salesforce LLM Gateway models when your environment supports that provider.",

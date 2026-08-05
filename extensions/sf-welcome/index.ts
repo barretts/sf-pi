@@ -662,7 +662,7 @@ export default function sfWelcome(pi: ExtensionAPI) {
     browserRuntimeTimer.unref?.();
 
     // Subscribe to the gateway usage store so any time the provider publishes
-    // a new snapshot (first populate, periodic refresh, /sf-llm-gateway-internal
+    // a new snapshot (first populate, periodic refresh, /sf-llm-gateway
     // refresh) the splash repaints with live numbers. This is the source of
     // truth for keeping the splash and bottom bar in sync regardless of
     // extension load order.
@@ -684,7 +684,7 @@ export default function sfWelcome(pi: ExtensionAPI) {
         data.modelName.toLowerCase().includes("gateway");
       const gatewayStatus = gatewayState.connectionStatus;
       data.gatewayVisible =
-        isSfPiExtensionEnabled(ctx.cwd, "sf-llm-gateway-internal") &&
+        isSfPiExtensionEnabled(ctx.cwd, "sf-llm-gateway") &&
         (activeGateway ||
           !!gatewayState.monthlyUsage ||
           (!!gatewayStatus &&

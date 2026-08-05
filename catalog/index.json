@@ -474,7 +474,7 @@
     "entry": "extensions/sf-devbar/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 2556
+    "srcLoc": 2546
   },
   {
     "id": "sf-docs",
@@ -699,7 +699,7 @@
     "srcLoc": 896
   },
   {
-    "id": "sf-llm-gateway-internal",
+    "id": "sf-llm-gateway",
     "name": "SF LLM Gateway",
     "description": "Salesforce LLM Gateway provider with model discovery",
     "category": "provider",
@@ -711,7 +711,7 @@
       "/sf-llm-gateway"
     ],
     "providers": [
-      "sf-llm-gateway-internal"
+      "sf-llm-gateway"
     ],
     "tools": [],
     "events": [
@@ -722,7 +722,7 @@
       "session_shutdown"
     ],
     "docs": {
-      "summary": "Complete Pi Provider for the Salesforce LLM Gateway. Pi-owned credential persistence and model storage, authenticated dynamic discovery with offline cache restore, real mixed-API dispatch, Gateway-aware transport adapters, explicit refresh, diagnostics, and usage status.",
+      "summary": "Complete Pi Provider for the Salesforce LLM Gateway. Pi-owned credential persistence and model storage, authenticated dynamic discovery with offline cache restore, provider-neutral mixed-API dispatch, explicit refresh, diagnostics, and usage status.",
       "primaryFiles": [
         "index.ts",
         "lib/provider.ts",
@@ -737,20 +737,20 @@
       ],
       "stateFiles": [
         "~/.pi/agent/auth.json (Pi-owned API-key credential + default non-secret URL)",
-        "<globalAgentDir>/sf-llm-gateway-internal.json (non-secret settings; inactive legacy apiKey may remain for detection and confirmed cleanup)",
+        "<globalAgentDir>/sf-llm-gateway.json (non-secret settings)",
         "<globalAgentDir>/sf-llm-gateway/* (monthly usage and diagnostic state)"
       ],
       "safety": [
         "API-key input uses SF Pi's shared fixed-mask component and never enters Pi's visible stock prompt.",
         "Pi alone persists/removes active credentials; setup and import paths write no secrets.",
-        "Legacy config apiKey fields are never used for authentication and remain untouched without verified explicit cleanup.",
+        "Extension config stores only non-secret settings; credentials remain Pi-owned.",
         "Pi's settings.json is mutated through pi-settings.ts helpers with race-aware reads."
       ]
     },
-    "entry": "extensions/sf-llm-gateway-internal/index.ts",
+    "entry": "extensions/sf-llm-gateway/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 11467
+    "srcLoc": 8983
   },
   {
     "id": "sf-lsp",

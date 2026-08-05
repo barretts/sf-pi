@@ -113,41 +113,18 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 ### Features
 
 - **Project mutable hidden context from Pi's active branch.** SF Brain, DevBar, Guardrail, and Slack now use Pi's compaction-aware `buildContextEntries()` projection, reinject from the latest active value, and filter superseded model-visible custom messages without changing state-only approval or audit entries.
-- **Adopt pi 0.72 model-level `thinkingLevelMap` in
-  sf-llm-gateway-internal.** Pi 0.72 replaced `compat.reasoningEffortMap`
-  with a top-level `thinkingLevelMap` on each model (pi-mono #3208). The
-  Codex gateway clamp (`minimal` → `low`, `xhigh` → `high`) that used to
-  live on `CODEX_OPENAI_COMPAT.reasoningEffortMap` is now emitted as
-  `thinkingLevelMap` in `buildProviderModel`. Without this migration,
-  Codex on pi ≥ 0.72 would silently drop the pi-level → provider-effort
-  mapping and hit gateway 400s for `minimal`/`xhigh`.
-- **Expose `xhigh` thinking for Opus 4.7 on the SF LLM Gateway.** Pi 0.72
-  treats `xhigh` as opt-in via `thinkingLevelMap.xhigh`
-  (`getSupportedThinkingLevels` requires `mapped !== undefined`).
-  Opus 4.7's gateway presets had no `thinkingLevelMap`, so pi hid `xhigh`
-  from the `/thinking` selector and silently clamped
-  `DEFAULT_THINKING_LEVEL = "xhigh"` down to `high`. All four Opus 4.7
-  presets (`claude-opus-4-7`, `claude-opus-4-7-v1`,
-  `claude-opus-4-7-20250416`, `us.anthropic.claude-opus-4-7-v1`) now
-  declare `thinkingLevelMap: { xhigh: "xhigh" }`, routing straight through
-  to the Anthropic `xhigh` effort tier already handled by
-  `mapPiLevelToOpus47Effort` in `transport.ts`. Opus 4.6 is intentionally
-  unchanged: pi-ai's default mapping has no `xhigh` case for 4.6, and
-  surfacing `xhigh` there without a live probe would silently route heavy
-  4.6 traffic to an unmapped tier.
-- **Simplify sf-llm-gateway-internal dispatcher with per-model
-  `baseUrl`.** Pi 0.72 honors per-model `baseUrl` overrides on
-  `pi.registerProvider()` (pi-mono #4063). Anthropic-tagged models are now
-  registered with `baseUrl` pinned to the gateway root, so the
-  `unifiedStream` dispatcher no longer needs to clone each model and
-  rewrite its `baseUrl` at request time. The dispatcher keeps the
-  OpenAI-compat ↔ Anthropic-native routing (required to hit our Opus 4.7
-  max_tokens shim and the SSE early-error retry wrapper in
-  `transport.ts`), but the boilerplate explanation in `discovery.ts`
-  shrinks from ~20 lines to ~8.
+- **Adopt Pi model-level capability metadata in sf-llm-gateway.**
+  The provider moved from compatibility-local thinking fields to Pi's public
+  model metadata. ADR 0100 later replaced source-controlled route policy with
+  authenticated discovery and portable metadata inherited from Pi's public
+  catalog.
+- **Simplify sf-llm-gateway dispatch.** Pi's Provider API map now owns
+  protocol dispatch while SF Pi keeps endpoint materialization and bounded
+  error guidance. ADR 0100 later removed deployment-specific payload and route
+  workarounds.
 - **Drop pi 0.70-era compatibility casts.** Now that the floor is 0.73,
   the `ProviderConfigWithName` structural cast in
-  `sf-llm-gateway-internal/lib/discovery.ts` and the `pi.on as unknown
+  `sf-llm-gateway/lib/discovery.ts` and the `pi.on as unknown
   as ...` cast around `thinking_level_select` in `sf-devbar/index.ts` are
   gone; both use the real `ProviderConfig` / event typings from
   `@mariozechner/pi-coding-agent`.
@@ -157,29 +134,10 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
   `@mariozechner/pi-agent-core`). No sf-pi extension needs it today; it is
   available to any future extension that wants to exit the agent loop
   gracefully after a completed turn.
-- **sf-llm-gateway-internal: unified one-provider, one-`/login`-row design
-  with paste-token flow.** Previously the gateway registered two pi
-  providers (`sf-llm-gateway-internal` for GPT/Gemini/Codex and
-  `sf-llm-gateway-internal-anthropic` for Claude) so pi's `/login` menu
-  showed two rows for the same gateway and the same token, which was
-  confusing. Now there is a single provider `sf-llm-gateway-internal`
-  displayed with one gateway-specific label. All models inherit
-  the provider-level `openai-completions` API so pi always invokes the
-  provider's custom `streamSimple`; the dispatcher detects Claude model ids
-  and forwards them to the native Anthropic transport (same streamer as
-  before, with a one-line `model.baseUrl` rewrite to the gateway root). A
-  new `oauth.onPrompt` block wires
-  `/login` to a one-shot paste-token flow that saves to the global saved
-  config, so new users can authenticate without leaving pi.
-
-  Backward compatibility: a one-shot settings migration rewrites any
-  residual references to the retired `sf-llm-gateway-internal-anthropic`
-  id in the user's global and project pi `settings.json`
-  (`defaultProvider`, `defaultModel`, `enabledModels`). Idempotent via a
-  `sfPi.gatewayUnifyMigrated` sentinel, so the migrator runs at most once
-  per settings file. Legacy gateway env-var users and existing saved-config
-  users are not affected. Current sf-pi builds require
-  pi `>=0.73.0`; see the breaking-change note above.
+- **sf-llm-gateway: unified one-provider, one-`/login`-row design.** The
+  gateway uses one Pi Provider and one credential flow. Later releases moved
+  credentials fully into Pi ownership and replaced source-controlled dispatch
+  policy with authenticated discovery and provider-neutral protocol adapters.
 
 - **sf-devbar: instant thinking-badge repaint on `thinking_level_select`
   (pi ≥ 0.71).** pi emits `thinking_level_select` whenever the user flips
@@ -207,7 +165,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
   Close / Disable this extension actions, and routes results through
   `openInfoPanel`. New extensions pass the panel-consistency lint
   immediately.
-- **Drift migrations: sf-lsp, sf-llm-gateway-internal, and sf-welcome
+- **Drift migrations: sf-lsp, sf-llm-gateway, and sf-welcome
   adopt the standardized panel + popup pattern.**
   - `/sf-lsp` keeps its rich Doctor + Recent activity panel but its
     section labels now use the shared `toolTitle` color, every action
@@ -215,7 +173,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
     servers`, ...) routes through `openInfoPanel` instead of dumping a
     `notify` line, and a `Disable this extension` row joins the
     actions list under a Lifecycle group.
-  - `/sf-llm-gateway-internal` was already using the shared command
+  - `/sf-llm-gateway` was already using the shared command
     panel; the lifecycle toggle row is now appended automatically.
   - `/sf-welcome` now opens a standardized command panel with `Show
     splash summary`, `Install bundled Nerd Font`, `Show help`, `Close`,
@@ -263,7 +221,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 - **sf-data360: standardized `/sf-data360` settings panel.** `/sf-data360`
   with no args used to dump a status notification, while every other
   bundled extension (`/sf-slack`, `/sf-devbar`, `/sf-guardrail`,
-  `/sf-llm-gateway-internal`, `/sf-skills-hud`, `/sf-agentscript-assist`)
+  `/sf-llm-gateway`, `/sf-skills-hud`, `/sf-agentscript-assist`)
   opened a grouped command panel via `lib/common/command-panel.ts`. The
   Data 360 command now opens the same standardized panel — status
   block plus Show status / Show help / Close actions — so the suite has
@@ -274,12 +232,12 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-- **sf-llm-gateway-internal: preserve explicit gateway model allow-lists
+- **sf-llm-gateway: preserve explicit gateway model allow-lists
   across restarts (#163).** Startup now registers the previous local model
   discovery cache immediately after the bootstrap catalog, before Pi resolves
   `enabledModels`, so scoped model lists can include discovered gateway models
   on first paint. The settings repair step also keeps user-authored
-  `sf-llm-gateway-internal/<model-id>` entries instead of rewriting them to
+  `sf-llm-gateway/<model-id>` entries instead of rewriting them to
   the provider wildcard; only entries from the retired Anthropic-only provider
   are normalized.
 - **sf-pi-manager: auto-detect scope for `/sf-pi` commands so a project-only
@@ -294,14 +252,14 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
   scope tokens still win, and the overlay's `S`-key toggle is unchanged.
   When the package is in the *other* scope, the warning now points the
   user at the right scope instead of asking them to reinstall.
-- **sf-llm-gateway-internal: keep Claude requests on the unified dispatcher.**
+- **sf-llm-gateway: keep Claude requests on the unified dispatcher.**
   Claude models no longer pass `api: "anthropic-messages"` into pi's model
   registry because that made pi bypass the provider-level `streamSimple`
   dispatcher and call the built-in Anthropic transport with the provider's
   OpenAI base URL, producing `<gateway>/v1/v1/messages`. Claude is now
   detected by model id inside the dispatcher, which rewrites the base URL to
   the gateway root before calling the Anthropic-native shim.
-- **sf-llm-gateway-internal: don't create project `.pi/settings.json` for a
+- **sf-llm-gateway: don't create project `.pi/settings.json` for a
   no-op migration.** Missing project settings cannot contain legacy provider
   references, so the migration now skips them instead of stamping a sentinel
   file into every repo a user opens.
@@ -504,28 +462,28 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 - `catalog/index.json` now includes a `srcLoc` field per extension so agents
   can quickly gauge extension size.
 - Added per-extension `AGENTS.md` for the three most complex extensions
-  (`sf-plan`, `sf-slack`, `sf-llm-gateway-internal`) with prescriptive rules,
+  (`sf-plan`, `sf-slack`, `sf-llm-gateway`) with prescriptive rules,
   file maps, and closure-state conventions.
 - Folded `MAINTAINERS.md` into `GOVERNANCE.md` and deleted shipped proposals
   under `proposals/` (captured in git history + CHANGELOG).
 - Moved `lib/common/display/render.ts` into `sf-pi-manager` (its sole
   consumer) to reduce shared-lib noise.
 - Removed the deprecated `createGatewayConfigPanel` alias in
-  `sf-llm-gateway-internal`.
+  `sf-llm-gateway`.
 
 ### Refactors
 
-- **sf-welcome ↔ sf-llm-gateway-internal decoupling**: monthly-usage state now
+- **sf-welcome ↔ sf-llm-gateway decoupling**: monthly-usage state now
   lives in `lib/common/monthly-usage/store.ts`. The gateway registers a
   refresher at `session_start`; sf-welcome reads the shared snapshot. This
   restores the "disabled extensions have zero runtime cost" contract —
   sf-welcome no longer imports from the gateway's internals.
-- **sf-llm-gateway-internal:** extracted Anthropic beta header controls into
+- **sf-llm-gateway:** extracted Anthropic beta header controls into
   `lib/beta-controls.ts` (-159 LOC from `index.ts`). Behavior unchanged.
 
 ### Bug Fixes
 
-- **sf-llm-gateway-internal:** reduce intermittent Anthropic `api_error` ("Internal
+- **sf-llm-gateway:** reduce intermittent Anthropic `api_error` ("Internal
   server error") on Opus 4.7 by shrinking the heavy-workload request profile
   and retrying transient mid-stream failures before they reach the user.
   Four coordinated fixes (addresses #39):
@@ -544,7 +502,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
     (previously only `start`), so transient Anthropic 500s that arrive
     after thinking begins can still be recovered without bubbling a raw
     JSON error envelope to the TUI.
-- **sf-llm-gateway-internal:** surface inner-stream retry state to the UI and
+- **sf-llm-gateway:** surface inner-stream retry state to the UI and
   append actionable guidance to final upstream errors (rounds out #39):
   - When the transparent retry kicks in, show `Gateway upstream hiccup —
     retrying (n/N) in Xs. <reason>` so users can tell a hiccup apart from
@@ -810,7 +768,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **gateway:** restore GPT-5.6 strict tool metadata ([d8ee2ad](https://github.com/salesforce/sf-pi/commit/d8ee2ad45c7097d599471ca0199881253da847b7))
+* **gateway:** restore discovered-model tool metadata ([d8ee2ad](https://github.com/salesforce/sf-pi/commit/d8ee2ad45c7097d599471ca0199881253da847b7))
 
 ## [0.241.0](https://github.com/salesforce/sf-pi/compare/v0.240.0...v0.241.0) (2026-07-25)
 
@@ -939,7 +897,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Features
 
-* **sf-llm-gateway:** default to GPT-5.6 Sol ([575ad72](https://github.com/salesforce/sf-pi/commit/575ad72f911a8d364117b38ab599cf271391aa79))
+* **sf-llm-gateway:** update the gateway default model policy ([575ad72](https://github.com/salesforce/sf-pi/commit/575ad72f911a8d364117b38ab599cf271391aa79))
 
 ## [0.228.7](https://github.com/salesforce/sf-pi/compare/v0.228.6...v0.228.7) (2026-07-20)
 
@@ -1289,7 +1247,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway:** handle GPT-5 Bedrock responses ([5384d2a](https://github.com/salesforce/sf-pi/commit/5384d2a093b6ed1744207485fce214b0b72d10b7))
+* **sf-llm-gateway:** handle a deployment-specific Responses route ([5384d2a](https://github.com/salesforce/sf-pi/commit/5384d2a093b6ed1744207485fce214b0b72d10b7))
 
 ## [0.210.0](https://github.com/salesforce/sf-pi/compare/v0.209.1...v0.210.0) (2026-06-24)
 
@@ -1879,7 +1837,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway:** apply priority service tier on gpt-5 Responses path ([ffbf56e](https://github.com/salesforce/sf-pi/commit/ffbf56e0cc4a31b9039976d1b8872a63aa6610b4))
+* **sf-llm-gateway:** apply a route-specific request tier ([ffbf56e](https://github.com/salesforce/sf-pi/commit/ffbf56e0cc4a31b9039976d1b8872a63aa6610b4))
 
 ## [0.178.0](https://github.com/salesforce/sf-pi/compare/v0.177.0...v0.178.0) (2026-06-07)
 
@@ -2178,14 +2136,14 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Features
 
-* **sf-llm-gateway-internal:** promote Opus 4.8 to default model ([a8f5055](https://github.com/salesforce/sf-pi/commit/a8f505505830225ddcfa6a3c67794264471a8f67))
+* **sf-llm-gateway:** promote Opus 4.8 to default model ([a8f5055](https://github.com/salesforce/sf-pi/commit/a8f505505830225ddcfa6a3c67794264471a8f67))
 
 ## [0.150.0](https://github.com/salesforce/sf-pi/compare/v0.149.7...v0.150.0) (2026-05-28)
 
 
 ### Features
 
-* **sf-llm-gateway-internal:** add Opus 4.8 preset, unlock effort=max for 4.7+ ([d5f770b](https://github.com/salesforce/sf-pi/commit/d5f770b1284f76604f645d5af14899ddf01b7a22))
+* **sf-llm-gateway:** add Opus 4.8 preset, unlock effort=max for 4.7+ ([d5f770b](https://github.com/salesforce/sf-pi/commit/d5f770b1284f76604f645d5af14899ddf01b7a22))
 
 ## [0.149.7](https://github.com/salesforce/sf-pi/compare/v0.149.6...v0.149.7) (2026-05-28)
 
@@ -2714,7 +2672,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** preserve explicit model allow-lists ([d4a3d73](https://github.com/salesforce/sf-pi/commit/d4a3d7348f98c39182a34387e7dec75ce59a6e68)), closes [#163](https://github.com/salesforce/sf-pi/issues/163)
+* **sf-llm-gateway:** preserve explicit model allow-lists ([d4a3d73](https://github.com/salesforce/sf-pi/commit/d4a3d7348f98c39182a34387e7dec75ce59a6e68)), closes [#163](https://github.com/salesforce/sf-pi/issues/163)
 
 ## [0.101.0](https://github.com/salesforce/sf-pi/compare/v0.100.0...v0.101.0) (2026-05-18)
 
@@ -2948,7 +2906,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** disable per-tool eager_input_streaming for Haiku 4.5 ([62f0f04](https://github.com/salesforce/sf-pi/commit/62f0f04aef3f79e88c57e9b403907603e9a0db7d)), closes [#166](https://github.com/salesforce/sf-pi/issues/166)
+* **sf-llm-gateway:** disable per-tool eager_input_streaming for Haiku 4.5 ([62f0f04](https://github.com/salesforce/sf-pi/commit/62f0f04aef3f79e88c57e9b403907603e9a0db7d)), closes [#166](https://github.com/salesforce/sf-pi/issues/166)
 
 ## [0.77.0](https://github.com/salesforce/sf-pi/compare/v0.76.1...v0.77.0) (2026-05-17)
 
@@ -3062,7 +3020,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** track gateway effort/tools validator changes ([75bd878](https://github.com/salesforce/sf-pi/commit/75bd87888bc4f3387857eba401189ce3fc4d7995))
+* **sf-llm-gateway:** track gateway effort/tools validator changes ([75bd878](https://github.com/salesforce/sf-pi/commit/75bd87888bc4f3387857eba401189ce3fc4d7995))
 
 ## [0.72.0](https://github.com/salesforce/sf-pi/compare/v0.71.1...v0.72.0) (2026-05-13)
 
@@ -3513,7 +3471,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Features
 
-* **panels:** drift migrations \u2014 sf-lsp, sf-llm-gateway-internal, sf-welcome ([e2bd0e4](https://github.com/salesforce/sf-pi/commit/e2bd0e467d3e8da7cfa3bb2383aa31d4e2ab92dc))
+* **panels:** drift migrations \u2014 sf-lsp, sf-llm-gateway, sf-welcome ([e2bd0e4](https://github.com/salesforce/sf-pi/commit/e2bd0e467d3e8da7cfa3bb2383aa31d4e2ab92dc))
 * **panels:** lint script + scaffold template + AGENTS.md contract ([9ac3e57](https://github.com/salesforce/sf-pi/commit/9ac3e57aa686ed64b152dbf8c154d57f8e8c98bd))
 * **panels:** shared lifecycle toggle action + sf-data360 popup output ([bdc313d](https://github.com/salesforce/sf-pi/commit/bdc313d1dce27c6b770ba5893c729f04f612eb22))
 * **ui:** four-color hierarchy + exit/quit keys for shared command panel ([6dbdeda](https://github.com/salesforce/sf-pi/commit/6dbdedab4716efbbdc5f28537708403aba9f7956))
@@ -3596,7 +3554,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** strengthen gateway status diagnostics ([a84055f](https://github.com/salesforce/sf-pi/commit/a84055f8751dda826c8a234b8edef178eb11f93f))
+* **sf-llm-gateway:** strengthen gateway status diagnostics ([a84055f](https://github.com/salesforce/sf-pi/commit/a84055f8751dda826c8a234b8edef178eb11f93f))
 
 ## [0.45.2](https://github.com/salesforce/sf-pi/compare/v0.45.1...v0.45.2) (2026-05-06)
 
@@ -3643,15 +3601,15 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Features
 
-* **sf-llm-gateway-internal:** route gpt-5 and gpt-5-mini through /responses ([#68](https://github.com/salesforce/sf-pi/issues/68)) ([a1b56f8](https://github.com/salesforce/sf-pi/commit/a1b56f857059a38c4d875765413efad9a9588814))
-* **sf-llm-gateway-internal:** route gpt-5.5 through OpenAI Responses API ([#66](https://github.com/salesforce/sf-pi/issues/66)) ([28714dd](https://github.com/salesforce/sf-pi/commit/28714dd7bff2fe22491e3b8937e61d7c2b0bcbaa))
+* **sf-llm-gateway:** route gpt-5 and gpt-5-mini through /responses ([#68](https://github.com/salesforce/sf-pi/issues/68)) ([a1b56f8](https://github.com/salesforce/sf-pi/commit/a1b56f857059a38c4d875765413efad9a9588814))
+* **sf-llm-gateway:** route a discovered model through the Responses API ([#66](https://github.com/salesforce/sf-pi/issues/66)) ([28714dd](https://github.com/salesforce/sf-pi/commit/28714dd7bff2fe22491e3b8937e61d7c2b0bcbaa))
 
 ## [0.42.0](https://github.com/salesforce/sf-pi/compare/v0.41.4...v0.42.0) (2026-05-05)
 
 
 ### Features
 
-* **sf-llm-gateway-internal:** daily activity, token counter, SSO onboarding, drift detection ([#63](https://github.com/salesforce/sf-pi/issues/63)) ([9577031](https://github.com/salesforce/sf-pi/commit/9577031c83f4ad472dc40a06b5b141c27e2137f5))
+* **sf-llm-gateway:** daily activity, token counter, SSO onboarding, drift detection ([#63](https://github.com/salesforce/sf-pi/issues/63)) ([9577031](https://github.com/salesforce/sf-pi/commit/9577031c83f4ad472dc40a06b5b141c27e2137f5))
 
 ## [0.41.4](https://github.com/salesforce/sf-pi/compare/v0.41.3...v0.41.4) (2026-05-05)
 
@@ -3673,7 +3631,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** simplify gateway setup recovery ([e4ea963](https://github.com/salesforce/sf-pi/commit/e4ea963d6fb7b62d6eef6f4b851b82e72a310320))
+* **sf-llm-gateway:** simplify gateway setup recovery ([e4ea963](https://github.com/salesforce/sf-pi/commit/e4ea963d6fb7b62d6eef6f4b851b82e72a310320))
 
 ## [0.41.1](https://github.com/salesforce/sf-pi/compare/v0.41.0...v0.41.1) (2026-05-05)
 
@@ -3692,7 +3650,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** handle bedrock gateway root routing ([0559c95](https://github.com/salesforce/sf-pi/commit/0559c956d842726d0a354e0a1d49068c5ae22260))
+* **sf-llm-gateway:** handle deployment-specific gateway root routing ([0559c95](https://github.com/salesforce/sf-pi/commit/0559c956d842726d0a354e0a1d49068c5ae22260))
 
 ## [0.40.0](https://github.com/salesforce/sf-pi/compare/v0.39.0...v0.40.0) (2026-05-05)
 
@@ -3784,7 +3742,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** make gpt-5.5 agentic-safe ([abf7dc0](https://github.com/salesforce/sf-pi/commit/abf7dc054307e74dce77d74d9e0c1662d186936b))
+* **sf-llm-gateway:** harden a discovered model for agentic use ([abf7dc0](https://github.com/salesforce/sf-pi/commit/abf7dc054307e74dce77d74d9e0c1662d186936b))
 
 ## [0.33.0](https://github.com/salesforce/sf-pi/compare/v0.32.0...v0.33.0) (2026-05-03)
 
@@ -3988,7 +3946,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** route Claude through unified dispatcher ([3b00948](https://github.com/salesforce/sf-pi/commit/3b00948597a3c7a29020486746dad1727cb667de))
+* **sf-llm-gateway:** route Claude through unified dispatcher ([3b00948](https://github.com/salesforce/sf-pi/commit/3b00948597a3c7a29020486746dad1727cb667de))
 
 ## [0.21.0](https://github.com/salesforce/sf-pi/compare/v0.20.2...v0.21.0) (2026-05-01)
 
@@ -3996,7 +3954,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 ### Features
 
 * **sf-devbar:** instant thinking-badge repaint on thinking_level_select (pi &gt;= 0.71) ([04a5f36](https://github.com/salesforce/sf-pi/commit/04a5f36b844d5d114eb788e76320159ec46d2b17))
-* **sf-llm-gateway-internal:** unify to one /login row with paste-token flow ([2c89661](https://github.com/salesforce/sf-pi/commit/2c896613d6bf2841739df3ae7746a7864480de5a))
+* **sf-llm-gateway:** unify to one /login row with paste-token flow ([2c89661](https://github.com/salesforce/sf-pi/commit/2c896613d6bf2841739df3ae7746a7864480de5a))
 
 ## [0.20.2](https://github.com/salesforce/sf-pi/compare/v0.20.1...v0.20.2) (2026-04-30)
 
@@ -4114,19 +4072,19 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Features
 
-* **sf-llm-gateway-internal:** surface retry state + guidance footer ([#39](https://github.com/salesforce/sf-pi/issues/39)) ([#48](https://github.com/salesforce/sf-pi/issues/48)) ([c63fec2](https://github.com/salesforce/sf-pi/commit/c63fec2d53c923fcb85313c5d7e3993d22867e48))
+* **sf-llm-gateway:** surface retry state + guidance footer ([#39](https://github.com/salesforce/sf-pi/issues/39)) ([#48](https://github.com/salesforce/sf-pi/issues/48)) ([c63fec2](https://github.com/salesforce/sf-pi/commit/c63fec2d53c923fcb85313c5d7e3993d22867e48))
 
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** reduce Opus 4.7 api_error 500s ([#39](https://github.com/salesforce/sf-pi/issues/39)) ([#46](https://github.com/salesforce/sf-pi/issues/46)) ([855e350](https://github.com/salesforce/sf-pi/commit/855e3503c8cf462e1aef960f52a0fc8ef8493097))
+* **sf-llm-gateway:** reduce Opus 4.7 api_error 500s ([#39](https://github.com/salesforce/sf-pi/issues/39)) ([#46](https://github.com/salesforce/sf-pi/issues/46)) ([855e350](https://github.com/salesforce/sf-pi/commit/855e3503c8cf462e1aef960f52a0fc8ef8493097))
 
 ## [0.11.2](https://github.com/salesforce/sf-pi/compare/v0.11.1...v0.11.2) (2026-04-27)
 
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** handle Anthropic stream errors ([bedec35](https://github.com/salesforce/sf-pi/commit/bedec3511cc357bad2047390023dc10cd03a6d15))
+* **sf-llm-gateway:** handle Anthropic stream errors ([bedec35](https://github.com/salesforce/sf-pi/commit/bedec3511cc357bad2047390023dc10cd03a6d15))
 ## [0.11.1](https://github.com/salesforce/sf-pi/compare/v0.11.0...v0.11.1) (2026-04-27)
 
 
@@ -4143,7 +4101,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Features
 
-* **sf-llm-gateway-internal:** default OpenAI-family requests to priority service tier ([#35](https://github.com/salesforce/sf-pi/issues/35)) ([c97ec41](https://github.com/salesforce/sf-pi/commit/c97ec41f1353aaa145f26b9b630535f7b2272736))
+* **sf-llm-gateway:** add a route-specific request-tier policy ([#35](https://github.com/salesforce/sf-pi/issues/35)) ([c97ec41](https://github.com/salesforce/sf-pi/commit/c97ec41f1353aaa145f26b9b630535f7b2272736))
 * **sf-plan:** subprocess-first default, Goals gate, rejection queue, friendly filenames ([#37](https://github.com/salesforce/sf-pi/issues/37)) ([36fbe5c](https://github.com/salesforce/sf-pi/commit/36fbe5cd83d4b3fa1756ef1383d9fd579163e304))
 
 ## [0.10.5](https://github.com/salesforce/sf-pi/compare/v0.10.4...v0.10.5) (2026-04-26)
@@ -4151,14 +4109,14 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** map pi thinking level to Opus 4.7 effort, default max_tokens to 64K ([90721ff](https://github.com/salesforce/sf-pi/commit/90721ff18083f2e6aa7ec5b2123c345cee799f58))
+* **sf-llm-gateway:** map pi thinking level to Opus 4.7 effort, default max_tokens to 64K ([90721ff](https://github.com/salesforce/sf-pi/commit/90721ff18083f2e6aa7ec5b2123c345cee799f58))
 
 ## [0.10.4](https://github.com/salesforce/sf-pi/compare/v0.10.3...v0.10.4) (2026-04-26)
 
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** seed bootstrap with an OpenAI-compat model ([dfa80e2](https://github.com/salesforce/sf-pi/commit/dfa80e275d35a4dfabda566473794fdeb75f2c57))
+* **sf-llm-gateway:** seed bootstrap with an OpenAI-compat model ([dfa80e2](https://github.com/salesforce/sf-pi/commit/dfa80e275d35a4dfabda566473794fdeb75f2c57))
 
 ## [0.10.3](https://github.com/salesforce/sf-pi/compare/v0.10.2...v0.10.3) (2026-04-26)
 
@@ -4166,21 +4124,21 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 ### Bug Fixes
 
 * **sf-devbar:** show rainbow gateway badge for Anthropic-native provider ([7d28fd8](https://github.com/salesforce/sf-pi/commit/7d28fd8a0d233f3709a5a3b3a130692a9f9b195b))
-* **sf-llm-gateway-internal:** scope enabledModels to both gateway providers ([a37b2b4](https://github.com/salesforce/sf-pi/commit/a37b2b4c85ebb7d946c09f6ccb558b82861194da))
+* **sf-llm-gateway:** scope enabledModels to both gateway providers ([a37b2b4](https://github.com/salesforce/sf-pi/commit/a37b2b4c85ebb7d946c09f6ccb558b82861194da))
 
 ## [0.10.2](https://github.com/salesforce/sf-pi/compare/v0.10.1...v0.10.2) (2026-04-26)
 
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** route Claude natively + max Opus 4.7 thinking ([#28](https://github.com/salesforce/sf-pi/issues/28)) ([97ce346](https://github.com/salesforce/sf-pi/commit/97ce346cbf7b26c96ded17e354de29dded445f07))
+* **sf-llm-gateway:** route Claude natively + max Opus 4.7 thinking ([#28](https://github.com/salesforce/sf-pi/issues/28)) ([97ce346](https://github.com/salesforce/sf-pi/commit/97ce346cbf7b26c96ded17e354de29dded445f07))
 
 ## [0.10.1](https://github.com/salesforce/sf-pi/compare/v0.10.0...v0.10.1) (2026-04-25)
 
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** route chat through v1 endpoint ([5a58531](https://github.com/salesforce/sf-pi/commit/5a585314ff0dee543815d3ed2f8b0a182ee00546))
+* **sf-llm-gateway:** route chat through v1 endpoint ([5a58531](https://github.com/salesforce/sf-pi/commit/5a585314ff0dee543815d3ed2f8b0a182ee00546))
 
 ## [0.10.0](https://github.com/salesforce/sf-pi/compare/v0.9.0...v0.10.0) (2026-04-25)
 
@@ -4210,12 +4168,12 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
   is a devDependency but the `prepare` lifecycle still runs. Contributor
   workflows are unaffected — a normal `npm install` still installs husky
   and wires up the git hooks.
-* **sf-llm-gateway-internal:** seed the bootstrap model catalog with an
+* **sf-llm-gateway:** seed the bootstrap model catalog with an
   OpenAI-compat model (`gpt-5`) alongside the Claude defaults. The
   bootstrap is registered synchronously before Pi resolves `enabledModels`
   at startup; previously it contained only Claude models, leaving the
   OpenAI-compat provider registered with zero models and triggering
-  `Warning: No models match pattern "sf-llm-gateway-internal/*"` on every
+  `Warning: No models match pattern "sf-llm-gateway/*"` on every
   launch until async discovery filled the catalog.
 
 ### Features
@@ -4269,7 +4227,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** arm choice normalizer per request ([ea52835](https://github.com/salesforce/sf-pi/commit/ea528357c3fe46367c5ee3187877a4360b53fcda))
+* **sf-llm-gateway:** arm choice normalizer per request ([ea52835](https://github.com/salesforce/sf-pi/commit/ea528357c3fe46367c5ee3187877a4360b53fcda))
 
 ## [0.8.0](https://github.com/salesforce/sf-pi/compare/v0.7.0...v0.8.0) (2026-04-25)
 
@@ -4281,7 +4239,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
-* **sf-llm-gateway-internal:** normalize streamed choice indexes ([fe8eab9](https://github.com/salesforce/sf-pi/commit/fe8eab9820ac24d1e3635bb09c55f2509194e8f5))
+* **sf-llm-gateway:** normalize streamed choice indexes ([fe8eab9](https://github.com/salesforce/sf-pi/commit/fe8eab9820ac24d1e3635bb09c55f2509194e8f5))
 
 ## [0.7.0](https://github.com/salesforce/sf-pi/compare/v0.6.0...v0.7.0) (2026-04-25)
 
@@ -4324,7 +4282,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 ### Features
 
 * **sf-agentscript-assist:** in-process Agent Script authoring companion ([#15](https://github.com/salesforce/sf-pi/issues/15)) ([4b4cc5c](https://github.com/salesforce/sf-pi/commit/4b4cc5c02011cf8a047f491791991fb3e0f638a9))
-* **sf-llm-gateway-internal:** opt-in raw fetch wire trace ([#16](https://github.com/salesforce/sf-pi/issues/16)) ([90e109c](https://github.com/salesforce/sf-pi/commit/90e109c4a3c89a27376a83959d7ac9325c568fcb))
+* **sf-llm-gateway:** opt-in raw fetch wire trace ([#16](https://github.com/salesforce/sf-pi/issues/16)) ([90e109c](https://github.com/salesforce/sf-pi/commit/90e109c4a3c89a27376a83959d7ac9325c568fcb))
 
 
 ### Security
@@ -4393,7 +4351,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
   subcommands, and native pi package-filter integration.
 - Real-time Salesforce LSP diagnostics via `sf-lsp`.
 - Slack integration via `sf-slack` (search, threads, channels, users, files, canvases).
-- Salesforce LLM Gateway provider (`sf-llm-gateway-internal`, internal-only).
+- Optional Salesforce LLM Gateway provider (`sf-llm-gateway`).
 - `sf-devbar`, `sf-welcome`, `sf-ohana-spinner`, `sf-skills-hud` UI extensions.
 - Generated catalog (`catalog/index.json`, `catalog/registry.ts`) derived from
   per-extension `manifest.json`.

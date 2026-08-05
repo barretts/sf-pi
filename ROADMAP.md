@@ -21,7 +21,7 @@ design proposal and — ideally — a PR.
 - [x] `slack_send` with human-in-the-loop confirm + audit trail
 - [x] Scope probing + dynamic tool gating for `sf-slack`
 - [x] Unified one-provider gateway design with OpenAI-compat + native
-      Anthropic transport routing in `sf-llm-gateway-internal`
+      Anthropic transport routing in `sf-llm-gateway`
 - [x] pi `>=0.73.0` runtime floor with per-model thinking/baseUrl support
 - [x] Auto-generated catalog, command reference, troubleshooting index, and
       folder layout (drift-proof docs via `npm run generate-catalog`)
@@ -59,7 +59,7 @@ design proposal and — ideally — a PR.
       where resolver and navigation parity are proven; - compare the advisory SF Herdr planning tool with a compact Pi skill and
       retain the extension only if deterministic plans or managed preferences
       demonstrate product leverage.
-- [ ] Generic OpenAI-compatible gateway alternative to `sf-llm-gateway-internal`
+- [ ] Generic OpenAI-compatible gateway alternative to `sf-llm-gateway`
       that works for external users
 - [ ] Per-extension telemetry opt-in proposal, if ever needed, with explicit privacy review
 - [ ] Docs site (Astro Starlight, deployed via GitHub Pages)

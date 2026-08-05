@@ -81,9 +81,9 @@ describe("parseCommandArgs", () => {
   });
 
   it("parses 'disable' with a target", () => {
-    const result = parseCommandArgs("disable sf-llm-gateway-internal");
+    const result = parseCommandArgs("disable sf-llm-gateway");
     expect(result.subcommand).toBe("disable");
-    expect(result.target).toBe("sf-llm-gateway-internal");
+    expect(result.target).toBe("sf-llm-gateway");
   });
 
   it("parses 'enable' without target (target is undefined)", () => {

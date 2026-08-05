@@ -1,0 +1,376 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/**
+ * Tests for gateway config resolution.
+ *
+ * Covers: normalizeBaseUrl plus the pure enabledModels helpers that control
+ * additive vs exclusive gateway scope behavior.
+ *
+ * These are the most breakable helpers — they determine whether the provider
+ * gets registered and which settings patterns are written.
+ */
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { describe, it, expect } from "vitest";
+import {
+  API_KEY_ENV,
+  BASE_URL_ENV,
+  PROVIDER_NAME,
+  getGatewayConfig,
+  normalizeBaseUrl,
+  projectGatewayConfigPath,
+  resolveSavedExclusiveScopeStatus,
+  writeGatewaySavedConfig,
+} from "../lib/config.ts";
+import {
+  applyGatewayModelScope,
+  ensureEnabledModelPattern,
+  isExclusiveEnabledModelPattern,
+  normalizeLegacyGatewayEnabledModels,
+  removeEnabledModelPattern,
+  restoreEnabledModelsSnapshot,
+  shouldCaptureExclusiveScopeSnapshot,
+  snapshotEnabledModelsForExclusiveScope,
+} from "../index.ts";
+import { normalizeLegacyGatewayIdentitySettings } from "../lib/pi-settings.ts";
+
+describe("canonical gateway identity", () => {
+  it("uses the public provider id", () => {
+    expect(PROVIDER_NAME).toBe("sf-llm-gateway");
+  });
+
+  it("repairs stale gateway suffixes without retaining an exact legacy id", () => {
+    const settings: Record<string, unknown> = {
+      defaultProvider: "sf-llm-gateway-retired",
+      defaultModel: "sf-llm-gateway-retired/example-model",
+      enabledModels: ["sf-llm-gateway-retired/*", "openai/*"],
+    };
+
+    expect(normalizeLegacyGatewayIdentitySettings(settings)).toBe(true);
+    expect(settings).toMatchObject({
+      defaultProvider: "sf-llm-gateway",
+      defaultModel: "sf-llm-gateway/example-model",
+      enabledModels: ["sf-llm-gateway/*", "openai/*"],
+    });
+  });
+});
+
+// -------------------------------------------------------------------------------------------------
+// normalizeBaseUrl
+// -------------------------------------------------------------------------------------------------
+
+describe("normalizeBaseUrl", () => {
+  it("returns undefined for undefined input", () => {
+    expect(normalizeBaseUrl(undefined)).toBeUndefined();
+  });
+
+  it("returns undefined for empty string", () => {
+    expect(normalizeBaseUrl("")).toBeUndefined();
+  });
+
+  it("returns undefined for whitespace-only string", () => {
+    expect(normalizeBaseUrl("   ")).toBeUndefined();
+  });
+
+  it("strips trailing slash from https URL", () => {
+    expect(normalizeBaseUrl("https://example.com/")).toBe("https://example.com");
+  });
+
+  it("keeps arbitrary path segments intact", () => {
+    expect(normalizeBaseUrl("https://gateway.example.com/team-proxy")).toBe(
+      "https://gateway.example.com/team-proxy",
+    );
+  });
+
+  it("strips the public /v1 route suffix", () => {
+    expect(normalizeBaseUrl("https://gateway.example.com/v1")).toBe("https://gateway.example.com");
+  });
+
+  it("normalizes http URL", () => {
+    expect(normalizeBaseUrl("http://localhost:8080")).toBe("http://localhost:8080");
+  });
+
+  it("returns undefined for non-http protocols", () => {
+    expect(normalizeBaseUrl("ftp://example.com")).toBeUndefined();
+  });
+
+  it("rejects URL userinfo so credentials cannot enter non-secret config", () => {
+    expect(normalizeBaseUrl("https://user:private@gateway.example.com")).toBeUndefined();
+  });
+
+  it("returns undefined for invalid URL", () => {
+    expect(normalizeBaseUrl("not-a-url")).toBeUndefined();
+  });
+
+  it("trims whitespace before parsing", () => {
+    expect(normalizeBaseUrl("  https://example.com  ")).toBe("https://example.com");
+  });
+
+  it("preserves port numbers", () => {
+    expect(normalizeBaseUrl("https://gateway.local:4443")).toBe("https://gateway.local:4443");
+  });
+});
+
+// -------------------------------------------------------------------------------------------------
+// getGatewayConfig precedence
+// -------------------------------------------------------------------------------------------------
+
+describe("getGatewayConfig precedence", () => {
+  it("resolves the public-safe environment URL without exposing credential values", () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "sf-pi-gateway-config-"));
+    const previousBaseUrl = process.env[BASE_URL_ENV];
+    const previousApiKey = process.env[API_KEY_ENV];
+
+    try {
+      process.env[BASE_URL_ENV] = "https://env.example.com/v1";
+      process.env[API_KEY_ENV] = "env-key";
+      writeGatewaySavedConfig(projectGatewayConfigPath(cwd), { baseUrl: "" });
+
+      const config = getGatewayConfig(cwd);
+
+      expect(config.baseUrl).toBe("https://env.example.com");
+      expect(config.baseUrlSource).toBe("env");
+      expect(config).not.toHaveProperty("apiKey");
+      expect(JSON.stringify(config)).not.toContain("env-key");
+    } finally {
+      if (previousBaseUrl === undefined) delete process.env[BASE_URL_ENV];
+      else process.env[BASE_URL_ENV] = previousBaseUrl;
+      if (previousApiKey === undefined) delete process.env[API_KEY_ENV];
+      else process.env[API_KEY_ENV] = previousApiKey;
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("prefers the saved URL over the environment", () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "sf-pi-gateway-config-"));
+    const previousBaseUrl = process.env[BASE_URL_ENV];
+    const previousApiKey = process.env[API_KEY_ENV];
+
+    try {
+      process.env[BASE_URL_ENV] = "https://stale-env.example.com/v1";
+      process.env[API_KEY_ENV] = "stale-env-key";
+      writeGatewaySavedConfig(projectGatewayConfigPath(cwd), {
+        baseUrl: "https://saved.example.com/v1",
+      });
+
+      const config = getGatewayConfig(cwd);
+
+      expect(config.baseUrl).toBe("https://saved.example.com");
+      expect(config.baseUrlSource).toBe("saved");
+      expect(config).not.toHaveProperty("apiKey");
+      expect(JSON.stringify(config)).not.toContain("stale-env-key");
+    } finally {
+      if (previousBaseUrl === undefined) delete process.env[BASE_URL_ENV];
+      else process.env[BASE_URL_ENV] = previousBaseUrl;
+      if (previousApiKey === undefined) delete process.env[API_KEY_ENV];
+      else process.env[API_KEY_ENV] = previousApiKey;
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+// -------------------------------------------------------------------------------------------------
+// ensureEnabledModelPattern
+// -------------------------------------------------------------------------------------------------
+
+describe("ensureEnabledModelPattern", () => {
+  const PATTERN = "sf-llm-gateway/*";
+
+  it("adds the gateway pattern to empty array", () => {
+    expect(ensureEnabledModelPattern([])).toEqual([PATTERN]);
+  });
+
+  it("adds the gateway pattern when value is undefined", () => {
+    expect(ensureEnabledModelPattern(undefined)).toContain(PATTERN);
+  });
+
+  it("adds the gateway pattern when value is not an array", () => {
+    expect(ensureEnabledModelPattern("not-an-array")).toContain(PATTERN);
+  });
+
+  it("does not duplicate when the pattern is already present", () => {
+    const result = ensureEnabledModelPattern([PATTERN, "openai/*"]);
+    expect(result.filter((s) => s === PATTERN).length).toBe(1);
+  });
+
+  it("preserves non-gateway patterns", () => {
+    const result = ensureEnabledModelPattern(["anthropic/*", "openai/*"]);
+    expect(result).toContain("anthropic/*");
+    expect(result).toContain("openai/*");
+    expect(result).toContain(PATTERN);
+  });
+
+  it("puts the gateway pattern first", () => {
+    const result = ensureEnabledModelPattern(["openai/*"]);
+    expect(result[0]).toBe(PATTERN);
+  });
+});
+
+// -------------------------------------------------------------------------------------------------
+// removeEnabledModelPattern
+// -------------------------------------------------------------------------------------------------
+
+describe("removeEnabledModelPattern", () => {
+  const PATTERN = "sf-llm-gateway/*";
+
+  it("removes the gateway pattern", () => {
+    const result = removeEnabledModelPattern([PATTERN, "openai/*"]);
+    expect(result).not.toContain(PATTERN);
+    expect(result).toContain("openai/*");
+  });
+
+  it("leaves obsolete suffixed patterns for startup identity repair", () => {
+    const result = removeEnabledModelPattern([PATTERN, "sf-llm-gateway-retired/*", "openai/*"]);
+    expect(result).toEqual(["sf-llm-gateway-retired/*", "openai/*"]);
+  });
+
+  it("returns empty array when only the gateway pattern was present", () => {
+    expect(removeEnabledModelPattern([PATTERN])).toEqual([]);
+  });
+
+  it("handles undefined input", () => {
+    expect(removeEnabledModelPattern(undefined)).toEqual([]);
+  });
+
+  it("handles empty array", () => {
+    expect(removeEnabledModelPattern([])).toEqual([]);
+  });
+
+  it("is a no-op when no gateway pattern is present", () => {
+    expect(removeEnabledModelPattern(["openai/*"])).toEqual(["openai/*"]);
+  });
+});
+
+describe("normalizeLegacyGatewayEnabledModels", () => {
+  const PATTERN = "sf-llm-gateway/*";
+
+  it("keeps explicit current-provider model entries", () => {
+    expect(
+      normalizeLegacyGatewayEnabledModels([
+        "sf-llm-gateway/example-native-message-model",
+        "sf-llm-gateway/example-model",
+      ]),
+    ).toEqual(["sf-llm-gateway/example-native-message-model", "sf-llm-gateway/example-model"]);
+  });
+
+  it("collapses obsolete suffixed provider patterns to the canonical wildcard", () => {
+    expect(normalizeLegacyGatewayEnabledModels(["sf-llm-gateway-retired/*", "openai/*"])).toEqual([
+      PATTERN,
+      "openai/*",
+    ]);
+  });
+
+  it("preserves current-provider entries alongside other providers", () => {
+    expect(
+      normalizeLegacyGatewayEnabledModels([
+        "sf-llm-gateway/example-model",
+        "openai/*",
+        "anthropic/*",
+      ]),
+    ).toEqual(["sf-llm-gateway/example-model", "openai/*", "anthropic/*"]);
+  });
+
+  it("does not prune explicit model entries when the wildcard is present", () => {
+    expect(
+      normalizeLegacyGatewayEnabledModels([PATTERN, "sf-llm-gateway/example-model", "openai/*"]),
+    ).toEqual([PATTERN, "sf-llm-gateway/example-model", "openai/*"]);
+  });
+
+  it("leaves non-gateway scopes unchanged", () => {
+    expect(normalizeLegacyGatewayEnabledModels(["openai/*"])).toEqual(["openai/*"]);
+  });
+
+  it("returns undefined when enabledModels is not an array", () => {
+    expect(normalizeLegacyGatewayEnabledModels(undefined)).toBeUndefined();
+  });
+});
+
+// -------------------------------------------------------------------------------------------------
+// Exclusive scope helpers
+// -------------------------------------------------------------------------------------------------
+
+describe("isExclusiveEnabledModelPattern", () => {
+  it("matches when only the gateway pattern is present", () => {
+    expect(isExclusiveEnabledModelPattern(["sf-llm-gateway/*"])).toBe(true);
+    expect(isExclusiveEnabledModelPattern(["sf-llm-gateway/*", "openai/*"])).toBe(false);
+    expect(isExclusiveEnabledModelPattern([])).toBe(false);
+    expect(isExclusiveEnabledModelPattern(undefined)).toBe(false);
+  });
+});
+
+describe("snapshotEnabledModelsForExclusiveScope", () => {
+  it("captures the non-gateway scope for later restore", () => {
+    expect(snapshotEnabledModelsForExclusiveScope(["sf-llm-gateway/*", "openai/*"])).toEqual([
+      "openai/*",
+    ]);
+  });
+
+  it("returns null when no explicit enabledModels were set", () => {
+    expect(snapshotEnabledModelsForExclusiveScope(undefined)).toBeNull();
+  });
+});
+
+describe("restoreEnabledModelsSnapshot", () => {
+  it("restores a saved enabledModels array", () => {
+    expect(restoreEnabledModelsSnapshot(["openai/*"])).toEqual(["openai/*"]);
+  });
+
+  it("returns undefined when the original scope was unset", () => {
+    expect(restoreEnabledModelsSnapshot(null)).toBeUndefined();
+  });
+});
+
+describe("applyGatewayModelScope", () => {
+  it("prepends the gateway pattern in additive mode", () => {
+    expect(applyGatewayModelScope(["openai/*"], false)).toEqual(["sf-llm-gateway/*", "openai/*"]);
+  });
+
+  it("replaces the scope entirely in exclusive mode", () => {
+    expect(applyGatewayModelScope(["openai/*"], true)).toEqual(["sf-llm-gateway/*"]);
+  });
+});
+
+describe("shouldCaptureExclusiveScopeSnapshot", () => {
+  it("captures when no snapshot exists yet", () => {
+    expect(shouldCaptureExclusiveScopeSnapshot(["openai/*"], undefined)).toBe(true);
+  });
+
+  it("does not overwrite an existing snapshot while already in exclusive scope", () => {
+    expect(shouldCaptureExclusiveScopeSnapshot(["sf-llm-gateway/*"], ["openai/*"])).toBe(false);
+  });
+});
+
+// -------------------------------------------------------------------------------------------------
+// Saved scope status resolution
+// -------------------------------------------------------------------------------------------------
+
+describe("resolveSavedExclusiveScopeStatus", () => {
+  it("prefers an explicit project saved mode", () => {
+    expect(
+      resolveSavedExclusiveScopeStatus({ exclusiveScope: true }, { exclusiveScope: false }),
+    ).toEqual({
+      project: "exclusive",
+      global: "additive",
+      effective: "exclusive",
+      effectiveSource: "project",
+    });
+  });
+
+  it("inherits from global when the project has no explicit mode", () => {
+    expect(resolveSavedExclusiveScopeStatus({}, { exclusiveScope: true })).toEqual({
+      project: "inherit",
+      global: "exclusive",
+      effective: "exclusive",
+      effectiveSource: "global",
+    });
+  });
+
+  it("falls back to additive defaults when nothing is saved", () => {
+    expect(resolveSavedExclusiveScopeStatus({}, {})).toEqual({
+      project: "inherit",
+      global: "inherit",
+      effective: "additive",
+      effectiveSource: "default",
+    });
+  });
+});

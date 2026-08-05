@@ -275,7 +275,7 @@ Keep it short. A good per-extension `AGENTS.md`:
 4. Lists explicit non-goals
 
 See `extensions/sf-slack/AGENTS.md` and
-`extensions/sf-llm-gateway-internal/AGENTS.md` as references.
+`extensions/sf-llm-gateway/AGENTS.md` as references.
 
 ### Per-extension `ROADMAP.md` (optional)
 

@@ -1,0 +1,44 @@
+{
+  "id": "sf-llm-gateway",
+  "name": "SF LLM Gateway",
+  "description": "Salesforce LLM Gateway provider with model discovery",
+  "category": "provider",
+  "maturity": "stable",
+  "defaultEnabled": true,
+  "configurable": true,
+  "commands": ["/sf-llm-gateway"],
+  "providers": ["sf-llm-gateway"],
+  "events": [
+    "session_start",
+    "turn_end",
+    "model_select",
+    "after_provider_response",
+    "session_shutdown"
+  ],
+  "docs": {
+    "summary": "Complete Pi Provider for the Salesforce LLM Gateway. Pi-owned credential persistence and model storage, authenticated dynamic discovery with offline cache restore, provider-neutral mixed-API dispatch, explicit refresh, diagnostics, and usage status.",
+    "primaryFiles": [
+      "index.ts",
+      "lib/provider.ts",
+      "lib/transport.ts",
+      "lib/models.ts",
+      "lib/model-resolution.ts",
+      "lib/stale-usage-refresh.ts",
+      "lib/config.ts",
+      "lib/config-panel.ts",
+      "lib/monthly-usage.ts",
+      "lib/doctor.ts"
+    ],
+    "stateFiles": [
+      "~/.pi/agent/auth.json (Pi-owned API-key credential + default non-secret URL)",
+      "<globalAgentDir>/sf-llm-gateway.json (non-secret settings)",
+      "<globalAgentDir>/sf-llm-gateway/* (monthly usage and diagnostic state)"
+    ],
+    "safety": [
+      "API-key input uses SF Pi's shared fixed-mask component and never enters Pi's visible stock prompt.",
+      "Pi alone persists/removes active credentials; setup and import paths write no secrets.",
+      "Extension config stores only non-secret settings; credentials remain Pi-owned.",
+      "Pi's settings.json is mutated through pi-settings.ts helpers with race-aware reads."
+    ]
+  }
+}

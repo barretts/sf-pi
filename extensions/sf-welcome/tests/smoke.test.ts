@@ -325,7 +325,7 @@ describe("sf-welcome", () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const baseData = {
       modelName: "Claude Sonnet 4 Gateway",
-      providerName: "sf-llm-gateway-internal",
+      providerName: "sf-llm-gateway",
       loadedCounts: { extensions: 3, skills: 1, promptTemplates: 0 },
       recentSessions: [],
       extensionHealth: [],
@@ -367,7 +367,7 @@ describe("sf-welcome", () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const data = {
       modelName: "Claude Sonnet 4 Gateway",
-      providerName: "sf-llm-gateway-internal",
+      providerName: "sf-llm-gateway",
       loadedCounts: { extensions: 3, skills: 1, promptTemplates: 0 },
       recentSessions: [],
       extensionHealth: [],
@@ -421,7 +421,7 @@ describe("sf-welcome", () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const data = {
       modelName: "Claude Sonnet 4 Gateway",
-      providerName: "sf-llm-gateway-internal",
+      providerName: "sf-llm-gateway",
       loadedCounts: { extensions: 3, skills: 1, promptTemplates: 0 },
       recentSessions: [],
       extensionHealth: [],
@@ -547,7 +547,7 @@ describe("sf-welcome", () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const data = {
       modelName: "Claude Opus 4.7",
-      providerName: "sf-llm-gateway-internal",
+      providerName: "sf-llm-gateway",
       loadedCounts: { extensions: 8, skills: 38, promptTemplates: 1 },
       recentSessions: [],
       extensionHealth: [],
@@ -590,7 +590,7 @@ describe("sf-welcome", () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const data = {
       modelName: "Claude Opus 4.7",
-      providerName: "sf-llm-gateway-internal",
+      providerName: "sf-llm-gateway",
       loadedCounts: { extensions: 8, skills: 38, promptTemplates: 1 },
       recentSessions: [],
       extensionHealth: [],
@@ -633,7 +633,7 @@ describe("sf-welcome", () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const data = {
       modelName: "Claude Opus 4.7",
-      providerName: "sf-llm-gateway-internal",
+      providerName: "sf-llm-gateway",
       loadedCounts: { extensions: 8, skills: 38, promptTemplates: 1 },
       recentSessions: [],
       extensionHealth: [],
@@ -679,7 +679,7 @@ describe("sf-welcome", () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const data = {
       modelName: "Claude Opus 4.6",
-      providerName: "sf-llm-gateway-internal",
+      providerName: "sf-llm-gateway",
       loadedCounts: { extensions: 8, skills: 38, promptTemplates: 1 },
       recentSessions: [],
       extensionHealth: [],
@@ -713,7 +713,7 @@ describe("sf-welcome", () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const data = {
       modelName: "Claude Opus 4.6",
-      providerName: "sf-llm-gateway-internal",
+      providerName: "sf-llm-gateway",
       loadedCounts: { extensions: 9, skills: 38, promptTemplates: 1 },
       recentSessions: [],
       extensionHealth: [],
@@ -741,7 +741,7 @@ describe("sf-welcome", () => {
     try {
       const data = {
         modelName: "Claude Opus 4.6",
-        providerName: "sf-llm-gateway-internal",
+        providerName: "sf-llm-gateway",
         loadedCounts: { extensions: 9, skills: 38, promptTemplates: 1 },
         recentSessions: [],
         extensionHealth: [],

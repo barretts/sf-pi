@@ -20,7 +20,7 @@ export const extensionSidebarItems = [
   { text: "Herdr", link: "/extensions/sf-herdr" },
   { text: "Feedback", link: "/extensions/sf-feedback" },
   { text: "Slack", link: "/extensions/sf-slack" },
-  { text: "LLM Gateway", link: "/extensions/sf-llm-gateway-internal" },
+  { text: "LLM Gateway", link: "/extensions/sf-llm-gateway" },
   { text: "Ohana Spinner", link: "/extensions/sf-ohana-spinner" },
   { text: "Manager", link: "/extensions/sf-pi-manager" },
   { text: "Skills", link: "/extensions/sf-skills" },

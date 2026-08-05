@@ -213,7 +213,7 @@ extensions/sf-devbar/
 
 - **shared Salesforce environment runtime** — reads `getCachedSfEnvironment()` from the
   shared runtime cache. Zero duplicate CLI calls.
-- **sf-llm-gateway-internal** — detected by provider name (`sf-llm-gateway-internal`)
+- **sf-llm-gateway** — detected by provider name (`sf-llm-gateway`)
   from `ctx.model.provider`. No import dependency, just a string match.
 
 ## Testing Strategy
@@ -245,10 +245,10 @@ compaction, Pi can know the context window while its percentage is explicitly
 unknown; DevBar shows `unknown` rather than a false `0%`. The percentage fills
 from Pi's public `ctx.getContextUsage().percent` after the next assistant turn.
 
-**Gateway badge color is wrong when using sf-llm-gateway-internal:**
-The gold badge triggers on `ctx.model.provider === "sf-llm-gateway-internal"`
+**Gateway badge color is wrong when using sf-llm-gateway:**
+The gold badge triggers on `ctx.model.provider === "sf-llm-gateway"`
 or the Anthropic-native provider. If your selected model is routed under
-one of those names in `/sf-llm-gateway-internal models`, the badge will
+one of those names in `/sf-llm-gateway models`, the badge will
 match.
 
 **`img:Nc` pill appears unexpectedly:**

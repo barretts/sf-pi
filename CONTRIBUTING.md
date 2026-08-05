@@ -250,7 +250,7 @@ Complex extensions (lots of rules, multiple write surfaces, non-obvious
 conventions) should also add an `AGENTS.md` at `extensions/<id>/AGENTS.md`
 with a short file map and any editing rules. See
 [`extensions/sf-slack/AGENTS.md`](./extensions/sf-slack/AGENTS.md) and
-[`extensions/sf-llm-gateway-internal/AGENTS.md`](./extensions/sf-llm-gateway-internal/AGENTS.md)
+[`extensions/sf-llm-gateway/AGENTS.md`](./extensions/sf-llm-gateway/AGENTS.md)
 for examples. Phased roadmaps live in the extension's own `ROADMAP.md`
 (see [`extensions/sf-skills/ROADMAP.md`](./extensions/sf-skills/ROADMAP.md)).
 
@@ -266,7 +266,7 @@ The `--category` must be one of:
   integrations like Slack, LSP diagnostics). These usually register slash
   commands and/or tools.
 - **`provider`** — LLM providers or auth integrations that plug into pi's
-  provider system (e.g. `sf-llm-gateway-internal`).
+  provider system (e.g. `sf-llm-gateway`).
 - **`ui`** — status bars, splashes, overlays, spinners. UI-only; never
   register tools that the LLM can call.
 

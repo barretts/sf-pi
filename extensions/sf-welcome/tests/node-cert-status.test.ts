@@ -4,8 +4,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { writeCaProbeState } from "../../sf-llm-gateway-internal/lib/ca-probe-state.ts";
-import { writeCaBundleFixerState } from "../../sf-llm-gateway-internal/lib/ca-bundle-fixer-state.ts";
+import { writeCaProbeState } from "../../sf-llm-gateway/lib/ca-probe-state.ts";
+import { writeCaBundleFixerState } from "../../sf-llm-gateway/lib/ca-bundle-fixer-state.ts";
 import {
   detectNodeCertStatus,
   extractNodeExtraCaCertsValues,

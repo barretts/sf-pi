@@ -114,8 +114,8 @@ describe("sf-pi-manager session_shutdown cleanup", () => {
   });
 });
 
-describe("sf-llm-gateway-internal session_shutdown cleanup", () => {
-  const source = readExtensionSource("sf-llm-gateway-internal");
+describe("sf-llm-gateway session_shutdown cleanup", () => {
+  const source = readExtensionSource("sf-llm-gateway");
 
   it("registers a session_shutdown handler", () => {
     expect(source).toMatch(/pi\.on\("session_shutdown",\s*async\s*\(_event,\s*ctx\)/);

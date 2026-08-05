@@ -102,3 +102,5 @@ or accidentally contradicted in extension READMEs.
 - [0097: Agent Script Eval Studio Is a Local-First EvalSpec Workspace](./0097-agent-script-eval-studio-local-first-workspace.md)
 - [0098: Agent Script Eval Uses Bounded SOQL Seed Profiles](./0098-agentscript-eval-soql-seed-profiles.md)
 - [0099: Agent Script Eval Supports Deterministic Turn Response Integrity](./0099-agentscript-turn-response-integrity-policy.md)
+- [0100: Public Gateway Client Excludes Deployment Routing](./0100-public-gateway-client-excludes-deployment-routing.md)
+- [0101: Canonical Gateway Identity Uses `sf-llm-gateway`](./0101-canonical-gateway-identity.md)

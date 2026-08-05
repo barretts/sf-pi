@@ -14,10 +14,10 @@ import { homedir } from "node:os";
 import {
   hasCaBundleFixApplied,
   readCaBundleFixerState,
-} from "../../sf-llm-gateway-internal/lib/ca-bundle-fixer-state.ts";
-import { buildCandidatePaths } from "../../sf-llm-gateway-internal/lib/ca-bundle-fixer.ts";
-import { getGatewayConfig } from "../../sf-llm-gateway-internal/lib/config.ts";
-import { readCaProbeState } from "../../sf-llm-gateway-internal/lib/ca-probe-state.ts";
+} from "../../sf-llm-gateway/lib/ca-bundle-fixer-state.ts";
+import { buildCandidatePaths } from "../../sf-llm-gateway/lib/ca-bundle-fixer.ts";
+import { getGatewayConfig } from "../../sf-llm-gateway/lib/config.ts";
+import { readCaProbeState } from "../../sf-llm-gateway/lib/ca-probe-state.ts";
 import type { NodeCertStatusInfo, NodeCertStatusSource } from "./types.ts";
 export { readCachedNodeCertStatus, writeCachedNodeCertStatus } from "./node-cert-cache.ts";
 

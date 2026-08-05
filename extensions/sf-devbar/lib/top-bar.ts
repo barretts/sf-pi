@@ -42,7 +42,7 @@ export type TopBarState = {
   modelName?: string;
   /** Per-language Salesforce LSP health snapshot. */
   lspHealth?: SfLspHealthSnapshot;
-  /** Model provider id, e.g. "sf-llm-gateway-internal" or "anthropic". */
+  /** Model provider id, e.g. "sf-llm-gateway" or "anthropic". */
   modelProvider?: string;
   /** Context window size in tokens, e.g. 1000000. */
   contextWindow?: number;
@@ -73,18 +73,8 @@ export type TopBarState = {
 // Constants
 // -------------------------------------------------------------------------------------------------
 
-/**
- * The unified sf-llm-gateway-internal provider. Since R1·Unify every model
- * (OpenAI-compat + Claude) is registered under this single id and gets the
- * same rainbow [SF LLM Gateway] badge. The retired
- * `sf-llm-gateway-internal-anthropic` id is still recognized so any
- * in-flight session that was opened against older sf-pi code keeps rendering
- * correctly until the one-shot settings migration runs.
- */
-const SF_GATEWAY_PROVIDERS = new Set<string>([
-  "sf-llm-gateway-internal",
-  "sf-llm-gateway-internal-anthropic",
-]);
+/** The canonical gateway provider receives the rainbow badge. */
+const SF_GATEWAY_PROVIDERS = new Set<string>(["sf-llm-gateway"]);
 
 function isGatewayProvider(provider: string | undefined): boolean {
   return provider !== undefined && SF_GATEWAY_PROVIDERS.has(provider);
@@ -369,7 +359,7 @@ function rainbowGradient(text: string, hexPalette: readonly string[]): string {
 /**
  * Strip gateway prefix and context window labels from a model name.
  *
- * The sf-llm-gateway-internal extension bakes "[SF LLM Gateway]" and
+ * The sf-llm-gateway extension bakes "[SF LLM Gateway]" and
  * context window labels like "[1M]" directly into model names
  * (e.g. "[SF LLM Gateway] Claude Opus 4.7 [1M] Global").
  * We render our own gateway badge and context size, so strip duplicates.

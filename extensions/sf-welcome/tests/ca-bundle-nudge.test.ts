@@ -46,7 +46,7 @@ function writeEnvelope(filePath: string, state: unknown): void {
 function enableGatewayExtension(): void {
   const settingsPath = path.join(tmpDir, "settings.json");
   writeFileSync(settingsPath, "{}", "utf8");
-  // The default for sf-llm-gateway-internal is "enabled when settings
+  // The default for sf-llm-gateway is "enabled when settings
   // doesn't list it as disabled". An empty settings.json suffices.
 }
 
@@ -96,7 +96,7 @@ describe("collectCaBundleNudge", () => {
         packages: [
           {
             source: "npm:sf-pi@latest",
-            extensions: ["!extensions/sf-llm-gateway-internal/index.ts"],
+            extensions: ["!extensions/sf-llm-gateway/index.ts"],
           },
         ],
       }),

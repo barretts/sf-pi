@@ -14,7 +14,7 @@ body:
     id: extension
     attributes:
       label: Affected extension or area
-      description: e.g. `sf-pi-manager`, `sf-slack`, `sf-llm-gateway-internal`, `lib/common`, CI
+      description: e.g. `sf-pi-manager`, `sf-slack`, `sf-llm-gateway`, `lib/common`, CI
       placeholder: sf-slack
     validations:
       required: true

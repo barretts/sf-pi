@@ -10,7 +10,7 @@ SF Pi now ships enough slash-command surfaces that discoverability is becoming a
 product problem. Some extensions have a compact Pi-native action panel, while
 others rely on text-only help, ad hoc setup wizards, or a bespoke full-screen
 manager overlay. Users should not need to memorize every subcommand under names
-like `/sf-llm-gateway-internal`, and troubleshooting flows such as doctor,
+like `/sf-llm-gateway`, and troubleshooting flows such as doctor,
 probe, refresh, and health checks should explain themselves before the user runs
 them.
 
@@ -20,7 +20,7 @@ The current baseline is mixed:
 | ------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `sf-lsp`                       | `/sf-lsp` opens a compact `DynamicBorder` + `SelectList` status/actions panel | This is the target pattern.                                                                |
 | `sf-pi-manager`                | `/sf-pi` opens a bespoke custom overlay with list/detail/config routing       | Powerful, but different from every other extension and more code to maintain.              |
-| `sf-llm-gateway-internal`      | Text status/help plus a custom setup/config flow                              | Too many subcommands; completions are incomplete and mostly lack descriptions.             |
+| `sf-llm-gateway`               | Text status/help plus a custom setup/config flow                              | Too many subcommands; completions are incomplete and mostly lack descriptions.             |
 | `sf-guardrail`                 | Text status/list/audit commands plus a config panel in the manager            | Needs a no-args action panel that groups status, rules, audit, forget, and preset install. |
 | `sf-slack`                     | Text status/help plus settings panel and many agent tools                     | Needs a no-args action panel for auth, refresh, settings, sent audit, and help.            |
 | `sf-agentscript`               | Minimal doctor/check text commands                                            | Needs a small status/actions panel.                                                        |

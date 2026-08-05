@@ -60,6 +60,6 @@ label "scope:sf-devbar"              "c5def5" "SF DevBar extension"
 label "scope:sf-welcome"             "c5def5" "SF Welcome splash extension"
 label "scope:sf-ohana-spinner"       "c5def5" "SF Ohana Spinner extension"
 label "scope:sf-skills"              "c5def5" "SF Skills extension"
-label "scope:sf-llm-gateway-internal" "c5def5" "SF LLM Gateway Internal extension"
+label "scope:sf-llm-gateway" "c5def5" "SF LLM Gateway extension"
 
 echo "done"

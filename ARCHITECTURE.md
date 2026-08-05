@@ -34,7 +34,7 @@ sf-pi/
 │   ├── sf-feedback/
 │   ├── sf-guardrail/
 │   ├── sf-herdr/
-│   ├── sf-llm-gateway-internal/
+│   ├── sf-llm-gateway/
 │   ├── sf-lsp/
 │   ├── sf-lwc/
 │   ├── sf-ohana-spinner/
@@ -162,7 +162,7 @@ rules or multi-phase plans.
 Current examples:
 
 - `extensions/sf-slack/AGENTS.md` — HITL rules, file map for 9 tools
-- `extensions/sf-llm-gateway-internal/AGENTS.md` — unified-provider + two-transport rules
+- `extensions/sf-llm-gateway/AGENTS.md` — unified-provider + two-transport rules
 - `extensions/sf-skills/ROADMAP.md` — Phase 2 work
 
 When editing an extension that has one, read it **before** `index.ts`.

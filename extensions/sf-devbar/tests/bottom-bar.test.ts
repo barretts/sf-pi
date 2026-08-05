@@ -141,7 +141,7 @@ describe("renderBottomBarParts", () => {
   });
 
   it("includes LLM gateway cost status on the left", () => {
-    const extStatuses = new Map([["sf-llm-gateway-internal", "💰 $665.52/∞"]]);
+    const extStatuses = new Map([["sf-llm-gateway", "💰 $665.52/∞"]]);
     const { left, right } = renderBottomBarParts(
       makeState({ extensionStatuses: extStatuses }),
       stubTheme,
@@ -153,7 +153,7 @@ describe("renderBottomBarParts", () => {
   it("orders bottom-left segments as cost, packages, then SFDX org", () => {
     const extStatuses = new Map([
       ["sf-pi", "📦 SF Pi Packages: 11/11 extensions"],
-      ["sf-llm-gateway-internal", "💰 $12.34/∞"],
+      ["sf-llm-gateway", "💰 $12.34/∞"],
     ]);
     const { left } = renderBottomBarParts(
       makeState({

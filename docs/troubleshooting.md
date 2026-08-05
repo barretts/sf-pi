@@ -105,14 +105,13 @@ Jump to an extension's Troubleshooting section to see the full fix. This index i
 - `/sf-pi skills` says "No external skill directories detected"
 - `/sf-pi skills` added a root but pi still doesn't load the skills
 
-**[SF LLM Gateway](./extensions/sf-llm-gateway-internal.md#troubleshooting)**
+**[SF LLM Gateway](./extensions/sf-llm-gateway.md#troubleshooting)**
 
-- Startup warning `No models match pattern "sf-llm-gateway-internal/*"`
+- A discovered model shows its raw ID or conservative 128K/4K metadata
+- Startup warning `No models match pattern "sf-llm-gateway/*"`
 - Model discovery only returns `no-default-models`
 - Gateway fails on startup or tool calls error out immediately
-- Claude responses appear to truncate and the agent asks you to type "continue"
-- Opus 4.7/4.8 returns `api_error: Internal server error` on heavy turns
-- GPT-5-family models fail with a message asking to use `/v1/responses`
+- A discovered model fails during a request
 - Footer shows `⚠` badge after a 429 or 5xx
 - I set `/thinking` to a different level but subsequent model switches reset it
 - Monthly-usage footer is stale or missing
@@ -233,7 +232,7 @@ Jump to an extension's Troubleshooting section to see the full fix. This index i
 - Bars don't appear at all
 - Org segment shows `…` or takes a long time
 - Context bar is hidden or says `unknown`
-- Gateway badge color is wrong when using sf-llm-gateway-internal
+- Gateway badge color is wrong when using sf-llm-gateway
 - `img:Nc` pill appears unexpectedly
 
 **[SF Ohana Spinner](./extensions/sf-ohana-spinner.md#troubleshooting)**

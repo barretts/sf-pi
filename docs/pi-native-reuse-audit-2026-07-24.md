@@ -636,17 +636,14 @@ Migrate incrementally and require no loss in behavior coverage. Keep the current
 
 ### Candidates
 
-- The remaining one-shot Gateway provider-id migration and its focused tests in
-  `migrate-unify-provider.ts`; the named-model default migration was removed
-  when ADR 0077 made the gateway catalog fully dynamic.
+- Gateway identity compatibility code was retired by ADR 0101's canonical hard cut; no provider-id or config-token migration remains.
 - Apex/SOQL one-caller `operations.ts` barrels.
 - Data 360 `path.ts` and `target-org.ts` compatibility re-exports, if they are not a supported external Interface.
 - hard-coded `.pi` paths that should use Pi's exported `CONFIG_DIR_NAME`.
 - duplicate semver-ish parsers and runtime-floor constants.
 
-Two nearby Modules are **not** one-shot deletion candidates under current ADRs:
+One nearby Module is **not** a one-shot deletion candidate under current ADRs:
 
-- `legacy-token-migration.ts` implements retained, value-free legacy-field detection and explicitly confirmed cleanup required by ADRs 0078 and 0054;
 - `model-resolution.ts` is an active Adapter that already delegates generic lookup to Pi while preserving Gateway dynamic-catalog fallback.
 
 They can change only through a superseding behavior decision, not because the v0.235–v0.236 execution-fallback window ended.
@@ -723,29 +720,29 @@ Potential reduction: **1,200–1,600 LOC**.
 
 # All-extension disposition
 
-| Extension                 | Disposition                             | Main opportunity                                                                     | Correctly custom; retain                                                          |
-| ------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| `sf-agentscript`          | Keep + share mechanics                  | Common report/artifact primitives                                                    | Agent Script compile, mutate, inspect, preview, eval, lifecycle                   |
-| `sf-apex`                 | Simplify                                | Shared `sf-conn`, artifacts, result/output shell                                     | Apex traces, logs, Anonymous Apex, tests, coverage                                |
-| `sf-brain`                | Keep, compact later                     | Remove duplicated static extension-intent data; rely on active tool/skill provenance | Operator kernel and routing policy                                                |
-| `sf-browser`              | Keep                                    | Low-level artifact/spill primitives only                                             | Salesforce UI auth, routing, waits, editor, evidence                              |
-| `sf-code-analyzer`        | Keep; already Pi-native in key places   | Result-card sharing, simple Manager panels                                           | CLI contract, recipes, ApexGuru, settled scans                                    |
-| `sf-data-explorer`        | Keep                                    | Settings and common connection primitives                                            | Read-only data grid, modes, exports                                               |
-| `sf-data360`              | Keep                                    | Remove shallow barrels; share envelope/artifact primitives                           | Generated action registry, Data 360 APIs, safety, journeys                        |
-| `sf-devbar`               | Product simplification candidate        | Restore Pi footer/theme; keep SF-only statuses                                       | Org/production warnings, LSP/Gateway/Slack signals, plus approved unique UI facts |
-| `sf-docs`                 | Keep; native auth status fixed          | Shared auth/Manager shell                                                            | Docs query shaping, citations, direct MCP-over-HTTP client                        |
-| `sf-feedback`             | Keep                                    | Shared settings/panel/runtime fixtures                                               | Sanitization, issue composition, explicit confirmation                            |
-| `sf-guardrail`            | Keep                                    | Presentation/settings primitives only                                                | Safety policy, org classification, HITL, approvals, audit                         |
-| `sf-herdr`                | Challenge                               | Compare advisory tool with Pi-native skill                                           | Keep only if inference/preferences prove product leverage                         |
-| `sf-llm-gateway-internal` | Keep; native migration largely complete | Sunset eligible one-shot migrations; preserve retained cleanup and model fallback    | Gateway routes, payloads, models, diagnostics, spend                              |
-| `sf-lsp`                  | Keep                                    | Settings, transcript helper, obsolete reload shims                                   | LSP discovery/process/protocol/diagnostics                                        |
-| `sf-lwc`                  | Simplify                                | Lifecycle artifact/result shell                                                      | LWC inspection, compiler diagnostics, bounded Jest                                |
-| `sf-ohana-spinner`        | Keep thin                               | Shared settings Module only                                                          | Pi working-indicator frames and Salesforce branding                               |
-| `sf-pi-manager`           | Simplify                                | Pi package resolver and native TUI lists                                             | Catalog, extension settings/actions, recommendations, bounded updater             |
-| `sf-skills`               | Keep under current ADR                  | Future capability-by-capability parity only                                          | Managed pack lifecycle, discovery, diagnostics, rescope, usage                    |
-| `sf-slack`                | Keep; native auth status fixed          | Shared auth/controller/Manager shell                                                 | Slack tools, scope checks, exact-recipient/body HITL                              |
-| `sf-soql`                 | Simplify                                | Shared `sf-conn`, artifacts, result/output shell                                     | Schema, validation, query plans, bounded execution, exports                       |
-| `sf-welcome`              | Major simplification candidate          | Direct Pi-overlap first; owner-migrate or explicitly remove other rows               | Branded splash, announcements, privacy, next actions                              |
+| Extension          | Disposition                             | Main opportunity                                                                     | Correctly custom; retain                                                          |
+| ------------------ | --------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `sf-agentscript`   | Keep + share mechanics                  | Common report/artifact primitives                                                    | Agent Script compile, mutate, inspect, preview, eval, lifecycle                   |
+| `sf-apex`          | Simplify                                | Shared `sf-conn`, artifacts, result/output shell                                     | Apex traces, logs, Anonymous Apex, tests, coverage                                |
+| `sf-brain`         | Keep, compact later                     | Remove duplicated static extension-intent data; rely on active tool/skill provenance | Operator kernel and routing policy                                                |
+| `sf-browser`       | Keep                                    | Low-level artifact/spill primitives only                                             | Salesforce UI auth, routing, waits, editor, evidence                              |
+| `sf-code-analyzer` | Keep; already Pi-native in key places   | Result-card sharing, simple Manager panels                                           | CLI contract, recipes, ApexGuru, settled scans                                    |
+| `sf-data-explorer` | Keep                                    | Settings and common connection primitives                                            | Read-only data grid, modes, exports                                               |
+| `sf-data360`       | Keep                                    | Remove shallow barrels; share envelope/artifact primitives                           | Generated action registry, Data 360 APIs, safety, journeys                        |
+| `sf-devbar`        | Product simplification candidate        | Restore Pi footer/theme; keep SF-only statuses                                       | Org/production warnings, LSP/Gateway/Slack signals, plus approved unique UI facts |
+| `sf-docs`          | Keep; native auth status fixed          | Shared auth/Manager shell                                                            | Docs query shaping, citations, direct MCP-over-HTTP client                        |
+| `sf-feedback`      | Keep                                    | Shared settings/panel/runtime fixtures                                               | Sanitization, issue composition, explicit confirmation                            |
+| `sf-guardrail`     | Keep                                    | Presentation/settings primitives only                                                | Safety policy, org classification, HITL, approvals, audit                         |
+| `sf-herdr`         | Challenge                               | Compare advisory tool with Pi-native skill                                           | Keep only if inference/preferences prove product leverage                         |
+| `sf-llm-gateway`   | Keep; native migration largely complete | Sunset eligible one-shot migrations; preserve retained cleanup and model fallback    | Gateway routes, payloads, models, diagnostics, spend                              |
+| `sf-lsp`           | Keep                                    | Settings, transcript helper, obsolete reload shims                                   | LSP discovery/process/protocol/diagnostics                                        |
+| `sf-lwc`           | Simplify                                | Lifecycle artifact/result shell                                                      | LWC inspection, compiler diagnostics, bounded Jest                                |
+| `sf-ohana-spinner` | Keep thin                               | Shared settings Module only                                                          | Pi working-indicator frames and Salesforce branding                               |
+| `sf-pi-manager`    | Simplify                                | Pi package resolver and native TUI lists                                             | Catalog, extension settings/actions, recommendations, bounded updater             |
+| `sf-skills`        | Keep under current ADR                  | Future capability-by-capability parity only                                          | Managed pack lifecycle, discovery, diagnostics, rescope, usage                    |
+| `sf-slack`         | Keep; native auth status fixed          | Shared auth/controller/Manager shell                                                 | Slack tools, scope checks, exact-recipient/body HITL                              |
+| `sf-soql`          | Simplify                                | Shared `sf-conn`, artifacts, result/output shell                                     | Schema, validation, query plans, bounded execution, exports                       |
+| `sf-welcome`       | Major simplification candidate          | Direct Pi-overlap first; owner-migrate or explicitly remove other rows               | Branded splash, announcements, privacy, next actions                              |
 
 ---
 

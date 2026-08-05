@@ -3,13 +3,13 @@
  * Monthly-usage shared state store.
  *
  * Decouples UI consumers (e.g. sf-welcome splash, sf-devbar footer) from the
- * provider that actually fetches usage data (sf-llm-gateway-internal). This
+ * provider that actually fetches usage data (sf-llm-gateway). This
  * preserves the "disabled extensions have zero runtime cost" contract — if
  * no provider is registered, consumers see null state and render fallbacks
  * instead of importing a disabled extension's internals.
  *
  * Contract:
- *   - A provider (typically sf-llm-gateway-internal) registers a refresher at
+ *   - A provider (typically sf-llm-gateway) registers a refresher at
  *     session_start via `registerMonthlyUsageRefresher`.
  *   - The provider publishes snapshots into the store via `setMonthlyUsageState`.
  *   - Consumers read via `getMonthlyUsageState` and can trigger a refresh via
@@ -204,7 +204,7 @@ const EMPTY_SNAPSHOT: MonthlyUsageSnapshot = {
 //
 // Pi loads each extension with `jiti.moduleCache: false`, which means this
 // module is instantiated once per extension that imports it. Producer
-// (`sf-llm-gateway-internal`) and consumers (`sf-welcome`, `sf-devbar`) would
+// (`sf-llm-gateway`) and consumers (`sf-welcome`, `sf-devbar`) would
 // otherwise end up with independent `listeners`/`currentSnapshot`/`refresher`
 // state and never see each other's publishes — which is the race that caused
 // the splash to stay on `(local estimate)` while the bottom bar had live
@@ -297,7 +297,7 @@ export function registerMonthlyUsageRefresher(refresher: MonthlyUsageRefresher):
 
 /**
  * Trigger a refresh via the registered provider. If no provider is
- * registered (e.g. sf-llm-gateway-internal is disabled), this is a no-op
+ * registered (e.g. sf-llm-gateway is disabled), this is a no-op
  * and consumers continue to see whatever was last published.
  */
 export async function refreshMonthlyUsage(force: boolean, cwd: string): Promise<void> {

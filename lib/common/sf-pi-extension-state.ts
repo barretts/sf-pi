@@ -22,7 +22,7 @@ export type SfPiExtensionId = (typeof SF_PI_REGISTRY)[number]["id"];
 
 const STATUS_KEY_EXTENSION_ID: Record<string, SfPiExtensionId | "always"> = {
   "sf-slack-status": "sf-slack",
-  "sf-llm-gateway-internal": "sf-llm-gateway-internal",
+  "sf-llm-gateway": "sf-llm-gateway",
   "sf-pi": "always",
 };
 

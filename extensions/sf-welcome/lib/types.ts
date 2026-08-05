@@ -236,7 +236,7 @@ export interface DoctorNudgeSummary {
  * pointing at `/sf-llm-gateway fix-ca-bundle`.
  *
  * Public-safe: this UI surface lives in sf-welcome (shared) but is
- * gated by `isSfPiExtensionEnabled("sf-llm-gateway-internal")` so it
+ * gated by `isSfPiExtensionEnabled("sf-llm-gateway")` so it
  * never renders for users who have the internal-only extension off.
  */
 export interface CaBundleNudgeSummary {

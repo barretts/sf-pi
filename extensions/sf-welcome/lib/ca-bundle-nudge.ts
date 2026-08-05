@@ -16,11 +16,11 @@
 import {
   hasCaBundleFixApplied,
   readCaBundleFixerState,
-} from "../../sf-llm-gateway-internal/lib/ca-bundle-fixer-state.ts";
+} from "../../sf-llm-gateway/lib/ca-bundle-fixer-state.ts";
 import {
   readCaProbeState,
   shouldShowCaBundleNudge,
-} from "../../sf-llm-gateway-internal/lib/ca-probe-state.ts";
+} from "../../sf-llm-gateway/lib/ca-probe-state.ts";
 import { isSfPiExtensionEnabled } from "../../../lib/common/sf-pi-extension-state.ts";
 import type { CaBundleNudgeSummary } from "./types.ts";
 
@@ -41,7 +41,7 @@ export function collectCaBundleNudge(opts: {
 }): CaBundleNudgeSummary | undefined {
   // Gate 1: the internal-only extension must be enabled. External users
   // never see this row regardless of any leftover state files.
-  if (!isSfPiExtensionEnabled(opts.cwd, "sf-llm-gateway-internal")) {
+  if (!isSfPiExtensionEnabled(opts.cwd, "sf-llm-gateway")) {
     return undefined;
   }
 

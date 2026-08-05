@@ -16,8 +16,6 @@ function runPi(extensionPath: string, modeArgs: string[], command: string, input
   const env = { ...process.env, PI_CODING_AGENT_DIR: agentDir };
   delete env.SF_LLM_GATEWAY_BASE_URL;
   delete env.SF_LLM_GATEWAY_API_KEY;
-  delete env.SF_LLM_GATEWAY_INTERNAL_BASE_URL;
-  delete env.SF_LLM_GATEWAY_INTERNAL_API_KEY;
 
   const args = [
     "--offline",
@@ -77,7 +75,7 @@ describe("human-only command output through real Pi modes", () => {
     ],
     [
       "Gateway",
-      "extensions/sf-llm-gateway-internal/index.ts",
+      "extensions/sf-llm-gateway/index.ts",
       "/sf-llm-gateway help",
       "/sf-llm-gateway with no args",
     ],
@@ -111,7 +109,7 @@ describe("human-only command output through real Pi modes", () => {
     ],
     [
       "Gateway",
-      "extensions/sf-llm-gateway-internal/index.ts",
+      "extensions/sf-llm-gateway/index.ts",
       "/sf-llm-gateway help",
       "/sf-llm-gateway with no args",
     ],
@@ -126,7 +124,7 @@ describe("human-only command output through real Pi modes", () => {
 
   it("emits Gateway JSON output as an entry, never a custom message", () => {
     const result = runPi(
-      "extensions/sf-llm-gateway-internal/index.ts",
+      "extensions/sf-llm-gateway/index.ts",
       ["--mode", "json", "--print"],
       "/sf-llm-gateway help",
     );
@@ -142,7 +140,7 @@ describe("human-only command output through real Pi modes", () => {
 
     expect(entry?.entry).toMatchObject({
       type: "custom",
-      customType: "sf-llm-gateway-internal",
+      customType: "sf-llm-gateway",
     });
     expect(entry?.entry?.data?.body).toContain("/sf-llm-gateway with no args");
     expect(events.some((event) => event.type === "message_start")).toBe(false);

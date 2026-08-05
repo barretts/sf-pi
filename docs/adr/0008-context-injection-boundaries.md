@@ -9,13 +9,13 @@ Accepted
 Five sf-pi extensions inject context blocks into the agent's session at
 session start or per-turn:
 
-| Extension                 | What it injects                                         |
-| ------------------------- | ------------------------------------------------------- |
-| `sf-brain`                | Salesforce Engineering Constitution and routing summary |
-| `sf-devbar`               | Salesforce environment (CLI / project / org / API)      |
-| `sf-slack`                | Slack workspace identity (user + team)                  |
-| `sf-guardrail`            | Guardrail policy summary                                |
-| `sf-llm-gateway-internal` | Provider/gateway identity                               |
+| Extension        | What it injects                                         |
+| ---------------- | ------------------------------------------------------- |
+| `sf-brain`       | Salesforce Engineering Constitution and routing summary |
+| `sf-devbar`      | Salesforce environment (CLI / project / org / API)      |
+| `sf-slack`       | Slack workspace identity (user + team)                  |
+| `sf-guardrail`   | Guardrail policy summary                                |
+| `sf-llm-gateway` | Provider/gateway identity                               |
 
 Each block is delivered through pi's `BeforeAgentStartEventResult.message`
 path, persists as a `custom_message` session entry with `display: false`,

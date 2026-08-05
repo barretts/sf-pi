@@ -196,19 +196,19 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
     },
   },
   {
-    id: "sf-llm-gateway-internal",
+    id: "sf-llm-gateway",
     name: "SF LLM Gateway",
     description: "Salesforce LLM Gateway provider with model discovery",
-    file: "extensions/sf-llm-gateway-internal/index.ts",
+    file: "extensions/sf-llm-gateway/index.ts",
     category: "provider",
     maturity: "stable",
     defaultEnabled: true,
     commands: ["/sf-llm-gateway"],
-    providers: ["sf-llm-gateway-internal"],
+    providers: ["sf-llm-gateway"],
     events: ["session_start","turn_end","model_select","after_provider_response","session_shutdown"],
     configurable: true,
     getConfigPanel: async () => {
-      const mod = await import("../extensions/sf-llm-gateway-internal/lib/config-panel.ts");
+      const mod = await import("../extensions/sf-llm-gateway/lib/config-panel.ts");
       return mod.createConfigPanel;
     },
   },

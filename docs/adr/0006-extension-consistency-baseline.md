@@ -74,7 +74,7 @@ the `core` bucket. We split it into six:
 | Category     | Members                                                        |
 | ------------ | -------------------------------------------------------------- |
 | `manager`    | `sf-pi-manager`                                                |
-| `provider`   | `sf-llm-gateway-internal`                                      |
+| `provider`   | `sf-llm-gateway`                                               |
 | `agent-tool` | `sf-data360`, `sf-slack`                                       |
 | `safety`     | `sf-guardrail`                                                 |
 | `assistive`  | `sf-brain`, `sf-lsp`, `sf-agentscript`, `sf-feedback`          |
@@ -166,7 +166,7 @@ Migrations included:
 
 Not migrated (intentional):
 
-- `extensions/sf-llm-gateway-internal/lib/config.ts` saved-config writer
+- `extensions/sf-llm-gateway/lib/config.ts` saved-config writer
   has bespoke `chmod 0o600`, project-or-global path discovery, and
   per-field validation. The migration risk outweighs the atomic-write
   win until the file needs other surgery.
@@ -182,7 +182,7 @@ the rest of the report.
 
 Providers registered:
 
-- `sf-llm-gateway-internal` — reuses the existing
+- `sf-llm-gateway` — reuses the existing
   `fetchGatewayDoctorReport` (URL signature, `/v1/models`, `/health/readiness`).
 - `sf-agentscript` — reuses `probeDoctor` (official SDK package + dialect probe).
 - `sf-lsp` — reuses `doctorLsp` per language (Apex/LWC/Agent Script).
@@ -236,7 +236,7 @@ with AGENTS.md §3 ("split by responsibility").
 
 ## Wave 3 follow-ups landed
 
-### sf-llm-gateway-internal file splits
+### sf-llm-gateway file splits
 
 `transport.ts` (1209 LOC) is now a barrel re-exporting from five focused
 modules under `lib/transport-internal/`:
@@ -290,7 +290,7 @@ by sf-pi.
 
 ADR 0006 is complete. The advisory lint flags a handful of files
 between 800 and 1500 LOC for visibility (sf-welcome/index.ts,
-sf-welcome/lib/splash-component.ts, sf-llm-gateway-internal/index.ts,
+sf-welcome/lib/splash-component.ts, sf-llm-gateway/index.ts,
 sf-slack/lib/{api,types}.ts, sf-lsp/lib/lsp-client.ts) but none
 block CI — they surface during PR review when those files are next
 touched.

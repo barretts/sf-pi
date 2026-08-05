@@ -62,7 +62,7 @@ describe("sf-pi extension state", () => {
     const cwd = makeCwd(["extensions/sf-slack/index.ts"]);
     const statuses = new Map([
       ["sf-slack-status", "Slack ✓ Connected"],
-      ["sf-llm-gateway-internal", "$1/∞"],
+      ["sf-llm-gateway", "$1/∞"],
       ["sf-pi", "SF Pi Packages: 10/12 extensions"],
       ["unknown", "should not render"],
     ]);
@@ -70,7 +70,7 @@ describe("sf-pi extension state", () => {
     const filtered = filterEnabledExtensionStatuses(cwd, statuses);
 
     expect(filtered.has("sf-slack-status")).toBe(false);
-    expect(filtered.get("sf-llm-gateway-internal")).toBe("$1/∞");
+    expect(filtered.get("sf-llm-gateway")).toBe("$1/∞");
     expect(filtered.get("sf-pi")).toBe("SF Pi Packages: 10/12 extensions");
     expect(filtered.has("unknown")).toBe(false);
   });

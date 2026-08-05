@@ -115,7 +115,7 @@ SF Pi is useful because it is a bundle: each extension adds a focused Salesforce
 ## Personalize pi
 
 <div class="sfpi-card-grid">
-<a class="sfpi-extension-card" href="./extensions/sf-llm-gateway-internal">
+<a class="sfpi-extension-card" href="./extensions/sf-llm-gateway">
   <span class="sfpi-card-kicker">Model provider setup</span>
   <strong>LLM Gateway</strong>
   <span>Connect pi to Salesforce LLM Gateway models when your environment supports that provider.</span>

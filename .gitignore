@@ -16,7 +16,7 @@ dist/
 .pi/state/
 
 # Local SF gateway credentials
-.pi/sf-llm-gateway-internal.json
+.pi/sf-llm-gateway.json
 
 # Local pi project settings (user-owned skills[] wiring, sf-pi flags)
 .pi/settings.json

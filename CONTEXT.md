@@ -76,21 +76,21 @@ _Avoid_: mandatory live CI, prompt score, hidden reviewer, deterministic unit te
 A post-agent SF Pi check that runs only after Pi has no automatic retry, compaction retry, or queued follow-up left. It is for workflow completion evidence, not per-run streaming feedback.
 _Avoid_: agent_end hook, background scan, immediate lint pass, always-on watcher
 
+**Canonical Gateway Identity**:
+The single `sf-llm-gateway` id shared by the extension, Pi Provider, command, status, configuration, and documentation. Prior credentials and cache entries are not copied across identities; users reconnect explicitly through Pi.
+_Avoid_: internal suffix, provider alias, duplicate login row, silent credential migration
+
 **Gateway Model Catalog**:
 The callable SF LLM Gateway models returned by authenticated discovery, with Pi's provider-scoped cache preserving the last successful result. SF Pi does not bundle a static gateway model inventory.
 _Avoid_: preset catalog, bootstrap model list, presumed model availability, source-controlled model inventory
 
 **Gateway Thinking Capability**:
-A model-specific SF LLM Gateway fact that says which Pi thinking levels a gateway model can safely expose. It must come from gateway discovery or generic family inference before SF Pi offers the level to users.
-_Avoid_: global thinking level, default reasoning level, exact-ID preset, universal max support, silent remap
+A model-specific SF LLM Gateway fact that says whether reasoning is available. SF Pi accepts neutral authenticated metadata or portable metadata inherited by exact ID from Pi's public catalog, but does not maintain its own exact-model capability policy.
+_Avoid_: global thinking level, default reasoning level, exact-ID capability, universal max support, silent remap
 
 **Gateway Default Model**:
 An available model chosen from the **Gateway Model Catalog** when gateway routing becomes the user's default model path. SF Pi preserves a still-available gateway choice and otherwise uses the catalog's stable first model; it does not bundle a default or fallback model ID.
 _Avoid_: bundled default, static fallback, direct-provider default, undiscovered model
-
-**Gateway Priority Traffic**:
-A model-specific SF LLM Gateway request mode for faster service-tier routing when the gateway model explicitly supports it. It is a capability assertion about the selected gateway route, not a universal OpenAI-family default.
-_Avoid_: fast mode, global priority, latency guarantee, always-on service tier
 
 **Gateway Spend Authority**:
 The SF LLM Gateway source that SF Pi treats as authoritative for gateway usage and cost presentation. Pi model pricing metadata can supplement it only when gateway-provided pricing data is explicit and trustworthy.
@@ -208,12 +208,8 @@ _Avoid_: custom updater framework, installer matrix, one-shot idle timer, unaudi
 The Native Auto Update lifecycle that records due work as pending, waits for Pi to settle, runs eligible first-party update targets independently, and emits a **Human-Only Transcript Row** with success, failure, skip, and restart evidence.
 _Avoid_: startup race, abandon-if-busy check, coupled all-or-nothing targets, transient-only result
 
-**Gateway Header Proof Spike**:
-A narrow behavior test and implementation spike that proves Pi's provider-header hook can preserve SF LLM Gateway routing, model defaults, beta headers, and secret redaction. If it proves simpler and equivalent, SF Pi should replace the older header path promptly instead of keeping both.
-_Avoid_: speculative header rewrite, dual header system, silent beta migration, provider re-registration workaround
-
 **Complete Gateway Provider**:
-The single Pi Provider that owns Gateway authentication, last-known models, refresh persistence, filtering, and mixed API streaming while Gateway-specific adapters retain route, payload, retry, drift, diagnostic, and spend semantics. It directly replaces legacy provider orchestration after behavior parity.
+The single Pi Provider that owns Gateway authentication, last-known models, refresh persistence, filtering, and mixed API streaming through provider-neutral protocol adapters. It does not encode deployment routing, traffic tiers, or exact-model payload policy.
 _Avoid_: legacy ProviderConfig coordinator, dual provider path, transitional refresh layer, ID-based API dispatcher
 
 **Model Resolution Delegation**:

@@ -454,7 +454,7 @@ export default function sfSlack(pi: ExtensionAPI) {
     if (!ctx.hasUI || !isActiveSession(ctx, generation)) return;
     const t = ctx.ui.theme;
     // Resolve glyph mode per render so a settings/terminal switch takes
-    // effect without a restart — mirrors sf-llm-gateway-internal's status line.
+    // effect without a restart — mirrors sf-llm-gateway's status line.
     const icon = glyph("slack", resolveGlyphMode({ cwd: ctx.cwd }));
     const kind = classifySlackStatus({
       state,
