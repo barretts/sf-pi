@@ -158,8 +158,8 @@ describe("release freshness splash rows", () => {
     const rendered = await render(
       baseData({
         piRelease: {
-          installedVersion: "0.82.0",
-          latestVersion: "0.83.0",
+          installedVersion: "0.84.0",
+          latestVersion: "0.85.0",
           forwardCompatibility: true,
           freshness: "update-available",
           loading: false,
@@ -170,7 +170,7 @@ describe("release freshness splash rows", () => {
 
     const pi = findStatusLine(rendered, "Pi");
     expect(pi).toContain("update available [forward]");
-    expect(pi).toContain("v0.82.0 → v0.83.0");
+    expect(pi).toContain("v0.84.0 → v0.85.0");
     expect(rendered).toContain("→ pi update --self");
   });
 
@@ -178,8 +178,8 @@ describe("release freshness splash rows", () => {
     const rendered = await render(
       baseData({
         piRelease: {
-          installedVersion: "0.83.0",
-          latestVersion: "0.83.0",
+          installedVersion: "0.85.0",
+          latestVersion: "0.85.0",
           forwardCompatibility: true,
           freshness: "latest",
           loading: false,
@@ -190,7 +190,7 @@ describe("release freshness splash rows", () => {
 
     const pi = findStatusLine(rendered, "Pi");
     expect(pi).toContain("latest [forward]");
-    expect(pi).toContain("v0.83.0");
+    expect(pi).toContain("v0.85.0");
   });
 
   it("shows when a Pi major release remains blocked", async () => {

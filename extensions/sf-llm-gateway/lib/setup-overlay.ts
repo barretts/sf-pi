@@ -25,11 +25,10 @@ import {
 import { GatewayConfigPanelComponent } from "./config-panel.ts";
 
 // -------------------------------------------------------------------------------------------------
-// Types (preserved for backward compatibility with the extension entry point)
+// Types shared with the extension entry point
 // -------------------------------------------------------------------------------------------------
 
-export type SetupOverlayAction =
-  "open-token" | "import-claude" | "save-enable" | "save" | "disable";
+export type SetupOverlayAction = "open-token" | "import-claude" | "save";
 
 export type SetupOverlayResult = {
   action: SetupOverlayAction;
@@ -46,7 +45,7 @@ export type SetupOverlayState = {
 };
 
 // -------------------------------------------------------------------------------------------------
-// State builders (still used by the extension entry point for non-overlay flows)
+// State builder shared by the standalone overlay and Manager panel
 // -------------------------------------------------------------------------------------------------
 
 export function getSetupOverlayState(cwd: string, scope: "global" | "project"): SetupOverlayState {
@@ -126,9 +125,8 @@ export class GatewaySetupOverlayComponent implements Focusable {
     cwd: string,
     private readonly done: (result: SetupOverlayResult | undefined) => void,
   ) {
-    // Create the config panel, translating its result to the legacy SetupOverlayResult.
-    // The standalone overlay still uses the old result type for backward compat with
-    // the extension entry point's save/enable/disable orchestration.
+    // Translate the shared panel's save and external-action results into the
+    // standalone overlay result consumed by the extension entry point.
     this.panel = new GatewayConfigPanelComponent(
       theme,
       scope,
@@ -151,20 +149,11 @@ export class GatewaySetupOverlayComponent implements Focusable {
           return;
         }
 
-        // The config panel already wrote the saved config to disk. We only
-        // need to tell the caller which high-level action to run next.
-        // needsReload means the panel changed the enabled bit (save+enable or
-        // disable); no reload means the user only edited fallback fields.
-        if (!panelResult.needsReload) {
-          this.done({ action: "save" });
-          return;
-        }
-        const configPath =
-          scope === "project" ? projectGatewayConfigPath(cwd) : globalGatewayConfigPath();
-        const saved = readGatewaySavedConfig(configPath);
-        this.done({ action: saved.enabled === false ? "disable" : "save-enable" });
+        // The panel already persisted the non-secret settings. Network and
+        // lifecycle work remain explicit commands outside this setup overlay.
+        this.done({ action: "save" });
       },
-      { externalActions: true, lifecycleActions: true, closeOnSave: true },
+      { externalActions: true, closeOnSave: true },
     );
   }
 

@@ -99,8 +99,8 @@ rechecks opt-in and idle state, writes a sanitized Human-Only plan row, and runs
 eligible targets independently under an atomic machine lock.
 
 Pi runtime updates remain user-managed. Stable Pi `>=0.82.0 <1.0.0` is
-loadable; releases at or above the current audited `<0.84.0` ceiling run in
-forward-compatibility mode. The coordinator does not invoke Pi's self-update
+loadable; stable Pi `>=0.85.0` runs in forward-compatibility mode above the
+current audited `<0.85.0` window. The coordinator does not invoke Pi's self-update
 path. Global npm Pi packages receive a read-only compatibility preflight; only
 an outdated, unpinned package whose latest release declares support for the
 active Pi and Node runtimes is updated
@@ -268,7 +268,7 @@ via name-based (`sf-pi` / `jag-pi-extensions`) or path-based detection
 Stable Pi 0.x releases continue loading in forward-compatibility mode. Run
 `/sf-pi doctor runtime` for the audited/loadable ranges and PATH diagnostics;
 do not downgrade unless a concrete failure occurs. Older, prerelease, and Pi
-1.x runtimes remain blocked, with exact Pi 0.83.0 as the repair target.
+1.x runtimes remain blocked, with exact Pi 0.84.0 as the repair target.
 
 **Disabling an extension through the manager doesn't take effect:**
 Pi reads the package filter at startup. After a disable, the manager

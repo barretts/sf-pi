@@ -110,6 +110,7 @@ Jump to an extension's Troubleshooting section to see the full fix. This index i
 - A discovered model shows its raw ID or conservative 128K/4K metadata
 - Startup warning `No models match pattern "sf-llm-gateway/*"`
 - Model discovery only returns `no-default-models`
+- Login says the API key was saved but the model catalog could not be refreshed
 - Gateway fails on startup or tool calls error out immediately
 - A discovered model fails during a request
 - Footer shows `⚠` badge after a 429 or 5xx

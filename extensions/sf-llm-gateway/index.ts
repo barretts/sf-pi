@@ -75,12 +75,10 @@
  * - The standalone TUI setup overlay is in lib/setup-overlay.ts; Manager setup reuses lib/config-panel.ts
  */
 
-import { matchesKey, type Focusable } from "@earendil-works/pi-tui";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
-  Theme,
 } from "@earendil-works/pi-coding-agent";
 
 // --- Lib imports ---
@@ -177,7 +175,6 @@ import {
   formatGatewayCommandReference,
   type GatewayCommandId,
 } from "./lib/command-surface.ts";
-import type { ConfigPanelResult } from "../../catalog/registry.ts";
 import {
   emitHumanOnlyCommandOutput,
   registerHumanOnlyCommandOutput,
@@ -468,116 +465,13 @@ function gatewayManagerAction(
     run: (ctx, scope) => handlePanelAction(pi, ctx, command, scope),
     ...(command === "setup"
       ? {
-          createPanel: (theme, cwd, scope, done, ctx) =>
-            new GatewaySetupManagerActionPanel(pi, theme, cwd, scope, done, ctx),
+          // Setup owns local non-secret persistence only. Enable, disable, and
+          // network refresh remain explicit Manager actions.
+          createPanel: (theme, cwd, scope, done) =>
+            new GatewayConfigPanelComponent(theme, scope, cwd, done, { closeOnSave: true }),
         }
       : {}),
   };
-}
-
-type GatewaySetupPanelResult = ConfigPanelResult & {
-  gatewayAction?: "save-enable" | "save" | "disable";
-};
-
-class GatewaySetupManagerActionPanel implements Focusable {
-  focused = false;
-  private readonly panel: GatewayConfigPanelComponent;
-  private busy = false;
-  private output: GatewayCommandOutput | undefined;
-
-  constructor(
-    private readonly pi: ExtensionAPI,
-    private readonly theme: Theme,
-    _cwd: string,
-    private readonly scope: "global" | "project",
-    private readonly done: (result: ConfigPanelResult | undefined) => void,
-    private readonly ctx: ExtensionCommandContext,
-  ) {
-    void _cwd;
-    this.panel = new GatewayConfigPanelComponent(
-      theme,
-      scope,
-      ctx.cwd,
-      (result) => {
-        void this.handlePanelResult(result as GatewaySetupPanelResult | undefined);
-      },
-      { lifecycleActions: true, closeOnSave: true },
-    );
-  }
-
-  handleInput(data: string): void {
-    if (this.busy) return;
-    if (this.output) {
-      if (matchesKey(data, "escape") || matchesKey(data, "enter") || matchesKey(data, "return")) {
-        this.done(undefined);
-      }
-      return;
-    }
-    this.panel.focused = this.focused;
-    this.panel.handleInput(data);
-  }
-
-  renderContent(width: number): string[] {
-    const t = this.theme;
-    if (this.busy) {
-      return [
-        ` ${t.fg("accent", t.bold("SF LLM Gateway setup"))}`,
-        "",
-        ` ${t.fg("dim", "Applying gateway setup…")}`,
-      ];
-    }
-    if (this.output) {
-      const color =
-        this.output.level === "error"
-          ? "error"
-          : this.output.level === "warning"
-            ? "warning"
-            : "text";
-      return [
-        ` ${t.fg("accent", t.bold(this.output.summary))}`,
-        "",
-        ...this.output.details.split("\n").map((line) => ` ${t.fg(color, line)}`),
-        "",
-        ` ${t.fg("dim", "Enter/Esc back")}`,
-      ];
-    }
-    this.panel.focused = this.focused;
-    return this.panel.renderContent(width);
-  }
-
-  render(width: number): string[] {
-    return this.renderContent(width);
-  }
-
-  invalidate(): void {
-    this.panel.invalidate();
-  }
-
-  private async handlePanelResult(result: GatewaySetupPanelResult | undefined): Promise<void> {
-    if (!result) {
-      this.done(undefined);
-      return;
-    }
-
-    this.busy = true;
-    try {
-      if (result.gatewayAction === "save-enable") {
-        this.output = await enableGatewayOperation(this.pi, this.ctx, this.scope, false);
-      } else if (result.gatewayAction === "disable") {
-        this.output = await disableGatewayOperation(this.pi, this.ctx, this.scope);
-      } else {
-        this.output = await saveGatewaySetupOperation(this.pi, this.ctx, this.scope);
-      }
-    } catch (error) {
-      this.output = {
-        summary: "SF LLM Gateway setup failed.",
-        details: error instanceof Error ? error.message : String(error),
-        level: "error",
-      };
-    } finally {
-      this.busy = false;
-    }
-  }
 }
 
 async function handleCommand(
@@ -694,18 +588,68 @@ function bindGatewayProviderContext(ctx: ExtensionCommandContext): void {
   }
 }
 
-async function refreshGatewayProvider(
+type GatewayModelRefreshResult = {
+  aborted: boolean;
+  errors: ReadonlyMap<string, Error>;
+};
+
+type GatewayRefreshCapableRegistry = {
+  refresh(options?: {
+    providers?: readonly string[];
+    force?: boolean;
+    signal?: AbortSignal;
+  }): Promise<GatewayModelRefreshResult | void>;
+};
+
+// Exported for cross-version ModelRegistry refresh behavior tests.
+export async function refreshGatewayProvider(
   ctx: ExtensionCommandContext,
 ): Promise<ReturnType<typeof gatewayProviderRuntime.getLastDiscovery>> {
   bindGatewayProviderContext(ctx);
-  await ctx.modelRegistry.refresh();
-  return gatewayProviderRuntime.getLastDiscovery();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  timeout.unref?.();
+  let result: GatewayModelRefreshResult | void;
+  try {
+    // Pi 0.84 scopes and cancels this refresh. Pi 0.82/0.83 safely ignore
+    // the extra argument and retain their existing broad-refresh behavior.
+    result = await (ctx.modelRegistry as unknown as GatewayRefreshCapableRegistry).refresh({
+      providers: [PROVIDER_NAME],
+      force: true,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const state = gatewayProviderRuntime.getLastDiscovery();
+  if (result && result.aborted) {
+    return {
+      ...state,
+      error:
+        "Gateway model refresh timed out; last-known catalog state was retained. Run /sf-llm-gateway doctor.",
+    };
+  }
+  if (result && result.errors.has(PROVIDER_NAME) && !state.error) {
+    return {
+      ...state,
+      error:
+        "Gateway model refresh failed; last-known catalog state was retained. Run /sf-llm-gateway doctor.",
+    };
+  }
+  return state;
 }
 
 async function handleRefreshCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<void> {
   const state = await refreshGatewayProvider(ctx);
   await syncGatewaySessionDefaults(pi, ctx, true);
-  const report = buildStatusReport(ctx, true, getRuntimeStatusState());
+  const runtimeAuth = await gatewayProviderRuntime.authController.resolveRuntimeAuth(ctx.cwd);
+  const report = buildStatusReport(
+    ctx,
+    true,
+    { ...getRuntimeStatusState(), discovery: state },
+    { effectiveBaseUrl: runtimeAuth?.baseUrl },
+  );
   await emitCommandOutput(
     pi,
     ctx,
@@ -1011,11 +955,8 @@ async function executeOnboardChain(
       await applyGatewayDefault(pi, ctx, setScope);
     },
     hasUsableSavedConfig: async () => {
-      const config = getGatewayConfig(ctx.cwd);
       bindGatewayProviderContext(ctx);
-      const credentialConfigured =
-        await gatewayProviderRuntime.authController.hasConfiguredCredential();
-      return Boolean(config.baseUrl) && credentialConfigured;
+      return Boolean(await gatewayProviderRuntime.authController.resolveRuntimeAuth(ctx.cwd));
     },
   };
   return runOnboardChain(scope, deps);
@@ -1272,8 +1213,10 @@ async function openGatewayTokenPage(
   ctx: ExtensionCommandContext,
   baseUrlOverride?: string,
 ): Promise<void> {
+  bindGatewayProviderContext(ctx);
   const config = getGatewayConfig(ctx.cwd);
-  const url = buildOnboardingUrl(baseUrlOverride ?? config.baseUrl);
+  const runtimeAuth = await gatewayProviderRuntime.authController.resolveRuntimeAuth(ctx.cwd);
+  const url = buildOnboardingUrl(baseUrlOverride ?? runtimeAuth?.baseUrl ?? config.baseUrl);
   if (!url) {
     await emitCommandOutput(
       pi,
@@ -1542,7 +1485,10 @@ async function handleHelpCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext)
 
 async function handleStatusCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<void> {
   await updateFooterStatus(ctx, false);
-  const report = buildStatusReport(ctx, true, getRuntimeStatusState());
+  const runtimeAuth = await gatewayProviderRuntime.authController.resolveRuntimeAuth(ctx.cwd);
+  const report = buildStatusReport(ctx, true, getRuntimeStatusState(), {
+    effectiveBaseUrl: runtimeAuth?.baseUrl,
+  });
   await emitCommandOutput(pi, ctx, "SF LLM Gateway status posted.", report, "info");
 }
 
@@ -1713,32 +1659,18 @@ async function runSetupWizard(
       continue;
     }
 
-    // The config panel wrote the saved config to disk before returning; no
-    // second write is needed here. We only dispatch on the action.
-    if (result.action === "save-enable") {
-      await enableGateway(pi, ctx, scope, false);
-      return;
-    }
-
-    if (result.action === "disable") {
-      await disableGateway(pi, ctx, scope);
-      return;
-    }
-
-    await emitGatewayCommandOutput(pi, ctx, await saveGatewaySetupOperation(pi, ctx, scope));
+    // The config panel already persisted the non-secret settings. Setup does
+    // not trigger model discovery, usage probes, or lifecycle changes.
+    await emitGatewayCommandOutput(pi, ctx, saveGatewaySetupOperation(ctx, scope));
     return;
   }
 }
 
-async function saveGatewaySetupOperation(
-  pi: ExtensionAPI,
+function saveGatewaySetupOperation(
   ctx: ExtensionCommandContext,
   scope: "global" | "project",
-): Promise<GatewayCommandOutput> {
+): GatewayCommandOutput {
   const config = getGatewayConfig(ctx.cwd);
-  await refreshGatewayProvider(ctx);
-  await updateFooterStatus(ctx, false);
-
   const report = [
     `Saved ${scope} gateway non-secret settings.`,
     `- Base URL: ${describeConfigValue(config.baseUrl, config.baseUrlSource)}`,
@@ -1783,15 +1715,35 @@ async function enableGatewayOperation(
     scope === "project" ? projectGatewayConfigPath(ctx.cwd) : globalGatewayConfigPath();
 
   const settings = readSettings(settingsPath);
+  let saved = readGatewaySavedConfig(configPath);
 
   if (promptForMissingCredentials) {
-    const configured = await ensureGatewayCredentialsConfigured(pi, ctx, scope);
+    // Provider auth intentionally hides disabled Gateway routing. Temporarily
+    // enable this explicit /on attempt so Pi can resolve a URL stored only in
+    // its credential; restore the prior bit if setup is cancelled or missing.
+    const previousEnabled = saved.enabled;
+    const restorePreviousEnabled = () => {
+      const current = readGatewaySavedConfig(configPath);
+      if (previousEnabled === undefined) delete current.enabled;
+      else current.enabled = previousEnabled;
+      writeGatewaySavedConfig(configPath, current);
+    };
+    saved.enabled = true;
+    writeGatewaySavedConfig(configPath, saved);
+    let configured: boolean;
+    try {
+      configured = await ensureGatewayCredentialsConfigured(pi, ctx, scope);
+    } catch (error) {
+      restorePreviousEnabled();
+      throw error;
+    }
     if (!configured) {
+      restorePreviousEnabled();
       return undefined;
     }
+    saved = readGatewaySavedConfig(configPath);
   }
 
-  const saved = readGatewaySavedConfig(configPath);
   const exclusiveScope = saved.exclusiveScope === true;
 
   if (ctx.model && !isGatewayProvider(ctx.model.provider)) {
@@ -1815,13 +1767,13 @@ async function enableGatewayOperation(
 
   const config = getGatewayConfig(ctx.cwd);
   const runtimeAuth = await gatewayProviderRuntime.authController.resolveRuntimeAuth(ctx.cwd);
-  if (!config.baseUrl || !runtimeAuth) {
+  if (!runtimeAuth) {
     return {
       summary: "SF LLM Gateway is still missing configuration.",
       details: [
-        `Base URL: ${describeConfigValue(config.baseUrl, config.baseUrlSource)}`,
-        `Credential: ${runtimeAuth ? `configured (${runtimeAuth.source})` : "missing"}`,
-        `Use /${FRIENDLY_COMMAND_NAME} setup ${scope} for the endpoint and /login ${PROVIDER_NAME} for credentials.`,
+        `Saved/env base URL: ${describeConfigValue(config.baseUrl, config.baseUrlSource)}`,
+        "Effective provider endpoint or credential: missing",
+        `Use /${FRIENDLY_COMMAND_NAME} setup ${scope} for a saved endpoint override or /login ${PROVIDER_NAME} for the Pi-owned default endpoint and credential.`,
       ].join("\n"),
       level: "warning",
     };
@@ -1866,7 +1818,7 @@ async function enableGatewayOperation(
     `- Model: ${effectiveDefaultModelId}`,
     "- Thinking: selected by Pi/user settings; Pi may clamp for model capabilities",
     `- Scoped model mode: ${exclusiveScope ? `exclusive (gateway-only: ${ENABLED_MODEL_PATTERN})` : `additive (prepended ${ENABLED_MODEL_PATTERN})`}`,
-    `- Base URL: ${describeConfigValue(config.baseUrl, config.baseUrlSource)}`,
+    `- Base URL: ${runtimeAuth.baseUrl} (effective provider auth)`,
     `- Credential: configured (${runtimeAuth.source})`,
     `- Discovery source: ${state.source}${state.error ? ` (${state.error})` : ""}`,
   ].join("\n");
@@ -1959,10 +1911,10 @@ async function ensureGatewayCredentialsConfigured(
   ctx: ExtensionCommandContext,
   scope: "global" | "project",
 ): Promise<boolean> {
-  let config = getGatewayConfig(ctx.cwd);
+  const config = getGatewayConfig(ctx.cwd);
   bindGatewayProviderContext(ctx);
   const hasCredential = () => gatewayProviderRuntime.authController.hasConfiguredCredential();
-  if (config.baseUrl && (await hasCredential())) {
+  if (await gatewayProviderRuntime.authController.resolveRuntimeAuth(ctx.cwd)) {
     return true;
   }
 
@@ -1991,7 +1943,6 @@ async function ensureGatewayCredentialsConfigured(
     }
   }
 
-  config = getGatewayConfig(ctx.cwd);
   if (!(await hasCredential())) {
     ctx.ui.setEditorText(`/login ${PROVIDER_NAME}`);
     await emitCommandOutput(
@@ -2004,7 +1955,7 @@ async function ensureGatewayCredentialsConfigured(
     return false;
   }
 
-  return Boolean(config.baseUrl);
+  return Boolean(await gatewayProviderRuntime.authController.resolveRuntimeAuth(ctx.cwd));
 }
 
 async function promptAndSaveBaseUrl(

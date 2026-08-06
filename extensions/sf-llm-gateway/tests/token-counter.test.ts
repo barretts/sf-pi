@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { API_KEY_ENV, BASE_URL_ENV } from "../lib/config.ts";
+import { gatewayProviderRuntime } from "../lib/provider.ts";
 import {
   countTokens,
   estimateSpend,
@@ -34,7 +35,7 @@ describe("countTokens", () => {
     const cwd = createProjectConfig({ baseUrl: "", apiKey: "" });
     const result = await countTokens(cwd, { model: "example-model", prompt: "hello" });
     expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/base URL/i);
+    expect(result.error).toMatch(/endpoint or credential/i);
   });
 
   it("returns an error when neither prompt nor messages is provided", async () => {
@@ -67,6 +68,27 @@ describe("countTokens", () => {
       totalTokens: 6,
       tokenizerType: "openai_tokenizer",
     });
+  });
+
+  it("uses the effective endpoint stored with the Pi credential", async () => {
+    delete process.env[BASE_URL_ENV];
+    vi.spyOn(gatewayProviderRuntime.authController, "resolveRuntimeAuth").mockResolvedValue({
+      apiKey: "pi-saved-test-key",
+      baseUrl: "https://gateway.example.test",
+      source: "Pi saved credential",
+    });
+    globalThis.fetch = vi.fn(async () =>
+      jsonResponse(200, {
+        total_tokens: 6,
+        request_model: "example-model",
+        tokenizer_type: "openai_tokenizer",
+      }),
+    ) as typeof fetch;
+    const cwd = createProjectConfig({ baseUrl: "", apiKey: "" });
+
+    const result = await countTokens(cwd, { model: "example-model", prompt: "Hello world" });
+
+    expect(result).toMatchObject({ ok: true, totalTokens: 6 });
   });
 
   it("prefers messages when both prompt and messages are provided", async () => {

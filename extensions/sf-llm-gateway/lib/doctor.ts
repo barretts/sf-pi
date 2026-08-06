@@ -4,7 +4,6 @@ import type { ExtensionDoctorReport } from "../../../lib/common/doctor/registry.
 import {
   API_KEY_ENV,
   CA_BUNDLE_SOURCE_ENV,
-  describeConfigValue,
   FRIENDLY_COMMAND_NAME,
   getGatewayConfig,
   type ConfigSource,
@@ -41,7 +40,7 @@ export type GatewayDoctorCheck = {
 export type GatewayDoctorReport = {
   enabled: boolean;
   baseUrl?: string;
-  baseUrlSource: ConfigSource;
+  baseUrlSource: ConfigSource | "provider-auth";
   apiKeyPresent: boolean;
   apiKeyDescription: string;
   openAiBaseUrl?: string;
@@ -167,6 +166,12 @@ export async function fetchGatewayDoctorReport(cwd: string): Promise<GatewayDoct
   const config = getGatewayConfig(cwd);
   const runtimeAuth = await gatewayProviderRuntime.authController.resolveRuntimeAuth(cwd);
   const effectiveBaseUrl = runtimeAuth?.baseUrl ?? config.baseUrl;
+  const effectiveBaseUrlSource =
+    config.baseUrlSource === "saved"
+      ? "saved"
+      : runtimeAuth
+        ? "provider-auth"
+        : config.baseUrlSource;
   const openAiBaseUrl = effectiveBaseUrl ? toGatewayOpenAiBaseUrl(effectiveBaseUrl) : undefined;
   const anthropicRootUrl = effectiveBaseUrl ? toGatewayRootBaseUrl(effectiveBaseUrl) : undefined;
   const checks: GatewayDoctorCheck[] = [];
@@ -238,7 +243,7 @@ export async function fetchGatewayDoctorReport(cwd: string): Promise<GatewayDoct
   return {
     enabled: config.enabled,
     baseUrl: effectiveBaseUrl,
-    baseUrlSource: config.baseUrlSource,
+    baseUrlSource: effectiveBaseUrlSource,
     apiKeyPresent: Boolean(runtimeAuth),
     apiKeyDescription: runtimeAuth ? `configured (${runtimeAuth.source})` : "missing",
     openAiBaseUrl,
@@ -393,7 +398,7 @@ export function formatGatewayDoctorReport(report: GatewayDoctorReport): string {
     "SF LLM Gateway Doctor",
     "",
     `Provider enabled: ${report.enabled ? "yes" : "no"}`,
-    `Configured URL: ${describeConfigValue(report.baseUrl, report.baseUrlSource)}`,
+    `Configured URL: ${report.baseUrl ? `${report.baseUrl} (${report.baseUrlSource})` : "missing"}`,
     `OpenAI route: ${report.openAiBaseUrl ?? "missing"}`,
     `Claude/admin root: ${report.anthropicRootUrl ?? "missing"}`,
     `API key: ${report.apiKeyDescription}`,

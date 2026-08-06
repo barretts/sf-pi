@@ -16,6 +16,7 @@ import {
   refreshUsageDetails,
   registerGatewayMonthlyUsageRefresher,
 } from "../lib/monthly-usage.ts";
+import { gatewayProviderRuntime } from "../lib/provider.ts";
 
 const originalFetch = globalThis.fetch;
 const originalBaseUrl = process.env[BASE_URL_ENV];
@@ -69,6 +70,31 @@ describe("gateway monthly usage refresh", () => {
     try {
       await getMonthlyUsageStateRefresh(true, cwd);
 
+      expect(getMonthlyUsageState().connectionStatus).toMatchObject({
+        kind: "connected",
+        source: "user-info",
+      });
+    } finally {
+      unregister();
+    }
+  });
+
+  it("uses the effective endpoint stored with the Pi credential", async () => {
+    delete process.env[BASE_URL_ENV];
+    delete process.env[API_KEY_ENV];
+    vi.spyOn(gatewayProviderRuntime.authController, "resolveRuntimeAuth").mockResolvedValue({
+      apiKey: "pi-saved-test-key",
+      baseUrl: "https://gateway.example.test",
+      source: "Pi saved credential",
+    });
+    mockGatewayFetch({ userStatus: 200, keyStatus: 200, healthStatus: 200 });
+    const unregister = registerGatewayMonthlyUsageRefresher();
+    const cwd = createProjectConfig({ baseUrl: "", apiKey: "" });
+
+    try {
+      await getMonthlyUsageStateRefresh(true, cwd);
+
+      expect(getMonthlyUsageState().monthlyUsage?.spend).toBe(42);
       expect(getMonthlyUsageState().connectionStatus).toMatchObject({
         kind: "connected",
         source: "user-info",

@@ -98,11 +98,14 @@ Use Pi's provider login as the primary connection flow:
 /login sf-llm-gateway
   → review URL (Enter keeps the current value)
   → enter API key in SF Pi's masked component
-  → Pi persists the credential and refreshes provider models
+  → Pi persists the credential and starts a bounded provider refresh
 ```
 
-`/sf-llm-gateway setup [global|project]` is now non-secret configuration only:
-endpoint overrides, model scope, help URL, and certificate preferences.
+`/sf-llm-gateway setup [global|project]` is non-secret, persistence-only
+configuration for the saved endpoint override and scoped model mode. It performs
+no model discovery, usage probe, enable, or disable work; those remain explicit
+Manager actions and slash subcommands. Help and certificate settings remain
+available through their documented environment or saved-config fields.
 
 Adjacent **Connect** group rows make the rest of the onboarding self-service:
 
@@ -306,6 +309,7 @@ extensions/sf-llm-gateway/
     global-config.test.ts   ← unit / smoke test
     lifecycle.test.ts       ← unit / smoke test
     manager-actions.test.ts ← unit / smoke test
+    manager-setup.test.ts   ← unit / smoke test
     model-resolution.test.ts← unit / smoke test
     models.test.ts          ← unit / smoke test
     monthly-usage.test.ts   ← unit / smoke test
@@ -404,6 +408,14 @@ sentinel rather than a callable model id. The extension filters that sentinel
 from `/v1/models`; when no callable peers remain, discovery fails without
 replacing the last successful cached catalog. Run `/sf-llm-gateway doctor` to
 verify endpoint and credential readiness.
+
+**Login says the API key was saved but the model catalog could not be refreshed:**
+Credential persistence succeeded, but the required `/v1/models` request failed.
+Run `/sf-llm-gateway doctor` to distinguish authentication, wrong-root/redirect,
+TLS, timeout, and service failures. The status report preserves only bounded,
+public-safe failure categories and says explicitly when no cached catalog is
+available. Setup remains usable because saving non-secret settings never waits
+for discovery.
 
 **Gateway fails on startup or tool calls error out immediately:**
 Run `/login sf-llm-gateway` for first-time onboarding. Login collects

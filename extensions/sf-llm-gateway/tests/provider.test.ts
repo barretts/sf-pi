@@ -9,6 +9,7 @@ import {
   InMemoryModelsStore,
   createAssistantMessageEventStream,
   createModels,
+  createProvider,
   type Api,
   type ApiKeyAuth,
   type AssistantMessage,
@@ -17,6 +18,7 @@ import {
   type StreamOptions,
 } from "@earendil-works/pi-ai";
 import { ModelRuntime, type ExtensionUIContext } from "@earendil-works/pi-coding-agent";
+import { compareVersions, getInstalledPiVersion } from "../../../lib/common/pi-compat.ts";
 import { PROVIDER_NAME } from "../lib/config.ts";
 import type { GatewayModelInfoMap } from "../lib/models.ts";
 import type { GatewayModelIdDiscovery } from "../lib/models-internal/fetchers.ts";
@@ -309,16 +311,13 @@ describe("complete native Gateway Provider", () => {
 
     const refreshed = await models.refresh({ allowNetwork: true });
     expect(refreshed.errors.size).toBe(0);
-    expect(network.modelIds).toHaveBeenCalledWith(
-      "https://active.example.test",
-      "native-key",
-      undefined,
-    );
-    expect(network.modelInfo).toHaveBeenCalledWith(
-      "https://active.example.test",
-      "native-key",
-      undefined,
-    );
+    const modelIdCall = vi.mocked(network.modelIds).mock.calls[0];
+    const modelInfoCall = vi.mocked(network.modelInfo).mock.calls[0];
+    expect(modelIdCall?.slice(0, 2)).toEqual(["https://active.example.test", "native-key"]);
+    expect(modelInfoCall?.slice(0, 2)).toEqual(["https://active.example.test", "native-key"]);
+    // Pi 0.84 always supplies a concrete signal; Pi 0.82/0.83 may omit it.
+    if (modelIdCall?.[2] !== undefined) expect(modelIdCall[2]).toBeInstanceOf(AbortSignal);
+    if (modelInfoCall?.[2] !== undefined) expect(modelInfoCall[2]).toBeInstanceOf(AbortSignal);
     expect(models.getModel(PROVIDER_NAME, "cached-only")).toBeUndefined();
     expect(models.getModel(PROVIDER_NAME, "example-responses-model")?.name).not.toBe(
       "Cached GPT override",
@@ -352,7 +351,9 @@ describe("complete native Gateway Provider", () => {
       new Error("gateway unavailable at https://active.example.test?token=native-key"),
     );
     const failed = await models.refresh({ allowNetwork: true });
-    expect(failed.errors.get(PROVIDER_NAME)?.message).toBe("Gateway model refresh failed.");
+    expect(failed.errors.get(PROVIDER_NAME)?.message).toBe(
+      "Gateway model refresh failed. Run /sf-llm-gateway doctor.",
+    );
     expect(models.getModel(PROVIDER_NAME, "fresh-chat")).toBeDefined();
     expect((await modelsStore.read(PROVIDER_NAME))?.models.map((model) => model.id)).toEqual([
       "example-responses-model",
@@ -363,7 +364,7 @@ describe("complete native Gateway Provider", () => {
       modelIds: runtime.provider.getModels().map((model) => model.id),
       discoveredAt: "2026-07-23T01:02:03.000Z",
       filteredModelIds: ["no-default-models"],
-      error: "Gateway model refresh failed.",
+      error: "Gateway model refresh failed. Run /sf-llm-gateway doctor.",
     });
     expect(JSON.stringify(runtime.getLastDiscovery())).not.toMatch(/active\.example|native-key/u);
   });
@@ -408,6 +409,66 @@ describe("complete native Gateway Provider", () => {
     expect(JSON.stringify(runtime.getLastDiscovery())).not.toMatch(/active\.example|native-key/u);
   });
 
+  it.runIf(compareVersions(getInstalledPiVersion() ?? "0.0.0", "0.84.0") >= 0)(
+    "uses Pi 0.84 provider-scoped refresh without touching unrelated catalogs",
+    async () => {
+      const network = fetchers({ ids: ["gateway-only"], filteredIds: [] });
+      const runtime = createGatewayProviderRuntime({
+        authController: authController(),
+        fetchers: network,
+      });
+      const unrelatedFetch = vi.fn(async () => new Promise<readonly Model<Api>[]>(() => undefined));
+      const unrelatedProvider = createProvider({
+        id: "unrelated-dynamic-provider",
+        name: "Unrelated Dynamic Provider",
+        auth: {
+          apiKey: {
+            name: "test",
+            resolve: async ({ credential }) =>
+              credential?.type === "api_key" && credential.key
+                ? { auth: { apiKey: credential.key }, source: "test" }
+                : undefined,
+          },
+        },
+        models: [],
+        fetchModels: unrelatedFetch,
+        api: {
+          stream: (model) => completedStream(model),
+          streamSimple: (model) => completedStream(model),
+        },
+      });
+      const credentials = new InMemoryCredentialStore();
+      await credentials.modify(PROVIDER_NAME, async () => ({
+        type: "api_key",
+        key: "gateway-key",
+      }));
+      await credentials.modify("unrelated-dynamic-provider", async () => ({
+        type: "api_key",
+        key: "unrelated-key",
+      }));
+      const models = createModels({ credentials, modelsStore: new InMemoryModelsStore() });
+      models.setProvider(runtime.provider);
+      models.setProvider(unrelatedProvider);
+
+      const refresh = models.refresh.bind(models) as unknown as (options: {
+        allowNetwork: boolean;
+        providers: readonly string[];
+        signal: AbortSignal;
+      }) => Promise<{ aborted: boolean; errors: ReadonlyMap<string, Error> }>;
+      const result = await refresh({
+        allowNetwork: true,
+        providers: [PROVIDER_NAME],
+        signal: new AbortController().signal,
+      });
+
+      expect(result.aborted).toBe(false);
+      expect(result.errors.size).toBe(0);
+      expect(network.modelIds).toHaveBeenCalledOnce();
+      expect(unrelatedFetch).not.toHaveBeenCalled();
+      expect(models.getModel(PROVIDER_NAME, "gateway-only")).toBeDefined();
+    },
+  );
+
   it("keeps callable peers when discovery also reports non-callable sentinels", async () => {
     const network = fetchers({
       ids: ["callable-peer", "no-default-models"],
@@ -439,33 +500,34 @@ describe("complete native Gateway Provider", () => {
       write: (entry: Parameters<typeof store.write>[1]) => store.write(PROVIDER_NAME, entry),
       delete: () => store.delete(PROVIDER_NAME),
     };
+    const refresh = runtime.provider.refreshModels as unknown as (
+      context: Record<string, unknown>,
+    ) => Promise<void>;
+    const refreshWith = (credential: Record<string, unknown>) =>
+      refresh({
+        credential,
+        // Pi <=0.83 reads store; Pi 0.84 uses stored + publish.
+        store: scopedStore,
+        stored: undefined,
+        publish: async () => true,
+        allowNetwork: true,
+        signal: new AbortController().signal,
+      });
 
+    await expect(refreshWith({ type: "api_key", key: "key" })).rejects.toThrow(
+      "resolved gateway root URL",
+    );
     await expect(
-      runtime.provider.refreshModels?.({
-        credential: { type: "api_key", key: "key" },
-        store: scopedStore,
-        allowNetwork: true,
-      }),
-    ).rejects.toThrow("resolved gateway root URL");
-    await expect(
-      runtime.provider.refreshModels?.({
-        credential: {
-          type: "api_key",
-          env: { [GATEWAY_RESOLVED_ROOT_ENV]: "https://gateway.example.test" },
-        },
-        store: scopedStore,
-        allowNetwork: true,
+      refreshWith({
+        type: "api_key",
+        env: { [GATEWAY_RESOLVED_ROOT_ENV]: "https://gateway.example.test" },
       }),
     ).rejects.toThrow("resolved API key");
     await expect(
-      runtime.provider.refreshModels?.({
-        credential: {
-          type: "api_key",
-          key: "key",
-          env: { [GATEWAY_RESOLVED_ROOT_ENV]: "https://gateway.example.test" },
-        },
-        store: scopedStore,
-        allowNetwork: true,
+      refreshWith({
+        type: "api_key",
+        key: "key",
+        env: { [GATEWAY_RESOLVED_ROOT_ENV]: "https://gateway.example.test" },
       }),
     ).rejects.toThrow("zero callable models");
     expect(runtime.provider.getModels()).toEqual([]);
@@ -485,7 +547,9 @@ describe("complete native Gateway Provider", () => {
       new Error("private https://project-a.example.test token=project-a-secret"),
     );
     await models.refresh({ allowNetwork: true });
-    expect(runtime.getLastDiscovery().error).toBe("Gateway model refresh failed.");
+    expect(runtime.getLastDiscovery().error).toBe(
+      "Gateway model refresh failed. Run /sf-llm-gateway doctor.",
+    );
 
     runtime.bind("/workspace/project-b", UNUSED_UI, "tui");
     expect(runtime.getLastDiscovery()).not.toHaveProperty("error");

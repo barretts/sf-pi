@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Changed
 
+- **Advanced the audited Pi runtime edge to 0.84 without raising the 0.82 floor.** Development packages and repair guidance now use exact Pi 0.84.0, required nightly compatibility covers 0.82/0.83/0.84, and Gateway discovery uses Pi 0.84's provider-scoped cancellable refresh while older supported runtimes keep their existing fallback behavior.
 - **Added advisory Salesforce Instruction Surface diagnostics and behavior regression.** SF Brain reports content-safe counts and bundled-baseline deltas in the Manager and through `npm run instruction-surface:report`; the opt-in behavior harness allows local context reads and blocks every non-local tool before execution.
 - **Reduced always-visible Salesforce guidance without changing eager tool availability or complete schemas.** The new constitution, compact environment and Guardrail summaries, tiny routing summary, per-extension guides, and deduplicated tool guidance reduce SF Pi-owned context while retaining one-call tool ergonomics.
 - **Made stable Pi 0.x releases forward-compatible by default.** SF Pi now hard-blocks only runtimes older than 0.81.1, prereleases, and Pi 1.x+, while newer stable 0.x releases load with one process-wide warning instead of disabling every extension. The peer range is `>=0.81.1 <1.0.0`; required CI remains pinned to the audited 0.81.1/0.82.0 edges, and an advisory nightly `latest` canary reports future drift without blocking users.
@@ -232,6 +233,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Bug Fixes
 
+- **sf-llm-gateway: make setup and runtime status agree with Pi-owned authentication.** Setup now persists non-secret overrides without waiting on model or usage network work, runtime consumers consistently use the effective endpoint stored with Pi credentials, and status distinguishes saved overrides from effective provider auth. Model discovery failures retain bounded authentication/route/service/timeout guidance with a Doctor handoff and explicitly report whether last-known models were retained.
 - **sf-llm-gateway: preserve explicit gateway model allow-lists
   across restarts (#163).** Startup now registers the previous local model
   discovery cache immediately after the bootstrap catalog, before Pi resolves

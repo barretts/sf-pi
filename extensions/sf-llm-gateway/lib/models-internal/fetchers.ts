@@ -19,33 +19,79 @@ export interface GatewayModelIdDiscovery {
   filteredIds: string[];
 }
 
+/** Safe, public diagnostic produced by the required model-discovery request. */
+export class GatewayModelDiscoveryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GatewayModelDiscoveryError";
+  }
+}
+
+function modelDiscoveryHttpError(status: number): GatewayModelDiscoveryError {
+  if (status === 401 || status === 403) {
+    return new GatewayModelDiscoveryError(
+      `Gateway model discovery authentication failed (${status}). Run /sf-llm-gateway doctor.`,
+    );
+  }
+  if (status === 404) {
+    return new GatewayModelDiscoveryError(
+      "Gateway model discovery endpoint was not found (404). Run /sf-llm-gateway doctor.",
+    );
+  }
+  if (status >= 500) {
+    return new GatewayModelDiscoveryError(
+      `Gateway model discovery service failed (${status}). Run /sf-llm-gateway doctor.`,
+    );
+  }
+  return new GatewayModelDiscoveryError(
+    `Gateway model discovery request failed (${status}). Run /sf-llm-gateway doctor.`,
+  );
+}
+
 export async function fetchGatewayModelIdDiscovery(
   baseUrl: string,
   apiKey: string,
   signal?: AbortSignal,
 ): Promise<GatewayModelIdDiscovery> {
-  const response = await fetchWithTimeout(
-    `${toGatewayOpenAiBaseUrl(baseUrl)}/models`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `${toGatewayOpenAiBaseUrl(baseUrl)}/models`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        signal,
       },
-      signal,
-    },
-    MODEL_FETCH_TIMEOUT_MS,
-  );
+      MODEL_FETCH_TIMEOUT_MS,
+    );
+  } catch (error) {
+    // Pi-owned cancellation must retain its original abort reason. Internal
+    // timeout/network failures are converted to public-safe guidance.
+    if (signal?.aborted) throw error;
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new GatewayModelDiscoveryError(
+        "Gateway model discovery timed out after 10 seconds. Run /sf-llm-gateway doctor.",
+      );
+    }
+    throw new GatewayModelDiscoveryError(
+      "Gateway model discovery request failed. Run /sf-llm-gateway doctor.",
+    );
+  }
 
   if (!response.ok) {
-    throw new Error(`Gateway model fetch failed (${response.status}).`);
+    throw modelDiscoveryHttpError(response.status);
   }
 
   let json: { data?: Array<{ id?: string }> };
   try {
     json = (await response.json()) as { data?: Array<{ id?: string }> };
   } catch {
-    throw new Error("Gateway model response could not be parsed.");
+    throw new GatewayModelDiscoveryError(
+      "Gateway model discovery returned an invalid response. Run /sf-llm-gateway doctor.",
+    );
   }
 
   const ids: string[] = [];

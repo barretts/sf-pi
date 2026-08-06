@@ -16,7 +16,6 @@
  * returned value so the command handler can stay linear and render
  * consistent output whether the gateway is healthy, slow, or 401.
  */
-import { getGatewayConfig } from "./config.ts";
 import { gatewayProviderRuntime } from "./provider.ts";
 import { toGatewayRootBaseUrl } from "./gateway-url.ts";
 import { fetchWithTimeout } from "./models.ts";
@@ -57,9 +56,6 @@ export interface TokenProbeInput {
  * local tokenizer that drifts from upstream.
  */
 export async function countTokens(cwd: string, input: TokenProbeInput): Promise<TokenCountResult> {
-  if (!getGatewayConfig(cwd).baseUrl) {
-    return { ok: false, model: input.model, error: "Missing gateway base URL." };
-  }
   const runtimeAuth = await gatewayProviderRuntime.authController.resolveRuntimeAuth(cwd);
   if (!runtimeAuth) {
     return { ok: false, model: input.model, error: "Missing Gateway endpoint or credential." };
@@ -138,9 +134,6 @@ export async function estimateSpend(
   cwd: string,
   input: TokenProbeInput,
 ): Promise<SpendEstimateResult> {
-  if (!getGatewayConfig(cwd).baseUrl) {
-    return { ok: false, model: input.model, error: "Missing gateway base URL." };
-  }
   const runtimeAuth = await gatewayProviderRuntime.authController.resolveRuntimeAuth(cwd);
   if (!runtimeAuth) {
     return { ok: false, model: input.model, error: "Missing Gateway endpoint or credential." };

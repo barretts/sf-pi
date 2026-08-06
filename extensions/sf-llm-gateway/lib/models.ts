@@ -300,6 +300,7 @@ export {
   fetchGatewayModelIds,
   fetchGatewayModelInfoMap,
   fetchWithTimeout,
+  GatewayModelDiscoveryError,
   type GatewayModelIdDiscovery,
 } from "./models-internal/fetchers.ts";
 

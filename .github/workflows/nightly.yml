@@ -69,6 +69,8 @@ jobs:
             experimental: false
           - pi-version: "0.83.0"
             experimental: false
+          - pi-version: "0.84.0"
+            experimental: false
           - pi-version: "latest"
             experimental: true
 

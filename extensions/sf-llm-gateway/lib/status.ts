@@ -11,6 +11,7 @@ import {
   PROVIDER_NAME,
   describeConfigValue,
   getGatewayConfig,
+  getMergedSavedGatewayConfig,
   getSavedExclusiveScopeStatus,
   globalGatewayConfigPath,
   projectGatewayConfigPath,
@@ -34,6 +35,11 @@ import { glyph, resolveGlyphMode } from "../../../lib/common/glyph-policy.ts";
 // the badge formatter from the status surface without reaching into the
 // telemetry module directly.
 export { formatProviderSignalBadge } from "./provider-telemetry.ts";
+
+export interface GatewayStatusReportOptions {
+  /** Effective non-secret endpoint resolved through Pi provider authentication. */
+  effectiveBaseUrl?: string;
+}
 
 export interface GatewayRuntimeStatusState {
   discovery: GatewayNativeDiscoveryState | null;
@@ -72,8 +78,10 @@ export function buildStatusReport(
   ctx: ExtensionContext,
   providerRegistered: boolean,
   state: GatewayRuntimeStatusState,
+  options: GatewayStatusReportOptions = {},
 ): string {
   const config = getGatewayConfig(ctx.cwd);
+  const savedConfig = getMergedSavedGatewayConfig(ctx.cwd);
   const savedScope = getSavedExclusiveScopeStatus(ctx.cwd);
   const activeModel = getActiveModelDefinition(ctx.model?.id, state.discovery?.modelIds);
   const contextUsage = ctx.getContextUsage();
@@ -88,7 +96,12 @@ export function buildStatusReport(
     "",
     `Provider enabled: ${config.enabled ? "yes" : "no"}`,
     `Provider registered: ${providerRegistered ? "yes" : "no"}`,
-    `Base URL: ${describeConfigValue(config.baseUrl, config.baseUrlSource)}`,
+    `Base URL: ${
+      options.effectiveBaseUrl
+        ? `${options.effectiveBaseUrl} (effective provider auth)`
+        : describeConfigValue(config.baseUrl, config.baseUrlSource)
+    }`,
+    `Saved base URL override: ${savedConfig.baseUrl ?? "missing"}`,
     `Credential: ${authDescription}`,
     `Saved config files: ${globalGatewayConfigPath()}, ${projectGatewayConfigPath(ctx.cwd)}`,
     `Saved scope fallback: project=${savedScope.project}, global=${savedScope.global}, effective=${savedScope.effective} (${savedScope.effectiveSource})`,
@@ -107,6 +120,15 @@ export function buildStatusReport(
     "",
     `Model discovery: ${discovery?.source ?? "not run"}${discovery?.error ? ` ⚠ ${discovery.error}` : ""}`,
     `Discovered models: ${discovery?.modelIds.length ?? 0}`,
+    ...(discovery?.error
+      ? [
+          `Catalog fallback: ${
+            discovery.modelIds.length > 0
+              ? `${discovery.modelIds.length} last-known model${discovery.modelIds.length === 1 ? "" : "s"} retained`
+              : "no cached catalog available"
+          }`,
+        ]
+      : []),
     "",
     ...buildProviderTelemetryReport(),
     ...buildWireTraceReport(),

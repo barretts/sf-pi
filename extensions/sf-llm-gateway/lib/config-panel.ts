@@ -33,18 +33,10 @@ import { getTextViewport, type SetupOverlayState, getSetupOverlayState } from ".
 // Types
 // -------------------------------------------------------------------------------------------------
 
-type PanelField =
-  | "baseUrl"
-  | "exclusiveScope"
-  | "open-token"
-  | "import-claude"
-  | "save-enable"
-  | "save"
-  | "disable"
-  | "cancel";
+type PanelField = "baseUrl" | "exclusiveScope" | "open-token" | "import-claude" | "save" | "cancel";
 
 type GatewayConfigPanelResult = ConfigPanelResult & {
-  gatewayAction?: "open-token" | "import-claude" | "save-enable" | "save" | "disable";
+  gatewayAction?: "open-token" | "import-claude" | "save";
   baseUrl?: string;
 };
 
@@ -53,8 +45,6 @@ type ExclusiveScopeMode = "inherit" | "exclusive" | "additive";
 type ConfigPanelOptions = {
   /** Show token-page / Claude Code import buttons. Used by the standalone setup overlay. */
   externalActions?: boolean;
-  /** Show enable/disable actions. These require entry-point orchestration after the panel closes. */
-  lifecycleActions?: boolean;
   /** Close after save and return a gatewayAction to the host. Manager-hosted settings save in place. */
   closeOnSave?: boolean;
 };
@@ -170,9 +160,7 @@ export class GatewayConfigPanelComponent implements Focusable {
       "baseUrl",
       "exclusiveScope",
       ...(options.externalActions ? (["open-token", "import-claude"] as const) : []),
-      ...(options.lifecycleActions ? (["save-enable"] as const) : []),
       "save",
-      ...(options.lifecycleActions ? (["disable"] as const) : []),
       "cancel",
     ];
     this.state = getSetupOverlayState(cwd, scope);
@@ -264,9 +252,7 @@ export class GatewayConfigPanelComponent implements Focusable {
       pad(
         ` ${theme.fg(
           "dim",
-          this.options.lifecycleActions
-            ? `Enable refreshes ${PROVIDER_NAME} and selects from discovered models without changing thinking.`
-            : `Use the detail-page Enable action to refresh ${PROVIDER_NAME}; Pi/user settings keep thinking authority.`,
+          `Use the detail-page Enable action to refresh ${PROVIDER_NAME}; Pi/user settings keep thinking authority.`,
         )}`,
       ),
     );
@@ -282,7 +268,7 @@ export class GatewayConfigPanelComponent implements Focusable {
     lines.push(pad(`   ${this.renderTextField("baseUrl", width - 4)}`));
     lines.push(
       pad(
-        `   ${theme.fg("muted", `Effective now: ${describeConfigValue(effective.baseUrl, effective.baseUrlSource)}`)}`,
+        `   ${theme.fg("muted", `Saved/env preview: ${describeConfigValue(effective.baseUrl, effective.baseUrlSource)}`)}`,
       ),
     );
     if (this.state.effectiveConfig.baseUrlSource === "env") {
@@ -328,9 +314,7 @@ export class GatewayConfigPanelComponent implements Focusable {
         pad(
           `   ${theme.fg(
             "dim",
-            this.options.lifecycleActions
-              ? "Save + enable writes gateway-only scoped models and restores the previous scope on disable."
-              : "The detail-page Enable action will write gateway-only scoped models and restore the previous scope on disable.",
+            "The detail-page Enable action will write gateway-only scoped models and restore the previous scope on disable.",
           )}`,
         ),
       );
@@ -339,9 +323,7 @@ export class GatewayConfigPanelComponent implements Focusable {
         pad(
           `   ${theme.fg(
             "dim",
-            this.options.lifecycleActions
-              ? `Save + enable prepends ${PROVIDER_NAME}/* while preserving other scoped models.`
-              : `The detail-page Enable action will prepend ${PROVIDER_NAME}/* while preserving other scoped models.`,
+            `The detail-page Enable action will prepend ${PROVIDER_NAME}/* while preserving other scoped models.`,
           )}`,
         ),
       );
@@ -373,22 +355,9 @@ export class GatewayConfigPanelComponent implements Focusable {
         ),
       );
     }
-    if (this.options.lifecycleActions) {
-      lines.push(
-        pad(
-          `   ${this.renderButton("save-enable", "Save + enable default model")}  ${this.renderButton("save", "Save only")}`,
-        ),
-      );
-      lines.push(
-        pad(
-          `   ${this.renderButton("disable", "Disable")}  ${this.renderButton("cancel", "Cancel")}`,
-        ),
-      );
-    } else {
-      lines.push(
-        pad(`   ${this.renderButton("save", "Save")}  ${this.renderButton("cancel", "Cancel")}`),
-      );
-    }
+    lines.push(
+      pad(`   ${this.renderButton("save", "Save")}  ${this.renderButton("cancel", "Cancel")}`),
+    );
     lines.push(pad(""));
 
     // Status / error line
@@ -417,15 +386,6 @@ export class GatewayConfigPanelComponent implements Focusable {
   }
 
   invalidate(): void {}
-
-  /**
-   * Get the result to pass to the save logic.
-   * Returns the action and field values for the host to process.
-   */
-  getAction(): "save-enable" | "save" | "disable" | undefined {
-    // This is used by the standalone overlay wrapper
-    return undefined;
-  }
 
   // --- Private helpers ---
 
@@ -504,18 +464,11 @@ export class GatewayConfigPanelComponent implements Focusable {
   }
 
   private renderButton(
-    field: "open-token" | "import-claude" | "save-enable" | "save" | "disable" | "cancel",
+    field: "open-token" | "import-claude" | "save" | "cancel",
     label: string,
   ): string {
     const focused = this.currentFocus() === field;
-    const color =
-      field === "save-enable"
-        ? "success"
-        : field === "disable"
-          ? "warning"
-          : field === "cancel"
-            ? "muted"
-            : "accent";
+    const color = field === "cancel" ? "muted" : "accent";
     const text = `[ ${label} ]`;
     if (focused) {
       return this.theme.bg("selectedBg", this.theme.fg("text", text));
@@ -636,10 +589,11 @@ export class GatewayConfigPanelComponent implements Focusable {
         this.focusIndex = 0;
         return;
       }
-      const effective = this.resolveEffectivePreview(normalizedSavedBaseUrl);
+      const savedBaseUrl =
+        this.state.higherSavedBaseUrl ?? normalizedSavedBaseUrl ?? this.state.lowerSavedBaseUrl;
       this.done({
         gatewayAction: "open-token",
-        baseUrl: effective.baseUrl,
+        baseUrl: savedBaseUrl,
       } as GatewayConfigPanelResult);
       return;
     }
@@ -653,15 +607,6 @@ export class GatewayConfigPanelComponent implements Focusable {
       this.errorMessage = "Saved base URL must be blank or a valid http:// or https:// URL.";
       this.focusIndex = 0;
       return;
-    }
-
-    if (focus === "save-enable") {
-      const effective = this.resolveEffectivePreview(normalizedSavedBaseUrl);
-      if (!effective.baseUrl) {
-        this.errorMessage = `Enter a saved base URL before enabling. ${BASE_URL_ENV} is only an automation fallback.`;
-        this.focusIndex = 0;
-        return;
-      }
     }
 
     // Save the config
@@ -682,16 +627,9 @@ export class GatewayConfigPanelComponent implements Focusable {
       saved.exclusiveScope = savedExclusiveScope;
     }
 
-    if (focus === "save-enable") {
-      saved.enabled = true;
-    } else if (focus === "disable") {
-      saved.enabled = false;
-    }
-
     const changed = this.isDirty(normalizedSavedBaseUrl);
-    const needsReload = focus === "save-enable" || focus === "disable";
 
-    if (!changed && !needsReload && !this.options.closeOnSave) {
+    if (!changed && !this.options.closeOnSave) {
       this.savedMessage = "No changes to save.";
       this.errorMessage = null;
       return;
@@ -700,10 +638,8 @@ export class GatewayConfigPanelComponent implements Focusable {
     writeGatewaySavedConfig(configPath, saved);
     this.markSaved(normalizedSavedBaseUrl, savedExclusiveScope);
 
-    // Signal reload needed for enable/disable actions. Manager-hosted settings
-    // save in place and report the reload requirement when the user backs out.
     if (this.options.closeOnSave) {
-      this.done({ needsReload, gatewayAction: focus } as GatewayConfigPanelResult);
+      this.done({ needsReload: false, gatewayAction: "save" } as GatewayConfigPanelResult);
       return;
     }
 

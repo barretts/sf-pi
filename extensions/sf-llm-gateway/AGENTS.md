@@ -76,6 +76,13 @@ copy.
 5. **Settings mutations go through `lib/pi-settings.ts`.** Don't write JSON from
    ad-hoc call sites. The helpers handle global vs project scope, additive vs
    exclusive mode, and generic stale-suffix repair.
+6. **Runtime connectivity comes from provider auth.** `getGatewayConfig()` is
+   the non-secret saved/env configuration view; request, status, usage, token,
+   and readiness paths use `authController.resolveRuntimeAuth()` for the
+   effective endpoint and credential. Never require both views to contain a URL.
+7. **Setup is persistence-only.** Saving endpoint or scope overrides performs no
+   discovery, usage probe, enable, disable, or model selection. Keep network and
+   lifecycle intent on the existing explicit actions.
 
 ## Command handler pattern
 

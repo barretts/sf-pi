@@ -23,7 +23,10 @@ import {
   type TaggedGatewayModel,
 } from "./models.ts";
 import { filterCallableDiscoveredModelIds } from "./models-internal/discovery-sentinels.ts";
-import type { GatewayModelIdDiscovery } from "./models-internal/fetchers.ts";
+import {
+  GatewayModelDiscoveryError,
+  type GatewayModelIdDiscovery,
+} from "./models-internal/fetchers.ts";
 import {
   GATEWAY_RESOLVED_ROOT_ENV,
   createGatewayProviderAuth,
@@ -182,10 +185,11 @@ function requireRefreshConfig(context: RefreshModelsContext): {
 
 function sanitizedRefreshError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
+  if (error instanceof GatewayModelDiscoveryError) return message;
   if (message === "Gateway returned zero callable models.") return message;
   if (message === "Gateway model refresh requires a resolved API key.") return message;
   if (message === "Gateway model refresh requires a resolved gateway root URL.") return message;
-  return "Gateway model refresh failed.";
+  return "Gateway model refresh failed. Run /sf-llm-gateway doctor.";
 }
 
 export function createGatewayProviderRuntime(

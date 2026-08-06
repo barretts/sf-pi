@@ -23,12 +23,21 @@ import {
 import type { SecureCredentialPromptBridge } from "../../../lib/common/secure-credential-prompt.ts";
 
 const UNUSED_UI = {} as ExtensionUIContext;
+const TEST_SIGNAL = new AbortController().signal;
 
 function authContext(values: Record<string, string | undefined>): AuthContext {
   return {
     env: async (name) => values[name],
     fileExists: async () => false,
   };
+}
+
+function authRequest(
+  ctx: AuthContext,
+  credential?: { type: "api_key"; key?: string; env?: Record<string, string> },
+) {
+  // Pi 0.84 requires a concrete signal; older runtime typings omit it.
+  return { ctx, credential, signal: TEST_SIGNAL } as never;
 }
 
 function makePromptBridge(value = "canonical-login-key"): SecureCredentialPromptBridge {
@@ -67,7 +76,7 @@ async function resolve(
 ) {
   const controller = createGatewayProviderAuth(dependencies);
   controller.bind("/workspace/project-a", UNUSED_UI, "tui");
-  return controller.auth.resolve({ ctx: authContext(values), credential });
+  return controller.auth.resolve(authRequest(authContext(values), credential));
 }
 
 describe("Gateway complete-Provider auth resolution", () => {
@@ -158,11 +167,11 @@ describe("Gateway complete-Provider auth resolution", () => {
     const ctx = authContext({ [API_KEY_ENV]: "automation-private" });
 
     controller.bind("/workspace/project-a", UNUSED_UI, "tui");
-    const projectA = await controller.auth.resolve({ ctx });
+    const projectA = await controller.auth.resolve(authRequest(ctx));
     controller.bind("/workspace/project-b", UNUSED_UI, "tui");
-    const projectB = await controller.auth.resolve({ ctx });
+    const projectB = await controller.auth.resolve(authRequest(ctx));
     controller.clear();
-    const global = await controller.auth.resolve({ ctx });
+    const global = await controller.auth.resolve(authRequest(ctx));
 
     expect(projectA).toMatchObject({
       auth: { apiKey: "automation-private" },
@@ -192,7 +201,11 @@ describe("Gateway complete-Provider auth resolution", () => {
     controller.bind("/workspace/project-a", UNUSED_UI, "tui");
     const prompt = vi.fn(async () => "https://gateway.example.test/v1");
 
-    const credential = await controller.auth.login?.({ prompt, notify: vi.fn() });
+    const credential = await controller.auth.login?.({
+      prompt,
+      notify: vi.fn(),
+      signal: TEST_SIGNAL,
+    } as never);
 
     expect(prompt).toHaveBeenCalledWith({
       type: "text",
@@ -211,7 +224,7 @@ describe("Gateway complete-Provider auth resolution", () => {
     const dependencies = makeDependencies();
     const controller = createGatewayProviderAuth(dependencies);
     controller.bind("/workspace/project-a", UNUSED_UI, "tui");
-    const input = { ctx: authContext({ [API_KEY_ENV]: "env-private" }) };
+    const input = authRequest(authContext({ [API_KEY_ENV]: "env-private" }));
 
     const checked = await controller.auth.check?.(input);
     const resolved = await controller.auth.resolve(input);

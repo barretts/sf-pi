@@ -6,10 +6,11 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { GatewayConfigPanelComponent } from "../lib/config-panel.ts";
-import { projectGatewayConfigPath, readGatewaySavedConfig } from "../lib/config.ts";
+import { BASE_URL_ENV, projectGatewayConfigPath, readGatewaySavedConfig } from "../lib/config.ts";
 
 const PI_AGENT_ENV = "PI_CODING_AGENT_DIR";
 const originalAgentDir = process.env[PI_AGENT_ENV];
+const originalBaseUrl = process.env[BASE_URL_ENV];
 let tempAgentDir: string;
 let tempProjectDir: string;
 
@@ -31,6 +32,8 @@ afterEach(() => {
   } else {
     process.env[PI_AGENT_ENV] = originalAgentDir;
   }
+  if (originalBaseUrl === undefined) delete process.env[BASE_URL_ENV];
+  else process.env[BASE_URL_ENV] = originalBaseUrl;
   rmSync(tempAgentDir, { recursive: true, force: true });
   rmSync(tempProjectDir, { recursive: true, force: true });
 });
@@ -68,6 +71,24 @@ describe("GatewayConfigPanelComponent Manager contract", () => {
     panel.handleInput("\x1b");
 
     expect(done).toHaveBeenCalledWith({ needsReload: true });
+  });
+
+  it("does not pass an environment fallback as an explicit token-page override", () => {
+    process.env[BASE_URL_ENV] = "https://environment.example.test";
+    const done = vi.fn();
+    const panel = new GatewayConfigPanelComponent(theme, "project", tempProjectDir, done, {
+      externalActions: true,
+      closeOnSave: true,
+    });
+
+    panel.handleInput("\x1b[B"); // base URL -> scoped model mode
+    panel.handleInput("\x1b[B"); // scoped model mode -> Open token page
+    panel.handleInput("\r");
+
+    expect(done).toHaveBeenCalledWith({
+      gatewayAction: "open-token",
+      baseUrl: undefined,
+    });
   });
 
   it("does not require reload when Save is pressed without changes", () => {

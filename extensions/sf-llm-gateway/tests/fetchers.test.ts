@@ -55,6 +55,39 @@ describe("gateway discovery fetchers", () => {
     );
   });
 
+  it.each([
+    [401, "authentication failed (401)"],
+    [404, "endpoint was not found (404)"],
+    [503, "service failed (503)"],
+  ] as const)("classifies HTTP %s without exposing response content", async (status, expected) => {
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: "private upstream detail" }), {
+          status,
+          headers: { "content-type": "application/json" },
+        }),
+    ) as typeof fetch;
+
+    await expect(fetchGatewayModelIds("https://gateway.example.test", "test-key")).rejects.toThrow(
+      expected,
+    );
+  });
+
+  it("sanitizes network failures with an actionable doctor handoff", async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error("private host and credential-shaped detail");
+    }) as typeof fetch;
+
+    const error = await fetchGatewayModelIds("https://gateway.example.test", "test-key").catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("/sf-llm-gateway doctor");
+    expect((error as Error).message).not.toContain("private host");
+    expect((error as Error).message).not.toContain("credential-shaped");
+  });
+
   it("propagates outer cancellation through required and optional fetches", async () => {
     const receivedSignals: AbortSignal[] = [];
     globalThis.fetch = vi.fn(

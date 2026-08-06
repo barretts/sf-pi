@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { API_KEY_ENV } from "../lib/config.ts";
+import { API_KEY_ENV, BASE_URL_ENV } from "../lib/config.ts";
 
 const originalHomeEnv = process.env.HOME;
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -22,6 +22,7 @@ import {
   type GatewayRuntimeStatusState,
 } from "../lib/status.ts";
 const originalApiKeyEnv = process.env[API_KEY_ENV];
+const originalBaseUrlEnv = process.env[BASE_URL_ENV];
 const tempDirs: string[] = [];
 
 function makeTempDir(prefix: string): string {
@@ -35,6 +36,11 @@ afterEach(() => {
     delete process.env[API_KEY_ENV];
   } else {
     process.env[API_KEY_ENV] = originalApiKeyEnv;
+  }
+  if (originalBaseUrlEnv === undefined) {
+    delete process.env[BASE_URL_ENV];
+  } else {
+    process.env[BASE_URL_ENV] = originalBaseUrlEnv;
   }
 
   if (originalHomeEnv === undefined) {
@@ -207,6 +213,66 @@ describe("buildStatusReport", () => {
     );
     expect(report).toContain("Model discovery: gateway");
     expect(report).toContain("Discovered models: 2");
+  });
+
+  it("distinguishes a failed empty catalog from retained last-known models", () => {
+    process.env.HOME = makeTempDir("gateway-home-");
+    const ctx = {
+      cwd: makeTempDir("gateway-status-empty-catalog-"),
+      model: undefined,
+      modelRegistry: {
+        getProviderAuthStatus: () => ({ configured: true, source: "stored" }),
+      },
+      getContextUsage: () => null,
+    } as unknown as ExtensionContext;
+
+    const empty = buildStatusReport(
+      ctx,
+      true,
+      withDefaults({
+        discovery: {
+          source: "empty",
+          modelIds: [],
+          error: "Gateway model discovery authentication failed (401).",
+        },
+      }),
+    );
+    const retained = buildStatusReport(
+      ctx,
+      true,
+      withDefaults({
+        discovery: {
+          source: "gateway",
+          modelIds: ["last-known"],
+          error: "Gateway model discovery service failed (503).",
+        },
+      }),
+    );
+
+    expect(empty).toContain("Catalog fallback: no cached catalog available");
+    expect(retained).toContain("Catalog fallback: 1 last-known model retained");
+  });
+
+  it("shows the effective provider endpoint when no saved or environment URL exists", () => {
+    process.env.HOME = makeTempDir("gateway-home-");
+    delete process.env[BASE_URL_ENV];
+
+    const ctx = {
+      cwd: makeTempDir("gateway-status-runtime-url-"),
+      model: { provider: "sf-llm-gateway", id: "example-model" },
+      modelRegistry: {
+        getProviderAuthStatus: () => ({ configured: true, source: "stored" }),
+      },
+      getContextUsage: () => null,
+    } as unknown as ExtensionContext;
+
+    const report = buildStatusReport(ctx, true, withDefaults({}), {
+      effectiveBaseUrl: "https://gateway.example.test",
+    });
+
+    expect(report).toContain("Base URL: https://gateway.example.test (effective provider auth)");
+    expect(report).toContain("Saved base URL override: missing");
+    expect(report).not.toContain("pi-saved-test-key");
   });
 });
 

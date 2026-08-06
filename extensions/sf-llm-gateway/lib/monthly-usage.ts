@@ -39,7 +39,7 @@ import {
   readCachedMonthlyUsageSnapshot,
   writeCachedMonthlyUsageSnapshot,
 } from "../../../lib/common/monthly-usage/cache.ts";
-import { API_KEY_ENV, getGatewayConfig } from "./config.ts";
+import { API_KEY_ENV } from "./config.ts";
 import { gatewayProviderRuntime } from "./provider.ts";
 import { toGatewayRootBaseUrl } from "./gateway-url.ts";
 import { fetchWithTimeout } from "./models.ts";
@@ -205,23 +205,11 @@ export async function refreshMonthlyUsage(force: boolean, cwd: string): Promise<
   }
 
   refreshInFlight = (async () => {
-    const config = getGatewayConfig(cwd);
     const runtimeAuth = await gatewayProviderRuntime.authController.resolveRuntimeAuth(cwd);
     const previousLastKnownMonthlyUsage = getLastKnownMonthlyUsage();
 
-    if (!config.baseUrl) {
-      publishError("Missing base URL configuration.", {
-        kind: "not-configured",
-        detail: "Missing base URL configuration.",
-        checkedAt: new Date().toISOString(),
-        source: "config",
-      });
-      lastFetchAt = Date.now();
-      return;
-    }
-
     if (!runtimeAuth) {
-      const message = `Missing Pi credential or ${API_KEY_ENV} automation fallback.`;
+      const message = `Missing Gateway endpoint or Pi credential (${API_KEY_ENV} is the automation fallback).`;
       publishError(message, {
         kind: "not-configured",
         detail: message,

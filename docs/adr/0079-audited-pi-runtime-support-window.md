@@ -4,7 +4,7 @@ Status: accepted; hard floor superseded by ADR 0088, soft audit ceiling remains 
 
 SF Pi distinguishes **loadable** Pi releases from **audited** Pi releases. Lack of an audit is not evidence of incompatibility, so a newly published stable Pi 0.x release must not preemptively disable every SF Pi extension.
 
-ADR 0088 raises the hard loadable range to stable Pi `>=0.82.0 <1.0.0`. Runtimes below the floor, prereleases, and Pi 1.x or later remain blocked with bounded repair guidance. The current required-CI audit range is `>=0.82.0 <0.84.0`: exact Pi 0.82.0 remains the floor check, while exact Pi 0.83.0 is used for normal development, repair, and the latest audited edge.
+ADR 0088 raises the hard loadable range to stable Pi `>=0.82.0 <1.0.0`. Runtimes below the floor, prereleases, and Pi 1.x or later remain blocked with bounded repair guidance. The current required-CI audit range is `>=0.82.0 <0.85.0`: exact Pi 0.82.0 remains the floor check, while exact Pi 0.84.0 is used for normal development, repair, and the latest audited edge.
 
 When a stable runtime is inside the hard range but above the audit ceiling, SF Pi:
 
@@ -16,8 +16,8 @@ When a stable runtime is inside the hard range but above the audit ceiling, SF P
 
 Package metadata follows the hard range (`>=0.82.0 <1.0.0`) so npm does not reject a newly published stable Pi 0.x release. Development dependencies remain pinned to the latest exact audited runtime. Required nightly compatibility starts at the 0.82.0 floor; a non-blocking `latest` canary reports future drift so maintainers can advance the audit ceiling after evidence arrives.
 
-The Pi 0.82.0 floor audit and Pi 0.83.0 edge audit found the public complete-Provider, authentication, extension lifecycle, and custom-TUI APIs used by SF Pi to be source-compatible across the required window. Exact-runtime type checking and the full SF Pi test suite cover provider registration, provider-neutral Gateway API dispatch, Docs/Slack auth-only providers, credential resolution, lifecycle teardown, and shared masked-input behavior at both edges.
+The Pi 0.82.0 floor audit and Pi 0.84.0 edge audit establish runtime compatibility across the required window for complete Providers, authentication, extension lifecycle, and custom TUI behavior. Pi 0.84 adds provider-scoped cancellable `ModelRegistry.refresh(options)` and a result object, while Pi 0.82/0.83 retain a no-argument, void-returning broad refresh. SF Pi isolates that difference behind one Gateway adapter: older runtimes ignore the extra JavaScript argument, and Pi 0.84 consumes cancellation and provider errors. Exact-runtime type checking and full suites cover provider registration, provider-neutral Gateway dispatch, Docs/Slack auth-only providers, credential resolution, lifecycle teardown, and shared masked input; the 0.84 edge additionally covers targeted refresh.
 
-Pi 0.81.1 and 0.82.0 render values submitted through the stock secret prompt, and the Pi 0.83 audit provided no replacement **Secure Credential Prompt Proof**. Gateway, SF Docs, and SF Slack therefore continue to use ADR 0087's shared fixed-mask component. Pi alone owns credential persistence and logout.
+Pi 0.81.1 and 0.82.0 render values submitted through the stock secret prompt, and the audits through Pi 0.84 provided no replacement **Secure Credential Prompt Proof**. Gateway, SF Docs, and SF Slack therefore continue to use ADR 0087's shared fixed-mask component. Pi alone owns credential persistence and logout.
 
 [ADR 0084](./0084-agent-settled-update-coordinator.md) keeps automatic Pi runtime mutation out of SF Pi's update coordinator. Pi runtime updates remain user-managed; SF Pi's responsibility is to avoid breaking compatible future stable releases after the update.
