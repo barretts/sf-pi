@@ -4,7 +4,7 @@
 import { SfWelcomeHeader } from "../extensions/sf-welcome/lib/splash-component.ts";
 
 const data = {
-  modelName: "Claude Opus 4.7 [1M] Global",
+  modelName: "Example Gateway Model [1M] Global",
   providerName: "[SF LLM Gateway] sf-llm-gateway",
   loadedCounts: { extensions: 19, skills: 40, promptTemplates: 1 },
   recentSessions: [

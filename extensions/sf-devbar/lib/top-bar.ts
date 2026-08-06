@@ -38,7 +38,7 @@ export type BarTheme = {
 };
 
 export type TopBarState = {
-  /** Model display name, e.g. "Claude Opus 4.7". */
+  /** Model display name, e.g. "Example Gateway Model". */
   modelName?: string;
   /** Per-language Salesforce LSP health snapshot. */
   lspHealth?: SfLspHealthSnapshot;
@@ -361,7 +361,7 @@ function rainbowGradient(text: string, hexPalette: readonly string[]): string {
  *
  * The sf-llm-gateway extension bakes "[SF LLM Gateway]" and
  * context window labels like "[1M]" directly into model names
- * (e.g. "[SF LLM Gateway] Claude Opus 4.7 [1M] Global").
+ * (e.g. "[SF LLM Gateway] Example Gateway Model [1M] Global").
  * We render our own gateway badge and context size, so strip duplicates.
  */
 function cleanModelName(raw: string): string {

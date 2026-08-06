@@ -76,7 +76,7 @@ describe("renderTopBar", () => {
     const [line] = renderTopBar(
       makeState({
         modelProvider: "sf-llm-gateway",
-        modelName: "Claude Opus 4.7",
+        modelName: "Example Gateway Model",
       }),
       stubTheme,
     );
@@ -89,7 +89,7 @@ describe("renderTopBar", () => {
     expect(line).toContain("w");
     expect(line).toContain("y");
     expect(line).toContain(ANSI_FG_PREFIX); // Rainbow ANSI codes
-    expect(line).toContain("Claude Opus 4.7");
+    expect(line).toContain("Example Gateway Model");
   });
 
   it("shows plain model name for non-gateway providers", () => {
@@ -213,20 +213,20 @@ describe("renderTopBar", () => {
     const [line] = renderTopBar(
       makeState({
         modelProvider: "sf-llm-gateway",
-        modelName: "Claude Opus 4.7",
+        modelName: "Example Gateway Model",
       }),
       stubTheme,
     );
     // Pink #d787af -> rgb(215,135,175)
     expect(line).toContain(ansiFg(215, 135, 175));
-    expect(line).toContain("Claude Opus 4.7");
+    expect(line).toContain("Example Gateway Model");
   });
 
   it("uses custom model and folder colors when provided", () => {
     const [line] = renderTopBar(
       makeState({
         modelProvider: "sf-llm-gateway",
-        modelName: "Claude Opus 4.7",
+        modelName: "Example Gateway Model",
         colors: {
           folderPath: "#112233",
           modelName: "#445566",
@@ -241,7 +241,7 @@ describe("renderTopBar", () => {
       stubTheme,
     );
 
-    expect(line).toContain(`${ansiFg(68, 85, 102)}Claude Opus 4.7`);
+    expect(line).toContain(`${ansiFg(68, 85, 102)}Example Gateway Model`);
     expect(line).toContain(ansiFg(17, 34, 51));
     expect(line).toContain("my-project");
     expect(line).toContain(ansiFg(1, 2, 3));
@@ -251,7 +251,7 @@ describe("renderTopBar", () => {
     const [line] = renderTopBar(
       makeState({
         modelProvider: "sf-llm-gateway",
-        modelName: "Claude Opus 4.7",
+        modelName: "Example Gateway Model",
         colors: {
           folderPath: "#00afaf",
           modelName: "#d787af",
@@ -275,7 +275,7 @@ describe("renderTopBar", () => {
     const [line] = renderTopBar(
       makeState({
         modelProvider: "sf-llm-gateway",
-        modelName: "Claude Opus 4.7",
+        modelName: "Example Gateway Model",
         colors: {
           folderPath: "#00afaf",
           modelName: "#d787af",

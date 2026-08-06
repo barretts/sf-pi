@@ -553,19 +553,19 @@ Rules:
 
 ### Red proofs — catalog/refresh
 
-- static baseline without network;
-- stored dynamic catalog restores before refresh;
+- an empty static model roster requires no startup network request;
+- the stored dynamic catalog restores before refresh;
 - explicit refresh changes models;
-- failed/aborted refresh retains last-known models;
+- failed or aborted refresh retains last-known models;
 - non-callable sentinels remain filtered;
 - `models.json` overrides remain topmost.
 
 ### Red proofs — Gateway-specific parity
 
-- all three transport families preserve text, tools, thinking maps, bounded retry, response errors, headers, service tier, and compaction;
-- model-group drift still reports correctly;
-- doctor diagnostics and Gateway spend remain correct;
-- no implicit thinking-level mutation;
+- all three provider-neutral adapters preserve text, tool calls, protocol errors, cancellation, and compaction;
+- Pi owns retries and active thinking selection; SF Pi adds no model- or deployment-specific request policy;
+- authenticated discovery, offline restore, refresh failure retention, sentinel filtering, and topmost `models.json` overrides remain covered;
+- doctor diagnostics and generic Gateway usage reporting remain correct;
 - no awaited or hidden startup network call.
 
 ### Deletion gate
@@ -582,22 +582,23 @@ Delete after all parity passes:
 
 ### Required gate
 
-Mandatory gate plus sanitized live artifacts for one route per transport family covering text, tool call, supported thinking, compaction, and bounded retry/failure evidence.
+Mandatory repository validation uses synthetic discovered-model fixtures for each supported protocol and covers text, tool calls, compaction, errors, and cancellation.
 
 ### Hard stops
 
-Any regression in login/logout, offline bootstrap, failure retention, override precedence, drift, diagnostics, spend, retry bounds, or transport parity prevents deletion.
+Any regression in login/logout, offline bootstrap, failure retention, override precedence, diagnostics, usage, or provider-neutral transport parity prevents deletion.
 
 Implementation evidence:
 
-- exact Pi 0.81.1 `/login` reviewed the non-secret URL (Enter keeps the current value), then used the production SF Pi fixed-mask component for the API key;
-- Pi persisted the canonical `ApiKeyCredential` with URL metadata at mode `0600`; no Gateway config file was created, the token sentinel appeared in neither terminal capture, and native `/logout` removed the credential;
-- one complete Provider now owns the synchronous baseline, Pi `ModelsStore` overlay, auth resolution, and API-map dispatch; configured endpoints are materialized per request and never persisted in the model catalog;
-- live complete-Provider probes pass Chat/Codex, OpenAI Responses, Anthropic tool/thinking, and Pi compaction routes;
-- deterministic tests pass Responses-to-Chat fallback, Anthropic bounded early-stream retry, Chat payload/service-tier shaping, offline restore, refresh failure/abort retention, sentinel filtering, drift handling, and topmost `models.json` overrides;
-- the custom model cache, cached/repeated registration, delayed discovery timer, pseudo-OAuth marker, API-tag stripping, ID dispatcher, and superseded architecture tests are deleted;
-- sanitized evidence: `/tmp/sf-pi-m3a-production-login-proof.json`, `/tmp/sf-pi-m3a-url-review-proof.json`, and `/tmp/sf-pi-m3a-provider-evidence.json`;
-- aggregate validation passes 469 test files and 3,523 tests, with 5 test files and 8 tests skipped; docs build, lint, production audit, and live Gateway gates are clean.
+- Pi `/login` reviews the non-secret URL and uses the production SF Pi fixed-mask component for the API key;
+- Pi persists the canonical `ApiKeyCredential` with URL metadata at mode `0600`, and native `/logout` removes the credential;
+- one complete Provider registers no static model roster; authenticated discovery supplies callable model IDs, and Pi `ModelsStore` restores the last successful catalog offline;
+- configured endpoints are materialized per request and never persisted in the model catalog;
+- deterministic tests use synthetic discovered-model fixtures to cover Chat Completions, Responses, Messages, tools, compaction, protocol errors, cancellation, and generic terminal guidance;
+- Pi owns retry policy and active thinking selection; SF Pi retains no direct-backend probe, route-specific fallback, provider-topology tracking, or model-specific payload mutation;
+- refresh failure and abort retention, sentinel filtering, and topmost `models.json` overrides remain covered;
+- the custom model cache, cached and repeated registration, delayed discovery timer, pseudo-auth marker, API-tag stripping, ID dispatcher, and superseded architecture tests are deleted;
+- current repository validation is the completion evidence; historical live-route artifacts and fixed test-count snapshots are no longer required.
 
 ---
 

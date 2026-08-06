@@ -546,7 +546,7 @@ describe("sf-welcome", () => {
   it("renders an infinite monthly budget when the gateway reports no ceiling", async () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const data = {
-      modelName: "Claude Opus 4.7",
+      modelName: "Example Gateway Model",
       providerName: "sf-llm-gateway",
       loadedCounts: { extensions: 8, skills: 38, promptTemplates: 1 },
       recentSessions: [],
@@ -589,7 +589,7 @@ describe("sf-welcome", () => {
   it("renders only the top four pending recommendations with the install shortcut", async () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const data = {
-      modelName: "Claude Opus 4.7",
+      modelName: "Example Gateway Model",
       providerName: "sf-llm-gateway",
       loadedCounts: { extensions: 8, skills: 38, promptTemplates: 1 },
       recentSessions: [],
@@ -632,7 +632,7 @@ describe("sf-welcome", () => {
   it("omits the shortcut Tips section", async () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const data = {
-      modelName: "Claude Opus 4.7",
+      modelName: "Example Gateway Model",
       providerName: "sf-llm-gateway",
       loadedCounts: { extensions: 8, skills: 38, promptTemplates: 1 },
       recentSessions: [],

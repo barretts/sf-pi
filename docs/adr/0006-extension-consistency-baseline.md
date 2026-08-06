@@ -236,23 +236,16 @@ with AGENTS.md §3 ("split by responsibility").
 
 ## Wave 3 follow-ups landed
 
-### sf-llm-gateway file splits
+### sf-llm-gateway transport layout
 
-`transport.ts` (1209 LOC) is now a barrel re-exporting from five focused
-modules under `lib/transport-internal/`:
+The gateway provider keeps only provider-neutral protocol adapters under
+`lib/transport-internal/` for Chat Completions, Responses, and Messages.
+Authenticated model discovery and neutral metadata parsing live under
+`models-internal/`, while Pi owns credential persistence, model caching,
+refresh coordination, retry policy, and thinking selection.
 
-- `shared.ts` (487 LOC) — constants, types, model-id detection, error
-  formatting, early-stream retry wrapper
-- `payloads.ts` (190 LOC) — gateway payload mutators (codex tools,
-  OpenAI service tier, reasoning effort, Opus 4.7 max thinking)
-- `anthropic.ts` (81 LOC) — `streamSfGatewayAnthropic`
-- `openai-chat.ts` (68 LOC) — `streamSfGatewayOpenAI`
-- `openai-responses.ts` (170 LOC) — `streamSfGatewayResponses` + chat fallback
-
-`models.ts` (1267 → 787 LOC) extracted HTTP discovery into
-`models-internal/fetchers.ts` (model ids, info map, group info, provider drift,
-and `fetchWithTimeout`). The former exact-ID catalog module was later removed by
-ADR 0077 when authenticated discovery became the only model-ID source.
+Deployment-routing policy and model-specific payload behavior were removed by
+ADR 0100. The extension README is the source of truth for the current file map.
 
 ### sf-slack send-tool split
 
