@@ -414,6 +414,31 @@ describe("summarizeTrace (preview source)", () => {
     expect(digestSize).toBeLessThan(rawSize);
   });
 
+  test("flags deterministic transition revisits even without a router LLM call", () => {
+    const d = summarizeTrace({
+      plan: [
+        {
+          type: "TransitionStep",
+          data: { from_agent: "Agent Router", to_agent: "transfer" },
+        },
+        {
+          type: "TransitionStep",
+          data: { from_agent: "Transfer", to_agent: "agent_router" },
+        },
+        {
+          type: "TransitionStep",
+          data: { from_agent: "Agent Router", to_agent: "transfer" },
+        },
+      ],
+    });
+    expect(d.diagnostics).toContainEqual(
+      expect.objectContaining({
+        severity: "warning",
+        message: expect.stringMatching(/Potential same-turn route loop/),
+      }),
+    );
+  });
+
   test("`steps` field name is also tolerated as a fallback for legacy callers", () => {
     const d = summarizeTrace({ steps: FAKE_PLAN });
     expect(d.timeline.length).toBe(FAKE_PLAN.length);

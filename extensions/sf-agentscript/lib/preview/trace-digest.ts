@@ -700,7 +700,7 @@ export function summarizeTrace(trace: unknown, opts: SummarizeOptions = {}): Tra
           ...(relatedAgents.length > 0 ? { related_agents: relatedAgents } : {}),
         }
       : undefined;
-  const diagnostics = buildTraceFindings({ timeline, errors, toolActivity });
+  const diagnostics = buildTraceFindings({ timeline, errors, toolActivity, routePath });
 
   return {
     source: "preview",
@@ -734,6 +734,7 @@ function buildTraceFindings(input: {
   timeline: DigestRow[];
   errors: TraceDigest["errors"];
   toolActivity?: ToolActivityDigest;
+  routePath?: RouteTransitionDigest[];
 }): TraceFindingDigest[] {
   const findings: TraceFindingDigest[] = [];
   for (const error of input.errors) {
@@ -749,6 +750,26 @@ function buildTraceFindings(input: {
       message: `${enabledCount} tool${enabledCount === 1 ? " was" : "s were"} enabled but no action was called.`,
     });
   }
+  const routedNodes: Array<{ step: number; label: string; canonical: string }> = [];
+  const addRouteNode = (step: number, label: string | undefined): void => {
+    if (!label) return;
+    const canonical = label.toLocaleLowerCase("en-US").replace(/[^a-z0-9]/g, "");
+    if (!canonical || routedNodes[routedNodes.length - 1]?.canonical === canonical) return;
+    routedNodes.push({ step, label, canonical });
+  };
+  for (const route of input.routePath ?? []) {
+    addRouteNode(route.step, route.from);
+    addRouteNode(route.step, route.to);
+  }
+  const routeLoop = firstRevisit(routedNodes);
+  if (routeLoop) {
+    findings.push({
+      severity: "warning",
+      step: routeLoop.step,
+      message: `Potential same-turn route loop: ${routeLoop.path.join(" → ")}.`,
+    });
+  }
+
   const llmAgents = input.timeline
     .filter((row) => row.t === "LLMStep" && typeof row.agent === "string")
     .map((row) => ({ step: row.i, agent: String(row.agent) }));
@@ -788,6 +809,23 @@ function buildTraceFindings(input: {
     }
   }
   return findings;
+}
+
+function firstRevisit(
+  nodes: Array<{ step: number; label: string; canonical: string }>,
+): { step: number; path: string[] } | undefined {
+  const lastVisit = new Map<string, number>();
+  for (let index = 0; index < nodes.length; index++) {
+    const previous = lastVisit.get(nodes[index].canonical);
+    if (previous !== undefined && previous < index - 1) {
+      return {
+        step: nodes[index].step,
+        path: nodes.slice(previous, index + 1).map((node) => node.label),
+      };
+    }
+    lastVisit.set(nodes[index].canonical, index);
+  }
+  return undefined;
 }
 
 // -------------------------------------------------------------------------------------------------
