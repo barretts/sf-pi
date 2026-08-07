@@ -1,39 +1,35 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** Config panel for SF Herdr managed preferences. */
-import { type Focusable, matchesKey } from "@earendil-works/pi-tui";
+/** Global-only SF Herdr settings panel. */
 import type { Theme } from "@earendil-works/pi-coding-agent";
+import { type Focusable, matchesKey } from "@earendil-works/pi-tui";
 import type { ConfigPanelFactory, ConfigPanelResult } from "../../../catalog/registry.ts";
+import { HERDR_PLAN_INTENTS, type HerdrPlanIntent } from "../../../lib/common/herdr.ts";
 import {
-  LANE_IDS,
-  WORKFLOW_KEYS,
-  readSfHerdrPreferences,
-  writeSfHerdrPreferences,
-  type HerdrLaneId,
-  type HerdrLaneLifecycle,
+  readSfHerdrSettings,
+  writeSfHerdrSettings,
+  type HerdrLifecycle,
   type HerdrSplitDirection,
-  type HerdrWorkflowKey,
-  type SfHerdrPreferences,
-} from "../../../lib/common/herdr-profile/store.ts";
+  type SfHerdrSettings,
+} from "./settings.ts";
 
-const LIFECYCLES: readonly HerdrLaneLifecycle[] = ["ephemeral", "sticky", "manual"];
-const ROW_COUNT = 4;
+const DIRECTIONS: readonly HerdrSplitDirection[] = ["auto", "right", "down"];
+const LIFECYCLES: readonly HerdrLifecycle[] = ["ephemeral", "sticky", "manual"];
+const ROW_COUNT = 3;
 
 class SfHerdrConfigPanel implements Focusable {
   focused = false;
-
-  private preferences: SfHerdrPreferences;
+  private settings: SfHerdrSettings;
   private savedSnapshot: string;
   private cursor = 0;
-  private workflowIndex = 0;
-  private laneIndex = 0;
+  private intentIndex = 0;
   private savedMessage = "";
 
   constructor(
     private readonly theme: Theme,
     private readonly done: (result: ConfigPanelResult | undefined) => void,
   ) {
-    this.preferences = readSfHerdrPreferences();
-    this.savedSnapshot = snapshot(this.preferences);
+    this.settings = readSfHerdrSettings();
+    this.savedSnapshot = snapshot(this.settings);
   }
 
   handleInput(data: string): void {
@@ -41,22 +37,10 @@ class SfHerdrConfigPanel implements Focusable {
       this.done(undefined);
       return;
     }
-    if (matchesKey(data, "up")) {
-      this.moveCursor(-1);
-      return;
-    }
-    if (matchesKey(data, "down")) {
-      this.moveCursor(1);
-      return;
-    }
-    if (matchesKey(data, "left")) {
-      this.changeCurrent(-1);
-      return;
-    }
-    if (matchesKey(data, "right") || matchesKey(data, "space")) {
-      this.changeCurrent(1);
-      return;
-    }
+    if (matchesKey(data, "up")) return this.moveCursor(-1);
+    if (matchesKey(data, "down")) return this.moveCursor(1);
+    if (matchesKey(data, "left")) return this.changeCurrent(-1);
+    if (matchesKey(data, "right") || matchesKey(data, "space")) return this.changeCurrent(1);
     if (data === "s" || data === "S" || matchesKey(data, "enter") || matchesKey(data, "return")) {
       this.save();
     }
@@ -65,33 +49,29 @@ class SfHerdrConfigPanel implements Focusable {
   renderContent(): string[] {
     const t = this.theme;
     const dirty = this.isDirty();
-    const status = dirty ? t.fg("warning", "Unsaved changes") : t.fg("success", "Saved");
-    const workflow = this.selectedWorkflow();
-    const lane = this.selectedLane();
-    const lanePrefs = this.currentLanePreferences();
-    const saved = JSON.parse(this.savedSnapshot) as SfHerdrPreferences;
+    const saved = JSON.parse(this.savedSnapshot) as SfHerdrSettings;
+    const intent = this.selectedIntent();
     const row = (index: number, label: string, value: string, changed: boolean) => {
       const selected = index === this.cursor;
-      const marker = changed ? t.fg("warning", "•") : " ";
-      const cursor = selected ? t.fg("accent", "›") : " ";
-      const renderedValue = selected ? t.fg("accent", value) : t.fg("text", value);
-      return ` ${cursor} ${marker} ${t.fg("muted", label.padEnd(18))} ${renderedValue}`;
+      return ` ${selected ? t.fg("accent", "›") : " "} ${changed ? t.fg("warning", "•") : " "} ${t.fg("muted", label.padEnd(18))} ${selected ? t.fg("accent", value) : t.fg("text", value)}`;
     };
     const lines = [
-      ` ${t.fg("accent", t.bold("SF Herdr settings"))}  ${status}`,
-      ` ${t.fg("dim", "Tune Herdr lane planning. Ephemeral lanes are fresh split panes and auto-clean on success.")}`,
+      ` ${t.fg("accent", t.bold("SF Herdr settings"))}  ${dirty ? t.fg("warning", "Unsaved changes") : t.fg("success", "Saved")}`,
+      ` ${t.fg("dim", "Global-only planner defaults for the current split Herdr tools.")}`,
       "",
       row(
         0,
         "Split direction",
-        this.currentSplitDirection(),
-        this.currentSplitDirection() !== (saved.defaults.splitDirection ?? "right"),
+        this.settings.splitDirection,
+        this.settings.splitDirection !== saved.splitDirection,
       ),
-      "",
-      ` ${t.fg("muted", t.bold("Workflow lane lifecycle"))}`,
-      row(1, "Workflow", workflow, false),
-      row(2, "Lane", lane, false),
-      row(3, "Lane lifecycle", lanePrefs.lifecycle ?? "ephemeral", this.currentLaneChanged(saved)),
+      row(1, "Intent", intent, false),
+      row(
+        2,
+        "Lifecycle",
+        this.settings.lifecycleByIntent[intent],
+        this.settings.lifecycleByIntent[intent] !== saved.lifecycleByIntent[intent],
+      ),
       "",
     ];
     if (this.savedMessage) lines.push(` ${t.fg("success", this.savedMessage)}`);
@@ -108,43 +88,32 @@ class SfHerdrConfigPanel implements Focusable {
   invalidate(): void {}
 
   private moveCursor(delta: -1 | 1): void {
-    this.cursor = (this.cursor + delta + ROW_COUNT) % ROW_COUNT;
+    this.cursor = cycleIndex(this.cursor, ROW_COUNT, delta);
     this.savedMessage = "";
   }
 
   private changeCurrent(delta: -1 | 1): void {
-    switch (this.cursor) {
-      case 0:
-        this.preferences.defaults.splitDirection =
-          this.currentSplitDirection() === "right" ? "down" : "right";
-        break;
-      case 1:
-        this.workflowIndex = cycleIndex(this.workflowIndex, WORKFLOW_KEYS.length, delta);
-        break;
-      case 2:
-        this.laneIndex = cycleIndex(this.laneIndex, LANE_IDS.length, delta);
-        break;
-      case 3:
-        this.currentLanePreferences().lifecycle = cycleValue(
-          LIFECYCLES,
-          this.currentLanePreferences().lifecycle ?? "ephemeral",
-          delta,
-        );
-        break;
+    if (this.cursor === 0) {
+      this.settings.splitDirection = cycleValue(DIRECTIONS, this.settings.splitDirection, delta);
+    } else if (this.cursor === 1) {
+      this.intentIndex = cycleIndex(this.intentIndex, HERDR_PLAN_INTENTS.length, delta);
+    } else {
+      const intent = this.selectedIntent();
+      this.settings.lifecycleByIntent[intent] = cycleValue(
+        LIFECYCLES,
+        this.settings.lifecycleByIntent[intent],
+        delta,
+      );
     }
     this.savedMessage = "";
   }
 
-  private isDirty(): boolean {
-    return snapshot(this.preferences) !== this.savedSnapshot;
+  private selectedIntent(): HerdrPlanIntent {
+    return HERDR_PLAN_INTENTS[this.intentIndex] ?? "run-tests";
   }
 
-  private currentLaneChanged(saved: SfHerdrPreferences): boolean {
-    const workflow = this.selectedWorkflow();
-    const lane = this.selectedLane();
-    const current = this.preferences.workflows[workflow]?.lanes?.[lane] ?? {};
-    const previous = saved.workflows[workflow]?.lanes?.[lane] ?? {};
-    return JSON.stringify(current) !== JSON.stringify(previous);
+  private isDirty(): boolean {
+    return snapshot(this.settings) !== this.savedSnapshot;
   }
 
   private save(): void {
@@ -152,36 +121,15 @@ class SfHerdrConfigPanel implements Focusable {
       this.savedMessage = "No changes to save.";
       return;
     }
-    writeSfHerdrPreferences(this.preferences);
-    this.preferences = readSfHerdrPreferences();
-    this.savedSnapshot = snapshot(this.preferences);
+    writeSfHerdrSettings(this.settings);
+    this.settings = readSfHerdrSettings();
+    this.savedSnapshot = snapshot(this.settings);
     this.savedMessage = "Saved SF Herdr settings.";
-  }
-
-  private currentSplitDirection(): HerdrSplitDirection {
-    return this.preferences.defaults.splitDirection ?? "right";
-  }
-
-  private selectedWorkflow(): HerdrWorkflowKey {
-    return WORKFLOW_KEYS[this.workflowIndex] ?? "generic";
-  }
-
-  private selectedLane(): HerdrLaneId {
-    return LANE_IDS[this.laneIndex] ?? "tests";
-  }
-
-  private currentLanePreferences() {
-    const workflow = this.selectedWorkflow();
-    const lane = this.selectedLane();
-    this.preferences.workflows[workflow] ??= {};
-    this.preferences.workflows[workflow].lanes ??= {};
-    this.preferences.workflows[workflow].lanes[lane] ??= {};
-    return this.preferences.workflows[workflow].lanes[lane];
   }
 }
 
-function snapshot(preferences: SfHerdrPreferences): string {
-  return JSON.stringify(preferences);
+function snapshot(settings: SfHerdrSettings): string {
+  return JSON.stringify(settings);
 }
 
 function cycleIndex(index: number, length: number, delta: -1 | 1): number {
@@ -193,6 +141,5 @@ function cycleValue<T extends string>(values: readonly T[], current: T, delta: -
   return values[cycleIndex(index, values.length, delta)] ?? current;
 }
 
-export const createConfigPanel: ConfigPanelFactory = (theme, _cwd, _scope, done) => {
-  return new SfHerdrConfigPanel(theme, done);
-};
+export const createConfigPanel: ConfigPanelFactory = (theme, _cwd, _scope, done) =>
+  new SfHerdrConfigPanel(theme, done);

@@ -157,9 +157,9 @@ describe("Safety Kernel", () => {
     expect(decision).toBeUndefined();
   });
 
-  it("mediates Herdr run commands through the same command gate", async () => {
+  it("mediates Herdr pane run commands through the same command gate", async () => {
     const decision = await evaluateSafety({
-      toolName: "herdr",
+      toolName: "herdr_pane",
       input: { action: "run", pane: "tests", command: "rm -rf tmp/" },
       cwd: "/project",
       config: readBundledConfig(),

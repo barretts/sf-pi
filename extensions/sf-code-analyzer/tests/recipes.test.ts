@@ -117,9 +117,10 @@ describe("Code Analyzer recipes", () => {
       recipeId: "appexchange",
       label: "Plan a Herdr lane for AppExchange security review scan",
       commandSource: "owning-extension",
-      plan: { intent: "verify", primaryWorkflow: "generic", expectedDuration: "long" },
+      plan: { intent: "verify", primaryWorkflow: "generic" },
     });
     expect(JSON.stringify(handoff)).not.toContain("suggestedCommand");
+    expect(JSON.stringify(handoff)).not.toContain("expectedDuration");
   });
 
   it("infers Apex workflow for Apex-specific Herdr handoffs", () => {

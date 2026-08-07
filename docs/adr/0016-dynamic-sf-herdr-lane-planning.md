@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted; runtime Interface, settings, and explicit-planning details amended by [ADR 0102](./0102-forward-only-current-herdr-tools.md).
 
 ## Context
 

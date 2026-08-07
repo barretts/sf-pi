@@ -48,9 +48,9 @@ You can also manage this extension from the SF Pi home base:
 
 ## Safety notes
 
-- Does not register or wrap the upstream herdr tool; pane mutations stay explicit herdr calls.
 - sf_herdr_plan is non-mutating and never generates shell commands.
-- sf-guardrail mediates herdr.run.command when dangerous-command or org-aware rules match.
+- Planner steps use only herdr_layout, herdr_pane, and herdr_agent and pass the opaque pane ID returned by pane_split.
+- sf-guardrail mediates herdr_pane action=run commands when dangerous-command or org-aware rules match.
 
 ## Exact reference
 
@@ -64,7 +64,7 @@ You can also manage this extension from the SF Pi home base:
 - **Commands:** `/sf-herdr`
 - **LLM tools:** `sf_herdr_plan`
 - **Providers:** _none_
-- **Events/hooks:** `session_start`, `session_tree`, `tool_result`, `resources_discover`, `session_shutdown`
+- **Events/hooks:** `session_start`
 
 </details>
 

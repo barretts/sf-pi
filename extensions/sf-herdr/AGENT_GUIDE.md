@@ -1,20 +1,22 @@
 # SF Herdr Agent Guide
 
-Use SF Herdr only when the user explicitly requests Herdr or when operating inside an active Herdr-managed pane with the relevant upstream tools available.
+Use SF Herdr only when the user explicitly requests Herdr or when the active
+workflow is already running inside a ready Herdr pane.
 
 ## Workflow
 
-1. Call `sf_herdr_plan` for a Salesforce lane plan. The result is non-mutating and chooses lane lifecycle, not shell commands.
-2. Inspect existing workspace/tab/pane topology with upstream Herdr layout tools.
-3. Create a fresh ephemeral lane just in time for command-scoped tests, previews, evals, validations, or log tails.
-4. Let the owning Salesforce extension choose the actual workflow command.
-5. Watch/read the lane until its workflow success condition.
-6. Close fresh ephemeral lanes only after success. Preserve failed or timed-out lanes for inspection and ask before cleanup.
+1. Call `sf_herdr_plan` with explicit `intent` and `primaryWorkflow`.
+2. Execute the returned `herdr_layout.pane_split` step.
+3. Read the opaque pane ID from `details.pane.pane_id`; do not construct or name a pane ID.
+4. For ordinary tests, logs, deploy checks, previews, evals, servers, or verification, use the returned `herdr_pane` steps. The owning workflow supplies the command and success marker.
+5. For review work, use the returned `herdr_agent` steps. The caller supplies agent kind, name, and prompt.
+6. Close a fresh ephemeral pane only after observed success. Leave failure, timeout, blocked, or ambiguous results open for inspection.
 
 ## Boundaries
 
-- Do not use Herdr for ordinary one-shot commands or file edits.
+- Never call or recommend a monolithic Herdr control tool.
+- Never generate a shell command; the owning Salesforce workflow retains command ownership.
 - Preserve UI focus unless the user asks to switch.
-- Do not shrink the orchestrator below a practical working area or stack many splits directly from it.
-- Use sticky/manual lanes for servers or long-lived reviewer agents; never silently reuse stale ephemeral panes.
-- If Herdr is unavailable, fall back to the normal SF Pi tool path without blocking the Salesforce task.
+- Do not close panes that the current workflow did not create.
+- Sticky and manual lifecycles require explicit cleanup.
+- The official Herdr skill is separate and out of scope for SF Herdr.

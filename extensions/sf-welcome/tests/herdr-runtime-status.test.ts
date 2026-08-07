@@ -42,9 +42,9 @@ function writePiIntegration(contents: string): void {
 }
 
 describe("Herdr Runtime Readiness", () => {
-  it("reports ready only with the upstream tool and active pane-control env", () => {
+  it("reports ready only when all three current tools and active pane-control env are present", () => {
     const status = collectHerdrRuntimeStatus(cwd, {
-      activeToolNames: ["herdr"],
+      activeToolNames: ["herdr_layout", "herdr_pane", "herdr_agent"],
       env: { HERDR_ENV: "1", HERDR_PANE_ID: "pane-1", HERDR_SOCKET_PATH: "/tmp/herdr.sock" },
     });
 
@@ -56,30 +56,27 @@ describe("Herdr Runtime Readiness", () => {
     });
   });
 
-  it.each(["herdr_layout", "herdr_pane", "herdr_agent"])(
-    "recognizes the current split-tool API through %s",
-    (toolName) => {
-      const status = collectHerdrRuntimeStatus(cwd, {
-        activeToolNames: [toolName],
-        env: { HERDR_ENV: "1", HERDR_PANE_ID: "pane-1" },
-      });
-
-      expect(status).toMatchObject({ kind: "ready", toolActive: true });
-    },
-  );
-
-  it("recognizes split tools through the all-tools fallback", () => {
+  it("does not report partial split-tool activation as ready", () => {
     const status = collectHerdrRuntimeStatus(cwd, {
-      allToolNames: ["herdr_layout"],
+      activeToolNames: ["herdr_layout", "herdr_pane"],
+      env: { HERDR_ENV: "1", HERDR_PANE_ID: "pane-1" },
+    });
+
+    expect(status).toMatchObject({ kind: "missing", toolActive: false });
+  });
+
+  it("uses all current tools through the all-tools fallback", () => {
+    const status = collectHerdrRuntimeStatus(cwd, {
+      allToolNames: ["herdr_layout", "herdr_pane", "herdr_agent"],
       env: { HERDR_ENV: "1", HERDR_PANE_ID: "pane-1" },
     });
 
     expect(status).toMatchObject({ kind: "ready", toolActive: true });
   });
 
-  it("distinguishes a tool outside Herdr from pane-control readiness", () => {
+  it("distinguishes current tools outside Herdr from pane-control readiness", () => {
     const status = collectHerdrRuntimeStatus(cwd, {
-      activeToolNames: ["herdr"],
+      activeToolNames: ["herdr_layout", "herdr_pane", "herdr_agent"],
       env: {},
     });
 

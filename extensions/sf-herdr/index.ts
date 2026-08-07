@@ -2,15 +2,15 @@
 /**
  * sf-herdr behavior contract
  *
- * SF Herdr owns Salesforce-aware Herdr lane planning, preferences, and status.
- * It does not replace the upstream `herdr` tool from npm:@ogulcancelik/pi-herdr
- * and does not perform pane mutations itself. The only LLM tool registered here
- * is non-mutating: sf_herdr_plan returns a phased plan that the agent executes
- * through explicit herdr calls.
+ * The command/status/settings surface is always registered when this extension
+ * loads. The non-mutating planner is registered at session startup only when
+ * the current split Herdr runtime is fully active.
  */
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 import { getFirstTokenCompletions } from "../../lib/common/command-actions.ts";
+import { registerExtensionDoctor } from "../../lib/common/doctor/registry.ts";
+import { getHerdrSplitToolReadiness } from "../../lib/common/herdr-runtime.ts";
 import { openInfoPanel, type InfoPanelSeverity } from "../../lib/common/info-panel.ts";
 import {
   openExtensionInManager,
@@ -21,22 +21,15 @@ import {
   type ManagerDetailAction,
 } from "../../lib/common/manager-actions.ts";
 import { requirePiVersion } from "../../lib/common/pi-compat.ts";
-import { isSfPiExtensionEnabled } from "../../lib/common/sf-pi-extension-state.ts";
 import { withSafeCommandHandler } from "../../lib/common/safe-command-handler.ts";
-import { registerExtensionDoctor } from "../../lib/common/doctor/registry.ts";
-import {
-  DEFAULT_SF_HERDR_PREFERENCES,
-  herdrPreferencesPath,
-  readSfHerdrPreferences,
-  writeSfHerdrPreferences,
-} from "../../lib/common/herdr-profile/store.ts";
-import { createHerdrSignalState } from "./lib/signal-state.ts";
+import { registerSfHerdrPlanTool } from "./lib/sf_herdr_plan-tool.ts";
+import { readSfHerdrSettings } from "./lib/settings.ts";
 import { renderDoctor, renderStatus } from "./lib/status.ts";
 
 const EXTENSION_ID = "sf-herdr";
 const COMMAND_NAME = "sf-herdr";
 
-type SfHerdrAction = "status" | "doctor" | "profiles" | "reset" | "settings" | "help";
+type SfHerdrAction = "status" | "doctor" | "settings" | "help";
 
 const COMMAND_ACTIONS: Array<{
   value: SfHerdrAction;
@@ -46,62 +39,28 @@ const COMMAND_ACTIONS: Array<{
   {
     value: "status",
     label: "Show status",
-    description: "Show Herdr runtime state, preferences path, and inferred workflow signals.",
+    description: "Show current split-tool readiness and effective global settings.",
   },
   {
     value: "doctor",
     label: "Run doctor",
-    description:
-      "Show readiness notes for upstream Herdr control, passive bridge, and planner state.",
-  },
-  {
-    value: "profiles",
-    label: "Show workflow profiles",
-    description: "Print the effective managed workflow preferences used by sf_herdr_plan.",
-  },
-  {
-    value: "reset",
-    label: "Reset profiles",
-    description: "Reset managed Herdr workflow preferences to bundled defaults.",
+    description: "Check the Herdr environment and all three current upstream tools.",
   },
   {
     value: "settings",
     label: "Open settings",
-    description: "Open the SF Herdr settings page in the SF Pi Manager.",
+    description: "Open the global SF Herdr settings page in the SF Pi Manager.",
   },
-  {
-    value: "help",
-    label: "Show help",
-    description: "Print usage and v1 boundaries.",
-  },
+  { value: "help", label: "Show help", description: "Print usage and boundaries." },
 ];
 
 export default function sfHerdr(pi: ExtensionAPI): void {
   if (!requirePiVersion(pi, "sf-herdr")) return;
 
-  const signalState = createHerdrSignalState();
   let planToolRegistered = false;
-  let planToolRegistration: Promise<void> | undefined;
-
-  async function ensureToolRegistered(): Promise<void> {
-    if (planToolRegistered) return;
-    planToolRegistration ??= (async () => {
-      try {
-        const { registerSfHerdrPlanTool } = await import("./lib/sf_herdr_plan-tool.ts");
-        registerSfHerdrPlanTool(pi, signalState);
-        planToolRegistered = true;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn(`[sf-herdr] sf_herdr_plan tool registration skipped: ${message}`);
-      } finally {
-        planToolRegistration = undefined;
-      }
-    })();
-    await planToolRegistration;
-  }
 
   pi.registerCommand(COMMAND_NAME, {
-    description: "SF Herdr — dynamic Herdr lane planning, profiles, and status",
+    description: "SF Herdr — current split-tool planning, status, and settings",
     getArgumentCompletions: (prefix) => getFirstTokenCompletions(COMMAND_ACTIONS, prefix),
     handler: async (args, ctx) => {
       await withSafeCommandHandler(ctx, COMMAND_NAME, async () => {
@@ -123,10 +82,10 @@ export default function sfHerdr(pi: ExtensionAPI): void {
   registerExtensionDoctor(EXTENSION_ID, async () => ({
     extensionId: EXTENSION_ID,
     title: "SF Herdr",
-    summary: "Herdr lane planning and workflow signal inference",
-    checks: renderDoctor(signalState)
+    summary: "Current split Herdr runtime and planner readiness",
+    checks: renderDoctor(pi.getActiveTools())
       .split("\n")
-      .filter((line) => line.trim().length > 0)
+      .filter((line) => /^[✓○]/.test(line))
       .map((line, index) => ({
         id: `sf-herdr.${index}`,
         severity: line.startsWith("○") ? ("info" as const) : ("ok" as const),
@@ -136,32 +95,12 @@ export default function sfHerdr(pi: ExtensionAPI): void {
   }));
   registerManagerDetailActions(pi, EXTENSION_ID, buildHerdrManagerActions());
 
-  pi.on("session_start", async (event, ctx) => {
-    if (event.reason === "reload") {
-      planToolRegistered = false;
-      planToolRegistration = undefined;
-    }
-    signalState.reconstruct(ctx);
-    if (isSfPiExtensionEnabled(ctx.cwd, EXTENSION_ID)) await ensureToolRegistered();
-  });
-  pi.on("session_tree", async (_event, ctx) => {
-    signalState.reconstruct(ctx);
-  });
-  pi.on("session_shutdown", async () => {
-    signalState.reset();
-    planToolRegistered = false;
-    planToolRegistration = undefined;
-  });
-  pi.on("tool_result", async (event, ctx) => {
-    signalState.observeToolResult(event, ctx.cwd);
-  });
-  pi.on("resources_discover", (event) => {
-    if (!isSfPiExtensionEnabled(event.cwd, EXTENSION_ID)) return;
-    if (event.reason === "reload") {
-      planToolRegistered = false;
-      planToolRegistration = undefined;
-    }
-    void ensureToolRegistered();
+  pi.on("session_start", async () => {
+    if (planToolRegistered) return;
+    const readiness = getHerdrSplitToolReadiness(pi.getActiveTools());
+    if (!readiness.ready) return;
+    registerSfHerdrPlanTool(pi);
+    planToolRegistered = true;
   });
 
   function buildHerdrManagerActions(): ManagerDetailAction[] {
@@ -182,7 +121,6 @@ export default function sfHerdr(pi: ExtensionAPI): void {
       view,
       actions: buildHerdrManagerActions(),
     });
-
     if (!opened) {
       ctx.ui.notify("SF Pi Manager is unavailable. Try /sf-pi open sf-herdr.", "warning");
     }
@@ -197,33 +135,18 @@ export default function sfHerdr(pi: ExtensionAPI): void {
       await emit(
         ctx,
         "SF Herdr settings",
-        "Open settings from the interactive manager: /sf-pi open sf-herdr settings",
+        "Open global settings from the interactive manager: /sf-pi open sf-herdr settings",
         "info",
         fromPanel,
       );
       return;
     }
     if (action === "status") {
-      await emit(ctx, "SF Herdr status", renderStatus(signalState), "info", fromPanel);
+      await emit(ctx, "SF Herdr status", renderStatus(pi.getActiveTools()), "info", fromPanel);
       return;
     }
     if (action === "doctor") {
-      await emit(ctx, "SF Herdr doctor", renderDoctor(signalState), "info", fromPanel);
-      return;
-    }
-    if (action === "profiles") {
-      await emit(ctx, "SF Herdr profiles", renderProfiles(), "info", fromPanel);
-      return;
-    }
-    if (action === "reset") {
-      writeSfHerdrPreferences(DEFAULT_SF_HERDR_PREFERENCES);
-      await emit(
-        ctx,
-        "SF Herdr reset",
-        "Herdr workflow preferences reset to bundled defaults.",
-        "success",
-        fromPanel,
-      );
+      await emit(ctx, "SF Herdr doctor", renderDoctor(pi.getActiveTools()), "info", fromPanel);
       return;
     }
     await emit(ctx, "SF Herdr help", renderHelp(), "info", fromPanel);
@@ -248,33 +171,13 @@ async function emit(
   console.info(body);
 }
 
-function renderProfiles(): string {
-  const preferences = readSfHerdrPreferences();
-  return [
-    "SF Herdr workflow profiles",
-    `Path: ${herdrPreferencesPath()}`,
-    `Default split direction: ${preferences.defaults.splitDirection ?? "right"}`,
-    "Proactive Herdr guidance is controlled by SF Brain settings; SF Herdr handles explicit lane planning.",
-    "",
-    "Workflow lane preferences:",
-    ...Object.entries(preferences.workflows).map(([workflow, profile]) => {
-      const laneNames = Object.entries(profile?.lanes ?? {})
-        .map(
-          ([laneId, lane]) =>
-            `${laneId}=${lane?.alias ?? laneId}:${lane?.lifecycle ?? "ephemeral"}`,
-        )
-        .join(", ");
-      return `- ${workflow}: ${laneNames || "inherits defaults"}`;
-    }),
-  ].join("\n");
-}
-
 function renderHelp(): string {
+  const settings = readSfHerdrSettings();
   return [
-    "Usage: /sf-herdr [status|doctor|profiles|reset|settings|help]",
+    "Usage: /sf-herdr [status|doctor|settings|help]",
     "",
-    "SF Herdr owns dynamic Herdr lane planning for Salesforce workflows.",
-    "It does not call Herdr directly and does not generate shell commands.",
-    "Use sf_herdr_plan for a non-mutating lane plan, then execute visible herdr actions.",
+    "sf_herdr_plan is non-mutating and is available only inside a current split Herdr runtime.",
+    "Plans use herdr_layout, herdr_pane, and herdr_agent; they never generate shell commands.",
+    `Current split direction: ${settings.splitDirection}.`,
   ].join("\n");
 }

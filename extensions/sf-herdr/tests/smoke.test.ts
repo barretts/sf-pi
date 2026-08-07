@@ -1,8 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** Smoke tests for sf-herdr command registration and Manager Surface routing. */
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+/** Public extension seams for command routing and gated planner registration. */
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -26,29 +23,11 @@ function fakeCommandContext(): ExtensionCommandContext {
   return {
     hasUI: true,
     cwd: "/tmp/sf-pi-test",
-    ui: {
-      notify: vi.fn(),
-      setStatus: vi.fn(),
-    },
+    ui: { notify: vi.fn(), setStatus: vi.fn() },
   } as unknown as ExtensionCommandContext;
 }
 
-const source = readFileSync(
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../index.ts"),
-  "utf-8",
-);
-
 describe("sf-herdr", () => {
-  it("exports a default extension factory", async () => {
-    const mod = await import("../index.ts");
-    expect(typeof mod.default).toBe("function");
-  });
-
-  it("does not statically import the planner tool before command registration", () => {
-    expect(source).not.toContain('from "./lib/sf_herdr_plan-tool.ts"');
-    expect(source).toContain('import("./lib/sf_herdr_plan-tool.ts")');
-  });
-
   it("registers the slash command before lifecycle wiring", async () => {
     const mod = await import("../index.ts");
     const pi = {
@@ -57,81 +36,88 @@ describe("sf-herdr", () => {
         throw new Error("lifecycle registration failed");
       }),
       registerCommand: vi.fn(),
+      getActiveTools: vi.fn(() => []),
     };
 
     expect(() => mod.default(pi as never)).toThrow("lifecycle registration failed");
     expect(pi.registerCommand).toHaveBeenCalledWith("sf-herdr", expect.any(Object));
   });
 
-  it("observes successful workflow input only through Pi's tool_result hook", async () => {
+  it("registers only the session_start lifecycle hook", async () => {
     const mod = await import("../index.ts");
     const pi = {
       events: eventBus(),
       on: vi.fn(),
       registerCommand: vi.fn(),
+      getActiveTools: vi.fn(() => []),
     };
 
     mod.default(pi as never);
-    const eventNames = pi.on.mock.calls.map(([eventName]) => eventName);
-
-    expect(eventNames).toContain("tool_result");
-    expect(eventNames).not.toContain("tool_execution_start");
-    expect(eventNames).not.toContain("tool_execution_end");
+    expect(pi.on.mock.calls.map(([name]) => name)).toEqual(["session_start"]);
   });
 
-  it("routes the no-args UI command to the SF Pi Manager detail page", async () => {
+  it("registers sf_herdr_plan at session startup only with Herdr env and all current tools active", async () => {
+    const previousEnv = {
+      HERDR_ENV: process.env.HERDR_ENV,
+      HERDR_PANE_ID: process.env.HERDR_PANE_ID,
+    };
+    process.env.HERDR_ENV = "1";
+    process.env.HERDR_PANE_ID = "opaque-current-pane";
+    try {
+      const mod = await import("../index.ts");
+      const handlers = new Map<string, () => Promise<void>>();
+      const registerTool = vi.fn();
+      const pi = {
+        events: eventBus(),
+        on: vi.fn((name: string, handler: () => Promise<void>) => handlers.set(name, handler)),
+        registerCommand: vi.fn(),
+        registerTool,
+        getActiveTools: vi.fn(() => ["herdr_layout", "herdr_pane"]),
+      };
+
+      mod.default(pi as never);
+      await handlers.get("session_start")?.();
+      expect(registerTool).not.toHaveBeenCalled();
+
+      pi.getActiveTools.mockReturnValue(["herdr_layout", "herdr_pane", "herdr_agent"]);
+      await handlers.get("session_start")?.();
+      expect(registerTool).toHaveBeenCalledWith(expect.objectContaining({ name: "sf_herdr_plan" }));
+    } finally {
+      if (previousEnv.HERDR_ENV === undefined) delete process.env.HERDR_ENV;
+      else process.env.HERDR_ENV = previousEnv.HERDR_ENV;
+      if (previousEnv.HERDR_PANE_ID === undefined) delete process.env.HERDR_PANE_ID;
+      else process.env.HERDR_PANE_ID = previousEnv.HERDR_PANE_ID;
+    }
+  });
+
+  it("routes no-args and settings to their SF Pi Manager pages", async () => {
     const mod = await import("../index.ts");
     const events = eventBus();
     const pi = {
       events,
       on: vi.fn(),
       registerCommand: vi.fn(),
+      getActiveTools: vi.fn(() => []),
     };
-    let request: SfPiManagerOpenRequest | undefined;
+    const requests: SfPiManagerOpenRequest[] = [];
     events.on(SF_PI_MANAGER_OPEN_EVENT, (payload) => {
-      request = payload as SfPiManagerOpenRequest;
+      const request = payload as SfPiManagerOpenRequest;
+      requests.push(request);
       request.accept?.();
       request.resolve?.();
     });
 
     mod.default(pi as never);
     const command = pi.registerCommand.mock.calls.find(([name]) => name === "sf-herdr")?.[1];
-    expect(command).toBeDefined();
-
     await command.handler("", fakeCommandContext());
-
-    expect(request?.route?.extensionId).toBe("sf-herdr");
-    expect(request?.route?.view).toBe("detail");
-    expect(request?.route?.actions?.map((action) => action.id)).toEqual([
-      "status",
-      "doctor",
-      "profiles",
-      "reset",
-      "help",
-    ]);
-  });
-
-  it("routes the settings subcommand to the SF Pi Manager settings page", async () => {
-    const mod = await import("../index.ts");
-    const events = eventBus();
-    const pi = {
-      events,
-      on: vi.fn(),
-      registerCommand: vi.fn(),
-    };
-    let request: SfPiManagerOpenRequest | undefined;
-    events.on(SF_PI_MANAGER_OPEN_EVENT, (payload) => {
-      request = payload as SfPiManagerOpenRequest;
-      request.accept?.();
-      request.resolve?.();
-    });
-
-    mod.default(pi as never);
-    const command = pi.registerCommand.mock.calls.find(([name]) => name === "sf-herdr")?.[1];
-    expect(command).toBeDefined();
-
     await command.handler("settings", fakeCommandContext());
 
-    expect(request?.route).toMatchObject({ extensionId: "sf-herdr", view: "settings" });
+    expect(requests[0]?.route).toMatchObject({ extensionId: "sf-herdr", view: "detail" });
+    expect(requests[0]?.route?.actions?.map((action) => action.id)).toEqual([
+      "status",
+      "doctor",
+      "help",
+    ]);
+    expect(requests[1]?.route).toMatchObject({ extensionId: "sf-herdr", view: "settings" });
   });
 });

@@ -85,7 +85,7 @@ _Salesforce documentation lookup for agents and humans, with local credential st
 
 ### [SF Herdr](./extensions/sf-herdr)
 
-_Dynamic Herdr lane planning for Salesforce workflows without replacing the upstream Herdr tool._
+_Non-mutating Salesforce workflow plans for the current split Herdr tools._
 
 - Default: **on**
 - Commands: `/sf-herdr`

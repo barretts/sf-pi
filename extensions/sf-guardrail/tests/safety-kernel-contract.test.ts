@@ -319,10 +319,10 @@ describe("Safety Kernel — commandGate (Tier 2)", () => {
     }
   });
 
-  it("confirms dangerous herdr.run commands", async () => {
+  it("confirms dangerous herdr_pane.run commands", async () => {
     const config = readBundledConfig();
     const decision = await evaluateSafety({
-      toolName: "herdr",
+      toolName: "herdr_pane",
       input: { action: "run", pane: "tests", command: "rm -rf tmp/" },
       cwd: "/project",
       config,
@@ -367,10 +367,10 @@ describe("Safety Kernel — commandGate (Tier 2)", () => {
     }
   });
 
-  it("ignores non-run herdr actions", async () => {
+  it("ignores non-run herdr_pane actions", async () => {
     const config = readBundledConfig();
     const decision = await evaluateSafety({
-      toolName: "herdr",
+      toolName: "herdr_pane",
       input: { action: "read", pane: "tests", command: "rm -rf tmp/" },
       cwd: "/project",
       config,
@@ -378,10 +378,10 @@ describe("Safety Kernel — commandGate (Tier 2)", () => {
     expect(decision).toBeUndefined();
   });
 
-  it("ignores herdr.run without a string command", async () => {
+  it("ignores herdr_pane.run without a string command", async () => {
     const config = readBundledConfig();
     const decision = await evaluateSafety({
-      toolName: "herdr",
+      toolName: "herdr_pane",
       input: { action: "run", pane: "tests" },
       cwd: "/project",
       config,
@@ -408,11 +408,11 @@ describe("Safety Kernel — orgAwareGate (Tier 2)", () => {
     expect(decision?.approvalScope?.persistedGrant).toBeUndefined();
   });
 
-  it("confirms herdr.run sf project deploy start against production", async () => {
+  it("confirms herdr_pane.run sf project deploy start against production", async () => {
     mockedEnv = env("Prod", "production");
     const config = readBundledConfig();
     const decision = await evaluateSafety({
-      toolName: "herdr",
+      toolName: "herdr_pane",
       input: { action: "run", pane: "deploy", command: "sf project deploy start -o Prod" },
       cwd: "/project",
       config,

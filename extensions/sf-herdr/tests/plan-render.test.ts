@@ -1,55 +1,115 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** Tests for compact sf_herdr_plan text rendering. */
-import { describe, expect, it } from "vitest";
+/** Public planner behavior proofs for the current split Herdr tools. */
+import { describe, expect, it, vi } from "vitest";
 
 import {
-  DEFAULT_SF_HERDR_PREFERENCES,
-  buildHerdrLanePlan,
-} from "../../../lib/common/herdr-profile/store.ts";
-import { renderHerdrLanePlan } from "../lib/sf_herdr_plan-tool.ts";
+  buildSfHerdrPlan,
+  registerSfHerdrPlanTool,
+  renderSfHerdrPlan,
+} from "../lib/sf_herdr_plan-tool.ts";
+import { DEFAULT_SF_HERDR_SETTINGS } from "../lib/settings.ts";
 
-describe("renderHerdrLanePlan", () => {
-  it("renders a compact fresh ephemeral card", () => {
-    const plan = buildHerdrLanePlan(DEFAULT_SF_HERDR_PREFERENCES, {
+type CapturedTool = {
+  execute: (
+    id: string,
+    params: Record<string, unknown>,
+  ) => Promise<{
+    content: Array<{ type: string; text: string }>;
+    details: { plan: { steps: Array<Record<string, unknown>> } };
+  }>;
+};
+
+describe("sf_herdr_plan", () => {
+  it("returns current tool/action steps that pass the opaque split-pane result forward", async () => {
+    let tool: CapturedTool | undefined;
+    registerSfHerdrPlanTool({
+      registerTool: vi.fn((definition) => (tool = definition as CapturedTool)),
+    } as never);
+
+    const result = await tool!.execute("plan-1", {
       intent: "verify",
       primaryWorkflow: "generic",
-      confidence: 1,
-      reason: "Workflow supplied by caller: generic.",
     });
+    const steps = result.details.plan.steps;
 
-    const rendered = renderHerdrLanePlan(plan, { inHerdrPane: true });
-
-    expect(rendered).toContain("🐑 SF Herdr plan  deploy · verify · fresh ephemeral");
-    expect(rendered).toContain("Workflow  generic (100%)");
-    expect(rendered).toContain("target deploy_<shortid>");
-    expect(rendered).toContain("source=current agent pane");
-    expect(rendered).toContain("Action path");
-    expect(rendered).toContain(
-      'herdr(action="pane_split", newPane="deploy_<shortid>", direction="right", focus=false)',
+    expect(steps.map(({ tool, action }) => [tool, action])).toEqual([
+      ["herdr_layout", "pane_split"],
+      ["herdr_pane", "run"],
+      ["herdr_pane", "wait_output"],
+      ["herdr_pane", "read"],
+      ["herdr_pane", "close"],
+    ]);
+    expect(steps[0]).toMatchObject({
+      id: "split",
+      tool: "herdr_layout",
+      action: "pane_split",
+      arguments: { focus: false },
+    });
+    expect(
+      steps
+        .slice(1)
+        .map((step) => (step.argumentBindings as Record<string, unknown> | undefined)?.pane),
+    ).toEqual([
+      { stepId: "split", path: "details.pane.pane_id" },
+      { stepId: "split", path: "details.pane.pane_id" },
+      { stepId: "split", path: "details.pane.pane_id" },
+      { stepId: "split", path: "details.pane.pane_id" },
+    ]);
+    expect(steps.at(-1)).toMatchObject({ when: "observed_success_only" });
+    expect(JSON.stringify(result)).not.toContain('"tool":"herdr"');
+    expect(JSON.stringify(result)).not.toContain("<shortid>");
+    expect(result.content[0]?.text).toContain("1. herdr_layout.pane_split · focus=false");
+    expect(result.content[0]?.text).toContain(
+      "2. herdr_pane.run · pane←split.details.pane.pane_id · caller supplies command",
     );
-    expect(rendered).toContain("create fresh lane");
-    expect(rendered).toContain('herdr(action="watch", pane="deploy_<shortid>"');
-    expect(rendered).toContain('herdr(action="read", pane="deploy_<shortid>"');
-    expect(rendered).toContain("stop/close after Workflow Success Condition");
-    expect(rendered).not.toContain("Recommended Herdr actions:");
-    expect(rendered).not.toContain("Phases:");
   });
 
-  it("renders sticky lane cleanup without auto-stop", () => {
-    const plan = buildHerdrLanePlan(DEFAULT_SF_HERDR_PREFERENCES, {
-      intent: "server",
-      primaryWorkflow: "uiBundle",
-      confidence: 1,
+  it("uses herdr_agent for review lanes and keeps the default manual pane open", async () => {
+    let tool: CapturedTool | undefined;
+    registerSfHerdrPlanTool({
+      registerTool: vi.fn((definition) => (tool = definition as CapturedTool)),
+    } as never);
+
+    const result = await tool!.execute("plan-2", {
+      intent: "review",
+      primaryWorkflow: "apex",
     });
 
-    const rendered = renderHerdrLanePlan(plan, { inHerdrPane: false });
+    expect(result.details.plan.steps.map(({ tool, action }) => [tool, action])).toEqual([
+      ["herdr_layout", "pane_split"],
+      ["herdr_agent", "start"],
+      ["herdr_agent", "prompt"],
+      ["herdr_agent", "read"],
+    ]);
+    expect(result.details.plan.steps.some((step) => step.action === "close")).toBe(false);
+    expect(result.content[0]?.text).toContain(
+      "manual lifecycle; leave open until explicit cleanup",
+    );
+  });
 
-    expect(rendered).toContain("server · server · sticky");
-    expect(rendered).toContain("Herdr pane environment not detected");
-    expect(rendered).toContain('herdr(action="list")');
-    expect(rendered).toContain("find/reuse server if present");
-    expect(rendered).toContain("create only when alias is absent");
-    expect(rendered).toContain("manual cleanup");
-    expect(rendered).toContain("no automatic cleanup; explicit user cleanup required");
+  it("applies explicit split direction and lifecycle settings without aliases", () => {
+    const plan = buildSfHerdrPlan(
+      {
+        ...DEFAULT_SF_HERDR_SETTINGS,
+        splitDirection: "down",
+        lifecycleByIntent: {
+          ...DEFAULT_SF_HERDR_SETTINGS.lifecycleByIntent,
+          verify: "sticky",
+        },
+      },
+      { intent: "verify", primaryWorkflow: "generic" },
+    );
+
+    expect(plan.lifecycle).toBe("sticky");
+    expect(plan.steps[0]).toMatchObject({
+      tool: "herdr_layout",
+      action: "pane_split",
+      arguments: { focus: false, direction: "down" },
+    });
+    expect(plan.steps.some((step) => step.action === "close")).toBe(false);
+    expect(renderSfHerdrPlan(plan)).toContain(
+      "herdr_layout.pane_split · focus=false · direction=down",
+    );
+    expect(JSON.stringify(plan)).not.toContain("alias");
   });
 });

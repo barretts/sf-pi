@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted; current tool names and alias-free opaque pane handling amended by [ADR 0102](./0102-forward-only-current-herdr-tools.md).
 
 ## Context
 

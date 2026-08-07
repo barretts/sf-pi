@@ -20,7 +20,7 @@ controlled by per-rule behavior (`off`, `confirm`, or `block`):
 
 2. **commandGate** — dangerous-command patterns matched structurally
    against tokenized shell commands from `bash.command` or
-   `herdr.run.command`, including commands later in simple shell chains.
+   `herdr_pane.run.command`, including commands later in simple shell chains.
    Ships with recursive deletion variants, permission/ownership changes,
    destructive git commands, pipe-to-shell and base64-to-shell patterns,
    process/system disruption commands, container/cloud/database destruction
@@ -180,7 +180,7 @@ engine. The canonical terms live in `CONTEXT.md`; the redesign plan lives in
 | tool_call          | commandGate safe temp cleanup           | Pass through, audit as allow_auto                |
 | tool_call          | commandGate allowedPatterns             | Pass through                                     |
 | tool_call          | commandGate autoDenyPatterns            | `{ block }`, audit                               |
-| tool_call          | `herdr.run` command matches a gate      | same confirmation path as `bash`                 |
+| tool_call          | `herdr_pane.run` command matches a gate | same confirmation path as `bash`                 |
 | tool_call          | native high-value mutation matches      | same confirmation path as other confirm gates    |
 | tool_call          | previously allowed (session memory)     | Pass through, audit as allow_session             |
 | tool_call          | interactive confirmation                | `ctx.ui.select`, status/notify, audit per choice |
@@ -297,7 +297,7 @@ Covered by unit tests:
   `productionAliases`, resolves explicit aliases through a bounded cached
   lookup when needed, and fails closed to "production" on unknown aliases.
 - Safety Subject normalization covers file tools, `bash.command`, and
-  `herdr.run.command`.
+  `herdr_pane.run.command`.
 - Safety Kernel characterization tests preserve end-to-end decisions for
   protected files, dangerous commands, org-aware gates, Herdr mediation,
   and safe temp cleanup.
@@ -312,7 +312,7 @@ Covered by unit tests:
 - Envelope-first HIL detail renders risk gate, subject, target org, approval
   coverage, session duration, and advisory recovery guidance.
 - Safety Kernel contract tests produce the right decision for representative
-  `read`/`write`/`bash`/`herdr.run` tool calls with the bundled config.
+  `read`/`write`/`bash`/`herdr_pane.run` tool calls with the bundled config.
 - Config loader parses bundled defaults, merges user override by id,
   disables bundled rules via `enabled: false`, and falls back silently
   on malformed JSON.

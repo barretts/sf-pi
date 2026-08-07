@@ -1,13 +1,11 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** Tests for SF Herdr settings panel save / dirty-state behavior. */
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+/** Public settings-panel behavior proof for global native Pi settings. */
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { createConfigPanel } from "../lib/config-panel.ts";
-
-const PI_AGENT_ENV = "PI_CODING_AGENT_DIR";
 
 const stubTheme: Theme = {
   fg: (_color: string, text: string) => text,
@@ -15,91 +13,97 @@ const stubTheme: Theme = {
 } as Theme;
 
 type TestPanel = { handleInput(data: string): void; renderContent(width: number): string[] };
-
 let tmpDir: string;
-let prevAgentDir: string | undefined;
+let projectDir: string;
+let previousAgentDir: string | undefined;
 
 beforeEach(() => {
   tmpDir = mkdtempSync(path.join(os.tmpdir(), "sf-herdr-config-"));
-  prevAgentDir = process.env[PI_AGENT_ENV];
-  process.env[PI_AGENT_ENV] = tmpDir;
+  projectDir = path.join(tmpDir, "project");
+  previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = tmpDir;
 });
 
 afterEach(() => {
-  if (prevAgentDir === undefined) delete process.env[PI_AGENT_ENV];
-  else process.env[PI_AGENT_ENV] = prevAgentDir;
+  if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
 function makePanel(onDone: (value: unknown) => void = () => undefined): TestPanel {
-  return createConfigPanel(stubTheme, "/tmp/project", "global", onDone) as unknown as TestPanel;
+  return createConfigPanel(stubTheme, projectDir, "project", onDone) as unknown as TestPanel;
 }
 
-describe("SF Herdr config panel", () => {
-  it("shows only split direction and workflow lane lifecycle controls", () => {
-    const panel = makePanel();
-    const rendered = panel.renderContent(100).join("\n");
-
-    expect(rendered).toContain("Split direction");
-    expect(rendered).toContain("Workflow");
-    expect(rendered).toContain("Lane");
-    expect(rendered).toContain("Lane lifecycle");
-    expect(rendered).not.toContain("Workflow mode");
-    expect(rendered).not.toContain("Lane style");
-    expect(rendered).not.toContain("Preserve focus");
-    expect(rendered).not.toContain("Lane enabled");
-  });
-
-  it("marks split-direction changes as unsaved, saves explicitly, and stays on settings", () => {
-    let result: unknown = "not-called";
-    const panel = makePanel((value) => {
-      result = value;
-    });
-
-    expect(panel.renderContent(100).join("\n")).toContain("Saved");
-
-    panel.handleInput(" ");
-    const dirty = panel.renderContent(100).join("\n");
-    expect(dirty).toContain("Unsaved changes");
-    expect(result).toBe("not-called");
-
-    panel.handleInput("s");
-
-    expect(result).toBe("not-called");
-    expect(panel.renderContent(100).join("\n")).toContain("Saved");
-    const raw = JSON.parse(
-      readFileSync(path.join(tmpDir, "sf-pi", "herdr", "preferences.json"), "utf-8"),
+describe("SF Herdr settings panel", () => {
+  it("ignores the retired profile file instead of migrating it", () => {
+    const retiredDir = path.join(tmpDir, "sf-pi", "herdr");
+    mkdirSync(retiredDir, { recursive: true });
+    writeFileSync(
+      path.join(retiredDir, "preferences.json"),
+      JSON.stringify({ state: { defaults: { splitDirection: "down" } } }),
     );
-    expect(raw.state.defaults.splitDirection).toBe("down");
-    expect(raw.state.workflowMode).toBeUndefined();
-    expect(raw.state.defaults.laneStyle).toBeUndefined();
-    expect(raw.state.defaults.preserveFocus).toBeUndefined();
+
+    const rendered = makePanel().renderContent(100).join("\n");
+    expect(rendered).toMatch(/Split direction\s+auto/);
+    expect(existsSync(path.join(tmpDir, "settings.json"))).toBe(false);
   });
 
-  it("edits workflow lane lifecycle", () => {
-    const panel = makePanel();
+  it("writes only the new global sfPi.herdr schema and supports dirty, save, and discard", () => {
+    let done: unknown = "not-called";
+    const panel = makePanel((value) => (done = value));
+    const initial = panel.renderContent(100).join("\n");
+    expect(initial).toContain("Split direction");
+    expect(initial).toContain("Intent");
+    expect(initial).toContain("Lifecycle");
+    expect(initial).toContain("Saved");
 
-    // Move to Lane lifecycle (default selected workflow=generic, lane=tests).
-    for (let i = 0; i < 3; i++) panel.handleInput("\x1b[B");
     panel.handleInput(" ");
+    expect(panel.renderContent(100).join("\n")).toContain("Unsaved changes");
     panel.handleInput("s");
+    expect(panel.renderContent(100).join("\n")).toContain("Saved");
+    expect(done).toBe("not-called");
 
-    const raw = JSON.parse(
-      readFileSync(path.join(tmpDir, "sf-pi", "herdr", "preferences.json"), "utf-8"),
-    );
-    expect(raw.state.workflows.generic.lanes.tests.lifecycle).toBe("sticky");
-    expect(raw.state.workflows.generic.lanes.tests.enabled).toBeUndefined();
-  });
-
-  it("leaves without writing when escape is pressed with unsaved changes", () => {
-    let result: unknown = "not-called";
-    const panel = makePanel((value) => {
-      result = value;
+    const global = JSON.parse(readFileSync(path.join(tmpDir, "settings.json"), "utf8"));
+    expect(global).toEqual({
+      sfPi: {
+        herdr: {
+          splitDirection: "right",
+          lifecycleByIntent: {
+            "run-tests": "ephemeral",
+            "tail-logs": "ephemeral",
+            "deploy-validate": "ephemeral",
+            preview: "ephemeral",
+            eval: "ephemeral",
+            server: "sticky",
+            review: "manual",
+            verify: "ephemeral",
+          },
+        },
+      },
     });
+    expect(existsSync(path.join(projectDir, ".pi", "settings.json"))).toBe(false);
+    expect(existsSync(path.join(tmpDir, "sf-pi", "herdr", "preferences.json"))).toBe(false);
 
     panel.handleInput(" ");
+    expect(panel.renderContent(100).join("\n")).toContain("Unsaved changes");
     panel.handleInput("\u001b");
+    expect(done).toBeUndefined();
+    expect(JSON.parse(readFileSync(path.join(tmpDir, "settings.json"), "utf8"))).toEqual(global);
+  });
 
-    expect(result).toBeUndefined();
+  it("edits lifecycle by explicit intent without creating workflow profiles", () => {
+    const panel = makePanel();
+
+    panel.handleInput("\x1b[B"); // Intent
+    panel.handleInput(" "); // tail-logs
+    panel.handleInput("\x1b[B"); // Lifecycle
+    panel.handleInput(" "); // sticky
+    panel.handleInput("s");
+
+    const global = JSON.parse(readFileSync(path.join(tmpDir, "settings.json"), "utf8"));
+    expect(global.sfPi.herdr.lifecycleByIntent["tail-logs"]).toBe("sticky");
+    expect(global.sfPi.herdr.lifecycleByIntent["run-tests"]).toBe("ephemeral");
+    expect(JSON.stringify(global)).not.toContain("workflows");
+    expect(JSON.stringify(global)).not.toContain("lanes");
   });
 });

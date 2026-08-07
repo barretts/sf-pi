@@ -4,7 +4,7 @@
  *
  * This keeps tool-shape knowledge out of the Safety Kernel and lower-level risk
  * gates. It is intentionally narrow: only file-path tools, bash commands, and
- * `herdr.run.command` are safety subjects today.
+ * current `herdr_pane` run commands are safety subjects today.
  */
 import { classifyNativeToolRisk } from "./native-tool-risk-registry.ts";
 import type { SafetySubject } from "./types.ts";
@@ -28,7 +28,7 @@ export function normalizeSafetySubject(
     return { kind: "shellCommand", toolName, command: input.command };
   }
 
-  if (toolName === "herdr" && input.action === "run" && typeof input.command === "string") {
+  if (toolName === "herdr_pane" && input.action === "run" && typeof input.command === "string") {
     return { kind: "shellCommand", toolName, command: input.command };
   }
 

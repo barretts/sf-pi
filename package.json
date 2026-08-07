@@ -89,6 +89,7 @@
     "test:coverage": "vitest run --coverage",
     "agentscript:versions": "node --experimental-strip-types scripts/agentscript-versions.mjs",
     "e2e:d360-sweep": "node --experimental-strip-types scripts/e2e/d360-capability-sweep.ts",
+    "e2e:sf-herdr": "node --experimental-strip-types scripts/e2e/sf-herdr-live-smoke.ts",
     "e2e:sf-apex-harness": "node --experimental-strip-types scripts/e2e/sf-apex-harness-e2e.ts",
     "e2e:sf-browser-harden": "node --experimental-strip-types scripts/e2e/sf-browser-pack-harden.ts",
     "validate": "./scripts/validate.sh",

@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Static, public-safe scan recipe catalog for SF Code Analyzer. */
 import { existsSync, readFileSync } from "node:fs";
-import type { HerdrWorkflowHandoff } from "../../../lib/common/herdr-profile/handoff.ts";
-import type { HerdrWorkflowKey } from "../../../lib/common/herdr-profile/store.ts";
+import type { HerdrWorkflow, HerdrWorkflowHandoff } from "../../../lib/common/herdr.ts";
 
 export interface CodeAnalyzerRecipe {
   id: string;
@@ -233,12 +232,11 @@ export function herdrHandoffsForRecipes(recipeIds: string[]): CodeAnalyzerHerdrH
       plan: {
         intent: "verify" as const,
         primaryWorkflow: primaryWorkflowForRecipe(recipe),
-        expectedDuration: "long" as const,
       },
     }));
 }
 
-function primaryWorkflowForRecipe(recipe: CodeAnalyzerRecipe): HerdrWorkflowKey {
+function primaryWorkflowForRecipe(recipe: CodeAnalyzerRecipe): HerdrWorkflow {
   if (recipe.id === "sfge" || recipe.id === "apex-performance") return "apex";
   if (recipe.id === "auto-apex-default") return "apex";
   if (recipe.id === "auto-js-default") return "generic";

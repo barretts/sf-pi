@@ -305,11 +305,11 @@ Terminal.app and some Powerlevel10k setups. Fixes:
   above — they fall back to the color emoji font on their own.
 
 **Herdr says the upstream package or Pi state integration is missing:**
-The actual `herdr` tool comes from the upstream Pi package
-`npm:@ogulcancelik/pi-herdr`; SF Herdr only plans Salesforce workflow lanes.
-There is no separate Herdr skill to install. Run
+The current `herdr_layout`, `herdr_pane`, and `herdr_agent` tools come from the
+upstream Pi package `npm:@ogulcancelik/pi-herdr`; SF Herdr only plans Salesforce
+workflow lanes. The separate official Herdr skill is outside SF Pi's scope. Run
 `pi install npm:@ogulcancelik/pi-herdr`, then start Pi from inside a Herdr pane
-so `HERDR_ENV`, `HERDR_PANE_ID`, and the upstream tool are active. For richer
+so `HERDR_ENV`, `HERDR_PANE_ID`, and all three current tools are active. For richer
 Pi lifecycle/session state in Herdr, also run `herdr integration install pi`.
 Herdr writes `herdr-agent-state.ts` into Pi's global extensions directory. If
 the package is already configured but the tool is still inactive inside Herdr,

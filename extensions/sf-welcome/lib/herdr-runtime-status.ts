@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Startup-safe Herdr runtime readiness for the welcome splash. */
 import { closeSync, existsSync, openSync, readSync } from "node:fs";
+import { getHerdrSplitToolReadiness } from "../../../lib/common/herdr-runtime.ts";
 import { globalAgentPath } from "../../../lib/common/pi-paths.ts";
 import { isSfPiExtensionEnabled } from "../../../lib/common/sf-pi-extension-state.ts";
 import { isRecommendedPackageSourceInstalled } from "./recommendations-status.ts";
@@ -8,8 +9,6 @@ import type { HerdrPiIntegrationStatusInfo, HerdrRuntimeStatusInfo } from "./typ
 
 export const HERDR_PI_PACKAGE_SOURCE = "npm:@ogulcancelik/pi-herdr";
 export const HERDR_PI_INTEGRATION_FILE = "herdr-agent-state.ts";
-
-const HERDR_CONTROL_TOOLS = new Set(["herdr", "herdr_layout", "herdr_pane", "herdr_agent"]);
 
 export function collectHerdrRuntimeStatus(
   cwd: string | undefined,
@@ -21,12 +20,9 @@ export function collectHerdrRuntimeStatus(
 ): HerdrRuntimeStatusInfo {
   const env = options.env ?? process.env;
   const extensionEnabled = cwd ? isSfPiExtensionEnabled(cwd, "sf-herdr") : true;
-  const activeTools = options.activeToolNames ?? [];
-  const allTools = options.allToolNames ?? [];
-  const toolActive =
-    activeTools.some((tool) => HERDR_CONTROL_TOOLS.has(tool)) ||
-    (options.activeToolNames === undefined &&
-      allTools.some((tool) => HERDR_CONTROL_TOOLS.has(tool)));
+  const activeTools = options.activeToolNames ?? options.allToolNames ?? [];
+  const readiness = getHerdrSplitToolReadiness(activeTools, env);
+  const toolActive = readiness.allToolsActive;
   const packageInstalled = cwd
     ? isRecommendedPackageSourceInstalled(cwd, HERDR_PI_PACKAGE_SOURCE)
     : false;

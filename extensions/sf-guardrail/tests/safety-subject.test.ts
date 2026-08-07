@@ -30,29 +30,31 @@ describe("normalizeSafetySubject", () => {
     });
   });
 
-  it("normalizes herdr run commands into shell command subjects", () => {
+  it("normalizes current herdr_pane run commands into shell command subjects", () => {
     expect(
-      normalizeSafetySubject("herdr", {
+      normalizeSafetySubject("herdr_pane", {
         action: "run",
-        pane: "tests",
+        pane: "opaque-pane-id",
         command: "npm test",
       }),
     ).toEqual({
       kind: "shellCommand",
-      toolName: "herdr",
+      toolName: "herdr_pane",
       command: "npm test",
     });
   });
 
-  it("ignores non-run herdr actions and run actions without string commands", () => {
+  it("ignores non-run herdr_pane actions and run actions without string commands", () => {
     expect(
-      normalizeSafetySubject("herdr", {
+      normalizeSafetySubject("herdr_pane", {
         action: "read",
-        pane: "tests",
+        pane: "opaque-pane-id",
         command: "rm -rf tmp/",
       }),
     ).toBeUndefined();
-    expect(normalizeSafetySubject("herdr", { action: "run", pane: "tests" })).toBeUndefined();
+    expect(
+      normalizeSafetySubject("herdr_pane", { action: "run", pane: "opaque-pane-id" }),
+    ).toBeUndefined();
   });
 
   it("ignores unrelated tool calls", () => {

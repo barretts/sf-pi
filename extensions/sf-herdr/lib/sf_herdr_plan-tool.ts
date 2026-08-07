@@ -1,185 +1,210 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** Non-mutating Herdr lane planner tool. */
+/** Minimal non-mutating planner for the current split Herdr tools. */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
 import {
   HERDR_PLAN_INTENTS,
-  WORKFLOW_KEYS,
-  buildHerdrLanePlan,
-  formatHerdrActionCall,
-  readSfHerdrPreferences,
-  type HerdrExpectedDuration,
+  HERDR_WORKFLOWS,
   type HerdrPlanIntent,
-  type HerdrWorkflowKey,
-} from "../../../lib/common/herdr-profile/store.ts";
-import type { HerdrSignalState } from "./signal-state.ts";
-import { getHerdrRuntimeStatus } from "./status.ts";
+  type HerdrWorkflow,
+} from "../../../lib/common/herdr.ts";
+import { readSfHerdrSettings, type HerdrLifecycle, type SfHerdrSettings } from "./settings.ts";
 
 export const SF_HERDR_PLAN_TOOL_NAME = "sf_herdr_plan";
 
-const WorkflowEnum = StringEnum(WORKFLOW_KEYS, {
-  description:
-    "Optional primary workflow. Omit to let sf-herdr infer from recent tool calls/results.",
-});
-const IntentEnum = StringEnum(HERDR_PLAN_INTENTS, {
-  description: "Workflow intent to plan a Herdr lane for.",
-});
-const DurationEnum = StringEnum(["short", "long", "unknown"] as const, {
-  description: "Expected duration of the lane work. Default unknown.",
-});
-
 export const SfHerdrPlanParams = Type.Object({
-  intent: IntentEnum,
-  primaryWorkflow: Type.Optional(WorkflowEnum),
-  relatedWorkflows: Type.Optional(Type.Array(WorkflowEnum)),
-  expectedDuration: Type.Optional(DurationEnum),
+  intent: StringEnum(HERDR_PLAN_INTENTS, {
+    description: "Explicit workflow intent to run in a Herdr pane.",
+  }),
+  primaryWorkflow: StringEnum(HERDR_WORKFLOWS, {
+    description: "Owning Salesforce workflow. Required; SF Herdr does not infer workflows.",
+  }),
 });
 
 export interface SfHerdrPlanInput {
   intent: HerdrPlanIntent;
-  primaryWorkflow?: HerdrWorkflowKey;
-  relatedWorkflows?: HerdrWorkflowKey[];
-  expectedDuration?: HerdrExpectedDuration;
+  primaryWorkflow: HerdrWorkflow;
 }
 
-export function registerSfHerdrPlanTool(pi: ExtensionAPI, signalState: HerdrSignalState): void {
+interface ResultReference {
+  stepId: "split";
+  path: "details.pane.pane_id";
+}
+
+interface PlanStepBase {
+  id: string;
+  arguments: Record<string, string | boolean | number>;
+  argumentBindings?: Partial<Record<"pane" | "target", ResultReference>>;
+  callerSupplies?: string[];
+  purpose: string;
+  when?: "observed_success_only";
+}
+
+type HerdrPlanStep =
+  | (PlanStepBase & { tool: "herdr_layout"; action: "pane_split" })
+  | (PlanStepBase & {
+      tool: "herdr_pane";
+      action: "run" | "wait_output" | "read" | "close";
+    })
+  | (PlanStepBase & {
+      tool: "herdr_agent";
+      action: "start" | "prompt" | "read";
+    });
+
+export interface SfHerdrPlan {
+  intent: HerdrPlanIntent;
+  primaryWorkflow: HerdrWorkflow;
+  lifecycle: HerdrLifecycle;
+  steps: HerdrPlanStep[];
+  failureOrTimeout: "leave_open_for_inspection";
+}
+
+const PANE_RESULT: ResultReference = { stepId: "split", path: "details.pane.pane_id" };
+
+export function registerSfHerdrPlanTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: SF_HERDR_PLAN_TOOL_NAME,
     label: "SF Herdr Plan",
     description:
-      "Plan a dynamic Herdr lane for Salesforce workflows. Non-mutating: returns discover/create/run/observe/cleanup guidance only.",
+      "Return a non-mutating plan using the current herdr_layout, herdr_pane, and herdr_agent tools. The owning workflow supplies commands or agent inputs.",
     promptSnippet:
-      "Plan dynamic Herdr lanes without mutating panes; actual pane actions remain explicit herdr tool calls.",
+      "Plan current split Herdr tool calls without constructing pane IDs or generating shell commands",
     promptGuidelines: [
-      "Use sf_herdr_plan only for explicit or active Herdr workflows; the plan is non-mutating and the owning Salesforce tool still chooses commands.",
-      "Preserve failed/timed-out lanes for inspection and close fresh ephemeral lanes only after their workflow success condition.",
-      "Read extensions/sf-herdr/AGENT_GUIDE.md for topology, lifecycle, and cleanup guidance.",
+      "Execute the returned steps explicitly and pass the opaque pane ID from herdr_layout.pane_split to later steps.",
+      "Leave failed or timed-out panes open for inspection. Close only fresh ephemeral panes after observed success.",
+      "Use herdr_pane for ordinary commands and herdr_agent for review or coding-agent work.",
     ],
     parameters: SfHerdrPlanParams,
     async execute(_toolCallId, params) {
       const input = params as SfHerdrPlanInput;
-      const inferred = signalState.infer();
-      const primaryWorkflow = input.primaryWorkflow ?? inferred.primaryWorkflow;
-      const relatedWorkflows = input.relatedWorkflows ?? inferred.relatedWorkflows;
-      const plan = buildHerdrLanePlan(readSfHerdrPreferences(), {
-        intent: input.intent,
-        primaryWorkflow,
-        relatedWorkflows,
-        expectedDuration: input.expectedDuration,
-        confidence: input.primaryWorkflow ? 1 : inferred.confidence,
-        reason: input.primaryWorkflow
-          ? `Workflow supplied by caller: ${input.primaryWorkflow}.`
-          : inferred.reason,
-      });
-      const runtime = getHerdrRuntimeStatus();
-
+      const plan = buildSfHerdrPlan(readSfHerdrSettings(), input);
       return {
-        content: [
-          { type: "text", text: renderHerdrLanePlan(plan, { inHerdrPane: runtime.inHerdrPane }) },
-        ],
-        details: { plan, herdrRuntime: runtime },
+        content: [{ type: "text", text: renderSfHerdrPlan(plan) }],
+        details: { plan },
       };
     },
   });
 }
 
-type Plan = ReturnType<typeof buildHerdrLanePlan>;
+export function buildSfHerdrPlan(settings: SfHerdrSettings, input: SfHerdrPlanInput): SfHerdrPlan {
+  const lifecycle = settings.lifecycleByIntent[input.intent];
+  const splitArguments: Record<string, string | boolean | number> = { focus: false };
+  if (settings.splitDirection !== "auto") splitArguments.direction = settings.splitDirection;
 
-export function renderHerdrLanePlan(plan: Plan, options: { inHerdrPane?: boolean } = {}): string {
-  const lifecycleLabel = lifecycleName(plan.lane.lifecycle);
-  const lines = [
-    `🐑 SF Herdr plan  ${plan.lane.id} · ${plan.intent} · ${lifecycleLabel}`,
-    options.inHerdrPane === false
-      ? "  ⚠ Herdr pane environment not detected — advisory until upstream herdr is active."
-      : undefined,
-    `  Workflow  ${plan.workflow.primary} (${Math.round(plan.workflow.confidence * 100)}%)${formatRelated(plan)}`,
-    `  Lane      ${plan.lane.id} · base ${plan.lane.baseAlias} · target ${plan.alias.targetAliasHint}`,
-    `  Place     split ${plan.placement.splitDirection} · source=current agent pane · focus=${plan.placement.focus}`,
-    `  Success   ${plan.successCondition}`,
-    "",
-    "  Action path",
-    ...formatActionPath(plan),
-    "",
-    "  Cleanup",
-    ...formatCleanup(plan),
-    "",
-    `  Advanced  herdr(action="send") for interactive text/keys · herdr(action="wait_agent") for recognized agent panes`,
-    "",
-    "  Notes",
-    `  · Non-mutating plan — execute upstream herdr actions visibly.`,
-    `  · Caller supplies the shell command; SF Guardrail mediates herdr(action="run") when rules match.`,
-    plan.workflow.reason ? `  · ${clip(plan.workflow.reason, 120)}` : undefined,
+  const steps: HerdrPlanStep[] = [
+    {
+      id: "split",
+      tool: "herdr_layout",
+      action: "pane_split",
+      arguments: splitArguments,
+      purpose: "Create the workflow pane and observe its returned opaque pane ID.",
+    },
+    ...(input.intent === "review" ? agentSteps() : commandSteps()),
   ];
-  return lines.filter((line): line is string => typeof line === "string").join("\n");
-}
-
-function lifecycleName(lifecycle: Plan["lane"]["lifecycle"]): string {
-  if (lifecycle === "ephemeral") return "fresh ephemeral";
-  return lifecycle;
-}
-
-function formatRelated(plan: Plan): string {
-  return plan.workflow.related.length ? ` · related ${plan.workflow.related.join(", ")}` : "";
-}
-
-function formatActionPath(plan: Plan): string[] {
-  const list = findAction(plan, "list");
-  const create = findAction(plan, "pane_split");
-  const run = findAction(plan, "run");
-  const watch = findAction(plan, "watch");
-  const read = findAction(plan, "read");
-  const stop = findAction(plan, "stop");
-  const isEphemeral = plan.cleanupPolicy.onSuccess.action === "stop";
-  const rows = [
-    [
-      "1",
-      list ? formatHerdrActionCall(list) : 'herdr(action="list")',
-      isEphemeral
-        ? "detect live alias collisions"
-        : `find/reuse ${plan.alias.targetAliasHint} if present`,
-    ],
-    [
-      "2",
-      create ? formatHerdrActionCall(create) : 'herdr(action="pane_split")',
-      isEphemeral ? "create fresh lane" : "create only when alias is absent",
-    ],
-    [
-      "3",
-      run ? formatHerdrActionCall(run) : 'herdr(action="run")',
-      run?.purpose ?? "submit caller-owned command",
-    ],
-    [
-      "4",
-      `${watch ? formatHerdrActionCall(watch) : 'herdr(action="watch")'} | ${read ? formatHerdrActionCall(read) : 'herdr(action="read")'}`,
-      "observe success marker; inspect recent-unwrapped when needed",
-    ],
-    ["5", stop ? formatHerdrActionCall(stop) : "manual cleanup", formatSuccessCleanup(plan)],
-  ];
-  return rows.map(([index, action, detail]) => `    ${index}. ${action} — ${detail}`);
-}
-
-function findAction(plan: Plan, actionName: Plan["recommendedActions"][number]["action"]) {
-  return plan.recommendedActions.find((action) => action.action === actionName);
-}
-
-function formatCleanup(plan: Plan): string[] {
-  const failure = plan.cleanupPolicy.onFailureOrTimeout;
-  return [
-    `    ✓ success   ${formatSuccessCleanup(plan)}`,
-    `    ⚠ failure   ${failure.action}; read ${failure.readSource}; ask before cleanup`,
-  ];
-}
-
-function formatSuccessCleanup(plan: Plan): string {
-  if (plan.cleanupPolicy.onSuccess.action === "none") {
-    return "no automatic cleanup; explicit user cleanup required";
+  if (lifecycle === "ephemeral") {
+    steps.push({
+      id: "close",
+      tool: "herdr_pane",
+      action: "close",
+      arguments: {},
+      argumentBindings: { pane: PANE_RESULT },
+      purpose: "Close the fresh ephemeral pane after its workflow succeeds.",
+      when: "observed_success_only",
+    });
   }
-  return `stop/close after Workflow Success Condition`;
+
+  return {
+    intent: input.intent,
+    primaryWorkflow: input.primaryWorkflow,
+    lifecycle,
+    steps,
+    failureOrTimeout: "leave_open_for_inspection",
+  };
 }
 
-function clip(value: string, max: number): string {
-  const clean = value.replace(/\s+/g, " ").trim();
-  return clean.length > max ? `${clean.slice(0, Math.max(0, max - 1))}…` : clean;
+function commandSteps(): HerdrPlanStep[] {
+  return [
+    {
+      id: "run",
+      tool: "herdr_pane",
+      action: "run",
+      arguments: {},
+      argumentBindings: { pane: PANE_RESULT },
+      callerSupplies: ["command"],
+      purpose: "Run the command chosen by the owning workflow.",
+    },
+    {
+      id: "wait",
+      tool: "herdr_pane",
+      action: "wait_output",
+      arguments: { source: "recent-unwrapped" },
+      argumentBindings: { pane: PANE_RESULT },
+      callerSupplies: ["match", "timeout"],
+      purpose: "Wait for the owning workflow's success or completion marker.",
+    },
+    {
+      id: "read",
+      tool: "herdr_pane",
+      action: "read",
+      arguments: { source: "recent-unwrapped" },
+      argumentBindings: { pane: PANE_RESULT },
+      purpose: "Read the resulting output and determine success.",
+    },
+  ];
+}
+
+function agentSteps(): HerdrPlanStep[] {
+  return [
+    {
+      id: "start-agent",
+      tool: "herdr_agent",
+      action: "start",
+      arguments: {},
+      argumentBindings: { pane: PANE_RESULT },
+      callerSupplies: ["name", "kind"],
+      purpose: "Start the caller-selected coding agent in the new pane.",
+    },
+    {
+      id: "prompt-agent",
+      tool: "herdr_agent",
+      action: "prompt",
+      arguments: { wait: true },
+      argumentBindings: { target: PANE_RESULT },
+      callerSupplies: ["prompt", "timeout"],
+      purpose: "Submit the review task and wait for lifecycle settlement.",
+    },
+    {
+      id: "read-agent",
+      tool: "herdr_agent",
+      action: "read",
+      arguments: { source: "recent-unwrapped" },
+      argumentBindings: { target: PANE_RESULT },
+      purpose: "Read the agent result and inspect blocked or uncertain states.",
+    },
+  ];
+}
+
+export function renderSfHerdrPlan(plan: SfHerdrPlan): string {
+  const cleanup =
+    plan.lifecycle === "ephemeral"
+      ? "close only after observed success"
+      : `${plan.lifecycle} lifecycle; leave open until explicit cleanup`;
+  return [
+    `SF Herdr plan · ${plan.primaryWorkflow} · ${plan.intent} · ${plan.lifecycle}`,
+    ...plan.steps.map((step, index) => `${index + 1}. ${renderStep(step)}`),
+    `Cleanup: ${cleanup}; failure or timeout stays open for inspection.`,
+  ].join("\n");
+}
+
+function renderStep(step: HerdrPlanStep): string {
+  const values = Object.entries(step.arguments).map(([name, value]) => `${name}=${value}`);
+  for (const [name, reference] of Object.entries(step.argumentBindings ?? {})) {
+    values.push(`${name}←${reference.stepId}.${reference.path}`);
+  }
+  if (step.callerSupplies?.length) values.push(`caller supplies ${step.callerSupplies.join(", ")}`);
+  if (step.when === "observed_success_only") values.push("after observed success only");
+  const suffix = values.length ? ` · ${values.join(" · ")}` : "";
+  return `${step.tool}.${step.action}${suffix}`;
 }
