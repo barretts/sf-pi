@@ -58,10 +58,12 @@ describe("sf-herdr", () => {
 
   it("normalizes the current pane-run empty-success result through the extension seam", async () => {
     const mod = await import("../index.ts");
-    const handlers = new Map<string, (event: any) => unknown>();
+    const handlers = new Map<string, (event: unknown) => unknown>();
     const pi = {
       events: eventBus(),
-      on: vi.fn((name: string, handler: (event: any) => unknown) => handlers.set(name, handler)),
+      on: vi.fn((name: string, handler: (event: unknown) => unknown) =>
+        handlers.set(name, handler),
+      ),
       registerCommand: vi.fn(),
       getActiveTools: vi.fn(() => []),
     };
