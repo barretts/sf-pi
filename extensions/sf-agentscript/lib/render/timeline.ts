@@ -21,11 +21,23 @@ import type {
 } from "../preview/trace-digest.ts";
 import { fmtMs, stepLabel, styleForStep, padRightVisible, clipLine } from "./shared.ts";
 import { responseSequenceLines } from "./response-sequence.ts";
+import { conversationReplayLines, type ConversationReplayScenario } from "./conversation.ts";
 
 // ─── Result shape we expect in `details` from preview-tool.ts ────────────────
 
 export interface PreviewSendDetails {
   ok?: boolean;
+  preview_end?: boolean;
+  agent_name?: string;
+  session_id?: string;
+  conversation?: ConversationReplayScenario[];
+  conversation_summary?: {
+    turns: number;
+    plans: number;
+    passed: number;
+    warnings: number;
+    unavailable: number;
+  };
   agent_response?: string;
   topic?: string;
   invoked_actions?: string[];
@@ -92,6 +104,22 @@ export function renderPreviewSendResult(
     const text = getFirstText(result.content) || "preview send failed";
     return new Text(theme.fg("error", `✗ ${text}`), 0, 0);
   }
+  if (details.preview_end && details.conversation_summary) {
+    return new Text(
+      previewSessionEndBody(
+        {
+          agent_name: details.agent_name ?? details.conversation?.[0]?.test_id ?? "Agent",
+          session_id: details.session_id ?? "",
+          turns: details.conversation?.[0]?.turns ?? [],
+          summary: details.conversation_summary,
+        },
+        theme,
+        opts.expanded ?? false,
+      ),
+      0,
+      0,
+    );
+  }
   const digest = details.digest;
   if (!digest) {
     // Defensive: pre-digest result. Render the simple summary.
@@ -112,6 +140,56 @@ export function renderPreviewSendResult(
 
 export function previewSendMarkdown(digest: TraceDigest, details: PreviewSendDetails): string {
   return formatSendBody(digest, details, undefined, /*ansi=*/ false);
+}
+
+export function previewSessionEndMarkdown(input: {
+  agent_name: string;
+  session_id: string;
+  turns: NonNullable<PreviewSendDetails["conversation"]>[number]["turns"];
+  summary: NonNullable<PreviewSendDetails["conversation_summary"]>;
+}): string {
+  return previewSessionEndBody(input, undefined, true);
+}
+
+function previewSessionEndBody(
+  input: {
+    agent_name: string;
+    session_id: string;
+    turns: NonNullable<PreviewSendDetails["conversation"]>[number]["turns"];
+    summary: NonNullable<PreviewSendDetails["conversation_summary"]>;
+  },
+  theme: Theme | undefined,
+  expanded: boolean,
+): string {
+  const fg = (token: Parameters<Theme["fg"]>[0], value: string): string =>
+    theme ? theme.fg(token, value) : value;
+  const bold = (value: string): string => (theme ? theme.bold(value) : `**${value}**`);
+  const dim = (value: string): string => fg("dim", value);
+  const lines = [
+    bold("🏁 Preview Session Summary"),
+    `  ${dim(`${input.agent_name}${input.session_id ? ` · ${input.session_id.slice(0, 8)}…` : ""}`)}`,
+    "",
+    ...conversationReplayLines(
+      [
+        {
+          test_id: input.agent_name,
+          verdict:
+            input.summary.warnings > 0
+              ? "failed"
+              : input.summary.unavailable > 0
+                ? "incomplete"
+                : "passed",
+          turns: input.turns,
+        },
+      ],
+      theme,
+      { expanded, maxScenarios: 1, maxTurns: expanded ? 60 : 0 },
+    ),
+  ];
+  lines.push(
+    `  ${dim(`Plans: ${input.summary.plans} · integrity ${input.summary.passed} pass / ${input.summary.warnings} warning / ${input.summary.unavailable} unavailable`)}`,
+  );
+  return lines.join("\n");
 }
 
 // ─── Shared body formatter ───────────────────────────────────────────────────

@@ -265,8 +265,23 @@ export function generateSpec(opts: GenerateSpecOptions): GenerateSpecResult {
     }
   }
 
+  const isVoice = (opts.inspect.components?.modalities ?? []).some(
+    (modality) => modality.name === "voice",
+  );
   return {
-    spec: { tests },
+    spec: {
+      ...(isVoice
+        ? {
+            sf_pi: {
+              turn_response_integrity: {
+                max_nonempty_llm_contents: 1,
+                severity: "error" as const,
+              },
+            },
+          }
+        : {}),
+      tests,
+    },
     summary: {
       total_tests: tests.length,
       subagent_tests: subagentCount,

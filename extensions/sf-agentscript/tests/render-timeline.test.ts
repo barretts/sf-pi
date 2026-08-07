@@ -8,7 +8,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { previewSendMarkdown } from "../lib/render/timeline.ts";
+import {
+  previewSendMarkdown,
+  previewSessionEndMarkdown,
+  renderPreviewSendResult,
+} from "../lib/render/timeline.ts";
 import type { TraceDigest } from "../lib/preview/trace-digest.ts";
 import { buildLlmResponseSequence } from "../lib/llm-response-sequence.ts";
 import {
@@ -22,6 +26,11 @@ import {
   padRightVisible,
   clipLine,
 } from "../lib/render/shared.ts";
+
+const plainTheme = {
+  fg: (_name: string, text: string) => text,
+  bold: (text: string) => text,
+} as never;
 
 function fixtureDigest(): TraceDigest {
   return {
@@ -114,6 +123,87 @@ function fixtureDigest(): TraceDigest {
     summary_line: "Triage → AccountSecurity · 2 LLM calls · 1.4s · 1 fn call",
   };
 }
+
+describe("previewSessionEndMarkdown", () => {
+  const endDetails = {
+    ok: true,
+    preview_end: true,
+    agent_name: "AVA",
+    session_id: "session-12345678",
+    conversation: [
+      {
+        test_id: "AVA",
+        verdict: "passed" as const,
+        turns: [
+          {
+            turn: 1,
+            user: "Do you have weekend appointments?",
+            agent: "What time works best?",
+            path: ["Transfer", "Agent Router", "Appointments"],
+            integrity: "pass" as const,
+            non_empty_content_count: 1,
+            llm_call_count: 3,
+          },
+        ],
+      },
+    ],
+    conversation_summary: { turns: 1, plans: 1, passed: 1, warnings: 0, unavailable: 0 },
+  };
+
+  it("keeps the default Preview end card compact until expanded", () => {
+    const rendered = renderPreviewSendResult(
+      { details: endDetails },
+      { expanded: false },
+      plainTheme,
+    ) as unknown as { text: string };
+    expect(rendered.text).toMatch(/Conversation Replay/);
+    expect(rendered.text).not.toMatch(/Do you have weekend appointments/);
+  });
+
+  it("shows the complete replay when the Preview end card is expanded", () => {
+    const rendered = renderPreviewSendResult(
+      { details: endDetails },
+      { expanded: true },
+      plainTheme,
+    ) as unknown as { text: string };
+    expect(rendered.text).toMatch(/Do you have weekend appointments/);
+    expect(rendered.text).toMatch(/Transfer → Agent Router → Appointments/);
+  });
+
+  it("renders the complete session conversation and route taken per turn", () => {
+    const md = previewSessionEndMarkdown({
+      agent_name: "AVA",
+      session_id: "session-12345678",
+      turns: [
+        {
+          turn: 1,
+          user: "Do you have weekend appointments?",
+          agent: "What time works best?",
+          path: ["Transfer", "Agent Router", "Appointments"],
+          integrity: "pass",
+          non_empty_content_count: 1,
+          llm_call_count: 3,
+        },
+        {
+          turn: 2,
+          user: "Evening.",
+          agent: "I found Saturday from 4pm to 8pm.",
+          path: ["Appointments"],
+          integrity: "pass",
+          non_empty_content_count: 1,
+          llm_call_count: 1,
+        },
+      ],
+      summary: { turns: 2, plans: 2, passed: 2, warnings: 0, unavailable: 0 },
+    });
+    expect(md).toMatch(/Preview Session Summary/);
+    expect(md).toMatch(/Conversation Replay/);
+    expect(md).toMatch(/Turn 1/);
+    expect(md).toMatch(/Do you have weekend appointments/);
+    expect(md).toMatch(/Transfer → Agent Router → Appointments/);
+    expect(md).toMatch(/Summary: 2 turns/);
+  });
+});
 
 describe("previewSendMarkdown", () => {
   it("renders the header with topic, plan, and latency", () => {

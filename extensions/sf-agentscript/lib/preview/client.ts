@@ -717,6 +717,7 @@ export async function sendMessage(opts: PreviewSendOptions): Promise<PreviewSend
           agentText: agentResponse,
           userTimestamp,
           agentTimestamp,
+          latencyMs,
           traceFile: traceFile ? path.relative(sessionDir, traceFile) : undefined,
         }),
       )
@@ -728,6 +729,7 @@ export async function sendMessage(opts: PreviewSendOptions): Promise<PreviewSend
         agentText: agentResponse,
         userTimestamp,
         agentTimestamp,
+        latencyMs,
         traceFile: traceFile ? path.relative(sessionDir, traceFile) : undefined,
       }));
 

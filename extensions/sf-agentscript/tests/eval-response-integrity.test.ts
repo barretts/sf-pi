@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { describe, expect, test } from "vitest";
 import {
+  designatedVoiceReleaseIntegrityIssue,
   summarizeEvalResponseIntegrity,
   validateEvalResponseIntegrityPolicy,
 } from "../lib/eval/response-integrity.ts";
@@ -14,6 +15,34 @@ function promptResponse(content: string, tool?: string): string {
 }
 
 describe("summarizeEvalResponseIntegrity", () => {
+  test("Voice release contracts refuse a weak designated suite", () => {
+    const generated = {
+      sf_pi: {
+        turn_response_integrity: {
+          max_nonempty_llm_contents: 1,
+          severity: "error" as const,
+        },
+      },
+      tests: [],
+    };
+    expect(designatedVoiceReleaseIntegrityIssue(generated, { tests: [] })).toMatch(
+      /must declare strict turn response integrity/,
+    );
+    expect(designatedVoiceReleaseIntegrityIssue(generated, generated)).toBeUndefined();
+    expect(
+      designatedVoiceReleaseIntegrityIssue(generated, {
+        sf_pi: {
+          turn_response_integrity: {
+            max_nonempty_llm_contents: 2,
+            severity: "error",
+          },
+        },
+        tests: [],
+      }),
+    ).toMatch(/must declare strict/);
+    expect(designatedVoiceReleaseIntegrityIssue({ tests: [] }, { tests: [] })).toBeUndefined();
+  });
+
   test("strict policy requires exactly one get_state after every send_message", () => {
     expect(() =>
       validateEvalResponseIntegrityPolicy({
@@ -92,6 +121,56 @@ describe("summarizeEvalResponseIntegrity", () => {
     ).toThrow("max_nonempty_llm_contents");
   });
 
+  test("detects exact repeated surface sentences even when llmEvents are unavailable", () => {
+    const repeated =
+      "I can connect you with a specialist — would you like that? " +
+      "I can connect you with a specialist — would you like that?";
+    const response: EvalApiResponse = {
+      results: [
+        {
+          id: "voice_repeat",
+          outputs: [{ type: "agent.send_message", id: "turn1", response: repeated }],
+          evaluation_results: [],
+          errors: [],
+        },
+      ],
+    };
+
+    expect(summarizeEvalResponseIntegrity(response)).toMatchObject({
+      turns_total: 1,
+      turns_pass: 0,
+      turns_warning: 0,
+      turns_unavailable: 1,
+      surface_repeated_turns: 1,
+      observations: [
+        {
+          test_id: "voice_repeat",
+          turn_id: "turn1",
+          status: "unavailable",
+          llm_call_count: 0,
+          non_empty_content_count: 0,
+          surface_repeat_count: 1,
+          surface_repeat_preview: "I can connect you with a specialist — would you like that?",
+        },
+      ],
+    });
+  });
+
+  test("surface repeat detection is exact and supports short sentences", () => {
+    const summarize = (response: string) =>
+      summarizeEvalResponseIntegrity({
+        results: [
+          {
+            id: "surface",
+            outputs: [{ type: "agent.send_message", id: "turn1", response }],
+          },
+        ],
+      });
+    expect(summarize("Yes. Yes.").surface_repeated_turns).toBe(1);
+    expect(summarize("No, thank you. No thank you?").surface_repeated_turns).toBe(0);
+    expect(summarize("The value is 1.5. The value is 1.6.").surface_repeated_turns).toBe(0);
+  });
+
   test("summarizes warnings, passes, and unavailable turns without changing verdicts", () => {
     const response: EvalApiResponse = {
       results: [
@@ -146,6 +225,7 @@ describe("summarizeEvalResponseIntegrity", () => {
       turns_warning: 1,
       turns_unavailable: 1,
       max_non_empty_content_count: 2,
+      surface_repeated_turns: 0,
       observations: [
         {
           test_id: "voice_flow",

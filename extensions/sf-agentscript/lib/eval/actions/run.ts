@@ -15,6 +15,11 @@ import { evalProjectRoot } from "../persist.ts";
 import { resolveAgentIds, substitutePlaceholders, type ResolvedAgentIds } from "../active-ids.ts";
 import { applyGeneratedBaselineSeedConfig } from "../seeds.ts";
 import {
+  designatedVoiceReleaseIntegrityIssue,
+  validateEvalResponseIntegrityPolicy,
+} from "../response-integrity.ts";
+import { buildEvalConversationSummaries } from "../conversation-summary.ts";
+import {
   latestEvalSpec,
   withAgentScriptBranchState,
   type AgentScriptBranchStateEvent,
@@ -109,6 +114,26 @@ export async function actionRunRelease(
   });
   if ((generated.details as { ok?: boolean }).ok !== true) return generated;
   const generatedSource = JSON.parse(await readFile(baselinePath, "utf8")) as EvalSpec;
+  const voiceIntegrityIssue = designatedVoiceReleaseIntegrityIssue(
+    generatedSource,
+    designatedSource,
+  );
+  if (voiceIntegrityIssue) {
+    return toolError(
+      `${voiceIntegrityIssue} ${designatedPath}`,
+      "Add sf_pi.turn_response_integrity with max_nonempty_llm_contents=1 and severity='error', then add exactly one agent.get_state after every agent.send_message.",
+    );
+  }
+  if (designatedSource) {
+    try {
+      validateEvalResponseIntegrityPolicy(designatedSource);
+    } catch (error) {
+      return toolError(
+        `Designated release spec response-integrity preflight failed: ${error instanceof Error ? error.message : String(error)}`,
+        "Add exactly one agent.get_state after every agent.send_message before rerunning the release contract.",
+      );
+    }
+  }
   const baselineSource = designatedSource
     ? applyGeneratedBaselineSeedConfig(generatedSource, designatedSource)
     : generatedSource;
@@ -315,6 +340,11 @@ export async function actionRun(
     }
   }
 
+  const conversations = buildEvalConversationSummaries(
+    result.merged,
+    spec,
+    result.response_integrity,
+  );
   const inlineThreshold = input.inline_threshold ?? 5;
   const passed = result.metadata.evidence_verdict === "passed";
   const head = headline(result, passed);
@@ -381,6 +411,7 @@ export async function actionRun(
         latency: result.latency,
         response_integrity: result.response_integrity,
         response_integrity_evidence: result.response_integrity_evidence,
+        conversations,
         failed_test_ids: result.failures.map((f) => f.test_id),
       },
       evalRunEvents({

@@ -21,6 +21,7 @@ import {
   logTurn,
   readTurnIndex,
   recordTurnPlan,
+  resolveSessionArtifactPath,
   type PreviewMetadata,
 } from "../lib/preview/session-store.ts";
 
@@ -35,6 +36,17 @@ afterEach(async () => {
 });
 
 describe("session lifecycle", () => {
+  test("resolves persisted relative trace pointers inside the session only", () => {
+    const sessionDir = path.join(workDir, ".sfdx", "agents", "A", "sessions", "S1");
+    expect(resolveSessionArtifactPath(sessionDir, "traces/P1.json")).toBe(
+      path.join(sessionDir, "traces", "P1.json"),
+    );
+    expect(resolveSessionArtifactPath(sessionDir, path.join(sessionDir, "traces", "P2.json"))).toBe(
+      path.join(sessionDir, "traces", "P2.json"),
+    );
+    expect(resolveSessionArtifactPath(sessionDir, "../../outside.json")).toBeNull();
+  });
+
   test("initSession creates the standard layout under .sfdx/agents/...", async () => {
     const dir = await initSession(workDir, {
       sessionId: "S1",
@@ -129,6 +141,7 @@ describe("session lifecycle", () => {
       agentText: "hi",
       userTimestamp: "t1",
       agentTimestamp: "t2",
+      latencyMs: 1250,
       traceFile: "traces/P1.json",
     });
     await recordTurnPlan(dir, {
@@ -165,6 +178,7 @@ describe("session lifecycle", () => {
       planId: "P1",
       userText: "hello",
       agentText: "hello again",
+      latencyMs: 1250,
       traceFile: "traces/P1.json",
     });
     expect(index?.turns[1]).toMatchObject({ turn: 2, planId: "P2" });

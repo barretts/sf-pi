@@ -56,8 +56,9 @@ You can also manage this extension from the SF Pi home base:
 - Apex action preflight uses Salesforce's registered action description for authoritative primitive and wrapper input/output contracts; failed target rows are never hidden behind resolved samples.
 - Eval Studio inventories repository EvalSpec JSON and local Run artifacts without Salesforce calls; org/version resolution occurs only after an explicit Run or Release Contract action.
 - Eval runs synthesize trace artifacts from inline Evaluation API data by default; explicit trace fetches are idempotent GETs.
-- Eval turn artifacts preserve a parsed response sequence for every lastExecution.llmEvents entry without duplicating full prompt bodies; missing get_state evidence is unavailable, never a passing zero.
-- Preview, eval reports, and Eval Studio expose every parsed LLM completion; source-controlled turn-response policy can deterministically fail exact-version evidence when explicitly enabled.
+- Eval turn artifacts preserve a parsed response sequence for every lastExecution.llmEvents entry without duplicating full prompt bodies; missing get_state evidence is unavailable, never a passing zero, and exact repeated surface sentences are detected even when LLM-event evidence is absent.
+- Preview and eval completion cards render bounded full-conversation replays with every user/agent utterance, per-turn path, latency, and integrity proof while keeping LLM-facing tool text compact.
+- Generated Voice suites enforce one customer-facing LLM completion per turn; exact-version Voice release contracts refuse designated suites without strict get_state-backed response-integrity evidence.
 - Publication always creates an inactive version; activation requires complete exact-org, exact-BotVersion generated-baseline evidence plus the current designated release suite when configured.
 - Untested activation is a distinct Guardrail Safety Envelope; acknowledge_untested_activation is intent, never approval.
 - 5xx-only retry on POST avoids amplifying server-side overload (no Retry-After contract on the Eval API); client-side Eval API batch timeouts are terminal and configurable through batch_timeout_ms.

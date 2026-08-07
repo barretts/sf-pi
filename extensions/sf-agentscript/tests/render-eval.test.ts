@@ -193,6 +193,65 @@ describe("evalRunMarkdown", () => {
     expect(md).toMatch(/evidence failed/);
   });
 
+  it("renders a beautiful expanded multi-turn conversation replay with paths and integrity", () => {
+    const md = evalRunMarkdown(
+      {
+        ok: true,
+        run_id: "conversation-replay",
+        totals: {
+          tests: 1,
+          test_pass: 1,
+          test_fail: 0,
+          evals: 2,
+          ev_pass: 2,
+          ev_fail: 0,
+          errors: 0,
+        },
+        latency: { count: 2, p50_ms: 900, max_ms: 1200 },
+        conversations: [
+          {
+            test_id: "reschedule_pivot",
+            verdict: "passed",
+            turns: [
+              {
+                turn: 1,
+                user: "Do you have weekend appointments?",
+                agent: "I can check another day. What time works best?",
+                topic: "appointments",
+                path: ["Transfer", "Agent Router", "Appointments"],
+                latency_ms: 1200,
+                integrity: "pass",
+                llm_call_count: 3,
+                non_empty_content_count: 1,
+              },
+              {
+                turn: 2,
+                user: "Evening.",
+                agent: "I found Saturday from 4pm to 8pm.",
+                topic: "appointments",
+                path: ["Appointments"],
+                latency_ms: 900,
+                integrity: "pass",
+                llm_call_count: 1,
+                non_empty_content_count: 1,
+              },
+            ],
+          },
+        ],
+      },
+      [],
+    );
+
+    expect(md).toMatch(/Conversation Replay/);
+    expect(md).toMatch(/reschedule_pivot/);
+    expect(md).toMatch(/👤 User/);
+    expect(md).toMatch(/Do you have weekend appointments/);
+    expect(md).toMatch(/🤖 Agent/);
+    expect(md).toMatch(/Transfer → Agent Router → Appointments/);
+    expect(md).toMatch(/1 non-empty/);
+    expect(md).toMatch(/Summary: 2 turns/);
+  });
+
   it("renders partial progress text when provided", () => {
     const rendered = renderEvalRunResult(
       { content: [{ type: "text", text: "Running 18 tests across 4 batch(es)" }] },

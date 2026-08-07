@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Preview session actions: start, send, and end. */
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { connForAgentApi } from "../../agent-api-auth.ts";
 import { getAgentScriptAnalysis } from "../../analysis-snapshot.ts";
@@ -16,6 +17,7 @@ import {
   writeMarkdownReport,
 } from "../../render/report-writer.ts";
 import { previewSendMarkdown } from "../../render/timeline.ts";
+import type { ConversationReplayScenario } from "../../render/conversation.ts";
 import { readEffectiveAgentScriptSettings } from "../../settings.ts";
 import type { TimingCollector } from "../../timings.ts";
 import { safeResolveToolPath, toolError, toolOk, type ToolError } from "../../tool-types.ts";
@@ -26,7 +28,13 @@ import {
   startPreview,
   startPreviewByApiName,
 } from "../client.ts";
-import type { PreviewMetadata } from "../session-store.ts";
+import {
+  getSessionDir,
+  readTurnIndex,
+  resolveSessionArtifactPath,
+  type PreviewMetadata,
+} from "../session-store.ts";
+import { summarizeTrace } from "../trace-digest.ts";
 
 export interface PreviewContextVariable {
   name: string;
@@ -486,6 +494,11 @@ export async function actionEnd(
       sessionId: input.session_id,
       signal,
     });
+    const conversation = await buildPreviewConversation(
+      ctx.cwd,
+      input.agent_name,
+      input.session_id,
+    );
     // Suggest the obvious next lifecycle step. We only nudge for sessions
     // that have an agent_file on disk — api_name sessions are already
     // running against a published agent.
@@ -509,6 +522,11 @@ export async function actionEnd(
           metadata: result.metadata,
           remote_ended: result.remoteEnded,
           remote_end_error: result.remoteEndError,
+          preview_end: true,
+          agent_name: input.agent_name,
+          session_id: input.session_id,
+          conversation: conversation.scenarios,
+          conversation_summary: conversation.summary,
         },
         previewSessionEvents({
           agentName: input.agent_name,
@@ -532,6 +550,92 @@ export async function actionEnd(
   } catch (err) {
     return toolError(err instanceof Error ? err.message : String(err));
   }
+}
+
+async function buildPreviewConversation(
+  cwd: string,
+  agentName: string,
+  sessionId: string,
+): Promise<{
+  scenarios: ConversationReplayScenario[];
+  summary: { turns: number; plans: number; passed: number; warnings: number; unavailable: number };
+}> {
+  const sessionDir = getSessionDir(cwd, agentName, sessionId);
+  const index = await readTurnIndex(sessionDir);
+  const turns = [];
+  for (const entry of index?.turns ?? []) {
+    let pathLabels: string[] = [];
+    let integrity: "pass" | "warning" | "unavailable" = "unavailable";
+    let llmCalls = 0;
+    let nonEmpty = 0;
+    let digestLatency: number | undefined = entry.latencyMs;
+    let integrityMessage: string | undefined;
+    const tracePath = resolveSessionArtifactPath(sessionDir, entry.traceFile ?? undefined);
+    if (tracePath) {
+      try {
+        const trace = JSON.parse(await readFile(tracePath, "utf8")) as unknown;
+        const digest = summarizeTrace(trace, {
+          userInput: entry.userText,
+          agentResponse: entry.agentText,
+          planId: entry.planId ?? undefined,
+          traceFile: tracePath,
+        });
+        pathLabels = previewPath(digest);
+        integrity = digest.response_sequence?.integrity.status ?? "unavailable";
+        llmCalls = digest.response_sequence?.llm_call_count ?? 0;
+        nonEmpty = digest.response_sequence?.non_empty_content_count ?? 0;
+        digestLatency = digest.turn.latency_ms;
+        integrityMessage = digest.response_sequence?.integrity.message;
+      } catch {
+        // Transcript remains useful even when an individual trace file is unreadable.
+      }
+    }
+    turns.push({
+      turn: entry.turn,
+      user: entry.userText,
+      agent: entry.agentText,
+      path: pathLabels,
+      latency_ms: digestLatency,
+      integrity,
+      llm_call_count: llmCalls,
+      non_empty_content_count: nonEmpty,
+      ...(integrityMessage ? { integrity_message: integrityMessage } : {}),
+    });
+  }
+  const warnings = turns.filter((turn) => turn.integrity === "warning").length;
+  const unavailable = turns.filter((turn) => turn.integrity === "unavailable").length;
+  return {
+    scenarios: [
+      {
+        test_id: `${agentName} · ${sessionId.slice(0, 8)}…`,
+        verdict: warnings > 0 ? "failed" : unavailable > 0 ? "incomplete" : "passed",
+        turns,
+      },
+    ],
+    summary: {
+      turns: turns.length,
+      plans: index?.turns.filter((turn) => Boolean(turn.planId)).length ?? 0,
+      passed: turns.length - warnings - unavailable,
+      warnings,
+      unavailable,
+    },
+  };
+}
+
+function previewPath(digest: ReturnType<typeof summarizeTrace>): string[] {
+  const pathLabels: string[] = [];
+  const add = (value: string | undefined): void => {
+    if (value && pathLabels[pathLabels.length - 1] !== value) pathLabels.push(value);
+  };
+  for (const route of digest.route_path ?? []) {
+    add(route.from);
+    add(route.to);
+  }
+  if (pathLabels.length === 0) {
+    for (const event of digest.response_sequence?.events ?? []) add(event.agent_name);
+  }
+  add(digest.turn.topic);
+  return pathLabels;
 }
 
 function previewSessionEvents(input: {

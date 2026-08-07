@@ -475,6 +475,26 @@ describe("summarizeLastExecution (eval source)", () => {
     expect(d.notes?.[0]).toMatch(/eval/i);
   });
 
+  test("flags a non-consecutive same-turn agent revisit as a potential loop", () => {
+    const d = summarizeLastExecution({
+      agentResponse: "final",
+      topic: "transfer",
+      llmEvents: [
+        [
+          { agent_name: "Transfer", prompt_response: JSON.stringify({ content: "offer" }) },
+          { agent_name: "Agent Router", prompt_response: JSON.stringify({ content: "" }) },
+          { agent_name: "Transfer", prompt_response: JSON.stringify({ content: "final" }) },
+        ],
+      ],
+    });
+    expect(d.diagnostics).toContainEqual(
+      expect.objectContaining({
+        severity: "warning",
+        message: "Potential same-turn agent loop: Transfer → Agent Router → Transfer.",
+      }),
+    );
+  });
+
   test("handles empty / missing lastExecution gracefully", () => {
     const d = summarizeLastExecution(undefined);
     expect(d.source).toBe("eval");

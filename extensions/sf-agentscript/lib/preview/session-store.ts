@@ -101,6 +101,7 @@ export interface TurnIndexEntry {
   agentText?: string;
   userTimestamp?: string;
   agentTimestamp?: string;
+  latencyMs?: number;
 }
 
 export interface TurnIndex {
@@ -167,6 +168,20 @@ export async function loadSession(
     /* empty session — no transcript yet */
   }
   return { metadata, transcript };
+}
+
+export function resolveSessionArtifactPath(
+  sessionDir: string,
+  pointer: string | undefined,
+): string | null {
+  if (!pointer) return null;
+  const candidate = path.isAbsolute(pointer)
+    ? path.normalize(pointer)
+    : path.resolve(sessionDir, pointer);
+  const relative = path.relative(sessionDir, candidate);
+  if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative)))
+    return candidate;
+  return null;
 }
 
 export async function readTurnIndex(sessionDir: string): Promise<TurnIndex | null> {
@@ -238,6 +253,11 @@ export async function recordTurnPlan(
     ...(entry.agentText !== undefined ? { agentText: entry.agentText } : {}),
     ...(entry.userTimestamp ? { userTimestamp: entry.userTimestamp } : {}),
     ...(entry.agentTimestamp ? { agentTimestamp: entry.agentTimestamp } : {}),
+    ...(typeof entry.latencyMs === "number"
+      ? { latencyMs: entry.latencyMs }
+      : typeof existingByTurn?.latencyMs === "number"
+        ? { latencyMs: existingByTurn.latencyMs }
+        : {}),
   };
   const idx = index.turns.findIndex((t) => t.turn === turn);
   if (idx >= 0) index.turns[idx] = nextEntry;

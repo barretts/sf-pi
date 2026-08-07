@@ -21,6 +21,7 @@ import type { TurnResponseSequence } from "../llm-response-sequence.ts";
 import type { EvalResponseIntegritySummary } from "../eval/response-integrity.ts";
 import type { ResponseIntegrityEvidence } from "../eval/verdict.ts";
 import { responseSequenceLines } from "./response-sequence.ts";
+import { conversationReplayLines, type ConversationReplayScenario } from "./conversation.ts";
 import { redactDisplayText } from "../../../../lib/common/redaction.ts";
 
 interface FailureRecord {
@@ -78,6 +79,7 @@ export interface EvalRunDetails {
   failed_test_ids?: string[];
   response_integrity?: EvalResponseIntegritySummary;
   response_integrity_evidence?: ResponseIntegrityEvidence;
+  conversations?: ConversationReplayScenario[];
   // The text payload (which the LLM consumes) embeds the failure JSON when
   // small. The renderer parses that for inline failure cards.
 }
@@ -149,7 +151,11 @@ export function renderEvalRunResult(
   // The inline failures live in the LLM `content[0].text` JSON blob; reparse
   // it (cheap, single string) so the human can see the per-test rows.
   const inlineFailures = parseInlineFailures(result.content);
-  return new Text(formatRunBody(details, inlineFailures, theme, /*ansi=*/ true), 0, 0);
+  return new Text(
+    formatRunBody(details, inlineFailures, theme, /*ansi=*/ true, opts.expanded ?? false),
+    0,
+    0,
+  );
 }
 
 export function renderEvalGetFailureResult(
@@ -172,7 +178,9 @@ export function renderEvalGetFailureResult(
 // ─── Markdown emitters ────────────────────────────────────────────────────────
 
 export function evalRunMarkdown(details: EvalRunDetails, inlineFailures: FailureRecord[]): string {
-  return redactDisplayText(formatRunBody(details, inlineFailures, undefined, /*ansi=*/ false));
+  return redactDisplayText(
+    formatRunBody(details, inlineFailures, undefined, /*ansi=*/ false, /*expanded=*/ true),
+  );
 }
 
 export function evalFailureMarkdown(failure: FailureRecord): string {
@@ -186,6 +194,7 @@ function formatRunBody(
   inlineFailures: FailureRecord[],
   theme: Theme | undefined,
   ansi: boolean,
+  expanded: boolean,
 ): string {
   const fg = (token: Parameters<Theme["fg"]>[0], s: string): string =>
     theme ? theme.fg(token, s) : s;
@@ -283,6 +292,10 @@ function formatRunBody(
         responseIntegrity.turns_unavailable > 0
           ? fg("warning", `ⓘ ${responseIntegrity.turns_unavailable} unavailable`)
           : dim("0 unavailable")
+      }${
+        (responseIntegrity.surface_repeated_turns ?? 0) > 0
+          ? `  ${err(`↻ ${responseIntegrity.surface_repeated_turns ?? 0} surface repeat${responseIntegrity.surface_repeated_turns === 1 ? "" : "s"}`)}`
+          : ""
       }`,
     );
     for (const observation of responseIntegrity.observations
@@ -295,6 +308,16 @@ function formatRunBody(
         }`,
       );
     }
+  }
+
+  const replay = conversationReplayLines(details.conversations, theme, {
+    expanded,
+    maxScenarios: expanded ? 20 : 12,
+    maxTurns: expanded ? 60 : 0,
+  });
+  if (replay.length > 0) {
+    lines.push("");
+    lines.push(...replay);
   }
 
   // Per-test rows (build from totals + failed_test_ids; we don't have a

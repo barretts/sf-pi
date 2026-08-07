@@ -82,7 +82,7 @@ Use `agentscript_authoring { "verb": "inspect", "mode": "runtime_smoke", "target
 
 `agentscript_preview action="send"` separates human readability from model context efficiency:
 
-- The TUI/report surface renders a rich Preview Trace Report with turn summary, the complete parsed LLM response sequence, route path, state changes, key state snapshot, tool activity, connected-agent invocations, action I/O appendix, aligned planner timeline, diagnostics, stats, and drill pointers.
+- The TUI/report surface renders a rich Preview Trace Report with turn summary, the complete parsed LLM response sequence, route path, state changes, key state snapshot, tool activity, connected-agent invocations, action I/O appendix, aligned planner timeline, diagnostics, stats, and drill pointers. Ending a multi-turn Preview session renders a bounded full-session Conversation Replay with every user/agent utterance, per-turn path, latency, and response-integrity proof.
 - Response-sequence rows distinguish tool-only, empty, malformed, intermediate candidate content, and content matching the final planner response. Multiple non-empty completions are an explicit human advisory; preview does not claim that candidate text was definitely streamed by a voice surface.
 - The LLM-facing text remains compact: a response, short summary, counts, and pointers. Structured details live in `details.digest`; raw prompts, full state, and full action payloads stay in persisted trace artifacts.
 - Internal planner variable spam is hidden from the human timeline by default, while user-visible state changes show previous → new previews when available.
@@ -143,7 +143,7 @@ Eval-created sessions usually disappear before the live planner trace endpoint c
 
 For each paired `agent.send_message` and `agent.get_state`, `transcript.jsonl`, failure records, and synthesized traces retain a parsed `response_sequence` built from every `lastExecution.llmEvents` entry. The sequence stores response content, tool names, ordering, timing, and final-response matching without duplicating full prompt bodies. A turn without `get_state` evidence is recorded as `unavailable`, never as a passing zero-event turn. `raw.json` remains the authoritative unmodified API payload.
 
-Eval run results aggregate this evidence as a human-facing LLM Response Integrity summary, including pass, warning, and unavailable turn counts. Eval failure cards render the full response sequence for each turn. Without a suite policy this remains advisory.
+Eval run results aggregate this evidence as a human-facing LLM Response Integrity summary, including pass, warning, unavailable, and exact repeated-surface turn counts. Eval run completion renders a Conversation Replay: every bounded user/agent utterance, per-turn agent path, latency, and response-integrity proof; collapsed cards summarize scenarios and expansion shows the complete replay. Failure cards still render the full response sequence for each failed turn. Without a suite policy integrity remains advisory.
 
 Suites can opt into a deterministic release gate:
 
@@ -158,7 +158,7 @@ Suites can opt into a deterministic release gate:
 }
 ```
 
-`warning` records advisory evidence without changing the run verdict. `error` makes excess non-empty completions fail evidence and missing response-sequence evidence incomplete. Strict policy requires exactly one `agent.get_state` after every `agent.send_message`; invalid suites fail local preflight before org calls or Run creation. The policy remains source-only, is preserved in snapshots and release digests, and is never sent as an Evaluation API step. See [ADR 0099](../../docs/adr/0099-agentscript-turn-response-integrity-policy.md).
+`warning` records advisory evidence without changing the run verdict. `error` makes excess non-empty completions or exact repeated surface sentences fail evidence and missing response-sequence evidence incomplete. Strict policy requires exactly one `agent.get_state` after every `agent.send_message`; invalid suites fail local preflight before org calls or Run creation. Generated Voice suites now include this strict policy automatically, and exact-version Voice release contracts refuse a designated Suite that omits it. The policy remains source-only, is preserved in snapshots and release digests, and is never sent as an Evaluation API step. See [ADR 0099](../../docs/adr/0099-agentscript-turn-response-integrity-policy.md).
 
 ## Eval-Gated Release Sequence
 
@@ -248,6 +248,7 @@ extensions/sf-agentscript/
         generation.ts       ← implementation module
         run.ts              ← implementation module
       active-ids.ts         ← implementation module
+      conversation-summary.ts← implementation module
       decode.ts             ← implementation module
       eval-client.ts        ← implementation module
       evaluator-catalog.ts  ← implementation module
@@ -336,6 +337,7 @@ extensions/sf-agentscript/
       types.ts              ← implementation module
     render/
       compile.ts            ← implementation module
+      conversation.ts       ← implementation module
       eval.ts               ← implementation module
       inspect.ts            ← implementation module
       lifecycle.ts          ← implementation module
@@ -418,6 +420,7 @@ extensions/sf-agentscript/
     eval-active-ids.test.ts ← unit / smoke test
     eval-agent-id-injection.test.ts← unit / smoke test
     eval-batch-failure.test.ts← unit / smoke test
+    eval-conversation-summary.test.ts← unit / smoke test
     eval-normalize.test.ts  ← unit / smoke test
     eval-persist-status.test.ts← unit / smoke test
     eval-plan-id-path.test.ts← unit / smoke test

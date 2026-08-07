@@ -749,6 +749,27 @@ function buildTraceFindings(input: {
       message: `${enabledCount} tool${enabledCount === 1 ? " was" : "s were"} enabled but no action was called.`,
     });
   }
+  const llmAgents = input.timeline
+    .filter((row) => row.t === "LLMStep" && typeof row.agent === "string")
+    .map((row) => ({ step: row.i, agent: String(row.agent) }));
+  const lastVisit = new Map<string, number>();
+  for (let index = 0; index < llmAgents.length; index++) {
+    const visit = llmAgents[index];
+    const previous = lastVisit.get(visit.agent);
+    if (previous !== undefined && previous < index - 1) {
+      const loop = llmAgents
+        .slice(previous, index + 1)
+        .map((row) => row.agent)
+        .join(" → ");
+      findings.push({
+        severity: "warning",
+        step: visit.step,
+        message: `Potential same-turn agent loop: ${loop}.`,
+      });
+      break;
+    }
+    lastVisit.set(visit.agent, index);
+  }
   for (const row of input.timeline) {
     const promptChars = typeof row.prompt_chars === "number" ? row.prompt_chars : 0;
     if (promptChars >= 16000) {
@@ -887,6 +908,7 @@ export function summarizeLastExecution(
   });
 
   const stateVariables = filterStateVariables(ctx.stateVariables ?? {});
+  const diagnostics = buildTraceFindings({ timeline, errors });
 
   return {
     source: "eval",
@@ -905,6 +927,7 @@ export function summarizeLastExecution(
       status: "unavailable",
       reason: "eval_api_does_not_expose_related_agent_step",
     },
+    ...(diagnostics.length > 0 ? { diagnostics } : {}),
     errors,
     stats,
     summary_line,

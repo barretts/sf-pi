@@ -17,6 +17,8 @@ export interface ResponseIntegrityObservation {
   status: "pass" | "warning" | "unavailable";
   llm_call_count: number;
   non_empty_content_count: number;
+  surface_repeat_count?: number;
+  surface_repeat_preview?: string;
   message?: string;
 }
 
@@ -26,6 +28,7 @@ export interface EvalResponseIntegritySummary {
   turns_warning: number;
   turns_unavailable: number;
   max_non_empty_content_count: number;
+  surface_repeated_turns?: number;
   observations: ResponseIntegrityObservation[];
 }
 
@@ -85,6 +88,20 @@ export function evalResponseIntegrityPolicyIssues(spec: EvalSpec): string[] {
   return issues;
 }
 
+export function hasStrictResponseIntegrity(spec: EvalSpec | undefined): boolean {
+  const policy = spec?.sf_pi?.turn_response_integrity;
+  return policy?.severity === "error" && policy.max_nonempty_llm_contents === 1;
+}
+
+export function designatedVoiceReleaseIntegrityIssue(
+  generated: EvalSpec,
+  designated: EvalSpec | undefined,
+): string | undefined {
+  if (!hasStrictResponseIntegrity(generated) || !designated) return undefined;
+  if (hasStrictResponseIntegrity(designated)) return undefined;
+  return "Designated Voice release spec must declare strict turn response integrity.";
+}
+
 export function validateEvalResponseIntegrityPolicy(spec: EvalSpec): void {
   const issues = evalResponseIntegrityPolicyIssues(spec);
   if (issues.length > 0) {
@@ -139,9 +156,24 @@ export function summarizeEvalResponseIntegrity(
       const plannerResponse = (
         state?.response as { planner_response?: PlannerResponse } | undefined
       )?.planner_response;
+      const lastExecution = plannerResponse?.lastExecution;
+      const surface = finalResponse(send.response) ?? lastExecution?.agentResponse;
       const sequence =
         sequences.get(`${String(test.id ?? "?")}::${String(send.id ?? "")}`) ??
-        buildLlmResponseSequence(undefined, finalResponse(send.response), options);
+        buildLlmResponseSequence(undefined, surface, options);
+      const repeated = repeatedSurfaceSegments(surface);
+      const status =
+        sequence.integrity.status === "unavailable"
+          ? "unavailable"
+          : repeated.count > 0
+            ? "warning"
+            : sequence.integrity.status;
+      const messages = [
+        sequence.integrity.message,
+        repeated.count > 0
+          ? `${repeated.count} repeated surface segment${repeated.count === 1 ? "" : "s"} detected.`
+          : undefined,
+      ].filter((message): message is string => Boolean(message));
       observations.push({
         test_id: String(test.id ?? "?"),
         turn_id: String(send.id ?? ""),
@@ -150,10 +182,20 @@ export function summarizeEvalResponseIntegrity(
               plan_id: (plannerResponse?.sessionProperties as { planId?: string }).planId,
             }
           : {}),
-        status: sequence.integrity.status,
+        status,
         llm_call_count: sequence.llm_call_count,
         non_empty_content_count: sequence.non_empty_content_count,
-        ...(sequence.integrity.message ? { message: sequence.integrity.message } : {}),
+        ...(repeated.count > 0
+          ? {
+              surface_repeat_count: repeated.count,
+              surface_repeat_preview: repeated.preview,
+            }
+          : {}),
+        ...(messages.length > 0
+          ? { message: messages.join(" ") }
+          : sequence.integrity.status === "unavailable" && repeated.count === 0
+            ? { message: sequence.integrity.message }
+            : {}),
       });
     }
   }
@@ -167,7 +209,34 @@ export function summarizeEvalResponseIntegrity(
       (maximum, row) => Math.max(maximum, row.non_empty_content_count),
       0,
     ),
+    surface_repeated_turns: observations.filter((row) => (row.surface_repeat_count ?? 0) > 0)
+      .length,
     observations,
+  };
+}
+
+function repeatedSurfaceSegments(value: string | undefined): {
+  count: number;
+  preview?: string;
+} {
+  if (!value) return { count: 0 };
+  const segmenter = new Intl.Segmenter("en", { granularity: "sentence" });
+  const rawSegments = [...segmenter.segment(value)].map((row) => row.segment);
+  const seen = new Map<string, { count: number; preview: string }>();
+  for (const raw of rawSegments) {
+    const preview = raw.normalize("NFKC").replace(/\s+/g, " ").trim();
+    if (!preview) continue;
+    const key = preview;
+    const current = seen.get(key) ?? { count: 0, preview };
+    current.count++;
+    seen.set(key, current);
+  }
+  const repeated = [...seen.values()]
+    .filter((row) => row.count > 1)
+    .sort((a, b) => b.count - a.count || b.preview.length - a.preview.length);
+  return {
+    count: repeated.reduce((sum, row) => sum + row.count - 1, 0),
+    ...(repeated[0] ? { preview: repeated[0].preview } : {}),
   };
 }
 

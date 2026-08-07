@@ -30,6 +30,24 @@ function fakeInspect(overrides: Partial<InspectResult["components"]> = {}): Insp
 }
 
 describe("generateSpec", () => {
+  test("generated Voice suites default to strict one-response-per-turn evidence", () => {
+    const out = generateSpec({
+      inspect: fakeInspect({ modalities: [{ name: "voice", fields: {} }] }),
+      includeSafetyProbes: false,
+      includeGuardrail: false,
+    });
+    expect(out.spec.sf_pi).toEqual({
+      turn_response_integrity: {
+        max_nonempty_llm_contents: 1,
+        severity: "error",
+      },
+    });
+  });
+
+  test("non-Voice generated suites remain policy-neutral", () => {
+    expect(generateSpec({ inspect: fakeInspect() }).spec.sf_pi).toBeUndefined();
+  });
+
   test("empty agent → only safety + guardrail rows by default", () => {
     const out = generateSpec({ inspect: fakeInspect() });
     expect(out.summary.subagent_tests).toBe(0);
