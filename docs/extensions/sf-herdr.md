@@ -50,6 +50,7 @@ You can also manage this extension from the SF Pi home base:
 
 - sf_herdr_plan is non-mutating and never generates shell commands.
 - Planner steps use only herdr_layout, herdr_pane, and herdr_agent and pass the opaque pane ID returned by pane_split.
+- The exact current successful-empty-body pane-run result is normalized without retrying the command.
 - sf-guardrail mediates herdr_pane action=run commands when dangerous-command or org-aware rules match.
 
 ## Exact reference
@@ -64,7 +65,7 @@ You can also manage this extension from the SF Pi home base:
 - **Commands:** `/sf-herdr`
 - **LLM tools:** `sf_herdr_plan`
 - **Providers:** _none_
-- **Events/hooks:** `session_start`
+- **Events/hooks:** `session_start`, `tool_result`
 
 </details>
 

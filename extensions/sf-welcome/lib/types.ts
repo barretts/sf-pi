@@ -154,6 +154,11 @@ export interface HerdrRuntimeStatusInfo {
   passiveStatusBridge: boolean;
   piIntegration: HerdrPiIntegrationStatusInfo;
   paneId?: string;
+  controlPackageVersion?: string;
+  runtimeVersion?: string;
+  runtimeChannel?: "stable" | "preview";
+  runtimeProtocol?: number;
+  runtimeVersionLoading?: boolean;
   loading: boolean;
 }
 

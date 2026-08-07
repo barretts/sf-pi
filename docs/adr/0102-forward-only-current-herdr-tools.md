@@ -5,8 +5,8 @@ Status: accepted
 ## Decision
 
 SF Herdr supports only the current upstream tool set: `herdr_layout`,
-`herdr_pane`, and `herdr_agent`. It has no adapter, version switch, migration,
-or dual schema.
+`herdr_pane`, and `herdr_agent`. It has no legacy adapter, version switch,
+migration, or dual schema.
 
 The `/sf-herdr` command, Manager actions, doctor, help, and global settings panel
 register whenever the extension loads. `sf_herdr_plan` registers only during
@@ -20,8 +20,8 @@ The planner is intentionally small and non-mutating:
 - the first step is `herdr_layout.pane_split`;
 - later steps reference the opaque pane ID at `details.pane.pane_id` from that
   result rather than constructing an ID;
-- ordinary workflows use `herdr_pane`, while review work uses `herdr_agent`;
-- the planner never supplies a shell command;
+- ordinary workflows use `herdr_pane.wait_output` as their bounded output snapshot, while review work uses `herdr_agent`;
+- the planner never supplies a shell command or a redundant pane-read step;
 - only a freshly created ephemeral pane is closed, and only after observed
   success; failure or timeout stays open for inspection.
 
@@ -31,8 +31,11 @@ retired SF Pi-managed preferences file is inert: it is not read, migrated, or
 deleted.
 
 SF Guardrail normalizes `herdr_pane` with `action=run` and a string `command` as
-a shell-command subject. The Code Analyzer Herdr handoff retains only the small
-shared intent/workflow contract.
+a shell-command subject. The current Herdr CLI accepts `pane run` with exit code
+zero and an empty response body; the external Pi tool misclassifies that exact
+success as `Expected JSON output`. SF Herdr normalizes only this exact result to
+submitted success and never retries the command. The Code Analyzer Herdr handoff
+retains only the small shared intent/workflow contract.
 
 The separate official Herdr skill is out of scope.
 
@@ -42,6 +45,8 @@ This hard cut removes profile merging, workflow inference, signal
 reconstruction, lane aliases/labels, compatibility prose, and obsolete state.
 Users must run a current split-tool runtime to receive planner registration.
 The reduced plan is easier to validate against the authoritative upstream tool
-schemas, and no stale pane identity can cross the split-result boundary.
+schemas, no stale pane identity can cross the split-result boundary, and the
+current empty-body success is repaired without introducing another tool or
+execution path.
 
 This ADR supersedes the legacy runtime Interface, workflow-profile, signal-inference, and pane-alias portions of ADRs 0016 and 0068. Their non-mutating orchestration and fresh-lane safety decisions remain in force. ADR 0015 remains superseded by ADR 0093.

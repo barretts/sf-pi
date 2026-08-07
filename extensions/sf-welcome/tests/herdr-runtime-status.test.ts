@@ -3,7 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { collectHerdrRuntimeStatus } from "../lib/herdr-runtime-status.ts";
+import {
+  collectHerdrRuntimeStatus,
+  detectHerdrClientStatus,
+  parseHerdrClientStatus,
+} from "../lib/herdr-runtime-status.ts";
 
 const PI_AGENT_ENV = "PI_CODING_AGENT_DIR";
 
@@ -41,7 +45,45 @@ function writePiIntegration(contents: string): void {
   writeFileSync(path.join(extensionsDir, "herdr-agent-state.ts"), contents);
 }
 
+function writeControlPackage(version: string): void {
+  const packageDir = path.join(tmpDir, "npm", "node_modules", "@ogulcancelik", "pi-herdr");
+  mkdirSync(packageDir, { recursive: true });
+  writeFileSync(path.join(packageDir, "package.json"), JSON.stringify({ version }));
+}
+
 describe("Herdr Runtime Readiness", () => {
+  it("parses and detects the installed runtime version, channel, and protocol locally", async () => {
+    const output = [
+      "version: 0.8.0-preview.2026-08-04-d78e3d3b5126",
+      "channel: preview",
+      "protocol: 19",
+      "binary: /example/herdr",
+    ].join("\n");
+
+    expect(parseHerdrClientStatus(output)).toEqual({
+      runtimeVersion: "0.8.0-preview.2026-08-04-d78e3d3b5126",
+      runtimeChannel: "preview",
+      runtimeProtocol: 19,
+      runtimeVersionLoading: false,
+    });
+    await expect(
+      detectHerdrClientStatus(async () => ({ stdout: output, stderr: "", code: 0 })),
+    ).resolves.toMatchObject({
+      runtimeVersion: "0.8.0-preview.2026-08-04-d78e3d3b5126",
+      runtimeChannel: "preview",
+      runtimeProtocol: 19,
+      runtimeVersionLoading: false,
+    });
+  });
+
+  it("reads the installed Pi control-package version without a subprocess", () => {
+    writeControlPackage("0.4.0");
+
+    const status = collectHerdrRuntimeStatus(cwd, { activeToolNames: [] });
+
+    expect(status.controlPackageVersion).toBe("0.4.0");
+  });
+
   it("reports ready only when all three current tools and active pane-control env are present", () => {
     const status = collectHerdrRuntimeStatus(cwd, {
       activeToolNames: ["herdr_layout", "herdr_pane", "herdr_agent"],
@@ -53,6 +95,7 @@ describe("Herdr Runtime Readiness", () => {
       toolActive: true,
       activeControlEnv: true,
       passiveStatusBridge: true,
+      runtimeVersionLoading: true,
     });
   });
 

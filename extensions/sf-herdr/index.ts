@@ -25,6 +25,7 @@ import { withSafeCommandHandler } from "../../lib/common/safe-command-handler.ts
 import { registerSfHerdrPlanTool } from "./lib/sf_herdr_plan-tool.ts";
 import { readSfHerdrSettings } from "./lib/settings.ts";
 import { renderDoctor, renderStatus } from "./lib/status.ts";
+import { normalizeHerdrPaneToolResult } from "./lib/tool-result-normalizer.ts";
 
 const EXTENSION_ID = "sf-herdr";
 const COMMAND_NAME = "sf-herdr";
@@ -102,6 +103,7 @@ export default function sfHerdr(pi: ExtensionAPI): void {
     registerSfHerdrPlanTool(pi);
     planToolRegistered = true;
   });
+  pi.on("tool_result", (event) => normalizeHerdrPaneToolResult(event));
 
   function buildHerdrManagerActions(): ManagerDetailAction[] {
     return COMMAND_ACTIONS.filter((action) => action.value !== "settings").map((action) => ({

@@ -760,6 +760,10 @@ _Avoid_: inferred workflow, suggested command, pane alias
 The state in which `HERDR_ENV=1`, `HERDR_PANE_ID` is set, and all three current tools—`herdr_layout`, `herdr_pane`, and `herdr_agent`—are active. SF Herdr registers its planner only at session startup in this state.
 _Avoid_: partial tool activation, extension enabled, legacy fallback
 
+**Herdr Runtime Identity**:
+The independently versioned Herdr binary and channel, Pi control package, CLI protocol, and Pi bridge schema installed for the current user. These values describe different contracts and are never compared as if they shared one release number.
+_Avoid_: Herdr version, Pi state version, matching-version requirement, unverified latest claim
+
 **tldraw Runtime Floor**:
 The minimum tldraw offline release contract that SF tldraw intentionally supports. Runtimes below the floor are incompatible rather than partially supported through legacy fallbacks.
 _Avoid_: best-effort compatibility, optional create support, legacy runtime mode

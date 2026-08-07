@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Startup-safe Herdr runtime readiness for the welcome splash. */
-import { closeSync, existsSync, openSync, readSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, readSync } from "node:fs";
 import { getHerdrSplitToolReadiness } from "../../../lib/common/herdr-runtime.ts";
 import { globalAgentPath } from "../../../lib/common/pi-paths.ts";
 import { isSfPiExtensionEnabled } from "../../../lib/common/sf-pi-extension-state.ts";
@@ -9,6 +9,53 @@ import type { HerdrPiIntegrationStatusInfo, HerdrRuntimeStatusInfo } from "./typ
 
 export const HERDR_PI_PACKAGE_SOURCE = "npm:@ogulcancelik/pi-herdr";
 export const HERDR_PI_INTEGRATION_FILE = "herdr-agent-state.ts";
+
+export type HerdrStatusExecFn = (
+  command: string,
+  args: string[],
+  options?: { timeout?: number; cwd?: string },
+) => Promise<{ stdout: string; stderr: string; code: number | null }>;
+
+export async function detectHerdrClientStatus(
+  exec: HerdrStatusExecFn,
+): Promise<
+  Pick<
+    HerdrRuntimeStatusInfo,
+    "runtimeVersion" | "runtimeChannel" | "runtimeProtocol" | "runtimeVersionLoading"
+  >
+> {
+  try {
+    const result = await exec("herdr", ["status", "client"], { timeout: 5_000 });
+    if (result.code !== 0) return { runtimeVersionLoading: false };
+    return parseHerdrClientStatus(result.stdout || result.stderr);
+  } catch {
+    return { runtimeVersionLoading: false };
+  }
+}
+
+export function parseHerdrClientStatus(
+  output: string,
+): Pick<
+  HerdrRuntimeStatusInfo,
+  "runtimeVersion" | "runtimeChannel" | "runtimeProtocol" | "runtimeVersionLoading"
+> {
+  const values = new Map(
+    output
+      .split(/\r?\n/)
+      .map((line) => line.match(/^([a-z]+):\s*(.+)$/i))
+      .filter((match): match is RegExpMatchArray => Boolean(match))
+      .map((match) => [match[1].toLowerCase(), match[2].trim()]),
+  );
+  const version = values.get("version") || undefined;
+  const channel = values.get("channel");
+  const protocol = Number.parseInt(values.get("protocol") ?? "", 10);
+  return {
+    runtimeVersion: version,
+    runtimeChannel: channel === "stable" || channel === "preview" ? channel : undefined,
+    runtimeProtocol: Number.isFinite(protocol) ? protocol : undefined,
+    runtimeVersionLoading: false,
+  };
+}
 
 export function collectHerdrRuntimeStatus(
   cwd: string | undefined,
@@ -51,8 +98,26 @@ export function collectHerdrRuntimeStatus(
     passiveStatusBridge,
     piIntegration,
     paneId: typeof env.HERDR_PANE_ID === "string" ? env.HERDR_PANE_ID : undefined,
+    controlPackageVersion: readHerdrControlPackageVersion(),
+    runtimeVersionLoading: activeControlEnv,
     loading: false,
   };
+}
+
+function readHerdrControlPackageVersion(): string | undefined {
+  try {
+    const packageJson = globalAgentPath(
+      "npm",
+      "node_modules",
+      "@ogulcancelik",
+      "pi-herdr",
+      "package.json",
+    );
+    const parsed = JSON.parse(readFileSync(packageJson, "utf8")) as { version?: unknown };
+    return typeof parsed.version === "string" ? parsed.version : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function readFileHeader(filePath: string, maxBytes: number = 2_048): string {

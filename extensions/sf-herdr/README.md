@@ -23,7 +23,8 @@ separate follow-up from this structured-tool repair.
 ```text
 extension load
   ├─ register /sf-herdr and Manager/doctor surfaces
-  └─ register session_start hook
+  ├─ register session_start gating
+  └─ register exact pane-run result normalization
 
 session_start
   ├─ inspect the active tool names and Herdr environment
@@ -33,7 +34,11 @@ sf_herdr_plan
   ├─ require intent and primaryWorkflow
   ├─ read global sfPi.herdr settings
   ├─ return structured current tool/action steps
-  └─ carry split.details.pane.pane_id forward as an opaque result reference
+  ├─ carry split.details.pane.pane_id forward as an opaque result reference
+  └─ use wait_output's bounded snapshot instead of a separate pane read
+
+tool_result
+  └─ normalize only the current successful-empty-body pane run without retrying
 ```
 
 The planner does not mutate panes and does not generate a shell command. The
@@ -42,17 +47,18 @@ Ordinary command intents use `herdr_pane`; review uses `herdr_agent`.
 
 ## Behavior Matrix
 
-| Event or action      | Condition                                          | Result                                                              |
-| -------------------- | -------------------------------------------------- | ------------------------------------------------------------------- |
-| Extension load       | Supported Pi runtime                               | Register `/sf-herdr`, Manager actions, doctor, and settings only.   |
-| `session_start`      | Herdr environment and all three tools are active   | Register `sf_herdr_plan` for the current session.                   |
-| `session_start`      | Environment or any current Herdr tool is missing   | Keep the planner unregistered; status and setup surfaces remain.    |
-| `/sf-herdr`          | Interactive, no arguments                          | Open the SF Herdr Manager detail page.                              |
-| `/sf-herdr status`   | Any runtime                                        | Report current environment, complete tool readiness, and settings.  |
-| `/sf-herdr settings` | Interactive                                        | Open the global split-direction and intent-lifecycle settings page. |
-| `sf_herdr_plan`      | Explicit `intent` and `primaryWorkflow`            | Return current structured tool/action steps without mutating panes. |
-| Ephemeral plan       | Workflow success is observed                       | Recommend `herdr_pane.close` for the freshly created pane.          |
-| Any plan             | Failure, timeout, blocked, or ambiguous completion | Leave the pane open for inspection and explicit cleanup.            |
+| Event or action      | Condition                                           | Result                                                              |
+| -------------------- | --------------------------------------------------- | ------------------------------------------------------------------- |
+| Extension load       | Supported Pi runtime                                | Register `/sf-herdr`, Manager actions, doctor, and settings only.   |
+| `session_start`      | Herdr environment and all three tools are active    | Register `sf_herdr_plan` for the current session.                   |
+| `session_start`      | Environment or any current Herdr tool is missing    | Keep the planner unregistered; status and setup surfaces remain.    |
+| `/sf-herdr`          | Interactive, no arguments                           | Open the SF Herdr Manager detail page.                              |
+| `/sf-herdr status`   | Any runtime                                         | Report current environment, complete tool readiness, and settings.  |
+| `/sf-herdr settings` | Interactive                                         | Open the global split-direction and intent-lifecycle settings page. |
+| `sf_herdr_plan`      | Explicit `intent` and `primaryWorkflow`             | Return current structured tool/action steps without mutating panes. |
+| `tool_result`        | Exact successful-empty-body `herdr_pane.run` result | Report the submitted command as success without executing it again. |
+| Ephemeral plan       | Workflow success is observed in `wait_output`       | Recommend `herdr_pane.close` for the freshly created pane.          |
+| Any plan             | Failure, timeout, blocked, or ambiguous completion  | Leave the pane open for inspection and explicit cleanup.            |
 
 ## Lifecycle Settings
 
@@ -105,7 +111,9 @@ deleted.
 
 `sf_herdr_plan` requires both `intent` and `primaryWorkflow`. Its structured
 steps use valid current tool/action pairs and result references instead of pane
-names. The compact text mirrors the structured plan for quick inspection.
+names. Command plans use the bounded snapshot returned by `wait_output` and do
+not add a redundant `herdr_pane.read` step. The compact text mirrors the
+structured plan for quick inspection.
 
 ## File Structure
 
@@ -118,10 +126,12 @@ extensions/sf-herdr/
     settings.ts             ← implementation module
     sf_herdr_plan-tool.ts   ← implementation module
     status.ts               ← implementation module
+    tool-result-normalizer.ts← implementation module
   tests/
     config-panel.test.ts    ← unit / smoke test
     plan-render.test.ts     ← unit / smoke test
     smoke.test.ts           ← unit / smoke test
+    tool-result-normalizer.test.ts← unit / smoke test
   AGENT_GUIDE.md            ← supporting file
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata

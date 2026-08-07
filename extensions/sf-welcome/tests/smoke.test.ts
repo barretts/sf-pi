@@ -445,6 +445,53 @@ describe("sf-welcome", () => {
     expect(plain).not.toContain("Update available");
   });
 
+  it("renders Herdr runtime identities without confusing bridge schema with release freshness", async () => {
+    const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
+    const data = {
+      modelName: "Claude Sonnet 4",
+      providerName: "anthropic",
+      loadedCounts: { extensions: 3, skills: 1, promptTemplates: 0 },
+      recentSessions: [],
+      extensionHealth: [],
+      slackConnected: false,
+      monthlyCost: 0,
+      monthlyBudget: 3000,
+      herdrRuntime: {
+        kind: "ready" as const,
+        extensionEnabled: true,
+        toolActive: true,
+        packageInstalled: true,
+        activeControlEnv: true,
+        passiveStatusBridge: true,
+        runtimeVersion: "0.8.0-preview.2026-08-04-d78e3d3b5126",
+        runtimeChannel: "preview" as const,
+        runtimeProtocol: 19,
+        controlPackageVersion: "0.4.0",
+        runtimeVersionLoading: false,
+        piIntegration: {
+          kind: "installed" as const,
+          path: "/example/herdr-agent-state.ts",
+          version: 8,
+          loading: false,
+        },
+        loading: false,
+      },
+    };
+
+    const plain = stripAnsi(new SfWelcomeOverlay(data).render(180).join("\n"));
+
+    expect(plain).toContain("Herdr (Multiplexer)");
+    expect(plain).toContain("0.8.0-preview");
+    expect(plain).toContain("preview");
+    expect(plain).toContain("control 0.4.0");
+    expect(plain).toContain("bridge schema 8");
+    expect(plain).not.toContain("Pi state v8");
+    const herdrLines = plain
+      .split("\n")
+      .filter((line) => line.includes("Herdr (Multiplexer)") || line.includes("control 0.4.0"));
+    expect(herdrLines.join("\n")).not.toContain("latest");
+  });
+
   it("keeps optional setup rows calm when disabled or missing", async () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const data = {

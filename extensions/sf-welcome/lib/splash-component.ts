@@ -553,23 +553,23 @@ function formatNodeRuntimeStatusValue(data: SplashData): string {
   return `${SF_ORANGE("?")} ${SF_ORANGE("Unknown")}`;
 }
 
-function formatHerdrPiIntegrationSuffix(herdr: NonNullable<SplashData["herdrRuntime"]>): string {
-  const pi = herdr.piIntegration;
-  if (pi.kind === "installed") {
-    const version = typeof pi.version === "number" ? ` v${pi.version}` : " installed";
-    return ` ${MUTED(`· Pi state${version}`)}`;
-  }
-  if (pi.kind === "missing") {
-    return ` ${MUTED("· Pi state not installed")}`;
-  }
-  return ` ${MUTED("· Pi state unknown")}`;
+function compactHerdrRuntimeVersion(version: string): string {
+  const preview = version.match(/^(\d+\.\d+\.\d+-preview)/);
+  return preview?.[1] ?? version;
 }
 
 function formatHerdrRuntimeStatusValue(data: SplashData): string {
   const herdr = data.herdrRuntime;
   if (!herdr || herdr.loading) return MUTED("Checking");
   if (herdr.kind === "ready") {
-    return `${SF_GREEN("✓")} ${SF_GREEN("tool active")} ${MUTED("· pane control ready")}${formatHerdrPiIntegrationSuffix(herdr)}`;
+    if (herdr.runtimeVersionLoading) {
+      return `${SF_GREEN("✓")} ${SF_GREEN("tools ready")} ${MUTED("· version checking")}`;
+    }
+    const version = herdr.runtimeVersion
+      ? compactHerdrRuntimeVersion(herdr.runtimeVersion)
+      : undefined;
+    const identity = [version, herdr.runtimeChannel].filter(Boolean).join(" · ");
+    return `${SF_GREEN("✓")} ${identity ? SF_GREEN(identity) : SF_GREEN("tools ready")}${identity ? ` ${MUTED("· tools ready")}` : ""}`;
   }
   if (herdr.kind === "tool-only") {
     return `${SF_ORANGE("!")} ${SF_ORANGE("tool active")} ${MUTED("· not inside Herdr")}`;
@@ -598,7 +598,16 @@ function herdrActionHint(data: SplashData): string | null {
   if (herdr.piIntegration.kind !== "installed" && herdr.packageInstalled) {
     return "herdr integration install pi";
   }
-  if (herdr.kind === "ready") return null;
+  if (herdr.kind === "ready") {
+    const details = [
+      herdr.controlPackageVersion ? `control ${herdr.controlPackageVersion}` : undefined,
+      herdr.piIntegration.kind === "installed"
+        ? `bridge schema ${herdr.piIntegration.version ?? "unknown"}`
+        : undefined,
+      typeof herdr.runtimeProtocol === "number" ? `protocol ${herdr.runtimeProtocol}` : undefined,
+    ].filter(Boolean);
+    return details.length ? details.join(" · ") : null;
+  }
   if (herdr.kind === "tool-only") return "run pi inside Herdr for pane multiplexing";
   return null;
 }

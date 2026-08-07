@@ -36,7 +36,6 @@ describe("sf_herdr_plan", () => {
       ["herdr_layout", "pane_split"],
       ["herdr_pane", "run"],
       ["herdr_pane", "wait_output"],
-      ["herdr_pane", "read"],
       ["herdr_pane", "close"],
     ]);
     expect(steps[0]).toMatchObject({
@@ -53,7 +52,6 @@ describe("sf_herdr_plan", () => {
       { stepId: "split", path: "details.pane.pane_id" },
       { stepId: "split", path: "details.pane.pane_id" },
       { stepId: "split", path: "details.pane.pane_id" },
-      { stepId: "split", path: "details.pane.pane_id" },
     ]);
     expect(steps.at(-1)).toMatchObject({ when: "observed_success_only" });
     expect(JSON.stringify(result)).not.toContain('"tool":"herdr"');
@@ -62,6 +60,10 @@ describe("sf_herdr_plan", () => {
     expect(result.content[0]?.text).toContain(
       "2. herdr_pane.run · pane←split.details.pane.pane_id · caller supplies command",
     );
+    expect(result.content[0]?.text).toContain(
+      "3. herdr_pane.wait_output · source=recent-unwrapped · pane←split.details.pane.pane_id",
+    );
+    expect(result.content[0]?.text).not.toContain("herdr_pane.read");
   });
 
   it("uses herdr_agent for review lanes and keeps the default manual pane open", async () => {

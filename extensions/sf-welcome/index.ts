@@ -70,6 +70,7 @@ import { readCachedNodeCertStatus, writeCachedNodeCertStatus } from "./lib/node-
 import { writeCachedFontRuntimeStatus } from "./lib/font-status-cache.ts";
 import { detectHunkStatus, writeCachedHunkStatus } from "./lib/hunk-status.ts";
 import { detectHomebrewStatus, writeCachedHomebrewStatus } from "./lib/homebrew-status.ts";
+import { detectHerdrClientStatus } from "./lib/herdr-runtime-status.ts";
 import {
   detectBrowserRuntimeStatus,
   writeCachedBrowserRuntimeStatus,
@@ -604,6 +605,28 @@ export default function sfWelcome(pi: ExtensionAPI) {
     }, 4_000);
     fontStatusTimer.unref?.();
 
+    // Background Herdr client identity: bounded and local-only. This reports
+    // the installed runtime, update channel, and protocol without checking for
+    // or applying updates.
+    const herdrStatusTimer = setTimeout(() => {
+      if (runId !== startupRunId || !isActiveSession(ctx, generation)) return;
+      if (!data.herdrRuntime?.activeControlEnv) return;
+      void markBootStep("sf-welcome.herdr-client-detect", () => detectHerdrClientStatus(exec))
+        .then((status) => {
+          if (runId !== startupRunId || !isActiveSession(ctx, generation)) return;
+          if (!data.herdrRuntime) return;
+          data.herdrRuntime = { ...data.herdrRuntime, ...status };
+          scheduleSplashRepaint(ctx, generation);
+        })
+        .catch(() => {
+          if (runId !== startupRunId || !isActiveSession(ctx, generation)) return;
+          if (!data.herdrRuntime) return;
+          data.herdrRuntime = { ...data.herdrRuntime, runtimeVersionLoading: false };
+          scheduleSplashRepaint(ctx, generation);
+        });
+    }, 4_250);
+    herdrStatusTimer.unref?.();
+
     // Background Hunk readiness: optional review-tool nudge only. This does
     // not open Hunk or create review annotations.
     const hunkTimer = setTimeout(() => {
@@ -1093,26 +1116,36 @@ export default function sfWelcome(pi: ExtensionAPI) {
 
   function formatPlainHerdrPiIntegration(status: SplashData["herdrRuntime"]): string {
     const pi = status?.piIntegration;
-    if (!pi) return "Pi state not checked";
+    if (!pi) return "Pi bridge not checked";
     if (pi.kind === "installed") {
-      return `Pi state${typeof pi.version === "number" ? ` v${pi.version}` : " installed"}`;
+      return `Pi bridge schema ${typeof pi.version === "number" ? pi.version : "unknown"}`;
     }
-    if (pi.kind === "missing") return "Pi state not installed";
-    return "Pi state unknown";
+    if (pi.kind === "missing") return "Pi bridge not installed";
+    return "Pi bridge unknown";
   }
 
   function formatPlainHerdrRuntimeStatus(status: SplashData["herdrRuntime"]): string {
     if (!status) return "not checked";
-    const piState = formatPlainHerdrPiIntegration(status);
-    if (status.kind === "ready") return `tool active · pane control ready · ${piState}`;
-    if (status.kind === "tool-only") return `tool active · not inside Herdr · ${piState}`;
+    const details = [
+      status.runtimeVersion ? `runtime ${status.runtimeVersion}` : undefined,
+      status.runtimeChannel ? `channel ${status.runtimeChannel}` : undefined,
+      status.controlPackageVersion ? `control ${status.controlPackageVersion}` : undefined,
+      typeof status.runtimeProtocol === "number" ? `protocol ${status.runtimeProtocol}` : undefined,
+      formatPlainHerdrPiIntegration(status),
+    ].filter(Boolean);
+    if (status.kind === "ready") {
+      return `tools active · pane control ready · ${details.join(" · ")}`;
+    }
+    if (status.kind === "tool-only") {
+      return `tools active · not inside Herdr · ${details.join(" · ")}`;
+    }
     if (status.kind === "installed-not-active") {
       return status.activeControlEnv
-        ? `package installed · tool inactive · ${piState}`
-        : `package installed · not inside Herdr · ${piState}`;
+        ? `package installed · tools inactive · ${details.join(" · ")}`
+        : `package installed · not inside Herdr · ${details.join(" · ")}`;
     }
     if (status.kind === "disabled") return "sf-herdr disabled";
-    return `package not installed · ${piState}`;
+    return "package not installed · upstream Herdr inactive";
   }
 
   function formatPlainReleaseStatus(

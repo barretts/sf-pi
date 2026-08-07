@@ -43,7 +43,7 @@ describe("sf-herdr", () => {
     expect(pi.registerCommand).toHaveBeenCalledWith("sf-herdr", expect.any(Object));
   });
 
-  it("registers only the session_start lifecycle hook", async () => {
+  it("registers only the current session and result-normalization lifecycle hooks", async () => {
     const mod = await import("../index.ts");
     const pi = {
       events: eventBus(),
@@ -53,7 +53,33 @@ describe("sf-herdr", () => {
     };
 
     mod.default(pi as never);
-    expect(pi.on.mock.calls.map(([name]) => name)).toEqual(["session_start"]);
+    expect(pi.on.mock.calls.map(([name]) => name)).toEqual(["session_start", "tool_result"]);
+  });
+
+  it("normalizes the current pane-run empty-success result through the extension seam", async () => {
+    const mod = await import("../index.ts");
+    const handlers = new Map<string, (event: any) => unknown>();
+    const pi = {
+      events: eventBus(),
+      on: vi.fn((name: string, handler: (event: any) => unknown) => handlers.set(name, handler)),
+      registerCommand: vi.fn(),
+      getActiveTools: vi.fn(() => []),
+    };
+
+    mod.default(pi as never);
+    const result = handlers.get("tool_result")?.({
+      type: "tool_result",
+      toolName: "herdr_pane",
+      input: { action: "run", pane: "pane-1", command: "npm test" },
+      content: [{ type: "text", text: "Expected JSON output from herdr pane run pane-1 npm test" }],
+      details: {},
+      isError: true,
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Submitted command to Herdr pane pane-1." }],
+      isError: false,
+    });
   });
 
   it("registers sf_herdr_plan at session startup only with Herdr env and all current tools active", async () => {

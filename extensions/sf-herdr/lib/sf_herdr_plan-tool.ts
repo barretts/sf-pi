@@ -142,15 +142,8 @@ function commandSteps(): HerdrPlanStep[] {
       arguments: { source: "recent-unwrapped" },
       argumentBindings: { pane: PANE_RESULT },
       callerSupplies: ["match", "timeout"],
-      purpose: "Wait for the owning workflow's success or completion marker.",
-    },
-    {
-      id: "read",
-      tool: "herdr_pane",
-      action: "read",
-      arguments: { source: "recent-unwrapped" },
-      argumentBindings: { pane: PANE_RESULT },
-      purpose: "Read the resulting output and determine success.",
+      purpose:
+        "Wait for the owning workflow's success marker and use the returned bounded output snapshot.",
     },
   ];
 }

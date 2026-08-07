@@ -188,7 +188,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
     defaultEnabled: true,
     commands: ["/sf-herdr"],
     tools: ["sf_herdr_plan"],
-    events: ["session_start"],
+    events: ["session_start","tool_result"],
     configurable: true,
     getConfigPanel: async () => {
       const mod = await import("../extensions/sf-herdr/lib/config-panel.ts");
