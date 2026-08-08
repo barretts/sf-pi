@@ -203,6 +203,66 @@ describe("Safety Kernel — commandGate (Tier 2)", () => {
     expect(decision?.ruleId).toBe("sf-org-auth-show-access-token");
   });
 
+  it.each([
+    "pi auth check --provider anthropic --credentials",
+    "pi auth check --credentials --provider anthropic",
+    "pi auth print-api-key --provider anthropic",
+    "pi auth print-bearer-token --provider openai-codex",
+    "/opt/homebrew/bin/pi auth check --provider anthropic --credentials",
+    "env PI_CODING_AGENT_DIR=/tmp/pi-test pi auth print-api-key --provider anthropic",
+    "env -u PI_OFFLINE pi auth print-api-key --provider anthropic",
+    "timeout 15 pi auth print-api-key --provider anthropic",
+    "PI_CODING_AGENT_DIR=/tmp/pi-test pi auth check --credentials --provider anthropic",
+    "PI_CODING_AGENT_DIR=/tmp/pi-test /opt/homebrew/bin/pi auth print-api-key --provider anthropic",
+    "(pi auth print-api-key --provider anthropic)",
+    "( pi auth print-api-key --provider anthropic )",
+    "{ pi auth print-api-key --provider anthropic; }",
+    "eval 'pi auth print-api-key --provider anthropic'",
+    "PI=pi; $PI auth print-api-key --provider anthropic",
+    'bash -c "(pi auth print-bearer-token --provider openai-codex)"',
+    'bash -c "( pi auth print-bearer-token --provider openai-codex )"',
+    'env -u PI_OFFLINE bash -c "pi auth print-api-key --provider anthropic"',
+    'timeout 15 bash -c "pi auth print-api-key --provider anthropic"',
+    'nice -n 5 bash -c "pi auth print-api-key --provider anthropic"',
+    'time -f %e bash -c "pi auth print-api-key --provider anthropic"',
+    'watch -n 2 bash -c "pi auth print-api-key --provider anthropic"',
+    'command bash -c "pi auth print-api-key --provider anthropic"',
+    "npx --yes @earendil-works/pi-coding-agent auth check --provider anthropic --credentials",
+    "npx --package @earendil-works/pi-coding-agent pi auth print-api-key --provider anthropic",
+    "npx --package @earendil-works/pi-coding-agent -- pi auth print-api-key --provider anthropic",
+    'npx --call "pi auth print-api-key --provider anthropic"',
+  ])("confirms Pi credential output: %s", async (command) => {
+    const decision = await evaluateSafety({
+      toolName: "bash",
+      input: { command },
+      cwd: "/project",
+      config: readBundledConfig(),
+    });
+
+    expect(decision?.feature).toBe("commandGate");
+    expect(decision?.action).toBe("confirm");
+    expect(decision?.ruleId).toBe("pi-auth-credential-output");
+  });
+
+  it.each([
+    "pi auth check --provider anthropic",
+    "pi auth check --provider anthropic --json --no-refresh",
+    'echo "pi auth check --credentials"',
+    "npx eslint pi auth print-api-key",
+    "timeout 15 echo pi auth print-api-key",
+    "env FOO=bar echo pi auth print-api-key",
+    "{ echo pi auth print-api-key; }",
+  ])("allows Pi auth checks that do not emit credentials: %s", async (command) => {
+    const decision = await evaluateSafety({
+      toolName: "bash",
+      input: { command },
+      cwd: "/project",
+      config: readBundledConfig(),
+    });
+
+    expect(decision).toBeUndefined();
+  });
+
   it("confirms temporary Salesforce CLI secret-output override", async () => {
     const config = readBundledConfig();
     const decision = await evaluateSafety({

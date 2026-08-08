@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Changed
 
+- **Mediated Pi credential-output commands in SF Guardrail.** Model-issued `pi auth check --credentials`, `pi auth print-api-key`, and `pi auth print-bearer-token` calls now use the existing command confirmation and audit path across direct, common-wrapper, environment-prefixed, and `npx` forms; ordinary non-output auth readiness checks remain allowed.
 - **Cleared the open dependency and CodeQL security findings.** The lockfile now resolves `js-yaml` 4.3.1, `postcss` 8.5.26, and its required `nanoid` 3.3.17 patch; the AgentFabric parity test uses `Dirent` metadata instead of a separate path `stat` before reading files.
 - **Normalized current Herdr pane-run success and clarified Herdr identities.** SF Herdr now converts only the known exit-zero empty-body `herdr_pane.run` result into submitted success without retrying, command plans use the bounded `wait_output` snapshot instead of a redundant pane read, and SF Welcome reports the installed Herdr runtime/channel, Pi control-package version, protocol, and Pi bridge schema without claiming release freshness.
 - **Advanced the audited Pi runtime edge to Pi 0.84.1 without raising the 0.82 floor.** Development packages and repair guidance use exact Pi 0.84.1, required nightly compatibility covers 0.82/0.83/0.84.1, and Gateway discovery uses Pi 0.84's provider-scoped cancellable refresh while older supported runtimes keep their existing fallback behavior.

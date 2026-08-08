@@ -382,6 +382,11 @@
         "description": "delete scratch/sandbox org"
       },
       {
+        "id": "pi-auth-credential-output",
+        "pattern": "pi-auth-credential-output",
+        "description": "reveal a configured Pi provider credential"
+      },
+      {
         "id": "sf-org-auth-show-access-token",
         "pattern": "org auth show-access-token",
         "description": "reveal Salesforce org access token"

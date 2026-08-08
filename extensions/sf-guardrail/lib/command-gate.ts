@@ -106,6 +106,9 @@ function patternMatches(
   if (trimmed === "base64-decode-to-shell") {
     return hasBase64DecodeToShell(simpleCommands);
   }
+  if (trimmed === "pi-auth-credential-output") {
+    return hasPiCredentialOutput(commands);
+  }
   if (trimmed === "find -delete") {
     return commands.some((item) => item.head === "find" && item.args.includes("-delete"));
   }
@@ -151,6 +154,45 @@ function patternMatches(
 
 const SHELL_HEADS = new Set(["bash", "sh", "zsh"]);
 const WRAPPER_HEADS = new Set(["sudo", "env", "timeout", "nohup", "nice", "time", "watch"]);
+const NPX_SCRIPT_OPTIONS = new Set(["--call", "-c"]);
+const NPX_OPTIONS_WITH_VALUE = new Set(["--package", "-p", "--node-options"]);
+
+type WrapperSpec = {
+  optionsWithValue?: readonly string[];
+  positionalsToSkip?: number;
+  skipAssignments?: boolean;
+};
+
+const PI_COMMAND_WRAPPERS: Record<string, WrapperSpec> = {
+  env: { optionsWithValue: ["-u", "--unset", "-C", "--chdir"], skipAssignments: true },
+  timeout: { optionsWithValue: ["-k", "--kill-after", "-s", "--signal"], positionalsToSkip: 1 },
+  sudo: {
+    optionsWithValue: [
+      "-u",
+      "--user",
+      "-g",
+      "--group",
+      "-h",
+      "--host",
+      "-p",
+      "--prompt",
+      "-C",
+      "--close-from",
+      "-T",
+      "--command-timeout",
+      "-R",
+      "--chroot",
+      "-D",
+      "--chdir",
+    ],
+    skipAssignments: true,
+  },
+  nice: { optionsWithValue: ["-n", "--adjustment"] },
+  time: { optionsWithValue: ["-o", "--output", "-f", "--format"] },
+  watch: { optionsWithValue: ["-n", "--interval"] },
+  nohup: {},
+  command: {},
+};
 
 function expandCommands(commands: TokenizedCommand[], depth = 0): TokenizedCommand[] {
   if (depth > 3) return commands;
@@ -169,6 +211,10 @@ function nestedCommands(command: TokenizedCommand): TokenizedCommand[] {
     const index = command.args.indexOf("-c");
     const nested = index >= 0 ? command.args[index + 1] : undefined;
     return nested ? tokenizeSimpleCommands(nested).map((item) => item.tokens) : [];
+  }
+
+  if (command.head === "eval") {
+    return tokenizeSimpleCommands(command.args.join(" ")).map((item) => item.tokens);
   }
 
   if (command.head === "xargs") {
@@ -203,6 +249,125 @@ function hasBase64DecodeToShell(commands: TokenizedCommand[]): boolean {
     if (left.args.includes("-d") || left.args.includes("--decode")) return true;
   }
   return false;
+}
+
+function hasPiCredentialOutput(commands: TokenizedCommand[]): boolean {
+  return commands.some((command) => {
+    const args = piCommandArgs(command);
+    if (!args || args[0] !== "auth") return false;
+    const action = args[1];
+    if (action === "check") return args.includes("--credentials");
+    return action === "print-api-key" || action === "print-bearer-token";
+  });
+}
+
+function piCommandArgs(command: TokenizedCommand): string[] | undefined {
+  const head = normalizedExecutable(command.head);
+  if (head === "npx") return npxPiCommandArgs(command.args);
+  if (head === "pi" || command.head === "$PI" || command.head === "${PI}") {
+    return command.args;
+  }
+  if (SHELL_HEADS.has(head)) {
+    const commandIndex = command.args.indexOf("-c");
+    const script = commandIndex >= 0 ? command.args[commandIndex + 1] : undefined;
+    return script ? piArgsFromScript(script) : undefined;
+  }
+  if (head === "eval") return piArgsFromScript(command.args.join(" "));
+
+  const nested = unwrapPiCommand(command, head);
+  return nested ? piCommandArgs(nested) : undefined;
+}
+
+function unwrapPiCommand(command: TokenizedCommand, head: string): TokenizedCommand | undefined {
+  if (command.head === "{" || command.head === "(") return commandAt(command.args, 0);
+
+  const wrapper = isEnvironmentAssignment(command.head)
+    ? { skipAssignments: true }
+    : PI_COMMAND_WRAPPERS[head];
+  if (!wrapper) return undefined;
+
+  const commandIndex = commandIndexAfterOptions(
+    command.args,
+    wrapper.optionsWithValue ?? [],
+    wrapper.positionalsToSkip ?? 0,
+    wrapper.skipAssignments ?? false,
+  );
+  return commandIndex === undefined ? undefined : commandAt(command.args, commandIndex);
+}
+
+function commandIndexAfterOptions(
+  args: string[],
+  optionsWithValue: readonly string[],
+  positionalsToSkip = 0,
+  skipAssignments = false,
+): number | undefined {
+  let parsingOptions = true;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? "";
+    if (parsingOptions && arg === "--") {
+      parsingOptions = false;
+      continue;
+    }
+    if (skipAssignments && isEnvironmentAssignment(arg)) continue;
+    if (parsingOptions && optionsWithValue.includes(arg)) {
+      index += 1;
+      continue;
+    }
+    if (parsingOptions && arg.startsWith("-")) continue;
+    if (positionalsToSkip > 0) {
+      positionalsToSkip -= 1;
+      continue;
+    }
+    return index;
+  }
+  return undefined;
+}
+
+function commandAt(args: string[], index: number): TokenizedCommand | undefined {
+  const executable = args[index];
+  return executable
+    ? { head: normalizedExecutable(executable), args: args.slice(index + 1) }
+    : undefined;
+}
+
+function npxPiCommandArgs(args: string[]): string[] | undefined {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? "";
+    if (arg === "--") continue;
+    if (NPX_SCRIPT_OPTIONS.has(arg)) {
+      const script = args[index + 1];
+      return script ? piArgsFromScript(script) : undefined;
+    }
+    if (NPX_OPTIONS_WITH_VALUE.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("-")) continue;
+    if (isPiPackage(arg) || normalizedExecutable(arg) === "pi") return args.slice(index + 1);
+    return undefined;
+  }
+  return undefined;
+}
+
+function piArgsFromScript(script: string): string[] | undefined {
+  for (const nested of tokenizeSimpleCommands(script)) {
+    const args = piCommandArgs(nested.tokens);
+    if (args) return args;
+  }
+  return undefined;
+}
+
+function isPiPackage(value: string): boolean {
+  const packageName = "@earendil-works/pi-coding-agent";
+  return value === packageName || value.startsWith(`${packageName}@`);
+}
+
+function isEnvironmentAssignment(value: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*=/.test(value);
+}
+
+function normalizedExecutable(value: string): string {
+  return basename(value).replace(/^[({]+|[)}]+$/g, "");
 }
 
 function basename(value: string): string {

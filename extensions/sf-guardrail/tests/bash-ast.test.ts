@@ -23,6 +23,14 @@ describe("tokenize", () => {
     expect(tokens?.head).toBe("sf");
   });
 
+  it("preserves path-valued environment assignments before a command", () => {
+    const tokens = tokenize("PI_CODING_AGENT_DIR=/tmp/pi-test pi auth check");
+    expect(tokens).toEqual({
+      head: "PI_CODING_AGENT_DIR=/tmp/pi-test",
+      args: ["pi", "auth", "check"],
+    });
+  });
+
   it("respects single quotes", () => {
     const tokens = tokenize("echo 'sf org delete prod'");
     expect(tokens?.head).toBe("echo");

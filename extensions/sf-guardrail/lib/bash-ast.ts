@@ -194,6 +194,7 @@ function tokenizeSimple(source: string): TokenizedCommand | undefined {
 }
 
 function basename(p: string): string {
+  if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(p)) return p;
   const idx = p.lastIndexOf("/");
   return idx >= 0 ? p.slice(idx + 1) : p;
 }

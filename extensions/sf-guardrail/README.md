@@ -25,8 +25,9 @@ controlled by per-rule behavior (`off`, `confirm`, or `block`):
    destructive git commands, pipe-to-shell and base64-to-shell patterns,
    process/system disruption commands, container/cloud/database destruction
    commands, Salesforce CLI project/package/plugin/org/agent destructive
-   operations, explicit Salesforce CLI credential reveal commands, and
-   `SF_TEMP_SHOW_SECRETS=true`.
+   operations, explicit Salesforce CLI credential reveal commands, Pi
+   credential-output commands (`pi auth check --credentials`, `pi auth print-api-key`, and
+   `pi auth print-bearer-token`), and `SF_TEMP_SHOW_SECRETS=true`.
    Strictly validated OS temp-directory cleanup is auto-allowed and audited;
    other dangerous commands default to `confirm` behavior and prompt via
    `ctx.ui.select` (Allow once / Allow for this session / Block). Individual
@@ -279,6 +280,9 @@ Covered by unit tests:
 - Command matcher expands common shell wrappers (`bash -c`, `sudo bash -c`,
   `xargs`) and structural bypasses (`curl|bash`, base64 decode to shell,
   `find -delete`, `find -exec rm`) without LLM calls or subprocesses.
+- Pi credential-output commands are confirmed structurally across direct, common-wrapper,
+  environment-prefixed, and `npx` invocation forms; ordinary auth readiness
+  checks remain allowed.
 - AST matcher supports alternatives, leading flags, `flagIn` constraints,
   and `--flag=value` shorthand.
 - Target-org extraction prefers `-o` over `--target-org`, returns

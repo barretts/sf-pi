@@ -43,6 +43,7 @@ describe("bundled defaults", () => {
         "chown-recursive",
         "dd-of",
         "mkfs",
+        "pi-auth-credential-output",
         "sf-org-auth-show-access-token",
         "sf-org-auth-show-sfdx-auth-url",
         "sf-org-auth-show-user-password",
