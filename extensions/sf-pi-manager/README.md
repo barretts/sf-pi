@@ -268,7 +268,7 @@ via name-based (`sf-pi` / `jag-pi-extensions`) or path-based detection
 Stable Pi 0.x releases continue loading in forward-compatibility mode. Run
 `/sf-pi doctor runtime` for the audited/loadable ranges and PATH diagnostics;
 do not downgrade unless a concrete failure occurs. Older, prerelease, and Pi
-1.x runtimes remain blocked, with exact Pi 0.84.0 as the repair target.
+1.x runtimes remain blocked, with exact Pi 0.84.1 as the repair target.
 
 **Disabling an extension through the manager doesn't take effect:**
 Pi reads the package filter at startup. After a disable, the manager
