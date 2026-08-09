@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Changed
 
+- **Made the SF DevBar Slack footer adaptive and compact.** Healthy user-token connections now render only `Slack ✓ Connected`; identity, token type, and scope counts stay in `/sf-slack`. The footer adds a short qualifier only for partial grants, bot-token constraints, unknown scopes, unsupported token types, or authentication errors.
 - **Consolidated startup readiness into one-line SF Welcome rows.** SF DevBar no longer reserves permanent width for LSP state; SF Welcome now renders cache-first Apex, LWC, and Agent Script readiness from the existing shared sf-lsp health store. The Herdr startup status also stays on one line, with protocol/control identity retained in the on-demand text summary.
 - **Mediated Pi credential-output commands in SF Guardrail.** Model-issued `pi auth check --credentials`, `pi auth print-api-key`, and `pi auth print-bearer-token` calls now use the existing command confirmation and audit path across direct, common-wrapper, environment-prefixed, and `npx` forms; ordinary non-output auth readiness checks remain allowed.
 - **Cleared the open dependency and CodeQL security findings.** The lockfile now resolves `js-yaml` 4.3.1, `postcss` 8.5.26, and its required `nanoid` 3.3.17 patch; the AgentFabric parity test uses `Dirent` metadata instead of a separate path `stat` before reading files.

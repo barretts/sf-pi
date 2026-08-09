@@ -170,20 +170,17 @@ describe("renderBottomBarParts", () => {
     expect(left.indexOf("SFDX Project →")).toBeLessThan(left.indexOf("Example-Dev"));
   });
 
-  it("includes Slack status on the right", () => {
-    // sf-slack emits a pre-themed pill (icon + Slack + readiness label + handle
-    // + bracketed tokenType + scopes). The bottom bar is a passthrough for
-    // allowed statuses, so the test verifies the string made it through.
-    const pill = "💬 Slack ✓ Connected @handle [user] 14/14 known scopes";
+  it("passes the compact Slack status through on the right", () => {
+    // SF Slack owns the pre-themed adaptive pill. DevBar only places it.
+    const pill = "💬 Slack ✓ Connected";
     const extStatuses = new Map([["sf-slack-status", pill]]);
     const { right } = renderBottomBarParts(
       makeState({ extensionStatuses: extStatuses }),
       stubTheme,
     );
-    expect(right).toContain("✓ Connected");
-    expect(right).toContain("@handle");
-    expect(right).toContain("[user]");
-    expect(right).toContain("14/14 known scopes");
+
+    expect(right).toBe(pill);
+    expect(right).not.toMatch(/@|\[user\]|scope/i);
   });
 
   it("filters out non-allowed extension statuses (Pi core)", () => {

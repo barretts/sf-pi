@@ -102,7 +102,7 @@ import {
 import { openPreferencesPanel } from "./lib/preferences-panel.ts";
 import { renderStatsLines, resetStats, setStatsListener } from "./lib/stats.ts";
 import { readSlackRuntimeCache, writeSlackRuntimeCache } from "./lib/runtime-cache.ts";
-import { classifySlackStatus, slackStatusLabel } from "./lib/status.ts";
+import { classifySlackStatus, formatSlackFooterStatus } from "./lib/status.ts";
 import { clearSlackStatus, setSlackStatus } from "../../lib/common/slack-status/store.ts";
 import {
   openExtensionInManager,
@@ -214,14 +214,11 @@ export default function sfSlack(pi: ExtensionAPI) {
   // surfaced as a neutral partial-grant signal because many workspaces
   // intentionally approve only a subset of the app's requested scopes.
   let missingGrantedScopeCount = 0;
-  // Scope counts + token type fuel the sf-devbar Slack pill. Token type
-  // (user/bot/app/unknown) is decoded from the xox*- prefix so the pill
-  // can color-code risk. The detailed status keeps requested-scope coverage;
-  // the compact pill shows known-scope coverage (requested ∪ Slack-returned extras).
+  // Scope counts classify the shared readiness state; token type supplies the
+  // compact footer's capability qualifier. Identity and exact scope coverage
+  // stay in `/sf-slack` rather than consuming permanent footer width.
   let grantedScopeCount = 0;
   let requestedScopeCount = 0;
-  let knownGrantedScopeCount = 0;
-  let knownScopeCount = 0;
   let tokenType: SlackTokenType = "unknown";
   let widgetCtx: ExtensionContext | null = null;
   let widgetGeneration = 0;
@@ -333,8 +330,6 @@ export default function sfSlack(pi: ExtensionAPI) {
   ): void {
     missingGrantedScopeCount = missingRequestedScopeCount;
     grantedScopeCount = computeGrantedRequestedScopeCount(grantedScopes, requestedScopes);
-    knownGrantedScopeCount = grantedScopes?.size ?? 0;
-    knownScopeCount = grantedScopes ? grantedScopes.size + missingRequestedScopeCount : 0;
   }
 
   async function refreshSlackIdentityAndScopes(options: {
@@ -471,51 +466,17 @@ export default function sfSlack(pi: ExtensionAPI) {
       missingScopes: missingGrantedScopeCount > 0 ? missingGrantedScopeCount : undefined,
     });
 
+    const footerStatus = formatSlackFooterStatus({ icon, kind, tokenType }, t);
     switch (state) {
       case "loading":
-        ctx.ui.setStatus(WIDGET_KEY, t.fg("dim", `${icon} Slack: connecting…`));
+      case "connected":
+      case "error":
+        ctx.ui.setStatus(WIDGET_KEY, footerStatus ?? undefined);
         break;
-      case "connected": {
-        // Pill format (surfaced on sf-devbar's right side):
-        //   💬 Slack ✓ Connected @handle [user] 29/30 known scopes
-        //       └dim    └─success          └accent └─token-type    └─neutral known-scope coverage
-        //                                    color depends on
-        //                                    token risk:
-        //                                      success → xoxp- user
-        //                                      warning → xoxb- bot
-        //                                      error   → xoxa-/xapp-/?
-        //
-        // The explicit green `✓ Connected` label keeps auth/connectivity
-        // separate from scope coverage. A partial grant is often the normal
-        // workspace/app approval, not something re-auth can fix.
-        const handle = identity?.userName ? `@${identity.userName}` : "";
-        const tokenColor: "success" | "warning" | "error" =
-          tokenType === "user" ? "success" : tokenType === "bot" ? "warning" : "error";
-        const tokenBracket = t.fg(tokenColor, `[${tokenType}]`);
-        const scopeColor: "success" | "dim" =
-          knownScopeCount > 0 && knownGrantedScopeCount >= knownScopeCount ? "success" : "dim";
-        const scopeText =
-          knownScopeCount > 0 ? `${knownGrantedScopeCount}/${knownScopeCount} known scopes` : "";
-        const scopeSegment = scopeText ? ` ${t.fg(scopeColor, scopeText)}` : "";
-        const handleSegment = handle ? ` ${t.fg("accent", handle)}` : "";
-        const labelColor: "success" | "dim" =
-          kind === "ready" || kind === "partial-grant" ? "success" : "dim";
-        const pill =
-          `${icon} ${t.fg("dim", "Slack")} ${t.fg(labelColor, slackStatusLabel(kind))}` +
-          `${handleSegment} ${tokenBracket}${scopeSegment}`;
-        ctx.ui.setStatus(WIDGET_KEY, pill);
-        break;
-      }
       case "disconnected":
         // Optional integration: keep the devbar quiet until Slack is configured.
         // /sf-slack remains the explicit place to see setup guidance.
         ctx.ui.setStatus(WIDGET_KEY, undefined);
-        break;
-      case "error":
-        ctx.ui.setStatus(
-          WIDGET_KEY,
-          `${icon} ${t.fg("dim", "Slack")} ${t.fg("error", "✗ Auth error")}`,
-        );
         break;
     }
   }
@@ -539,8 +500,6 @@ export default function sfSlack(pi: ExtensionAPI) {
     missingGrantedScopeCount = 0;
     grantedScopeCount = 0;
     requestedScopeCount = 0;
-    knownGrantedScopeCount = 0;
-    knownScopeCount = 0;
     tokenType = "unknown";
     widgetCtx = ctx;
     widgetGeneration = generation;
@@ -647,8 +606,6 @@ export default function sfSlack(pi: ExtensionAPI) {
     missingGrantedScopeCount = 0;
     grantedScopeCount = 0;
     requestedScopeCount = 0;
-    knownGrantedScopeCount = 0;
-    knownScopeCount = 0;
     tokenType = "unknown";
     if (ctx.hasUI) {
       ctx.ui.setStatus(WIDGET_KEY, undefined);

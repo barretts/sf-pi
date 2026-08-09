@@ -46,8 +46,8 @@ Extension loads
             ├─ gateToolsFromGrantedScopes() → disable tools whose scopes Slack
             │                                did not grant, using the header
             │                                captured from auth.test
-            ├─ Set footer "Slack: ✓ Connected" with scope-grant coverage
-            │  (scope coverage is separate from auth/connectivity)
+            ├─ Set an adaptive compact footer (`Slack ✓ Connected` when healthy)
+            │  and add a short qualifier only for limited scopes or token constraints
             └─ fire-and-forget cache prewarm:
                ├─ users.list → pre-warm user cache
                └─ conversations.list → pre-warm channel cache
@@ -437,7 +437,9 @@ Team: T01XYZ789
 
 Cache sizes and gated-tool counts are intentionally **not** included because
 they drift turn-to-turn and would invalidate prompt cache on every call.
-Those metrics live in the footer and the research-activity widget instead.
+Exact identity, token type, and scope/capability detail lives in `/sf-slack`;
+the persistent footer stays compact, and research counts remain in the
+research-activity widget.
 
 The injected block is NOT displayed to the user (`display: false`) — only
 visible to the LLM.
@@ -475,17 +477,17 @@ returns full bodies regardless of the shared display profile.
 
 ## Behavior Matrix
 
-| Event/Trigger        | Condition                       | Result                                                                         |
-| -------------------- | ------------------------------- | ------------------------------------------------------------------------------ |
-| `session_start`      | token available                 | Register slack\* tools, detect identity, probe scopes, cache users, set footer |
-| `session_start`      | no token                        | Skip tool registration entirely, keep footer hidden                            |
-| `session_shutdown`   | —                               | Clear footer status                                                            |
-| `before_agent_start` | identity + at least one slack\* | Inject minimal workspace context (User + Team only)                            |
-| `before_agent_start` | no identity / no slack tools    | Skip injection                                                                 |
-| `/sf-slack`          | UI available                    | Open SF Slack in the SF Pi Manager                                             |
-| `/sf-slack`          | no UI                           | Show auth status                                                               |
-| `/sf-slack refresh`  | token resolves now              | Register tools if needed, re-probe scopes, refresh cache                       |
-| any tool call        | no auth                         | Return setup instructions (defensive; normally unreachable)                    |
+| Event/Trigger        | Condition                       | Result                                                                                          |
+| -------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `session_start`      | token available                 | Register slack\* tools, detect identity, probe scopes, cache users, set adaptive compact footer |
+| `session_start`      | no token                        | Skip tool registration entirely, keep footer hidden                                             |
+| `session_shutdown`   | —                               | Clear footer status                                                                             |
+| `before_agent_start` | identity + at least one slack\* | Inject minimal workspace context (User + Team only)                                             |
+| `before_agent_start` | no identity / no slack tools    | Skip injection                                                                                  |
+| `/sf-slack`          | UI available                    | Open SF Slack in the SF Pi Manager                                                              |
+| `/sf-slack`          | no UI                           | Show auth status                                                                                |
+| `/sf-slack refresh`  | token resolves now              | Register tools if needed, re-probe scopes, refresh cache                                        |
+| any tool call        | no auth                         | Return setup instructions (defensive; normally unreachable)                                     |
 
 ## Environment Variables
 
@@ -597,6 +599,7 @@ All formatters and helpers are pure functions — no network calls in tests:
 - `render-helpers.test.ts` — collapsed preview clipping + OSC 8 permalinks
 - `preferences-stats.test.ts` — preferences sanitize + stats counters
 - `scope-probe.test.ts` — scope probe module export
+- `status.test.ts` — readiness classification and adaptive compact footer states
 - `resolve.test.ts` — resolver helper behavior
 - `search-plan.test.ts` — search operator planner behavior
 
@@ -609,13 +612,16 @@ No token was resolved at `session_start`, or the extension is disabled. Run
 `/sf-slack connect`, submit the prefilled `/login sf-slack`, and then run
 `/sf-slack refresh`. For automation, set `SLACK_USER_TOKEN` before starting Pi.
 
-**Footer shows `✓ Connected` with fewer known scopes than expected:**
-The footer counts known scopes: the union of scopes `sf-slack` requested and
-additional scopes Slack returned for the token. A partial count usually means
-Slack did not grant one or more requested scopes. `/sf-slack` shows which
-capabilities are available and which requested scopes are not included in the
-current grant; re-auth only adds scopes if those scopes are approved for your
-app/workspace.
+**Footer shows `✓ Connected · limited`:**
+Slack authenticated successfully, but one or more requested scopes were not
+granted. The compact footer intentionally omits identity and scope counts.
+`/sf-slack` shows the exact grant, available capabilities, and gated tools;
+re-auth only adds scopes that are approved for the app/workspace.
+
+**Footer shows `· bot token` or `! Unsupported token`:**
+Authentication can succeed with a non-user token, but user-context writes such
+as send, schedule, and some canvas actions require a user token. Run
+`/sf-slack` for the complete credential and capability report.
 
 **`slack_send action=dm` says `im:write` is missing:**
 `im:write` is only needed to open a new 1:1 DM. If the token has DM search

@@ -165,7 +165,8 @@ Jump to an extension's Troubleshooting section to see the full fix. This index i
 **[SF Slack](./extensions/sf-slack.md#troubleshooting)**
 
 - No Slack footer pill appears and no tools are available
-- Footer shows `✓ Connected` with fewer known scopes than expected
+- Footer shows `✓ Connected · limited`
+- Footer shows `· bot token` or `! Unsupported token`
 - `slack_send action=dm` says `im:write` is missing
 - A Slack user or channel reference resolves to the wrong target
 - `slack_canvas read` says "canvas not found"
