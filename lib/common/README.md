@@ -31,7 +31,7 @@ code lives in `extensions/<id>/lib/`.
 | `pi-paths.ts`                                 | all extensions that touch settings                                 | Global + project `settings.json` paths, pi home dir resolution                               |
 | `state-store.ts`                              | extensions that persist per-user/project state                     | Shared `createStateStore<T>()`: scoped paths, atomic write, schema versioning, safe defaults |
 | `exec-adapter.ts`                             | `sf-environment` consumers                                         | Adapter from `pi.exec()` to the `ExecFn` type used by `sf-environment/detect.ts`             |
-| `sf-conn/connection.ts`                       | `sf-agentscript`, `sf-data360`, `sf-environment`                   | Cached `@salesforce/core` Org / Connection lookup (replaces `sf api request rest`)           |
+| `sf-conn/connection.ts`                       | `sf-agentscript`, `sf-data360`, `sf-environment`                   | Cached `@salesforce/core` Org / Connection lookup with targeted explicit-refresh eviction    |
 | `sf-conn/request.ts`                          | `sf-data360`, `sf-data-explorer`                                   | `connRequest` thin wrapper that turns HTTP errors into `{ status, body }` data               |
 | `sf-rest/path.ts`                             | `sf-data360`, `sf-data-explorer`                                   | Shared `/services/data/vXX.X` path + query-string helpers                                    |
 | `sf-rest/target-org.ts`                       | `sf-data360`, `sf-data-explorer`                                   | Shared target-org, API-version, and org-type resolution for REST calls                       |
@@ -59,12 +59,12 @@ code lives in `extensions/<id>/lib/`.
 | `catalog-state/recommendations-manifest.ts`   | `sf-welcome`, `sf-pi-manager`                                      | Load + validate `catalog/recommendations.json` and resolve bundles                           |
 | `catalog-state/recommendations-state.ts`      | `sf-welcome`, `sf-pi-manager`                                      | Per-user recommendation decisions + ack state file                                           |
 | `catalog-state/whats-new.ts`                  | `sf-welcome`, orchestrator                                         | Parse the pi-coding-agent CHANGELOG into the splash-ready bullet payload                     |
-| `sf-environment/detect.ts`                    | shared runtime                                                     | Pure detection logic — runs SF CLI, parses config, returns a snapshot                        |
-| `sf-environment/shared-runtime.ts`            | `sf-welcome`, `sf-devbar`, others                                  | In-memory + persisted cache so startup runs SF CLI **once** per session                      |
+| `sf-environment/detect.ts`                    | shared runtime                                                     | Detection plus configured/resolved/SDK-fallback Connection API provenance                    |
+| `sf-environment/shared-runtime.ts`            | `sf-welcome`, `sf-devbar`, others                                  | Cache-first snapshots plus serialized deep refresh for explicit user actions                 |
 | `sf-environment/display-fallback.ts`          | `sf-devbar`, future compact org status surfaces                    | Shared Org Status Fallback Boundary / stale display selection                                |
 | `sf-environment/persisted-cache.ts`           | shared runtime                                                     | Disk persistence for the last-known snapshot                                                 |
 | `sf-environment/format-agent-context.ts`      | `sf-slack`, `sf-devbar`                                            | Shared `<sf_environment>` context-block formatter                                            |
-| `sf-environment/types.ts`                     | all SF-aware extensions                                            | `SfEnvironment` snapshot shape                                                               |
+| `sf-environment/types.ts`                     | all SF-aware extensions                                            | `SfEnvironment` snapshot shape, including optional Connection API provenance                 |
 | `test-fixtures.ts`                            | tests across extensions                                            | Shared factories for Pi context stubs + common fixtures                                      |
 | `tests/`                                      | —                                                                  | Tests for the shared modules themselves                                                      |
 

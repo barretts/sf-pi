@@ -67,8 +67,12 @@ export type ConfigInfo = {
   hasTargetOrg: boolean;
   /** Org alias or username from config. */
   targetOrg?: string;
-  /** Where the config is set: Local (project) or Global. */
+  /** Where the target-org config is set: Local (project) or Global. */
   location?: "Local" | "Global";
+  /** Explicit org-api-version override, when configured. */
+  apiVersion?: string;
+  /** Where the org-api-version override came from. */
+  apiVersionLocation?: "Local" | "Global" | "Environment";
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -76,6 +80,9 @@ export type ConfigInfo = {
 // -------------------------------------------------------------------------------------------------
 
 export type OrgType = "sandbox" | "scratch" | "developer" | "production" | "trial" | "unknown";
+
+/** Provenance of the effective API version selected on the SDK Connection. */
+export type ConnectionApiVersionSource = "configured" | "resolved" | "sdk-fallback" | "unknown";
 
 export type OrgInfo = {
   /** Whether we successfully retrieved org details. */
@@ -86,7 +93,10 @@ export type OrgInfo = {
   instanceUrl?: string;
   orgType: OrgType;
   connectedStatus?: string;
+  /** Effective API version selected for SDK requests; not the org's release identity. */
   apiVersion?: string;
+  /** How the effective Connection API version was selected. */
+  apiVersionSource?: ConnectionApiVersionSource;
   /** Cached Organization.NamespacePrefix when @salesforce/core has populated it. */
   namespacePrefix?: string | null;
   /** Cached Organization.OrganizationType / edition when available. */

@@ -48,8 +48,8 @@ export const DEVBAR_COLOR_DESCRIPTORS: readonly DevbarColorDescriptor[] = [
   },
   {
     key: "orgWarning",
-    label: "Org warning",
-    description: "No-org and undetected-org footer warning accent.",
+    label: "Missing org warning",
+    description: "Footer accent when an SFDX project has no detected/default org.",
     kind: "color",
   },
   {

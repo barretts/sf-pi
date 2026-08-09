@@ -39,7 +39,7 @@ export function formatAgentContext(env: SfEnvironment): string | undefined {
   // Project
   if (env.project.detected) {
     const name = env.project.name ?? "unknown";
-    const api = env.project.sourceApiVersion ? ` (API ${env.project.sourceApiVersion})` : "";
+    const api = env.project.sourceApiVersion ? ` (Source API ${env.project.sourceApiVersion})` : "";
     lines.push(`Project: ${name}${api}`);
 
     if (env.project.namespace) {
@@ -57,7 +57,11 @@ export function formatAgentContext(env: SfEnvironment): string | undefined {
     const status = env.org.connectedStatus ?? "unknown";
     lines.push(`Default org: ${orgLabel}${orgType} — ${status}`);
 
-    if (env.org.apiVersion) lines.push(`Org API version: ${env.org.apiVersion}`);
+    if (env.org.apiVersion) {
+      lines.push(
+        `Connection API version: ${formatConnectionApiVersion(env.org.apiVersion, env.org.apiVersionSource)}`,
+      );
+    }
   } else if (env.config.hasTargetOrg) {
     lines.push(`Default org: ${env.config.targetOrg} (⚠ unable to connect)`);
   } else {
@@ -94,7 +98,7 @@ export function formatDetailedStatus(env: SfEnvironment): string {
   if (env.project.detected) {
     lines.push(`✅ Project: ${env.project.name ?? "detected"}`);
     if (env.project.sourceApiVersion) {
-      lines.push(`   Source API: ${env.project.sourceApiVersion}`);
+      lines.push(`   Project Source API: ${env.project.sourceApiVersion}`);
     }
     if (env.project.namespace) {
       lines.push(`   Namespace: ${env.project.namespace}`);
@@ -136,7 +140,14 @@ export function formatDetailedStatus(env: SfEnvironment): string {
     lines.push(`✅ Org: ${env.org.alias ?? env.org.username ?? "connected"}${orgType}`);
     lines.push(`   Status: ${env.org.connectedStatus ?? "unknown"}`);
     if (env.org.instanceUrl) lines.push(`   Instance: ${env.org.instanceUrl}`);
-    if (env.org.apiVersion) lines.push(`   API version: ${env.org.apiVersion}`);
+    if (env.org.apiVersion) {
+      lines.push(
+        `   Connection API: ${formatConnectionApiVersion(env.org.apiVersion, env.org.apiVersionSource)}`,
+      );
+      if (env.org.apiVersionSource === "sdk-fallback") {
+        lines.push("   Maximum org API: not verified");
+      }
+    }
     if (env.org.orgId) lines.push(`   Org ID: ${env.org.orgId}`);
     if (env.org.username) lines.push(`   Username: ${env.org.username}`);
 
@@ -162,4 +173,23 @@ export function formatDetailedStatus(env: SfEnvironment): string {
   lines.push(`Detected ${ago}s ago. Run /sf-org refresh to re-detect.`);
 
   return lines.join("\n");
+}
+
+function formatConnectionApiVersion(
+  version: string,
+  source: SfEnvironment["org"]["apiVersionSource"],
+): string {
+  switch (source) {
+    case "configured":
+      return `${version} (configured)`;
+    case "resolved":
+      return `${version} (auto-resolved)`;
+    case "sdk-fallback":
+      return `${version} (unverified SDK fallback)`;
+    case "unknown":
+      return `${version} (source unknown)`;
+    default:
+      // Persisted snapshots created before provenance was added remain readable.
+      return version;
+  }
 }

@@ -72,6 +72,52 @@ describe("orgFromAlias", () => {
     expect(mod.cacheSize()).toBe(0);
   });
 
+  test("fresh lookup replaces only the requested alias", async () => {
+    createMock
+      .mockResolvedValueOnce({ id: "a-old" })
+      .mockResolvedValueOnce({ id: "b" })
+      .mockResolvedValueOnce({ id: "a-fresh" });
+
+    const mod = await import("../sf-conn/connection.ts");
+    mod.clearConnectionCache();
+
+    await mod.orgFromAlias("a");
+    const b = await mod.orgFromAlias("b");
+    const freshA = await mod.orgFromAlias("a", { fresh: true });
+    const cachedB = await mod.orgFromAlias("b");
+
+    expect(freshA).toEqual({ id: "a-fresh" });
+    expect(cachedB).toBe(b);
+    expect(createMock).toHaveBeenCalledTimes(3);
+    expect(mod.cacheSize()).toBe(2);
+  });
+
+  test("a superseded rejection cannot evict its fresh replacement", async () => {
+    let rejectOld: ((error: Error) => void) | undefined;
+    createMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectOld = reject;
+          }),
+      )
+      .mockResolvedValueOnce({ id: "fresh" });
+
+    const mod = await import("../sf-conn/connection.ts");
+    mod.clearConnectionCache();
+
+    const old = mod.orgFromAlias("a").catch((error: unknown) => error);
+    await vi.waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    const fresh = await mod.orgFromAlias("a", { fresh: true });
+    rejectOld?.(new Error("old failed"));
+    await old;
+    const cached = await mod.orgFromAlias("a");
+
+    expect(cached).toBe(fresh);
+    expect(createMock).toHaveBeenCalledTimes(2);
+    expect(mod.cacheSize()).toBe(1);
+  });
+
   test("a failing Org.create does NOT poison the cache", async () => {
     createMock.mockRejectedValueOnce(new Error("auth expired")).mockResolvedValueOnce({ id: "ok" });
 

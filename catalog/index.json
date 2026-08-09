@@ -477,7 +477,7 @@
     "entry": "extensions/sf-devbar/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 2377
+    "srcLoc": 2383
   },
   {
     "id": "sf-docs",

@@ -261,10 +261,13 @@ describe("detectConfig", () => {
     configGetInfoMock.mockReturnValue({ value: undefined });
     const result = await detectConfig();
     expect(result.hasTargetOrg).toBe(false);
+    expect(result.apiVersion).toBeUndefined();
   });
 
   it("extracts a Global target-org", async () => {
-    configGetInfoMock.mockReturnValue({ value: "MyOrg", location: "Global" });
+    configGetInfoMock.mockImplementation((key) =>
+      key === "target-org" ? { value: "MyOrg", location: "Global" } : { value: undefined },
+    );
     const result = await detectConfig();
     expect(result.hasTargetOrg).toBe(true);
     expect(result.targetOrg).toBe("MyOrg");
@@ -272,16 +275,33 @@ describe("detectConfig", () => {
   });
 
   it("extracts a Local target-org", async () => {
-    configGetInfoMock.mockReturnValue({ value: "LocalOrg", location: "Local" });
+    configGetInfoMock.mockImplementation((key) =>
+      key === "target-org" ? { value: "LocalOrg", location: "Local" } : { value: undefined },
+    );
     const result = await detectConfig();
     expect(result.targetOrg).toBe("LocalOrg");
     expect(result.location).toBe("Local");
   });
 
-  it("collapses Environment location to Global for the public shape", async () => {
-    configGetInfoMock.mockReturnValue({ value: "EnvOrg", location: "Environment" });
+  it("collapses Environment location to Global for the public target-org shape", async () => {
+    configGetInfoMock.mockImplementation((key) =>
+      key === "target-org" ? { value: "EnvOrg", location: "Environment" } : { value: undefined },
+    );
     const result = await detectConfig();
     expect(result.location).toBe("Global");
+  });
+
+  it("captures an explicit org-api-version independently from target-org", async () => {
+    configGetInfoMock.mockImplementation((key) => {
+      if (key === "target-org") return { value: "MyOrg", location: "Global" };
+      if (key === "org-api-version") return { value: "50.0", location: "Environment" };
+      return { value: undefined };
+    });
+
+    const result = await detectConfig();
+
+    expect(result.apiVersion).toBe("50.0");
+    expect(result.apiVersionLocation).toBe("Environment");
   });
 
   it("returns hasTargetOrg=false when ConfigAggregator throws", async () => {
@@ -368,6 +388,7 @@ describe("detectOrg", () => {
     expect(result.alias).toBe("TestOrg");
     expect(result.orgType).toBe("sandbox");
     expect(result.apiVersion).toBe("66.0");
+    expect(result.apiVersionSource).toBe("unknown");
     expect(result.connectedStatus).toBe("Connected");
     expect(result.orgId).toBe("00D000000000001");
     expect(result.namespacePrefix).toBe("pkg");
@@ -423,7 +444,9 @@ describe("detectEnvironment", () => {
     const exec = mockExec({
       "sf --version": { stdout: "@salesforce/cli/2.130.9 darwin-arm64\n" },
     });
-    configGetInfoMock.mockReturnValue({ value: "TestOrg", location: "Global" });
+    configGetInfoMock.mockImplementation((key) =>
+      key === "target-org" ? { value: "TestOrg", location: "Global" } : { value: undefined },
+    );
     orgCreateMock.mockResolvedValueOnce(
       fakeOrg({
         authFields: {
@@ -447,6 +470,90 @@ describe("detectEnvironment", () => {
     expect(env.config.targetOrg).toBe("TestOrg");
     expect(env.org.detected).toBe(true);
     expect(env.org.orgType).toBe("sandbox");
+    expect(env.org.apiVersionSource).toBe("resolved");
+  });
+
+  it("keeps an explicitly configured API 50 connection valid", async () => {
+    const exec = mockExec({ "sf --version": { stdout: "@salesforce/cli/2.130.9\n" } });
+    configGetInfoMock.mockImplementation((key) => {
+      if (key === "target-org") return { value: "PinnedOrg", location: "Global" };
+      if (key === "org-api-version") return { value: "50.0", location: "Global" };
+      return { value: undefined };
+    });
+    orgCreateMock.mockResolvedValueOnce(
+      fakeOrg({ authFields: { alias: "PinnedOrg" }, apiVersion: "50.0" }),
+    );
+
+    const env = await detectEnvironment(exec, createTempDir());
+
+    expect(env.org.apiVersion).toBe("50.0");
+    expect(env.org.apiVersionSource).toBe("configured");
+  });
+
+  it("classifies unexplained JSforce API 50 as an unverified SDK fallback", async () => {
+    const exec = mockExec({ "sf --version": { stdout: "@salesforce/cli/2.130.9\n" } });
+    configGetInfoMock.mockImplementation((key) =>
+      key === "target-org" ? { value: "FallbackOrg", location: "Global" } : { value: undefined },
+    );
+    orgCreateMock.mockResolvedValueOnce(
+      fakeOrg({ authFields: { alias: "FallbackOrg" }, apiVersion: "50.0" }),
+    );
+
+    const env = await detectEnvironment(exec, createTempDir());
+
+    expect(env.project.detected).toBe(false);
+    expect(env.org.apiVersion).toBe("50.0");
+    expect(env.org.apiVersionSource).toBe("sdk-fallback");
+  });
+
+  it("treats a fresh SDK API-version cache as resolved even when it is API 50", async () => {
+    const exec = mockExec({ "sf --version": { stdout: "@salesforce/cli/2.130.9\n" } });
+    configGetInfoMock.mockImplementation((key) =>
+      key === "target-org" ? { value: "CachedOrg", location: "Global" } : { value: undefined },
+    );
+    orgCreateMock.mockResolvedValueOnce(
+      fakeOrg({
+        authFields: {
+          alias: "CachedOrg",
+          instanceApiVersion: "50.0",
+          instanceApiVersionLastRetrieved: new Date().toLocaleString(),
+        },
+        apiVersion: "50.0",
+      }),
+    );
+
+    const env = await detectEnvironment(exec, createTempDir());
+
+    expect(env.org.apiVersion).toBe("50.0");
+    expect(env.org.apiVersionSource).toBe("resolved");
+  });
+
+  it("does not trust SDK cache fields when Salesforce Core cache use is disabled", async () => {
+    const previous = process.env.SFDX_IGNORE_API_VERSION_CACHE;
+    process.env.SFDX_IGNORE_API_VERSION_CACHE = "true";
+    try {
+      const exec = mockExec({ "sf --version": { stdout: "@salesforce/cli/2.130.9\n" } });
+      configGetInfoMock.mockImplementation((key) =>
+        key === "target-org" ? { value: "FallbackOrg", location: "Global" } : { value: undefined },
+      );
+      orgCreateMock.mockResolvedValueOnce(
+        fakeOrg({
+          authFields: {
+            alias: "FallbackOrg",
+            instanceApiVersion: "50.0",
+            instanceApiVersionLastRetrieved: new Date().toLocaleString(),
+          },
+          apiVersion: "50.0",
+        }),
+      );
+
+      const env = await detectEnvironment(exec, createTempDir());
+
+      expect(env.org.apiVersionSource).toBe("sdk-fallback");
+    } finally {
+      if (previous === undefined) delete process.env.SFDX_IGNORE_API_VERSION_CACHE;
+      else process.env.SFDX_IGNORE_API_VERSION_CACHE = previous;
+    }
   });
 
   it("skips org display when no target-org configured", async () => {

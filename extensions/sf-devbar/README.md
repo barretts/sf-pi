@@ -102,41 +102,55 @@ as results arrive:
 
 ## Commands
 
-| Command               | Description                                                    |
-| --------------------- | -------------------------------------------------------------- |
-| `/sf-devbar`          | Open SF DevBar in SF Pi Manager; show status in no-UI mode     |
-| `/sf-devbar status`   | Show current org/environment details                           |
-| `/sf-devbar toggle`   | Toggle bars on/off                                             |
-| `/sf-devbar refresh`  | Force Salesforce environment re-detection and settings refresh |
-| `/sf-devbar settings` | Open DevBar color settings in SF Pi Manager                    |
-| `/sf-devbar help`     | Show help                                                      |
-| `/sf-org`             | Show detected Salesforce org status                            |
-| `Ctrl+Shift+B`        | Keyboard toggle                                                |
-| `pi --no-devbar`      | Launch without status bars                                     |
+| Command               | Description                                                  |
+| --------------------- | ------------------------------------------------------------ |
+| `/sf-devbar`          | Open SF DevBar in SF Pi Manager; show status in no-UI mode   |
+| `/sf-devbar status`   | Show current org/environment details                         |
+| `/sf-devbar toggle`   | Toggle bars on/off                                           |
+| `/sf-devbar refresh`  | Recreate the target connection and re-detect the environment |
+| `/sf-devbar settings` | Open DevBar color settings in SF Pi Manager                  |
+| `/sf-devbar help`     | Show help                                                    |
+| `/sf-org`             | Show detected Salesforce org status                          |
+| `/sf-org refresh`     | Recreate the target connection and re-detect org status      |
+| `Ctrl+Shift+B`        | Keyboard toggle                                              |
+| `pi --no-devbar`      | Launch without status bars                                   |
 
 ## Behavior Matrix
 
-| Event/Trigger         | Condition        | Result                                                    |
-| --------------------- | ---------------- | --------------------------------------------------------- |
-| session_start         | UI available     | Render bars with cached data                              |
-| session_start         | `--no-devbar`    | Stay silent                                               |
-| model_select          | model changes    | Repaint model/gateway badge                               |
-| session_info_changed  | session renamed  | Repaint bounded Pi session-name segment                   |
-| thinking_level_select | thinking changes | Repaint rainbow thinking badge                            |
-| turn_end / agent_end  | —                | Refresh context, footer, and git state                    |
-| session_shutdown      | —                | Clear custom widget/footer                                |
-| `/sf-devbar`          | UI available     | Open SF Pi Manager detail page for SF DevBar              |
-| `/sf-devbar`          | no UI            | Show current status                                       |
-| `/sf-devbar toggle`   | —                | Toggle enabled state                                      |
-| `/sf-devbar refresh`  | —                | Force environment re-detection and color settings refresh |
-| `/sf-devbar settings` | UI available     | Open SF Pi Manager settings for DevBar colors             |
-| `/sf-org`             | —                | Show Salesforce environment summary                       |
+| Event/Trigger         | Condition        | Result                                                   |
+| --------------------- | ---------------- | -------------------------------------------------------- |
+| session_start         | UI available     | Render bars with cached data                             |
+| session_start         | `--no-devbar`    | Stay silent                                              |
+| model_select          | model changes    | Repaint model/gateway badge                              |
+| session_info_changed  | session renamed  | Repaint bounded Pi session-name segment                  |
+| thinking_level_select | thinking changes | Repaint rainbow thinking badge                           |
+| turn_end / agent_end  | —                | Refresh context, footer, and git state                   |
+| session_shutdown      | —                | Clear custom widget/footer                               |
+| `/sf-devbar`          | UI available     | Open SF Pi Manager detail page for SF DevBar             |
+| `/sf-devbar`          | no UI            | Show current status                                      |
+| `/sf-devbar toggle`   | —                | Toggle enabled state                                     |
+| `/sf-devbar refresh`  | —                | Recreate the target connection and re-detect environment |
+| `/sf-devbar settings` | UI available     | Open SF Pi Manager settings for DevBar colors            |
+| `/sf-org`             | —                | Show Salesforce environment summary                      |
+| `/sf-org refresh`     | —                | Recreate the target connection and re-detect org status  |
+
+## API Version Status
+
+`/sf-org` keeps project and connection versions distinct:
+
+- **Project Source API** comes from `sfdx-project.json` and describes source/metadata compatibility.
+- **Connection API** is the version selected by the Salesforce SDK for API requests.
+
+An intentional `org-api-version` override remains valid and is labeled `configured`. When no override or fresh SDK version cache explains JSforce's built-in `50.0` default, SF Pi labels it `unverified SDK fallback`; it does not imply that the org itself runs an old release. Explicit refresh actions recreate only the resolved target-org connection before retrying detection. Background startup refreshes remain cache-first and non-blocking.
 
 ## Color Preferences
 
 DevBar colors are configurable from **SF Pi Manager → SF DevBar → Settings**
-or directly with `/sf-devbar settings` in TUI mode. Settings are saved in
-Pi's native settings files under `sfPi.devbar.colors`.
+or directly with `/sf-devbar settings` in TUI mode. The panel is explicitly
+labeled **Color Settings** and shows the selected token's rendering purpose;
+for example, **Missing org warning** is a color used only when an SFDX project
+has no detected/default org. Settings are saved in Pi's native settings files
+under `sfPi.devbar.colors`.
 
 Project settings override global settings per field; omitted fields inherit
 from the next source and ultimately from the classic DevBar defaults. Invalid

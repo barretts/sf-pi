@@ -49,6 +49,7 @@ import { shouldInjectOnce } from "../../lib/common/session/inject-once.ts";
 import {
   getCachedSfEnvironment,
   getSharedSfEnvironment,
+  refreshSharedSfEnvironment,
   bindPiForSessionPersistence,
   restoreFromSessionEntries,
 } from "../../lib/common/sf-environment/shared-runtime.ts";
@@ -684,7 +685,9 @@ export default function sfDevBar(pi: ExtensionAPI) {
       ctx.ui.setStatus(`${COMMAND_NAME}-command`, "SF DevBar: detecting Salesforce environment…");
       try {
         refreshDevbarSettings(ctx.cwd);
-        env = await getSharedSfEnvironment(exec, ctx.cwd, force ? { force: true } : undefined);
+        env = force
+          ? await refreshSharedSfEnvironment(exec, ctx.cwd)
+          : await getSharedSfEnvironment(exec, ctx.cwd);
         refreshDisplayOrgEnvironment(ctx);
         updateTitle(ctx);
         updateTopBar(ctx);
@@ -903,7 +906,7 @@ export default function sfDevBar(pi: ExtensionAPI) {
     if (action === "refresh") {
       ctx.ui.setStatus("sf-org-command", "Detecting Salesforce environment…");
       try {
-        env = await getSharedSfEnvironment(exec, ctx.cwd, { force: true });
+        env = await refreshSharedSfEnvironment(exec, ctx.cwd);
         refreshDisplayOrgEnvironment(ctx);
         updateTitle(ctx);
         updateTopBar(ctx);

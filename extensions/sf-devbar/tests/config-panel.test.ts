@@ -135,6 +135,19 @@ describe("DevBar config panel", () => {
     expect(rendered).toContain("Invalid color");
   });
 
+  it("labels the panel as color settings and explains the missing-org warning color", () => {
+    const cwd = makeTempDir("devbar-config-panel-");
+    const panel = makePanel(cwd);
+    const orgWarningIndex = DEVBAR_COLOR_DESCRIPTORS.findIndex((item) => item.key === "orgWarning");
+    for (let i = 0; i < orgWarningIndex; i++) panel.handleInput("down");
+
+    const rendered = panel.renderContent(100).join("\n");
+
+    expect(rendered).toContain("SF Pi › SF DevBar › Color Settings");
+    expect(rendered).toContain("Missing org warning");
+    expect(rendered).toContain("Footer accent when an SFDX project has no detected/default org.");
+  });
+
   it("cancels the active field edit with escape without leaving settings", () => {
     const cwd = makeTempDir("devbar-config-panel-");
     let result: unknown;
@@ -148,7 +161,7 @@ describe("DevBar config panel", () => {
 
     const rendered = panel.renderContent(100).join("\n");
     expect(result).toBeUndefined();
-    expect(rendered).toContain("SF Pi › SF DevBar › Settings");
+    expect(rendered).toContain("SF Pi › SF DevBar › Color Settings");
     expect(rendered).not.toContain("Edit Folder path");
     expect(rendered).not.toContain("#abc");
   });

@@ -48,6 +48,8 @@ const ENTRY_TYPE = "sf-environment";
 interface CacheEntry {
   value?: SfEnvironment;
   inFlight?: Promise<SfEnvironment>;
+  refreshInFlight?: Promise<SfEnvironment>;
+  generation?: number;
 }
 
 const cache = new Map<string, CacheEntry>();
@@ -108,27 +110,73 @@ export async function getSharedSfEnvironment(
     }
   }
 
-  const inFlight = detectEnvironment(exec, cwd)
-    .then((env) => {
-      entry.value = env;
-      entry.inFlight = undefined;
+  return startDetection(exec, cwd, entry);
+}
 
-      // Persist to disk for cross-session warm starts
+/**
+ * Perform a user-requested deep refresh.
+ *
+ * Unlike `{ force: true }`, which only bypasses the environment snapshot for
+ * background cache refreshes, this path waits for same-cwd detection to settle
+ * and recreates the resolved target Org/Connection. Concurrent explicit
+ * refreshes share one replacement run.
+ */
+export async function refreshSharedSfEnvironment(
+  exec: SharedExecFn,
+  cwd: string,
+): Promise<SfEnvironment> {
+  const entry = getOrCreateEntry(cwd);
+  if (entry.refreshInFlight) return entry.refreshInFlight;
+
+  const refresh = (async () => {
+    const previousDetection = entry.inFlight;
+    if (previousDetection) {
       try {
-        writePersistedSfEnvironment(cwd, env);
+        await previousDetection;
       } catch {
-        // Cache persistence is best-effort. Keep the fresh in-memory result.
+        // A failed prior detection must not prevent the explicit retry.
       }
+    }
+    return startDetection(exec, cwd, entry, { freshOrgConnection: true });
+  })();
 
-      // Persist to session entries for branching/resume support
-      if (boundPi) {
-        boundPi.appendEntry(ENTRY_TYPE, { env });
+  entry.refreshInFlight = refresh;
+  try {
+    return await refresh;
+  } finally {
+    if (entry.refreshInFlight === refresh) entry.refreshInFlight = undefined;
+  }
+}
+
+function startDetection(
+  exec: SharedExecFn,
+  cwd: string,
+  entry: CacheEntry,
+  options: { freshOrgConnection?: boolean } = {},
+): Promise<SfEnvironment> {
+  const generation = (entry.generation ?? 0) + 1;
+  entry.generation = generation;
+
+  const inFlight = detectEnvironment(exec, cwd, options)
+    .then((env) => {
+      if (entry.generation === generation) {
+        entry.value = env;
+
+        // Persist to disk for cross-session warm starts.
+        try {
+          writePersistedSfEnvironment(cwd, env);
+        } catch {
+          // Cache persistence is best-effort. Keep the fresh in-memory result.
+        }
+
+        // Persist to session entries for branching/resume support.
+        if (boundPi) boundPi.appendEntry(ENTRY_TYPE, { env });
       }
-
+      if (entry.inFlight === inFlight) entry.inFlight = undefined;
       return env;
     })
     .catch((error) => {
-      entry.inFlight = undefined;
+      if (entry.inFlight === inFlight) entry.inFlight = undefined;
       throw error;
     });
 

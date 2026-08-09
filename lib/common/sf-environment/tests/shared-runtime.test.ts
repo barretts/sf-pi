@@ -25,6 +25,7 @@ import {
   getCachedSfEnvironment,
   getSharedSfEnvironment,
   peekSharedSfEnvironment,
+  refreshSharedSfEnvironment,
   type SharedExecFn,
 } from "../shared-runtime.ts";
 import { clearPersistedSfEnvironment } from "../persisted-cache.ts";
@@ -48,6 +49,15 @@ function createTempDir(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "sf-org-shared-"));
   tempDirs.push(dir);
   return dir;
+}
+
+function fakeOrg(alias: string, apiVersion: string) {
+  const conn = {
+    getAuthInfoFields: () => ({ alias }),
+    instanceUrl: "https://example.sandbox.my.salesforce.com",
+    getApiVersion: () => apiVersion,
+  };
+  return { getConnection: () => conn };
 }
 
 function mockExec(
@@ -171,6 +181,69 @@ describe("getSharedSfEnvironment", () => {
 
     await Promise.all([first, second]);
     expect(calls).toEqual(["sf --version"]);
+  });
+
+  it("explicit refresh replaces the cached Org connection for the resolved alias", async () => {
+    process.env.HOME = createTempDir();
+    const cwd = createTempDir();
+    const exec = mockExec({ "sf --version": { stdout: "@salesforce/cli/2.130.9\n" } });
+    configGetInfoMock.mockImplementation((key) =>
+      key === "target-org" ? { value: "RefreshOrg", location: "Global" } : { value: undefined },
+    );
+    orgCreateMock
+      .mockResolvedValueOnce(fakeOrg("RefreshOrg", "50.0"))
+      .mockResolvedValueOnce(fakeOrg("RefreshOrg", "67.0"));
+
+    const first = await getSharedSfEnvironment(exec, cwd, { force: true });
+    const refreshed = await refreshSharedSfEnvironment(exec, cwd);
+
+    expect(first.org.apiVersion).toBe("50.0");
+    expect(refreshed.org.apiVersion).toBe("67.0");
+    expect(orgCreateMock).toHaveBeenCalledTimes(2);
+    expect(peekSharedSfEnvironment(cwd)).toEqual(refreshed);
+  });
+
+  it("coalesces concurrent explicit refresh requests", async () => {
+    process.env.HOME = createTempDir();
+    const cwd = createTempDir();
+    const exec = mockExec({ "sf --version": { stdout: "@salesforce/cli/2.130.9\n" } });
+    configGetInfoMock.mockImplementation((key) =>
+      key === "target-org" ? { value: "RefreshOrg", location: "Global" } : { value: undefined },
+    );
+    orgCreateMock
+      .mockResolvedValueOnce(fakeOrg("RefreshOrg", "50.0"))
+      .mockResolvedValueOnce(fakeOrg("RefreshOrg", "67.0"));
+
+    await getSharedSfEnvironment(exec, cwd, { force: true });
+    const [first, second] = await Promise.all([
+      refreshSharedSfEnvironment(exec, cwd),
+      refreshSharedSfEnvironment(exec, cwd),
+    ]);
+
+    expect(first).toEqual(second);
+    expect(first.org.apiVersion).toBe("67.0");
+    expect(orgCreateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("explicit refresh waits for an in-flight detection, then starts a fresh one", async () => {
+    process.env.HOME = createTempDir();
+    const cwd = createTempDir();
+    const exec = mockExec({ "sf --version": { stdout: "@salesforce/cli/2.130.9\n" } }, [], 5);
+    configGetInfoMock.mockImplementation((key) =>
+      key === "target-org" ? { value: "RefreshOrg", location: "Global" } : { value: undefined },
+    );
+    orgCreateMock
+      .mockResolvedValueOnce(fakeOrg("RefreshOrg", "50.0"))
+      .mockResolvedValueOnce(fakeOrg("RefreshOrg", "67.0"));
+
+    const initial = getSharedSfEnvironment(exec, cwd, { force: true });
+    const refreshed = refreshSharedSfEnvironment(exec, cwd);
+    const [first, second] = await Promise.all([initial, refreshed]);
+
+    expect(first.org.apiVersion).toBe("50.0");
+    expect(second.org.apiVersion).toBe("67.0");
+    expect(orgCreateMock).toHaveBeenCalledTimes(2);
+    expect(peekSharedSfEnvironment(cwd)).toEqual(second);
   });
 
   it("hydrates from the persisted cache after in-memory state is cleared", async () => {

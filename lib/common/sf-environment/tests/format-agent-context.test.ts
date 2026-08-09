@@ -30,6 +30,7 @@ function makeEnv(
     orgConnected: string;
     orgInstanceUrl: string;
     orgApiVersion: string;
+    orgApiVersionSource: SfEnvironment["org"]["apiVersionSource"];
     orgError: string;
     detectedAt: number;
   }>,
@@ -56,6 +57,7 @@ function makeEnv(
       connectedStatus: overrides.orgConnected,
       instanceUrl: overrides.orgInstanceUrl,
       apiVersion: overrides.orgApiVersion,
+      apiVersionSource: overrides.orgApiVersionSource,
       error: overrides.orgError,
     },
     detectedAt: overrides.detectedAt ?? Date.now(),
@@ -86,7 +88,7 @@ describe("formatAgentContext", () => {
     const ctx = formatAgentContext(env)!;
     expect(ctx).toContain("<sf_environment>");
     expect(ctx).toContain("</sf_environment>");
-    expect(ctx).toContain("Project: my-app (API 66.0)");
+    expect(ctx).toContain("Project: my-app (Source API 66.0)");
   });
 
   it("includes org info", () => {
@@ -99,13 +101,56 @@ describe("formatAgentContext", () => {
       orgConnected: "Connected",
       orgInstanceUrl: "https://test.sandbox.my.salesforce.com",
       orgApiVersion: "66.0",
+      orgApiVersionSource: "resolved",
       configLocation: "Global",
     });
     const ctx = formatAgentContext(env)!;
     expect(ctx).toContain("Default org: MyOrg (sandbox) — Connected");
-    expect(ctx).toContain("Org API version: 66.0");
+    expect(ctx).toContain("Connection API version: 66.0");
+    expect(ctx).not.toContain("Org API version:");
     expect(ctx).not.toContain("Instance:");
     expect(ctx).not.toContain("Config scope:");
+  });
+
+  it("labels configured and fallback connection API provenance", () => {
+    const configured = formatAgentContext(
+      makeEnv({
+        hasTargetOrg: true,
+        targetOrg: "PinnedOrg",
+        orgDetected: true,
+        orgAlias: "PinnedOrg",
+        orgApiVersion: "50.0",
+        orgApiVersionSource: "configured",
+      }),
+    )!;
+    const fallback = formatAgentContext(
+      makeEnv({
+        hasTargetOrg: true,
+        targetOrg: "FallbackOrg",
+        orgDetected: true,
+        orgAlias: "FallbackOrg",
+        orgApiVersion: "50.0",
+        orgApiVersionSource: "sdk-fallback",
+      }),
+    )!;
+
+    expect(configured).toContain("Connection API version: 50.0 (configured)");
+    expect(fallback).toContain("Connection API version: 50.0 (unverified SDK fallback)");
+  });
+
+  it("keeps legacy persisted snapshots readable when provenance is absent", () => {
+    const ctx = formatAgentContext(
+      makeEnv({
+        hasTargetOrg: true,
+        targetOrg: "LegacyOrg",
+        orgDetected: true,
+        orgAlias: "LegacyOrg",
+        orgApiVersion: "66.0",
+      }),
+    )!;
+
+    expect(ctx).toContain("Connection API version: 66.0");
+    expect(ctx).not.toContain("source unknown");
   });
 
   it("includes CLI version", () => {
@@ -167,14 +212,33 @@ describe("formatDetailedStatus", () => {
       orgConnected: "Connected",
       orgInstanceUrl: "https://test.sandbox.my.salesforce.com",
       orgApiVersion: "66.0",
+      orgApiVersionSource: "resolved",
     });
 
     const status = formatDetailedStatus(env);
     expect(status).toContain("✅ SF CLI: v2.130.9");
     expect(status).toContain("✅ Project: my-app");
+    expect(status).toContain("Project Source API: 66.0");
     expect(status).toContain("✅ Target org: MyOrg");
     expect(status).toContain("✅ Org: MyOrg (sandbox)");
     expect(status).toContain("Status: Connected");
+    expect(status).toContain("Connection API: 66.0 (auto-resolved)");
+  });
+
+  it("marks an unexplained API 50 connection as an unverified SDK fallback", () => {
+    const status = formatDetailedStatus(
+      makeEnv({
+        hasTargetOrg: true,
+        targetOrg: "FallbackOrg",
+        orgDetected: true,
+        orgAlias: "FallbackOrg",
+        orgApiVersion: "50.0",
+        orgApiVersionSource: "sdk-fallback",
+      }),
+    );
+
+    expect(status).toContain("Connection API: 50.0 (unverified SDK fallback)");
+    expect(status).toContain("Maximum org API: not verified");
   });
 
   it("warns about production org", () => {

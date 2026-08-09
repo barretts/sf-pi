@@ -34,6 +34,8 @@ import type { ConfigAggregator as ConfigAggregatorClass, Org as SfOrg } from "@s
 import { orgFromAlias } from "../sf-conn/connection.ts";
 
 const DETECT_ORG_TIMEOUT_MS = 10_000;
+const JSFORCE_DEFAULT_API_VERSION = "50.0";
+const SDK_API_VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 let configAggregatorCtor: typeof ConfigAggregatorClass | undefined;
 async function getConfigAggregatorCtor(): Promise<typeof ConfigAggregatorClass> {
@@ -45,6 +47,7 @@ async function getConfigAggregatorCtor(): Promise<typeof ConfigAggregatorClass> 
 import type {
   CliInfo,
   ConfigInfo,
+  ConnectionApiVersionSource,
   OrgInfo,
   OrgType,
   PackageDirectory,
@@ -185,22 +188,36 @@ export async function detectConfig(): Promise<ConfigInfo> {
   try {
     const ConfigAggregator = await getConfigAggregatorCtor();
     const aggregator = await ConfigAggregator.create();
-    const info = aggregator.getInfo("target-org");
-    const value = info?.value;
-    if (typeof value !== "string" || !value) {
-      return { hasTargetOrg: false };
-    }
+    const targetInfo = aggregator.getInfo("target-org");
+    const apiVersionInfo = aggregator.getInfo("org-api-version");
+    const targetOrg =
+      typeof targetInfo?.value === "string" && targetInfo.value ? targetInfo.value : undefined;
+    const apiVersion =
+      typeof apiVersionInfo?.value === "string" && apiVersionInfo.value
+        ? apiVersionInfo.value
+        : undefined;
+
     return {
-      hasTargetOrg: true,
-      targetOrg: value,
+      hasTargetOrg: Boolean(targetOrg),
+      targetOrg,
       // ConfigAggregator.Location is "Local" | "Global" | "Environment".
-      // The previous `sf config list` flow only emitted Local | Global, so
-      // collapse Environment into Global to keep the public shape stable.
-      location: info?.location === "Local" ? "Local" : "Global",
+      // The previous `sf config list` flow only emitted Local | Global for
+      // target-org, so collapse Environment into Global for that legacy field.
+      location: targetOrg ? (targetInfo?.location === "Local" ? "Local" : "Global") : undefined,
+      apiVersion,
+      apiVersionLocation: normalizeConfigLocation(apiVersionInfo?.location),
     };
   } catch {
     return { hasTargetOrg: false };
   }
+}
+
+function normalizeConfigLocation(
+  location: unknown,
+): "Local" | "Global" | "Environment" | undefined {
+  return location === "Local" || location === "Global" || location === "Environment"
+    ? location
+    : undefined;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -210,10 +227,25 @@ export async function detectConfig(): Promise<ConfigInfo> {
 /**
  * Resolve org details for `targetOrg` via the cached `Org`. No subprocess.
  */
-export async function detectOrg(targetOrg: string): Promise<OrgInfo> {
+export interface DetectOrgOptions {
+  /** Recreate the cached SDK Org. Used only by explicit user refreshes. */
+  freshConnection?: boolean;
+  /** Explicit org-api-version found by ConfigAggregator, when checked. */
+  configuredApiVersion?: string;
+  /** Whether absence of configuredApiVersion is authoritative for this lookup. */
+  apiVersionConfigurationChecked?: boolean;
+}
+
+export async function detectOrg(
+  targetOrg: string,
+  options: DetectOrgOptions = {},
+): Promise<OrgInfo> {
   try {
-    const org = await orgFromAlias(targetOrg, { timeoutMs: DETECT_ORG_TIMEOUT_MS });
-    return readOrgInfo(org, targetOrg);
+    const org = await orgFromAlias(targetOrg, {
+      timeoutMs: DETECT_ORG_TIMEOUT_MS,
+      fresh: options.freshConnection,
+    });
+    return readOrgInfo(org, targetOrg, options);
   } catch (err) {
     return {
       detected: false,
@@ -231,7 +263,7 @@ export async function detectOrg(targetOrg: string): Promise<OrgInfo> {
  * succeeded against the auth files, which matches the offline behavior of
  * `sf org display`.
  */
-function readOrgInfo(org: SfOrg, requestedAlias: string): OrgInfo {
+function readOrgInfo(org: SfOrg, requestedAlias: string, options: DetectOrgOptions): OrgInfo {
   const conn = org.getConnection();
   const fields = conn.getAuthInfoFields() as {
     instanceUrl?: string;
@@ -244,9 +276,12 @@ function readOrgInfo(org: SfOrg, requestedAlias: string): OrgInfo {
     trailExpirationDate?: string | null;
     namespacePrefix?: string | null;
     orgEdition?: string;
+    instanceApiVersion?: string;
+    instanceApiVersionLastRetrieved?: string;
   };
 
   const instanceUrl = fields.instanceUrl ?? conn.instanceUrl;
+  const apiVersion = conn.getApiVersion();
   return {
     detected: true,
     alias: fields.alias ?? requestedAlias,
@@ -261,10 +296,45 @@ function readOrgInfo(org: SfOrg, requestedAlias: string): OrgInfo {
       trailExpirationDate: fields.trailExpirationDate ?? undefined,
     }),
     connectedStatus: "Connected",
-    apiVersion: conn.getApiVersion(),
+    apiVersion,
+    apiVersionSource: classifyConnectionApiVersion(apiVersion, fields, options),
     namespacePrefix: fields.namespacePrefix,
     orgEdition: fields.orgEdition,
   };
+}
+
+function classifyConnectionApiVersion(
+  apiVersion: string,
+  fields: { instanceApiVersion?: string; instanceApiVersionLastRetrieved?: string },
+  options: DetectOrgOptions,
+): ConnectionApiVersionSource {
+  if (!options.apiVersionConfigurationChecked) return "unknown";
+
+  if (options.configuredApiVersion) {
+    return options.configuredApiVersion === apiVersion ? "configured" : "unknown";
+  }
+
+  if (hasFreshSdkApiVersionCache(apiVersion, fields)) return "resolved";
+  return apiVersion === JSFORCE_DEFAULT_API_VERSION ? "sdk-fallback" : "resolved";
+}
+
+function hasFreshSdkApiVersionCache(
+  apiVersion: string,
+  fields: { instanceApiVersion?: string; instanceApiVersionLastRetrieved?: string },
+): boolean {
+  // Mirror @salesforce/core: this environment flag forces live discovery and
+  // makes auth-file cache fields ineligible as provenance for this connection.
+  if (sdkApiVersionCacheDisabled()) return false;
+  if (fields.instanceApiVersion !== apiVersion || !fields.instanceApiVersionLastRetrieved) {
+    return false;
+  }
+  const retrievedAt = Date.parse(fields.instanceApiVersionLastRetrieved);
+  return Number.isFinite(retrievedAt) && Date.now() - retrievedAt <= SDK_API_VERSION_CACHE_TTL_MS;
+}
+
+function sdkApiVersionCacheDisabled(): boolean {
+  const value = process.env.SFDX_IGNORE_API_VERSION_CACHE?.trim().toLowerCase();
+  return value === "true" || value === "1";
 }
 
 /**
@@ -335,7 +405,16 @@ function getInstanceHostname(instanceUrl: string | undefined): string | null {
  * `@salesforce/core` directly, so cold start drops from 3 subprocess calls
  * to 1.
  */
-export async function detectEnvironment(exec: ExecFn, cwd: string): Promise<SfEnvironment> {
+export interface DetectEnvironmentOptions {
+  /** Recreate the resolved target Org instead of reusing the shared connection cache. */
+  freshOrgConnection?: boolean;
+}
+
+export async function detectEnvironment(
+  exec: ExecFn,
+  cwd: string,
+  options: DetectEnvironmentOptions = {},
+): Promise<SfEnvironment> {
   // Layer 1: CLI (subprocess — only honest answer to "is sf on PATH?")
   const cli = await detectCli(exec);
 
@@ -358,7 +437,11 @@ export async function detectEnvironment(exec: ExecFn, cwd: string): Promise<SfEn
   // Layer 4: Org (in-process, cached Org/Connection)
   let org: OrgInfo;
   if (config.hasTargetOrg && config.targetOrg) {
-    org = await detectOrg(config.targetOrg);
+    org = await detectOrg(config.targetOrg, {
+      freshConnection: options.freshOrgConnection,
+      configuredApiVersion: config.apiVersion,
+      apiVersionConfigurationChecked: true,
+    });
   } else {
     org = { detected: false, orgType: "unknown" };
   }

@@ -138,7 +138,7 @@ class SfDevbarConfigPanel implements Focusable {
     const pad = (content = "") => padAnsi(truncateToWidth(content, width, ""), width);
     const effective = this.effectiveColors();
     const lines: string[] = [
-      ` ${t.fg("accent", themeBold(t, "SF Pi › SF DevBar › Settings"))}`,
+      ` ${t.fg("accent", themeBold(t, "SF Pi › SF DevBar › Color Settings"))}`,
       "",
       ` ${t.fg("muted", "Scope:")} ${t.fg("text", this.scope)}`,
       ` ${t.fg("muted", "Settings:")} ${t.fg("dim", settingsPathForScope(this.cwd, this.scope))}`,
@@ -150,6 +150,8 @@ class SfDevbarConfigPanel implements Focusable {
       lines.push(this.renderRow(descriptor, effective, i === this.cursor, width));
     }
 
+    lines.push("");
+    lines.push(` ${t.fg("dim", this.currentDescriptor().description)}`);
     lines.push("");
     if (this.lastError) lines.push(` ${t.fg("warning", this.lastError)}`);
     if (this.lastMessage) lines.push(` ${t.fg("success", this.lastMessage)}`);
@@ -170,11 +172,12 @@ class SfDevbarConfigPanel implements Focusable {
     const currentText = Array.isArray(current) ? formatPalette(current) : String(current);
     const draft = this.renderDraftText(width);
     const lines: string[] = [
-      ` ${t.fg("accent", themeBold(t, `SF Pi › SF DevBar › Settings › Edit ${descriptor.label}`))}`,
+      ` ${t.fg("accent", themeBold(t, `SF Pi › SF DevBar › Color Settings › Edit ${descriptor.label}`))}`,
       "",
-      ` ${t.fg("muted", "Field:")}  ${t.fg("text", descriptor.label)}`,
-      ` ${t.fg("muted", "Type:")}   ${t.fg("text", descriptor.kind === "palette" ? "Palette" : "Color")}`,
-      ` ${t.fg("muted", "Source:")} ${t.fg("text", effective.sources[descriptor.key])}`,
+      ` ${t.fg("muted", "Field:")}   ${t.fg("text", descriptor.label)}`,
+      ` ${t.fg("muted", "Purpose:")} ${t.fg("text", descriptor.description)}`,
+      ` ${t.fg("muted", "Type:")}    ${t.fg("text", descriptor.kind === "palette" ? "Palette" : "Color")}`,
+      ` ${t.fg("muted", "Source:")}  ${t.fg("text", effective.sources[descriptor.key])}`,
       "",
       ` ${t.fg("muted", "Current effective value:")}`,
       `   ${t.fg("dim", currentText)}`,

@@ -54,6 +54,8 @@ export interface OrgFromAliasOptions {
   timeoutMs?: number;
   /** Optional caller cancellation signal. */
   signal?: AbortSignal;
+  /** Evict this alias before resolving it. Reserved for explicit user refreshes. */
+  fresh?: boolean;
 }
 
 export class OrgConnectionTimeoutError extends Error {
@@ -79,13 +81,16 @@ export async function orgFromAlias(
 ): Promise<OrgType> {
   if (options.signal?.aborted) throw new OrgConnectionAbortedError();
   const key = targetOrg ?? DEFAULT_KEY;
+  if (options.fresh) orgCache.delete(key);
   let pending = orgCache.get(key);
   if (!pending) {
     pending = (async () => {
       const Org = await getOrgCtor();
       return Org.create({ aliasOrUsername: targetOrg });
     })().catch((err: unknown) => {
-      orgCache.delete(key);
+      // A fresh lookup may already have replaced this promise for the alias.
+      // Never let the superseded lookup evict its replacement when it rejects.
+      if (orgCache.get(key) === pending) orgCache.delete(key);
       throw err;
     });
     orgCache.set(key, pending);
@@ -95,7 +100,8 @@ export async function orgFromAlias(
   try {
     return await boundOrgCreate(pending, options);
   } catch (err) {
-    orgCache.delete(key);
+    // Timeout/abort of a superseded lookup must not remove a newer fresh one.
+    if (orgCache.get(key) === pending) orgCache.delete(key);
     throw err;
   }
 }
