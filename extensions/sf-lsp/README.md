@@ -3,7 +3,7 @@
 ## What It Does
 
 Provides real-time Language Server Protocol diagnostics to the agent after every
-file write or edit, plus three user-facing TUI surfaces.
+file write or edit, plus compact startup, activity, and on-demand TUI surfaces.
 
 When the agent creates or modifies an Apex class, LWC component, or Agent
 Script file, sf-lsp sends it to the appropriate LSP server and appends
@@ -20,16 +20,16 @@ extension that re-registers a tool name already claimed by another extension
 (see `detectExtensionConflicts` in `resource-loader`). Third-party extensions
 like `pi-tool-display` already own the `edit`/`write` names for rendering
 purposes, so sf-lsp stays out of that lane and communicates via the
-transcript row and the permanent sf-devbar top-bar LSP segment.
+transcript row plus the shared one-line readiness row in SF Welcome.
 
 ## TUI Surfaces
 
-| Surface                 | What it shows                                                                                                                                                                           | Pi primitive                                                          |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Working indicator       | `⠋ LSP Apex…` spinner while diagnostics are being fetched (≤6s)                                                                                                                         | `ctx.ui.setWorkingIndicator`                                          |
-| **Top-bar LSP segment** | Permanent right-aligned `LSP[Apex: ✓ \| LWC: ◐ \| AgentScript: ●]` inside sf-devbar. The `LSP[…]` wrapper disambiguates the dots from "feature enabled" indicators; glyph legend below. | `lib/common/sf-lsp-health` shared registry → sf-devbar top-bar widget |
-| Inline transcript row   | `[sf-lsp] Apex · Foo.cls · clean · 312ms` — user-only, **never** reaches the LLM                                                                                                        | `pi.appendEntry("sf-lsp", data)` + `registerEntryRenderer`            |
-| Rich `/sf-lsp` panel    | Doctor + recent activity ring + actions (refresh, verbose toggle, shut down servers)                                                                                                    | `ctx.ui.custom` overlay with `DynamicBorder` + `SelectList`           |
+| Surface                   | What it shows                                                                                                             | Pi primitive                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Working indicator         | `⠋ LSP Apex…` spinner while diagnostics are being fetched (≤6s)                                                           | `ctx.ui.setWorkingIndicator`                                   |
+| **Welcome readiness row** | One startup line: `SF LSP  ✓ Apex · ✓ LWC · ✓ Agent Script`. It reports discovery readiness, never last-file diagnostics. | `lib/common/sf-lsp-health` shared registry → SF Welcome header |
+| Inline transcript row     | `[sf-lsp] Apex · Foo.cls · clean · 312ms` — user-only, **never** reaches the LLM                                          | `pi.appendEntry("sf-lsp", data)` + `registerEntryRenderer`     |
+| Rich `/sf-lsp` panel      | Doctor + recent activity ring + actions (refresh, verbose toggle, shut down servers)                                      | `ctx.ui.custom` overlay with `DynamicBorder` + `SelectList`    |
 
 **Agent Script note:** when the `sf-agentscript` extension is loaded,
 sf-lsp yields `.agent` files to it. That extension handles the same diagnostic
@@ -54,7 +54,7 @@ continues to handle `.agent` files exactly as before.
 ```
 session_start
   └─ doctor probe (background) → write sf-lsp-health registry
-                                  → sf-devbar top bar repaints green/red dots
+                                  → SF Welcome repaints its one-line readiness row
 
 write/edit tool completes
   │
@@ -116,10 +116,11 @@ Requires Node.js 18+.
 | `/sf-lsp install status`          | Show current install state per component (installed version vs. upstream latest)       |
 | `/sf-lsp verbose on\|off\|toggle` | Flip transcript rows between balanced (errors + transitions) and verbose (every check) |
 
-No keyboard shortcut, no CLI flag, no overlay toggle — the LSP segment is
-always-on in the sf-devbar top bar. The Manager Settings page exposes the
-low-risk `sfPi.sfLsp.verbose` preference for user-visible transcript row
-verbosity; diagnostic feedback sent to the agent is unchanged.
+No keyboard shortcut, no CLI flag, and no permanent HUD. SF Welcome shows
+startup readiness while `/sf-lsp` and its Manager page provide on-demand detail.
+The Manager Settings page exposes the low-risk `sfPi.sfLsp.verbose` preference
+for user-visible transcript row verbosity; diagnostic feedback sent to the agent
+is unchanged.
 
 ## Behavior Matrix
 
@@ -139,14 +140,14 @@ verbosity; diagnostic feedback sent to the agent is unchanged.
 
 ### TUI-facing (user-only)
 
-| Surface                   | Event/Trigger                                    | Result                                                                 |
-| ------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
-| Working indicator         | check started / finished                         | Push `⠋ LSP <Lang>…` / restore default                                 |
-| sf-devbar top-bar LSP     | session_start doctor probe / `/sf-lsp doctor`    | Green dot for available language, red for unavailable, dim for unknown |
-| Transcript row (balanced) | error, error→clean transition, first unavailable | Emit one `sf-lsp` custom entry                                         |
-| Transcript row (verbose)  | every check                                      | Emit one `sf-lsp` custom entry                                         |
-| `/sf-lsp`                 | no args                                          | Open SF LSP in the SF Pi Manager                                       |
-| `/sf-lsp doctor`          | —                                                | `ui.notify` with availability report                                   |
+| Surface                   | Event/Trigger                                    | Result                                                |
+| ------------------------- | ------------------------------------------------ | ----------------------------------------------------- |
+| Working indicator         | check started / finished                         | Push `⠋ LSP <Lang>…` / restore default                |
+| SF Welcome readiness row  | session_start doctor probe / `/sf-lsp doctor`    | Per-language ✓ available, ✗ unavailable, or ○ unknown |
+| Transcript row (balanced) | error, error→clean transition, first unavailable | Emit one `sf-lsp` custom entry                        |
+| Transcript row (verbose)  | every check                                      | Emit one `sf-lsp` custom entry                        |
+| `/sf-lsp`                 | no args                                          | Open SF LSP in the SF Pi Manager                      |
+| `/sf-lsp doctor`          | —                                                | `ui.notify` with availability report                  |
 
 ## File Structure
 
@@ -194,7 +195,7 @@ extensions/sf-lsp/
 
 <!-- GENERATED:file-structure:end -->
 
-Shared with sf-devbar:
+Shared with SF Welcome:
 
 ```
 lib/common/sf-lsp-health/
@@ -236,7 +237,7 @@ The install runs in the background. You can revisit this anytime with
 | Install   | Apex → download vsix, unzip `extension/dist/apex-jorje-lsp.jar` → move into place + write `VERSION`. LWC → `npm install --prefix ~/.pi/agent/lsp/lwc @salesforce/lwc-language-server@<latest>`. |
 | Indicate  | `ctx.ui.setWorkingIndicator('⠋ Installing Apex Language Server…')` while each component installs.                                                                                               |
 | Summarize | Single `ctx.ui.notify(...)` with per-component ✓/✗ rows + any Java warning.                                                                                                                     |
-| Re-probe  | `doctorLsp(...)` fires after completion so the sf-devbar top-bar LSP segment repaints green.                                                                                                    |
+| Re-probe  | `doctorLsp(...)` fires after completion so the shared readiness snapshot and SF Welcome row update.                                                                                             |
 
 ### Re-prompt behavior
 
@@ -291,25 +292,21 @@ Run: `npm test`
 
 ## Troubleshooting
 
-**Top-bar LSP glyph legend:**
+**SF Welcome readiness glyph legend:**
 
-| Glyph | Color         | Meaning                                                  |
-| ----- | ------------- | -------------------------------------------------------- |
-| `◌`   | dim           | Not probed yet (first ~100ms after `session_start`)      |
-| `○`   | warning, bold | LSP jar / server / binary missing — see `/sf-lsp doctor` |
-| `●`   | success       | LSP is installed and ready; no check has run yet         |
-| `◐`   | accent, bold  | A diagnostic check is running right now                  |
-| `✓`   | success, bold | The most recent check came back clean                    |
-| `✗`   | error, bold   | The most recent check reported errors                    |
+| Glyph | Color   | Meaning                                                  |
+| ----- | ------- | -------------------------------------------------------- |
+| `○`   | muted   | Not probed yet, or sf-lsp is disabled                    |
+| `✓`   | success | The language server is discoverable and ready            |
+| `✗`   | error   | LSP jar / server / binary missing — see `/sf-lsp doctor` |
 
-Shape alone disambiguates on terminals with color fallback.
+The Welcome row deliberately ignores last-file activity. File errors and clean
+transitions stay in the working indicator, transcript row, and `/sf-lsp` panel.
 
-**The sf-devbar top-bar LSP segment stays `◌` (dotted circle) after a while:**
-Run `/sf-lsp doctor` to kick a fresh probe. If a language stays dotted,
-sf-devbar isn't subscribed (check `/sf-devbar` is enabled and loaded)
-— the segment is rendered by sf-devbar using the shared
-`lib/common/sf-lsp-health` registry that sf-lsp writes into on
-`session_start` and on every check.
+**The SF Welcome LSP row stays unknown after startup:**
+Run `/sf-lsp doctor` to kick a fresh probe. SF Welcome reads the shared
+`lib/common/sf-lsp-health` registry that sf-lsp updates on `session_start` and
+manual doctor runs; it never launches a duplicate probe.
 
 **Transcript rows feel too chatty / too quiet:**
 Default mode is balanced: transcript row only on errors, red-to-green
@@ -353,7 +350,7 @@ extension. Not managed by /sf-lsp install.` Run `/sf-lsp install` to
 force the prompt anyway — it will still offer to install a managed
 copy under `~/.pi/agent/lsp/` if you want sf-pi to own the version.
 
-**Top-bar dots are green but the install prompt says "not installed":**
+**SF Welcome checks are green but the install prompt says "not installed":**
 This was a bug in sf-pi < 0.27.6 where the orchestrator only checked
 the managed `~/.pi/agent/lsp/` directory and ignored VS Code-provided
 servers. Fixed in 0.27.6 by feeding the full doctor chain into the

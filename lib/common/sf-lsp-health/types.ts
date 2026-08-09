@@ -6,7 +6,7 @@
  */
 export type SupportedLspLanguage = "apex" | "lwc" | "agentscript";
 
-/** Human-friendly full-name label used in the sf-devbar top bar. */
+/** Human-friendly label used by passive LSP readiness consumers. */
 export function languageFullName(language: SupportedLspLanguage): string {
   switch (language) {
     case "apex":
@@ -14,6 +14,6 @@ export function languageFullName(language: SupportedLspLanguage): string {
     case "lwc":
       return "LWC";
     case "agentscript":
-      return "AgentScript";
+      return "Agent Script";
   }
 }

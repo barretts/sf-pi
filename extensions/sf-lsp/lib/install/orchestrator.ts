@@ -55,7 +55,7 @@ export function resetOrchestratorSession(): void {
 export interface OrchestratorOptions {
   /** Override platform (tests). */
   platform?: NodeJS.Platform;
-  /** Called after any doctor-relevant change so sf-devbar repaints. */
+  /** Called after doctor-relevant changes so shared readiness consumers repaint. */
   onInstallCompleted?(results: ComponentInstallResult[]): void;
   /** Working directory for doctor discovery (defaults to ctx.cwd). */
   cwd?: string;
@@ -340,7 +340,7 @@ export function renderResultSummary(
     );
   }
 
-  lines.push("", "Top-bar LSP status will refresh shortly. Run /sf-lsp doctor to re-probe.");
+  lines.push("", "LSP readiness will refresh shortly. Run /sf-lsp doctor to re-probe.");
   return lines.join("\n");
 }
 

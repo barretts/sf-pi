@@ -205,15 +205,15 @@ Jump to an extension's Troubleshooting section to see the full fix. This index i
 
 **[SF LSP](./extensions/sf-lsp.md#troubleshooting)**
 
-- Top-bar LSP glyph legend
-- The sf-devbar top-bar LSP segment stays `◌` (dotted circle) after a while
+- SF Welcome readiness glyph legend
+- The SF Welcome LSP row stays unknown after startup
 - Transcript rows feel too chatty / too quiet
 - Working indicator keeps saying `LSP Apex…` after the turn ends
 - `LSP setup note:` appears once per file type and then stays silent
 - Apex diagnostics never appear, even on obviously broken code
 - LWC diagnostics never appear
 - First-boot install prompt didn't appear
-- Top-bar dots are green but the install prompt says "not installed"
+- SF Welcome checks are green but the install prompt says "not installed"
 - Install appears to hang
 - Diagnostics take >6 seconds to arrive
 - `.agent` files show no feedback or unexpected subprocess output
@@ -250,6 +250,7 @@ Jump to an extension's Troubleshooting section to see the full fix. This index i
 **[SF Welcome](./extensions/sf-welcome.md#troubleshooting)**
 
 - Splash shows `?` boxes (tofu) where glyphs should be
+- The SF LSP row stays unknown after startup
 - Herdr says the upstream package or Pi bridge is missing
 - Splash feels too busy, stuck, or setup warnings are noisy
 - Splash content gets truncated in a narrow terminal

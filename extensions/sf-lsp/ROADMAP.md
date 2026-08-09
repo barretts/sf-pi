@@ -8,14 +8,15 @@ growing `index.ts`.
 
 - [x] **Live working indicator** (`ctx.ui.setWorkingIndicator`) flips to a
       themed `⠋ LSP Apex…` spinner while diagnostics are being fetched.
-- [x] **Footer status segment** via `ctx.ui.setStatus("sf-lsp", …)`. Picked
-      up automatically by `sf-devbar` through `footerData.getExtensionStatuses()`.
+- [~] ~~Footer status segment~~ retired in favor of the shared one-line
+  readiness row rendered by SF Welcome.
 - [~] ~~In-card LSP panel~~ intentionally dropped. Pi's cross-extension
   tool-name conflict detection (`resource-loader.detectExtensionConflicts`)
   refuses to load any extension that re-registers a tool name already
   claimed by another extension. `pi-tool-display` already owns
-  `edit`/`write` in most setups. The transcript row + HUD + footer + widget cover the same user-facing signal without fighting over
-  the tool registry.
+  `edit`/`write` in most setups. The transcript row, Welcome readiness row,
+  working indicator, and rich panel cover the user-facing signal without
+  fighting over the tool registry.
 
 ## ✅ Phase 2 — continuous visibility (shipped)
 
@@ -23,12 +24,11 @@ growing `index.ts`.
       `registerEntryRenderer`. Balanced default (error + transition +
       first unavailable); verbose mode emits every check. User-only, never
       enters LLM context.
-- [~] ~~HUD overlay~~ / ~~below-editor widget~~ / ~~footer pill~~ replaced
-  by a permanent right-aligned LSP segment in sf-devbar's top bar
-  (`LSP[Apex: ● | LWC: ● | AgentScript: ●]`) driven by the shared
-  `lib/common/sf-lsp-health` registry. User feedback was that the
-  floating HUD was visually noisy; permanent availability sitting next
-  to the context-window bar is where health belongs.
+- [~] ~~HUD overlay~~ / ~~below-editor widget~~ / ~~footer pill~~ /
+  ~~sf-devbar top-bar segment~~ replaced by one compact SF Welcome row
+  (`SF LSP  ✓ Apex · ✓ LWC · ✓ Agent Script`) driven by the shared
+  `lib/common/sf-lsp-health` registry. The row reports discovery readiness
+  only; per-file activity stays in the working indicator and transcript.
 
 ## ✅ Phase 3 — controls (shipped)
 
@@ -38,8 +38,8 @@ growing `index.ts`.
 - [x] **Subcommands** — `/sf-lsp verbose [on|off|toggle]`,
       `/sf-lsp doctor`.
 - [x] **Persistent settings** — `verbose` persists to `sfPi.sfLsp` in
-      the global Pi settings file. (The former `hud` and `icon` keys
-      were retired when the HUD overlay was replaced.)
+      the global Pi settings file. Former `hud` and `icon` keys remain
+      ignored for backward-compatible settings reads.
 
 ## 🔭 Phase 4 — deeper quick-fixes (planned)
 
@@ -61,7 +61,7 @@ growing `index.ts`.
 
 - [ ] Append LSP event samples to the session as
       `pi.appendEntry("sf-lsp/event", …)` so `/tree` navigation and
-      compaction can replay the HUD state.
+      compaction can replay recent activity state.
 - [ ] Offer an "export activity" action that dumps the ring buffer to a
       JSON file for offline analysis.
 

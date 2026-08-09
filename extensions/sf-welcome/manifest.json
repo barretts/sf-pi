@@ -9,7 +9,7 @@
   "commands": ["/sf-welcome", "/sf-setup-fonts"],
   "events": ["session_start", "agent_start", "tool_call", "session_shutdown"],
   "docs": {
-    "summary": "Two-column startup splash with model/environment status, optional gateway usage, and release freshness on the left, plus announcements/recommended extensions/recent sessions on the right. Dismissable overlay (default) or persistent header (quietStartup), plus /sf-welcome and /sf-setup-fonts commands.",
+    "summary": "Two-column startup splash with model/environment status, one-line LSP and Herdr readiness, optional gateway usage, and release freshness on the left, plus announcements/recommended extensions/recent sessions on the right. Dismissable overlay (default) or persistent header (quietStartup), plus /sf-welcome and /sf-setup-fonts commands.",
     "primaryFiles": [
       "index.ts",
       "lib/splash-component.ts",
@@ -25,6 +25,7 @@
       "lib/hunk-status.ts",
       "lib/homebrew-status.ts",
       "lib/herdr-runtime-status.ts",
+      "../../lib/common/sf-lsp-health/index.ts",
       "../../lib/common/auto-update/store.ts",
       "lib/welcome-settings.ts",
       "lib/config-panel.ts"

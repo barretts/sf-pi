@@ -215,7 +215,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
   {
     id: "sf-lsp",
     name: "SF LSP",
-    description: "Real-time Salesforce LSP diagnostics on write/edit with a working-indicator spinner, transcript rows, and a permanent top-bar health segment in sf-devbar",
+    description: "Real-time Salesforce LSP diagnostics on write/edit with a working indicator, transcript rows, and one-line startup readiness in SF Welcome",
     file: "extensions/sf-lsp/index.ts",
     category: "assistive",
     maturity: "stable",

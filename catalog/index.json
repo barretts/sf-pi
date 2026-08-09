@@ -477,7 +477,7 @@
     "entry": "extensions/sf-devbar/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 2546
+    "srcLoc": 2377
   },
   {
     "id": "sf-docs",
@@ -757,7 +757,7 @@
   {
     "id": "sf-lsp",
     "name": "SF LSP",
-    "description": "Real-time Salesforce LSP diagnostics on write/edit with a working-indicator spinner, transcript rows, and a permanent top-bar health segment in sf-devbar",
+    "description": "Real-time Salesforce LSP diagnostics on write/edit with a working indicator, transcript rows, and one-line startup readiness in SF Welcome",
     "category": "assistive",
     "maturity": "stable",
     "defaultEnabled": true,
@@ -774,7 +774,7 @@
       "tool_result"
     ],
     "docs": {
-      "summary": "Advisory LSP diagnostics on write/edit for Apex/LWC/Agent Script files. Surfaces appear as a working indicator, transcript row, top-bar health segment (via sf-lsp-health registry), and a /sf-lsp doctor + activity panel.",
+      "summary": "Advisory LSP diagnostics on write/edit for Apex/LWC/Agent Script files. Surfaces appear as a working indicator, transcript row, one-line SF Welcome readiness row (via sf-lsp-health), and a /sf-lsp doctor + activity panel.",
       "primaryFiles": [
         "index.ts",
         "lib/lsp-client.ts",
@@ -793,7 +793,7 @@
     "entry": "extensions/sf-lsp/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 4097
+    "srcLoc": 4066
   },
   {
     "id": "sf-lwc",
@@ -1208,7 +1208,7 @@
       "session_shutdown"
     ],
     "docs": {
-      "summary": "Two-column startup splash with model/environment status, optional gateway usage, and release freshness on the left, plus announcements/recommended extensions/recent sessions on the right. Dismissable overlay (default) or persistent header (quietStartup), plus /sf-welcome and /sf-setup-fonts commands.",
+      "summary": "Two-column startup splash with model/environment status, one-line LSP and Herdr readiness, optional gateway usage, and release freshness on the left, plus announcements/recommended extensions/recent sessions on the right. Dismissable overlay (default) or persistent header (quietStartup), plus /sf-welcome and /sf-setup-fonts commands.",
       "primaryFiles": [
         "index.ts",
         "lib/splash-component.ts",
@@ -1224,6 +1224,7 @@
         "lib/hunk-status.ts",
         "lib/homebrew-status.ts",
         "lib/herdr-runtime-status.ts",
+        "../../lib/common/sf-lsp-health/index.ts",
         "../../lib/common/auto-update/store.ts",
         "lib/welcome-settings.ts",
         "lib/config-panel.ts"
@@ -1240,6 +1241,6 @@
     "entry": "extensions/sf-welcome/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 6607
+    "srcLoc": 6639
   }
 ]

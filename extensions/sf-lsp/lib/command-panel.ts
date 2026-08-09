@@ -5,7 +5,7 @@
  * Three stacked sections rendered inside a DynamicBorder:
  *   1. Doctor (Apex / LWC / Agent Script availability)
  *   2. Recent activity (last N checks from the activity ring)
- *   3. Actions (SelectList with shutdown / refresh / toggle-hud / close)
+ *   3. Actions (SelectList with refresh / verbosity / shutdown / lifecycle / close)
  *
  * Pattern mirrors examples/extensions/preset.ts — SelectList + DynamicBorder
  * under ctx.ui.custom. Keeps input handling scoped to the list so users can
@@ -32,12 +32,7 @@ import {
 import type { LspDoctorStatus } from "./types.ts";
 
 export type SfLspPanelAction =
-  | "refresh-doctor"
-  | "toggle-hud"
-  | "toggle-verbose"
-  | "shutdown-servers"
-  | "lifecycle-toggle"
-  | "close";
+  "refresh-doctor" | "toggle-verbose" | "shutdown-servers" | "lifecycle-toggle" | "close";
 
 export interface SfLspPanelLifecycleOptions {
   /** When true, the panel renders a Disable / Enable this extension row. */
@@ -49,7 +44,6 @@ export interface SfLspPanelLifecycleOptions {
 export interface SfLspPanelOptions {
   store: LspActivityStore;
   doctorStatuses: LspDoctorStatus[];
-  hudEnabled: boolean;
   verboseEnabled: boolean;
   lifecycle: SfLspPanelLifecycleOptions;
 }
@@ -89,11 +83,6 @@ export async function openSfLspPanel(
         value: "refresh-doctor",
         label: "Refresh doctor",
         description: "Re-probe Apex, LWC, and Agent Script LSP discovery",
-      },
-      {
-        value: "toggle-hud",
-        label: options.hudEnabled ? "Hide HUD overlay" : "Show HUD overlay",
-        description: "Toggle the top-right LSP HUD",
       },
       {
         value: "toggle-verbose",

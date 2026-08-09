@@ -151,7 +151,7 @@ _Guided feedback and bug-report flow that collects sanitized SF Pi diagnostics a
 
 ### [SF LSP](./extensions/sf-lsp)
 
-_Real-time Salesforce LSP diagnostics on write/edit with a working-indicator spinner, transcript rows, and a permanent top-bar health segment in sf-devbar_
+_Real-time Salesforce LSP diagnostics on write/edit with a working indicator, transcript rows, and one-line startup readiness in SF Welcome_
 
 - Default: **on**
 - Commands: `/sf-lsp`

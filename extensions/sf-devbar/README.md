@@ -6,10 +6,9 @@ A bespoke Salesforce developer status bar that renders two persistent UI surface
 
 - **Top bar** (widget above editor): SF Pi brand, model name with gateway detection,
   rainbow thinking level, working folder, git branch + changes, context window progress bar,
-  an optional bounded Pi session name, and a permanent right-aligned **Salesforce LSP segment**
-  (`LSP[Apex: ● | LWC: ● | AgentScript: ●]`)
-  fed by sf-lsp via the shared `lib/common/sf-lsp-health` registry, and (when non-default)
-  an `img:Nc` pill reflecting `terminal.imageWidthCells`
+  an optional bounded Pi session name, and (when non-default) an `img:Nc` pill reflecting
+  `terminal.imageWidthCells`. Cross-extension readiness belongs in SF Welcome rather than
+  permanently competing with session context for DevBar width.
 - **Bottom bar** (custom footer): deterministic left order of active LLM gateway
   monthly budget, SF Pi package count, then `SFDX Project → <authenticated org> [type]`
   only inside a Salesforce DX project; Slack remains right-aligned when `sf-slack`
@@ -170,8 +169,8 @@ and returns to the settings list. Press `s` from the settings list to save in
 place without reloading Pi.
 
 Only DevBar-owned hardcoded true-color accents are configurable. Semantic theme
-colors such as production warnings, LSP success/error states, and git status
-colors continue to come from the active Pi theme.
+colors such as production warnings and git status continue to come from the
+active Pi theme.
 
 ## File Structure
 
@@ -199,7 +198,6 @@ extensions/sf-devbar/
     shutdown-reason.test.ts ← unit / smoke test
     smoke.test.ts           ← unit / smoke test
     system-prompt-options.test.ts← unit / smoke test
-    top-bar-lsp.test.ts     ← unit / smoke test
     top-bar.test.ts         ← unit / smoke test
   CREDITS.md                ← extension attribution
   index.ts                  ← Pi extension entry point

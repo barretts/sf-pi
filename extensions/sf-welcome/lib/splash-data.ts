@@ -21,6 +21,7 @@ import { estimateMonthlyCost, getRecentSessions } from "./session-data.ts";
 import { getMonthlyUsageState } from "../../../lib/common/monthly-usage/store.ts";
 import { getSlackStatus } from "../../../lib/common/slack-status/store.ts";
 import { getTldrawStatus } from "../../../lib/common/tldraw-status/store.ts";
+import { getSfLspHealth } from "../../../lib/common/sf-lsp-health/index.ts";
 import { isSfPiExtensionEnabled } from "../../../lib/common/sf-pi-extension-state.ts";
 import {
   buildAnnouncementsSync,
@@ -361,6 +362,7 @@ export function collectInitialSplashData(
   const slackStatus = getSlackStatus();
   const tldrawStatus = getTldrawStatus();
   const tldrawEnabled = cwd ? isSfPiExtensionEnabled(cwd, "sf-tldraw") : undefined;
+  const lspEnabled = cwd ? isSfPiExtensionEnabled(cwd, "sf-lsp") : true;
 
   return {
     modelName,
@@ -390,6 +392,8 @@ export function collectInitialSplashData(
     loadedCountsLoading: true,
     recentSessionsLoading: true,
     sfCli: { installed: false, freshness: "checking", loading: true },
+    lspEnabled,
+    lspHealth: getSfLspHealth(),
     nodeRuntime: collectNodeRuntimeStatus(),
     herdrRuntime: collectHerdrRuntimeStatus(cwd, {
       activeToolNames: options.activeToolNames,
@@ -440,6 +444,7 @@ export function collectSplashData(
   const slackVisible = shouldShowSlackStatus(cwd);
   const tldrawStatus = getTldrawStatus();
   const tldrawEnabled = isSfPiExtensionEnabled(cwd, "sf-tldraw");
+  const lspEnabled = isSfPiExtensionEnabled(cwd, "sf-lsp");
   const gatewayVisible = shouldShowGatewayStatus(cwd, modelName, providerName);
 
   // Announcements are resolved synchronously from bundled + cached remote
@@ -499,6 +504,8 @@ export function collectSplashData(
     caBundleNudge,
     privacy,
     sfCli: undefined,
+    lspEnabled,
+    lspHealth: getSfLspHealth(),
     nodeRuntime: collectNodeRuntimeStatus(),
     herdrRuntime: collectHerdrRuntimeStatus(cwd, {
       activeToolNames: options.activeToolNames,

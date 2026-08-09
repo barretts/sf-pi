@@ -13,6 +13,7 @@ import type { CodeAnalyzerReadinessState } from "../../../lib/common/code-analyz
 import type { AutoUpdateStatus } from "../../../lib/common/auto-update/store.ts";
 import type { BrowserRuntimeStatusInfo } from "../../../lib/common/browser-runtime-status/store.ts";
 import type { GlyphMode } from "../../../lib/common/glyph-policy.ts";
+import type { SfLspHealthSnapshot } from "../../../lib/common/sf-lsp-health/index.ts";
 
 export interface RecentSession {
   name: string;
@@ -322,6 +323,10 @@ export interface SplashData {
   recentSessionsLoading?: boolean;
   /** Lightweight SF CLI install/latest status populated asynchronously after initial render. */
   sfCli?: SfCliStatusInfo;
+  /** Whether sf-lsp is enabled for the current project. Disabled renders calmly. */
+  lspEnabled?: boolean;
+  /** Shared in-process LSP readiness snapshot. Welcome reads; sf-lsp owns probing. */
+  lspHealth?: SfLspHealthSnapshot;
   /** Current Node.js runtime support status. Pure process-local read. */
   nodeRuntime?: NodeRuntimeStatusInfo;
   /** Upstream Herdr pane-control runtime status; distinct from sf-herdr being enabled. */

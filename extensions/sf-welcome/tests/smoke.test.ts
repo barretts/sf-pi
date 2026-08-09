@@ -445,7 +445,7 @@ describe("sf-welcome", () => {
     expect(plain).not.toContain("Update available");
   });
 
-  it("renders Herdr runtime identities without confusing bridge schema with release freshness", async () => {
+  it("keeps ready Herdr status to one calm startup row", async () => {
     const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
     const data = {
       modelName: "Claude Sonnet 4",
@@ -479,17 +479,64 @@ describe("sf-welcome", () => {
     };
 
     const plain = stripAnsi(new SfWelcomeOverlay(data).render(180).join("\n"));
+    const herdrLines = plain.split("\n").filter((line) => line.includes("Herdr (Multiplexer)"));
 
-    expect(plain).toContain("Herdr (Multiplexer)");
-    expect(plain).toContain("0.8.0-preview");
-    expect(plain).toContain("preview");
-    expect(plain).toContain("control 0.4.0");
-    expect(plain).toContain("bridge schema 8");
-    expect(plain).not.toContain("Pi state v8");
-    const herdrLines = plain
-      .split("\n")
-      .filter((line) => line.includes("Herdr (Multiplexer)") || line.includes("control 0.4.0"));
-    expect(herdrLines.join("\n")).not.toContain("latest");
+    expect(herdrLines).toHaveLength(1);
+    expect(herdrLines[0]).toContain("0.8.0-preview");
+    expect(herdrLines[0]).toContain("tools ready");
+    expect(plain).not.toContain("control 0.4.0");
+    expect(plain).not.toContain("bridge schema 8");
+    expect(plain).not.toContain("protocol 19");
+  });
+
+  it("keeps degraded Herdr remediation inline", async () => {
+    const { SfWelcomeOverlay } = await import("../lib/splash-component.ts");
+    const base = {
+      modelName: "Claude Sonnet 4",
+      providerName: "anthropic",
+      loadedCounts: { extensions: 3, skills: 1, promptTemplates: 0 },
+      recentSessions: [],
+      extensionHealth: [],
+      slackConnected: false,
+      monthlyCost: 0,
+      monthlyBudget: 3000,
+    };
+    const shared = {
+      extensionEnabled: true,
+      toolActive: false,
+      packageInstalled: true,
+      activeControlEnv: false,
+      passiveStatusBridge: false,
+      piIntegration: { kind: "missing" as const, path: "/example/bridge.ts", loading: false },
+      loading: false,
+    };
+    const cases = [
+      {
+        status: { ...shared, kind: "tool-only" as const, toolActive: true },
+        expected: "Tools active · start Pi inside Herdr",
+      },
+      {
+        status: { ...shared, kind: "installed-not-active" as const },
+        expected: "Package installed · start Pi inside Herdr",
+      },
+      {
+        status: { ...shared, kind: "missing" as const, packageInstalled: false },
+        expected: "Not installed · /sf-herdr doctor",
+      },
+      {
+        status: { ...shared, kind: "disabled" as const, extensionEnabled: false },
+        expected: "Disabled",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const plain = stripAnsi(
+        new SfWelcomeOverlay({ ...base, herdrRuntime: testCase.status }).render(180).join("\n"),
+      );
+      const herdrLines = plain.split("\n").filter((line) => line.includes("Herdr (Multiplexer)"));
+      expect(herdrLines).toHaveLength(1);
+      expect(herdrLines[0]).toContain(testCase.expected);
+    }
   });
 
   it("keeps optional setup rows calm when disabled or missing", async () => {

@@ -21,6 +21,10 @@
 import type { Component } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { glyph, resolveGlyphMode, type GlyphMode } from "../../../lib/common/glyph-policy.ts";
+import {
+  languageFullName,
+  type SupportedLspLanguage,
+} from "../../../lib/common/sf-lsp-health/types.ts";
 import type { SplashData } from "./types.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -541,6 +545,21 @@ function formatSfCliStatusValue(data: SplashData, mode: GlyphMode): string {
   return `${SF_GREEN("✓")} ${SF_GREEN("Installed")}${suffix}`;
 }
 
+function formatLspStatusValue(data: SplashData): string {
+  if (data.lspEnabled === false) return `${MUTED("○")} ${MUTED("Disabled")}`;
+
+  const languages: SupportedLspLanguage[] = ["apex", "lwc", "agentscript"];
+  const parts = languages.map((language) => {
+    const availability = data.lspHealth?.byLanguage[language].availability ?? "unknown";
+    const label = languageFullName(language);
+    if (availability === "available") return SF_GREEN(`✓ ${label}`);
+    if (availability === "unavailable") return SF_RED(`✗ ${label}`);
+    return MUTED(`○ ${label}`);
+  });
+
+  return parts.join(` ${MUTED("·")} `);
+}
+
 function formatNodeRuntimeStatusValue(data: SplashData): string {
   const node = data.nodeRuntime;
   if (!node || node.loading) return MUTED("Checking");
@@ -568,48 +587,27 @@ function formatHerdrRuntimeStatusValue(data: SplashData): string {
     const version = herdr.runtimeVersion
       ? compactHerdrRuntimeVersion(herdr.runtimeVersion)
       : undefined;
-    const identity = [version, herdr.runtimeChannel].filter(Boolean).join(" · ");
-    return `${SF_GREEN("✓")} ${identity ? SF_GREEN(identity) : SF_GREEN("tools ready")}${identity ? ` ${MUTED("· tools ready")}` : ""}`;
+    if (herdr.piIntegration.kind !== "installed" && herdr.packageInstalled) {
+      const identity = version ? `${version} · ` : "";
+      return `${SF_ORANGE("!")} ${SF_ORANGE(`${identity}Pi bridge setup needed`)}`;
+    }
+    return version
+      ? `${SF_GREEN("✓")} ${SF_GREEN(version)} ${MUTED("· tools ready")}`
+      : `${SF_GREEN("✓")} ${SF_GREEN("tools ready")}`;
   }
   if (herdr.kind === "tool-only") {
-    return `${SF_ORANGE("!")} ${SF_ORANGE("tool active")} ${MUTED("· not inside Herdr")}`;
+    return `${SF_ORANGE("!")} ${SF_ORANGE("Tools active")} ${MUTED("· start Pi inside Herdr")}`;
   }
   if (herdr.kind === "installed-not-active") {
     const detail = herdr.activeControlEnv
       ? "· reload or check package filters"
-      : "· start pi inside Herdr";
-    return `${SF_ORANGE("!")} ${SF_ORANGE("package installed")} ${MUTED(detail)}`;
+      : "· start Pi inside Herdr";
+    return `${SF_ORANGE("!")} ${SF_ORANGE("Package installed")} ${MUTED(detail)}`;
   }
   if (herdr.kind === "disabled") {
-    return `${MUTED("○")} ${MUTED("sf-herdr disabled")}`;
+    return `${MUTED("○")} ${MUTED("Disabled")}`;
   }
-  return `${SF_ORANGE("!")} ${SF_ORANGE("package not installed")} ${MUTED("· upstream Herdr inactive")}`;
-}
-
-function herdrActionHint(data: SplashData): string | null {
-  const herdr = data.herdrRuntime;
-  if (!herdr || herdr.kind === "disabled") return null;
-  if (herdr.kind === "missing") return "pi install npm:@ogulcancelik/pi-herdr";
-  if (herdr.kind === "installed-not-active") {
-    return herdr.activeControlEnv
-      ? "/reload, or check pi package filters"
-      : "run pi inside Herdr for pane multiplexing";
-  }
-  if (herdr.piIntegration.kind !== "installed" && herdr.packageInstalled) {
-    return "herdr integration install pi";
-  }
-  if (herdr.kind === "ready") {
-    const details = [
-      herdr.controlPackageVersion ? `control ${herdr.controlPackageVersion}` : undefined,
-      herdr.piIntegration.kind === "installed"
-        ? `bridge schema ${herdr.piIntegration.version ?? "unknown"}`
-        : undefined,
-      typeof herdr.runtimeProtocol === "number" ? `protocol ${herdr.runtimeProtocol}` : undefined,
-    ].filter(Boolean);
-    return details.length ? details.join(" · ") : null;
-  }
-  if (herdr.kind === "tool-only") return "run pi inside Herdr for pane multiplexing";
-  return null;
+  return `${SF_ORANGE("!")} ${SF_ORANGE("Not installed")} ${MUTED("· /sf-herdr doctor")}`;
 }
 
 function formatFontRuntimeStatusValue(data: SplashData, mode: GlyphMode): string {
@@ -975,10 +973,11 @@ function buildLeftColumn(
     }
   }
 
-  // SF CLI status only. Org/API/config context belongs in sf-devbar, not in
-  // the welcome splash. Keep this directly under the gateway row so both
-  // environment statuses read as one aligned block.
+  // Salesforce developer runtime readiness stays grouped: CLI first, then
+  // the three language servers, followed by their shared Node.js runtime.
+  // sf-lsp owns probing; this row only renders its shared snapshot.
   lines.push(formatGlyphInfoRow("cli", mode, "SF CLI", formatSfCliStatusValue(data, mode)));
+  lines.push(formatGlyphInfoRow("lsp", mode, "SF LSP", formatLspStatusValue(data)));
 
   lines.push(
     formatGlyphInfoRow("nodeRuntime", mode, "Node.js", formatNodeRuntimeStatusValue(data)),
@@ -990,14 +989,11 @@ function buildLeftColumn(
     );
   }
 
+  // Herdr always consumes exactly one startup row. Healthy protocol/control
+  // identity belongs in on-demand detail rather than a second gray sub-line.
   lines.push(
     formatGlyphInfoRow("herdr", mode, "Herdr (Multiplexer)", formatHerdrRuntimeStatusValue(data)),
   );
-  const herdrHint = herdrActionHint(data);
-  if (herdrHint) {
-    const truncated = truncateToWidth(herdrHint, Math.max(10, colWidth - 4), "…");
-    lines.push(`   ${MUTED(`→ ${truncated}`)}`);
-  }
 
   lines.push(formatGlyphInfoRow("fonts", mode, "Fonts", formatFontRuntimeStatusValue(data, mode)));
   const fontHint = fontActionHint(data);

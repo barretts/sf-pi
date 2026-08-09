@@ -15,13 +15,14 @@
  *        clean        — the last check found no errors
  *        error        — the last check found errors
  *
- * The renderer in `sf-devbar` combines both signals into a single glyph +
- * color so the top bar reflects availability AND recent work at a glance.
+ * SF Welcome consumes `availability` for its one-line startup readiness row.
+ * `activity` remains in the shared contract for compatibility with sf-lsp's
+ * existing publisher, but it never changes the meaning of a Welcome checkmark.
  *
  * Why this lives on `globalThis`:
  *   Pi's extension loader (jiti) can give each extension its own module
  *   graph. That means plain module-level state in this file would create
- *   *two* separate registries — one in sf-lsp and one in sf-devbar — and
+ *   *two* separate registries — one in sf-lsp and one in sf-welcome — and
  *   writes in one would never reach the other. We intentionally pin the
  *   state on `globalThis.__sfLspHealthRegistry__` (a symbol in the
  *   process global) so every caller, regardless of which module graph
@@ -39,7 +40,7 @@ export interface SfLspLanguageEntry {
   language: SupportedLspLanguage;
   availability: SfLspAvailability;
   activity: SfLspActivity;
-  /** Reason string when `unavailable` — used for tooltips/debugging. */
+  /** Reason string when `unavailable` — used by on-demand diagnostics. */
   unavailableDetail?: string;
   /** Count of diagnostics from the last check (error status only). */
   lastErrorCount?: number;

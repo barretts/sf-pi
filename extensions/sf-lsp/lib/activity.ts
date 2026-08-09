@@ -3,11 +3,9 @@
  * Per-language LSP activity store.
  *
  * Pure state + formatters for:
- *   - `setStatus()` footer segment (picked up by sf-devbar via
- *     `footerData.getExtensionStatuses()`)
- *   - HUD overlay rows
- *   - Below-editor widget line
- *   - Rich `/sf-lsp` panel
+ *   - Rich `/sf-lsp` doctor and recent-activity panel
+ *   - Human-only transcript decisions
+ *   - Working-indicator lifecycle
  *
  * No rendering (ANSI/theme) lives here — only data + label/formatter helpers
  * that the thin rendering modules consume. That keeps this file fully
@@ -109,8 +107,7 @@ export function resetActivityStore(store: LspActivityStore): void {
   store.hasActivity = false;
 }
 
-/** Seed entries from a doctor probe so the HUD/footer can show availability
- *  even before the first tool_result check fires. */
+/** Seed entries from a doctor probe before the first tool_result check fires. */
 export function seedFromDoctor(store: LspActivityStore, statuses: LspDoctorStatus[]): void {
   for (const status of statuses) {
     const entry = ensureEntry(store, status.language);
@@ -123,8 +120,7 @@ export function seedFromDoctor(store: LspActivityStore, statuses: LspDoctorStatu
   }
 }
 
-/** Mark a language as actively checking (used to drive the working indicator
- *  and a transient "checking…" badge on the HUD). */
+/** Mark a language as actively checking for the panel and working indicator. */
 export function markChecking(
   store: LspActivityStore,
   language: SupportedLanguage,

@@ -1,7 +1,7 @@
 {
   "id": "sf-lsp",
   "name": "SF LSP",
-  "description": "Real-time Salesforce LSP diagnostics on write/edit with a working-indicator spinner, transcript rows, and a permanent top-bar health segment in sf-devbar",
+  "description": "Real-time Salesforce LSP diagnostics on write/edit with a working indicator, transcript rows, and one-line startup readiness in SF Welcome",
   "category": "assistive",
   "maturity": "stable",
   "defaultEnabled": true,
@@ -9,7 +9,7 @@
   "commands": ["/sf-lsp"],
   "events": ["session_start", "session_shutdown", "tool_result"],
   "docs": {
-    "summary": "Advisory LSP diagnostics on write/edit for Apex/LWC/Agent Script files. Surfaces appear as a working indicator, transcript row, top-bar health segment (via sf-lsp-health registry), and a /sf-lsp doctor + activity panel.",
+    "summary": "Advisory LSP diagnostics on write/edit for Apex/LWC/Agent Script files. Surfaces appear as a working indicator, transcript row, one-line SF Welcome readiness row (via sf-lsp-health), and a /sf-lsp doctor + activity panel.",
     "primaryFiles": [
       "index.ts",
       "lib/lsp-client.ts",

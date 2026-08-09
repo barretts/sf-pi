@@ -53,7 +53,6 @@ import {
   restoreFromSessionEntries,
 } from "../../lib/common/sf-environment/shared-runtime.ts";
 import { readPersistedSfEnvironment } from "../../lib/common/sf-environment/persisted-cache.ts";
-import { getSfLspHealth, onSfLspHealthChange } from "../../lib/common/sf-lsp-health/index.ts";
 import type { SfEnvironment } from "../../lib/common/sf-environment/types.ts";
 import {
   formatAgentContext,
@@ -138,15 +137,8 @@ export default function sfDevBar(pi: ExtensionAPI) {
   // Track the latest git branch from footerData for use in async callbacks
   let latestGitBranch: string | null = null;
 
-  // LSP health is read fresh from lib/common/sf-lsp-health at every
-  // top-bar render (see buildTopBarState). The widget factory subscribes
-  // to health changes and calls tui.requestRender() on each update so
-  // the bar stays in sync.
-
-  // Reference to the top-bar component's requestRender. Needed because the
-  // top bar is now driven by a Pi widget factory (not a static string
-  // array) so we can right-align the LSP segment against the terminal's
-  // current width.
+  // Reference to the top-bar component's requestRender. The factory keeps
+  // rendering width-aware so long session/model/project facts stay bounded.
   let requestTopBarRender: (() => void) | null = null;
 
   // Use the shared exec adapter instead of a per-extension wrapper
@@ -209,10 +201,6 @@ export default function sfDevBar(pi: ExtensionAPI) {
       gitChanges,
       isThinking,
       imageWidthPill,
-      // Always read fresh — the widget factory re-renders on every health
-      // change, and buildTopBarState is only called from inside render(),
-      // so this stays consistent with the terminal output.
-      lspHealth: getSfLspHealth(),
       colors: devbarColors,
     };
   }
@@ -258,25 +246,11 @@ export default function sfDevBar(pi: ExtensionAPI) {
     requestTopBarRender?.();
   }
 
-  /**
-   * Mount the top-bar widget as a component factory so we have access to
-   * the current terminal width at render time. This is what lets us
-   * right-align the LSP health segment against the terminal's right edge
-   * even as the window resizes.
-   */
+  /** Mount a width-aware top-bar component so resize truncation stays correct. */
   function mountTopBarWidget(ctx: ExtensionContext): void {
     if (!ctx.hasUI) return;
     ctx.ui.setWidget(WIDGET_KEY, (tui, theme) => {
       requestTopBarRender = () => tui.requestRender();
-
-      // Subscribe to LSP health changes *inside* the widget factory so
-      // `tui.requestRender()` is always bound by the time any listener
-      // fires. Subscribing from session_start is racy: the first doctor
-      // probe can resolve before Pi has called our factory, leaving no
-      // way to trigger a repaint until some OTHER event forces one.
-      const unsub = onSfLspHealthChange(() => {
-        tui.requestRender();
-      });
 
       return {
         render: (width: number): string[] => {
@@ -287,7 +261,6 @@ export default function sfDevBar(pi: ExtensionAPI) {
         },
         invalidate() {},
         dispose() {
-          unsub();
           requestTopBarRender = null;
         },
       };
@@ -411,9 +384,6 @@ export default function sfDevBar(pi: ExtensionAPI) {
 
     // Render initial top bar (without git branch — footer callback provides it)
     updateTopBar(ctx);
-
-    // LSP health subscription lives inside the widget factory now (see
-    // `mountTopBarWidget`) so it can't race the first render cycle.
 
     // Activate the custom footer
     ctx.ui.setFooter((tui, theme, footerData) => {

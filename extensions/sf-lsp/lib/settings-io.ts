@@ -11,9 +11,9 @@
  * Project settings override global settings. Missing keys fall back to
  * defaults (`verbose: false`).
  *
- * The former `hud` and `icon` keys were removed when the HUD overlay was
- * replaced by sf-devbar's permanent top-bar LSP segment. Settings files
- * written by older builds are still readable; unknown keys are ignored.
+ * The former `hud` and `icon` keys were removed with the retired persistent
+ * status overlays. Settings files written by older builds remain readable;
+ * unknown keys are ignored.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";

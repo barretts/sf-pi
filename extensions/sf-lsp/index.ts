@@ -11,14 +11,13 @@
  *   Surface                | Pi API                                 | Lifetime
  *   -----------------------|----------------------------------------|--------------------
  *   Working indicator      | ctx.ui.setWorkingIndicator             | streaming window
- *   Top-bar LSP segment    | sf-lsp-health registry -> sf-devbar    | permanent
+ *   Welcome readiness row  | sf-lsp-health registry -> sf-welcome   | startup header
  *   Transcript row         | pi.appendEntry + registerEntryRenderer  | per event
  *   Rich /sf-lsp panel     | ctx.ui.custom overlay + SelectList     | on-demand
  *
- * Earlier revisions shipped a separate HUD overlay; it was removed in
- * favor of rendering permanent per-language availability inside
- * sf-devbar's top bar via the shared `lib/common/sf-lsp-health` registry.
- * The transcript row, working indicator, and `/sf-lsp` panel all stay.
+ * The shared `lib/common/sf-lsp-health` registry keeps probing owned here
+ * while SF Welcome renders one passive, per-language startup row. File-level
+ * activity stays in the working indicator, transcript, and `/sf-lsp` panel.
  *
  * NOTE: sf-lsp intentionally does NOT override the built-in `edit`/`write`
  * tools. Pi's cross-extension conflict detector refuses to load any
@@ -229,9 +228,9 @@ export default function sfLspExtension(pi: ExtensionAPI) {
 
       if (!ctx.hasUI) return;
 
-      // Probe doctor after the first-paint boot storm. The top-bar LSP
-      // segment starts dim/unknown, then fills in once the bounded local
-      // checks finish.
+      // Probe doctor after the first-paint boot storm. SF Welcome reads the
+      // shared snapshot as unknown first, then repaints its one-line readiness
+      // row once these bounded local checks finish.
       const doctorTimer = setTimeout(() => {
         if (isAborted(ctx)) return;
         void markBootStep("sf-lsp.doctor (deferred)", () => doctorLsp(ctx.cwd))
@@ -541,10 +540,6 @@ export default function sfLspExtension(pi: ExtensionAPI) {
       const action = await openSfLspPanel(ctx, {
         store: activity,
         doctorStatuses: statuses,
-        // Retained fields for panel surface API stability. The HUD was
-        // removed; pass false so the panel doesn't offer toggle actions
-        // that no longer mean anything.
-        hudEnabled: false,
         verboseEnabled: uiSettings.verbose,
         lifecycle: {
           show: true,
@@ -600,7 +595,7 @@ export default function sfLspExtension(pi: ExtensionAPI) {
         "  /sf-lsp install status Show per-component install state",
         "  /sf-lsp verbose on|off Toggle transcript row for every check",
         "",
-        "Top-bar LSP status is always visible in the sf-devbar top bar.",
+        "Startup readiness appears as one SF LSP row in SF Welcome.",
       ].join("\n"),
       "warning",
     );
@@ -767,18 +762,6 @@ export default function sfLspExtension(pi: ExtensionAPI) {
         "sf-lsp doctor refreshed",
         renderDoctorReport(statuses),
         statuses.some((s) => !s.available) ? "warning" : "info",
-      );
-      return;
-    }
-
-    if (action === "toggle-hud") {
-      // HUD was retired — redirect to the doctor refresh so the action
-      // doesn't silently no-op.
-      await emitLspOutput(
-        ctx,
-        "sf-lsp HUD retired",
-        "sf-lsp HUD was retired — use the sf-devbar top-bar LSP segment.",
-        "info",
       );
       return;
     }

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { describe, expect, it } from "vitest";
-import { renderTopBar, type TopBarState, type BarTheme } from "../lib/top-bar.ts";
+import { visibleWidth } from "@earendil-works/pi-tui";
+import { renderTopBar, renderTopBarLine, type TopBarState, type BarTheme } from "../lib/top-bar.ts";
 
 // -------------------------------------------------------------------------------------------------
 // Stub theme — returns plain text with markers for testing
@@ -130,6 +131,47 @@ describe("renderTopBar", () => {
   it("shows Pi's public session name when present", () => {
     const [line] = renderTopBar(makeState({ sessionName: "Review gateway changes" }), stubTheme);
     expect(line).toContain("session:Review gateway changes");
+  });
+
+  it("keeps LSP readiness out of the DevBar", () => {
+    const legacyState = {
+      ...makeState(),
+      lspHealth: {
+        revision: 1,
+        byLanguage: {
+          apex: { language: "apex", availability: "available", activity: "idle" },
+          lwc: { language: "lwc", availability: "available", activity: "idle" },
+          agentscript: {
+            language: "agentscript",
+            availability: "available",
+            activity: "idle",
+          },
+        },
+      },
+    } as TopBarState & { lspHealth: object };
+
+    const [line] = renderTopBarLine(legacyState, stubTheme, 200);
+    expect(line).not.toContain("LSP[");
+    expect(line).not.toContain("Apex:");
+    expect(line).not.toContain("AgentScript:");
+  });
+
+  it("bounds the remaining DevBar content to terminal width", () => {
+    const [line] = renderTopBarLine(
+      makeState({ sessionName: `Review-${"gateway-".repeat(20)}` }),
+      stubTheme,
+      56,
+    );
+
+    expect(visibleWidth(line)).toBeLessThanOrEqual(56);
+  });
+
+  it("bounds wide-character session names by terminal cells", () => {
+    const sessionName = `Review-${"🚀".repeat(40)}`;
+    const [line] = renderTopBarLine(makeState({ sessionName }), stubTheme, 80);
+
+    expect(visibleWidth(line)).toBeLessThanOrEqual(80);
+    expect(line).not.toContain(sessionName);
   });
 
   it("shows git branch and changes", () => {

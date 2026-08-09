@@ -14,18 +14,10 @@
  * Pure function: takes state, returns themed string array (one line).
  */
 
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import { formatGitChanges, type GitChanges } from "./git-changes.ts";
 import { DEFAULT_DEVBAR_COLORS, type DevbarColors } from "./colors.ts";
 import { resolveGlyphMode, type GlyphMode } from "../../../lib/common/glyph-policy.ts";
-import type {
-  SfLspActivity,
-  SfLspAvailability,
-  SfLspHealthSnapshot,
-  SfLspLanguageEntry,
-  SupportedLspLanguage,
-} from "../../../lib/common/sf-lsp-health/index.ts";
-import { languageFullName } from "../../../lib/common/sf-lsp-health/types.ts";
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -40,8 +32,6 @@ export type BarTheme = {
 export type TopBarState = {
   /** Model display name, e.g. "Example Gateway Model". */
   modelName?: string;
-  /** Per-language Salesforce LSP health snapshot. */
-  lspHealth?: SfLspHealthSnapshot;
   /** Model provider id, e.g. "sf-llm-gateway" or "anthropic". */
   modelProvider?: string;
   /** Context window size in tokens, e.g. 1000000. */
@@ -88,203 +78,61 @@ const SESSION_SEGMENT_MAX_WIDTH = 32;
 // Renderer
 // -------------------------------------------------------------------------------------------------
 
-/**
- * Render the top bar as a single themed line.
- *
- * Back-compat thin wrapper over `renderTopBarParts`. The permanent LSP
- * health segment lives on the right side; the widget factory in
- * `index.ts` handles right-alignment at the current terminal width.
- */
+/** Render the DevBar as one themed line without cross-extension health status. */
 export function renderTopBar(state: TopBarState, theme: BarTheme): string[] {
-  const { left, right } = renderTopBarParts(state, theme);
-  return right ? [`${left}  ${right}`] : [left];
+  return [renderTopBarContent(state, theme)];
 }
 
-/**
- * Terminal-width-aware single-line renderer. Left side is flush-left,
- * right side (permanent LSP health segment) is flush-right at the
- * current terminal width. If the combined content doesn't fit, the
- * right side wins and the left side is truncated with an ellipsis —
- * availability is the permanent signal users asked for.
- */
+/** Bound the single DevBar line to the current terminal width. */
 export function renderTopBarLine(state: TopBarState, theme: BarTheme, width: number): string[] {
-  const { left, right } = renderTopBarParts(state, theme);
-  if (!right) return [truncateToWidth(left, width)];
-  const leftW = visibleWidth(left);
-  const rightW = visibleWidth(right);
-  const minGap = 2;
-
-  if (rightW >= width) {
-    return [truncateToWidth(right, width, "…")];
-  }
-  if (rightW + minGap >= width) {
-    return [`${" ".repeat(width - rightW)}${right}`];
-  }
-
-  if (leftW + minGap + rightW <= width) {
-    const pad = " ".repeat(width - leftW - rightW);
-    return [`${left}${pad}${right}`];
-  }
-
-  // Not enough room — truncate the left side to make room for the right.
-  const budget = Math.max(0, width - rightW - minGap);
-  const truncatedLeft = truncateToWidth(left, budget, "…");
-  const actual = visibleWidth(truncatedLeft);
-  const gap = Math.max(minGap, width - actual - rightW);
-  return [`${truncatedLeft}${" ".repeat(gap)}${right}`];
+  return [truncateToWidth(renderTopBarContent(state, theme), width, "…")];
 }
 
-/**
- * Render the top bar as left / right joined segments. Used by the widget
- * factory in `extensions/sf-devbar/index.ts` to right-align the LSP
- * health segment against the terminal's right edge.
- */
-export function renderTopBarParts(
-  state: TopBarState,
-  theme: BarTheme,
-): { left: string; right: string } {
+function renderTopBarContent(state: TopBarState, theme: BarTheme): string {
   const sep = ` ${theme.fg("dim", SEP_CHAR)} `;
   const mode = state.glyphMode ?? resolveGlyphMode();
   const colors = state.colors ?? DEFAULT_DEVBAR_COLORS;
-  const leftSegments: string[] = [];
+  const segments: string[] = [];
 
   // 1. SF Pi brand icon + powerline separator + model segment (no gap)
   const brandIcon = theme.bold(theme.fg("accent", mode === "ascii" ? "sf-pi" : "\ue22c"));
   const modelSeg = formatModelSegment(state, theme, mode, colors);
-  leftSegments.push(brandIcon + sep + modelSeg);
+  segments.push(brandIcon + sep + modelSeg);
 
   // 2. Thinking level (rainbow gradient, hidden when "off")
   const thinkSeg = formatThinkingSegment(state.thinkingLevel, theme, colors);
-  if (thinkSeg) leftSegments.push(thinkSeg);
+  if (thinkSeg) segments.push(thinkSeg);
 
   // 3. Working folder — teal color matching pi-powerline-footer
-  leftSegments.push(formatFolderSegment(state.folderName, mode, colors));
+  segments.push(formatFolderSegment(state.folderName, mode, colors));
 
   // 4. Git branch + changes
   const gitSeg = formatGitSegment(state, theme, mode);
-  if (gitSeg) leftSegments.push(gitSeg);
+  if (gitSeg) segments.push(gitSeg);
 
   // 5. Context window progress bar
   const ctxSeg = formatContextSegment(state.contextPercent, theme, colors);
-  if (ctxSeg) leftSegments.push(ctxSeg);
+  if (ctxSeg) segments.push(ctxSeg);
 
   // 6. Optional inline-image-width pill — only when the user has nudged the
   //    setting away from Pi's default, so the bar stays uncluttered for
   //    everyone else.
   if (state.imageWidthPill) {
-    leftSegments.push(theme.fg("muted", state.imageWidthPill));
+    segments.push(theme.fg("muted", state.imageWidthPill));
   }
 
   // 7. Thinking indicator (subtle pulse when agent is working)
   if (state.isThinking) {
-    leftSegments.push(theme.fg("accent", "⟳"));
+    segments.push(theme.fg("accent", "⟳"));
   }
 
   // 8. Optional public Pi session name. Keep it last so model, project,
   // context, and active-work facts win when the terminal is narrow.
   const sessionSeg = formatSessionSegment(state.sessionName, theme);
-  if (sessionSeg) leftSegments.push(sessionSeg);
+  if (sessionSeg) segments.push(sessionSeg);
 
-  const rightSegments: string[] = [];
-
-  // LSP health segment — permanent, full names, colored by availability.
-  const lspSeg = formatLspHealthSegment(state.lspHealth, theme);
-  if (lspSeg) rightSegments.push(lspSeg);
-
-  return {
-    left: leftSegments.join(sep),
-    right: rightSegments.join(sep),
-  };
+  return segments.join(sep);
 }
-
-/**
- * Render the permanent LSP health segment:
- *
- *   LSP[Apex: ● | LWC: ✓ | AgentScript: ◐]
- *
- * The `LSP[…]` wrapper labels the segment so new users don't mistake the
- * three colored dots for "feature enabled" indicators — they report the
- * health of the Apex / LWC / Agent Script Language Server Protocol
- * backends that power sf-lsp diagnostics.
- *
- * The glyph blends *availability* (can we run diagnostics for this
- * language at all?) with the *most recent activity* (is a check running
- * right now? did the last one pass?). This gives the user a single
- * at-a-glance read:
- *
- *   ◌  dim        — unknown (not probed yet / session just started)
- *   ○  warning    — unavailable (LSP jar / server / binary missing)
- *   ●  success    — available, no activity yet (ready / healthy)
- *   ◐  accent     — check in flight right now
- *   ✓  success    — last check was clean
- *   ✗  error      — last check reported errors
- *
- * On color fallback terminals the glyph shape alone still disambiguates.
- */
-export function formatLspHealthSegment(
-  snapshot: SfLspHealthSnapshot | undefined,
-  theme: BarTheme,
-): string | null {
-  if (!snapshot) return null;
-  const languages: SupportedLspLanguage[] = ["apex", "lwc", "agentscript"];
-  const bar = theme.fg("dim", " | ");
-  const body = languages
-    .map((language) => {
-      const entry = snapshot.byLanguage[language];
-      const { glyph, color, bold } = resolveLspStatus(entry);
-      const label = theme.fg("muted", `${languageFullName(language)}:`);
-      const coloredGlyph = bold ? theme.fg(color, theme.bold(glyph)) : theme.fg(color, glyph);
-      return `${label} ${coloredGlyph}`;
-    })
-    .join(bar);
-  const open = theme.fg("muted", "LSP[");
-  const close = theme.fg("muted", "]");
-  return `${open}${body}${close}`;
-}
-
-export type LspStatusRender = {
-  glyph: string;
-  color: "success" | "error" | "warning" | "accent" | "muted" | "dim";
-  bold: boolean;
-};
-
-/**
- * Pure glyph/color resolver. Exported so tests can assert on the raw
- * render without having to parse ANSI escape sequences.
- *
- * Activity dominates when the language is available: 'error' is stickiest
- * because unresolved errors matter more than "last clean check". When
- * availability is unknown or unavailable, activity is ignored.
- */
-export function resolveLspStatus(entry: SfLspLanguageEntry): LspStatusRender {
-  switch (entry.availability) {
-    case "unknown":
-      return { glyph: "◌", color: "dim", bold: false };
-    case "unavailable":
-      return { glyph: "○", color: "warning", bold: true };
-    case "available":
-      return renderActivityGlyph(entry.activity);
-    default:
-      return { glyph: "◌", color: "dim", bold: false };
-  }
-}
-
-function renderActivityGlyph(activity: SfLspActivity): LspStatusRender {
-  switch (activity) {
-    case "checking":
-      return { glyph: "◐", color: "accent", bold: true };
-    case "clean":
-      return { glyph: "✓", color: "success", bold: true };
-    case "error":
-      return { glyph: "✗", color: "error", bold: true };
-    case "idle":
-    default:
-      return { glyph: "●", color: "success", bold: false };
-  }
-}
-
-// Keep types importable for other callers.
-export type { SfLspAvailability, SfLspActivity };
 
 // -------------------------------------------------------------------------------------------------
 // Segment formatters

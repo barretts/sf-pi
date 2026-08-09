@@ -93,6 +93,7 @@ import {
 } from "../../lib/common/monthly-usage/store.ts";
 import { subscribeSlackStatus } from "../../lib/common/slack-status/store.ts";
 import { subscribeTldrawStatus } from "../../lib/common/tldraw-status/store.ts";
+import { onSfLspHealthChange } from "../../lib/common/sf-lsp-health/index.ts";
 import { isSfPiExtensionEnabled } from "../../lib/common/sf-pi-extension-state.ts";
 import { FONT_FAMILY_NAME, isFontFamilyInstalled } from "./lib/font-status.ts";
 import { readWelcomeState, writeWelcomeState } from "./lib/state-store.ts";
@@ -142,6 +143,7 @@ export default function sfWelcome(pi: ExtensionAPI) {
   let unsubscribeUsageStore: (() => void) | null = null;
   let unsubscribeSlackStore: (() => void) | null = null;
   let unsubscribeTldrawStore: (() => void) | null = null;
+  let unsubscribeLspStore: (() => void) | null = null;
   let startupRunId = 0;
   let activeSessionGeneration = 0;
   let activeSessionKey: string | null = null;
@@ -315,6 +317,8 @@ export default function sfWelcome(pi: ExtensionAPI) {
     unsubscribeSlackStore = null;
     unsubscribeTldrawStore?.();
     unsubscribeTldrawStore = null;
+    unsubscribeLspStore?.();
+    unsubscribeLspStore = null;
   }
 
   // --- Session start: show splash screen ---
@@ -742,6 +746,14 @@ export default function sfWelcome(pi: ExtensionAPI) {
       scheduleSplashRepaint(ctx, generation);
     });
 
+    unsubscribeLspStore?.();
+    unsubscribeLspStore = onSfLspHealthChange((snapshot) => {
+      if (runId !== startupRunId || !isActiveSession(ctx, generation)) return;
+      data.lspEnabled = isSfPiExtensionEnabled(ctx.cwd, "sf-lsp");
+      data.lspHealth = snapshot;
+      scheduleSplashRepaint(ctx, generation);
+    });
+
     // Refresh announcements from the remote feed (when configured) in the
     // background. Updates the data payload in place and repaints the splash
     // once the fetch settles. The sync payload has already populated
@@ -836,6 +848,8 @@ export default function sfWelcome(pi: ExtensionAPI) {
     unsubscribeSlackStore = null;
     unsubscribeTldrawStore?.();
     unsubscribeTldrawStore = null;
+    unsubscribeLspStore?.();
+    unsubscribeLspStore = null;
     endActiveSession(ctx);
   });
 
@@ -855,7 +869,7 @@ export default function sfWelcome(pi: ExtensionAPI) {
       value: "summary",
       label: "Show splash summary",
       description:
-        "Print the same model, monthly-cost, gateway/slack, Node CA, release freshness, extension health, and recent-session lines the splash shows on startup.",
+        "Print the same model, usage, integration, LSP/Herdr readiness, release freshness, extension health, and recent-session lines the splash shows on startup.",
       group: "Diagnostics",
     },
     {
@@ -1033,6 +1047,7 @@ export default function sfWelcome(pi: ExtensionAPI) {
       : "hidden";
     const slackStatus = data.slackVisible ? (data.slackStatus?.kind ?? "not checked") : "hidden";
     const tldrawStatus = formatPlainTldrawStatus(data);
+    const lspStatus = formatPlainLspStatus(data);
     const nodeCertStatus = data.nodeCert?.kind ?? "not checked";
     const nodeRuntimeStatus = data.nodeRuntime
       ? `${data.nodeRuntime.version} (${data.nodeRuntime.kind}, requires >=${data.nodeRuntime.requiredVersion})`
@@ -1068,6 +1083,7 @@ export default function sfWelcome(pi: ExtensionAPI) {
       `Gateway: ${gatewayStatus}`,
       `Slack: ${slackStatus}`,
       `SF tldraw: ${tldrawStatus}`,
+      `SF LSP: ${lspStatus}`,
       `Node.js: ${nodeRuntimeStatus}`,
       `Herdr (Multiplexer): ${herdrRuntimeStatus}`,
       `Fonts: ${fontRuntimeStatus}`,
@@ -1103,6 +1119,18 @@ export default function sfWelcome(pi: ExtensionAPI) {
     if (status.kind === "stale-config") return "restart needed";
     if (status.kind === "auth-error") return "auth error";
     return "incompatible runtime";
+  }
+
+  function formatPlainLspStatus(data: SplashData): string {
+    if (data.lspEnabled === false) return "disabled";
+    const labels = [
+      ["Apex", data.lspHealth?.byLanguage.apex.availability],
+      ["LWC", data.lspHealth?.byLanguage.lwc.availability],
+      ["Agent Script", data.lspHealth?.byLanguage.agentscript.availability],
+    ] as const;
+    return labels
+      .map(([label, availability]) => `${label}=${availability ?? "unknown"}`)
+      .join(" · ");
   }
 
   function formatPlainBrowserRuntimeStatus(status: SplashData["browserRuntime"]): string {

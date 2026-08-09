@@ -9,11 +9,11 @@ Salesforce-branded splash screen that displays on startup with an animated Pi + 
 - Animated Pi + SALESFORCE wordmark with Salesforce-blue and pastel-rainbow palettes
 - Active model name and provider
 - Gateway-sourced monthly usage line when the active provider is SF LLM Gateway
-- Optional Slack and auth-gated LLM Gateway status only when enabled/configured,
-  plus lightweight SF CLI install/latest, Node.js runtime floor, Homebrew
-  status, Herdr multiplexer readiness, bundled font status, Hunk code-review
-  readiness, SF Browser `agent-browser` runtime status, Native Auto Update
-  status, and Node CA certificate status
+- Optional integration status only when enabled/configured, plus lightweight
+  SF CLI install/latest, one-line Apex/LWC/Agent Script LSP readiness, Node.js
+  runtime floor, Homebrew status, one-line Herdr multiplexer readiness, bundled
+  font status, Hunk code-review readiness, SF Browser `agent-browser` runtime
+  status, Native Auto Update status, and Node CA certificate status
 - **Privacy row** showing pi's anonymous-telemetry posture
   (`telemetry off (sf-pi default)` / `(user override)` / `telemetry on (user
 override)`). Driven by `lib/common/privacy/state.ts` — see
@@ -53,7 +53,7 @@ Dismissal triggers:
   └─ tool_call (agent working)
 
 session_shutdown
-  └─ clear overlay/header state, reset animation flags, and unsubscribe usage-store listeners
+  └─ clear overlay/header state, reset animation flags, and unsubscribe shared status listeners
 ```
 
 ## Key Architecture Decisions
@@ -114,9 +114,13 @@ session_shutdown
    readiness stays startup-safe: process-local pane-control env plus a small
    settings.json package check for `npm:@ogulcancelik/pi-herdr`, its local
    package version, and a bounded header read of Herdr's managed Pi bridge.
-   After first paint, a bounded local `herdr status client` probe adds the
-   installed runtime version, update channel, and protocol without checking for
-   or applying updates. Font detection is local-only and cache-first; Hunk,
+   After first paint, a bounded local `herdr status client` probe adds installed
+   runtime identity without checking for or applying updates. The startup row
+   remains one line; control, bridge-schema, and protocol detail stays in the
+   on-demand text summary. LSP readiness also uses a shared-store boundary:
+   SF Welcome reads `lib/common/sf-lsp-health` and subscribes for the existing
+   deferred sf-lsp doctor result instead of launching a duplicate probe. Font
+   detection is local-only and cache-first; Hunk,
    Homebrew, and `agent-browser` use deferred bounded version/prefix probes and
    never open a review UI, browser, Chrome/CDP session, Herdr pane, or
    package-manager update from the splash. The Herdr row reports installed
@@ -228,6 +232,7 @@ extensions/sf-welcome/
     herdr-runtime-status.test.ts← unit / smoke test
     homebrew-status.test.ts ← unit / smoke test
     hunk-status.test.ts     ← unit / smoke test
+    lsp-status.test.ts      ← unit / smoke test
     node-cert-status.test.ts← unit / smoke test
     recommendations-status.test.ts← unit / smoke test
     release-status.test.ts  ← unit / smoke test
@@ -275,8 +280,11 @@ uses it because upstream Pi owns Pi Runtime release-note surfaces.
 runtime latest-version result for 24 hours. The splash also caches font, Hunk,
 and Homebrew readiness under `<globalAgentDir>/sf-pi/sf-welcome/font-status.json`,
 `<globalAgentDir>/sf-pi/sf-welcome/hunk-status.json`, and
-`<globalAgentDir>/sf-pi/sf-welcome/homebrew-status.json`. SF Browser owns the
-shared `agent-browser` runtime cache at
+`<globalAgentDir>/sf-pi/sf-welcome/homebrew-status.json`. LSP readiness is
+intentionally process-local because discovery depends on the current project,
+PATH, and environment; SF Welcome renders unknown until sf-lsp publishes its
+bounded local doctor result. SF Browser owns the shared `agent-browser` runtime
+cache at
 `<globalAgentDir>/sf-pi/sf-browser/agent-browser-status.json`; SF Welcome only
 reads it cache-first and refreshes it with a deferred version probe. Native Auto
 Update status lives at `<globalAgentDir>/sf-pi/auto-update/status.json`. sf-pi
@@ -308,6 +316,11 @@ Terminal.app and some Powerlevel10k setups. Fixes:
   ```
 - iTerm2 / Ghostty / WezTerm / VS Code terminals don't need any of the
   above — they fall back to the color emoji font on their own.
+
+**The SF LSP row stays unknown after startup:**
+Run `/sf-lsp doctor`. SF Welcome only reads the shared readiness snapshot; it
+never starts its own language-server discovery pass. If sf-lsp is disabled, the
+row renders a calm `Disabled` state instead.
 
 **Herdr says the upstream package or Pi bridge is missing:**
 The current `herdr_layout`, `herdr_pane`, and `herdr_agent` tools come from the
