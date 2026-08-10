@@ -37,178 +37,44 @@ extensions — see [Credits](#credits) at the bottom of this README.
 
 ## Getting started
 
-Follow this one-time setup in order.
-
-### 1. Install Node.js and npm
-
-Install [Node.js](https://nodejs.org/) **22.19 or newer**, then use npm 11:
+Install [Node.js](https://nodejs.org/) 22.19 or newer, the latest supported
+[pi coding agent](https://pi.dev), and Salesforce CLI. Then install SF Pi:
 
 ```bash
-node --version
-npm install --global npm@11
-npm --version
-```
-
-### 2. Allow immediate package updates
-
-Some managed npm configurations delay newly published packages for seven days.
-Set the user-level release age to zero so Pi and its packages can update
-immediately:
-
-```bash
-npm config set min-release-age 0 --location=user
-npm config get min-release-age
-```
-
-The final command must print `0`. This changes the npm policy for every install
-run by your user, not only Pi.
-
-### 3. Install the latest Pi and SF Pi
-
-These unpinned commands install the latest available releases:
-
-```bash
-npm install --global --ignore-scripts @earendil-works/pi-coding-agent
-pi --version
+npm install --global @earendil-works/pi-coding-agent
 pi install git:github.com/salesforce/sf-pi
+pi
 ```
 
-### 4. Install or update Salesforce CLI
-
-```bash
-npm install --global @salesforce/cli@latest
-sf --version
-```
-
-### 5. Start Pi and verify the installation
-
-Run `pi`, then enter:
+Inside Pi:
 
 ```text
 /reload
 /sf-pi doctor
-```
-
-### 6. Install Salesforce skills
-
-`sf-skills` is already bundled with SF Pi. Install the managed Salesforce skill
-library globally so it is available in every project:
-
-```text
 /sf-skills defaults install global
-/sf-skills summary
 ```
 
-### 7. Install the recommended extensions
+See the [installation guide](./docs/install.md) for npm policy, updates,
+project-local installation, platform notes, fonts, and troubleshooting. The
+[quickstart](./docs/quickstart.md) covers the first useful commands.
 
-Install the complete curated package bundle:
+SF Pi's supported Pi range is currently
+`>=0.82.0 <1.0.0`.
 
-```text
-/sf-pi recommended install bundle:default
-/sf-pi recommended status
-```
+## Privacy and telemetry
 
-<details>
-<summary><strong>Advanced setup and manual updates</strong></summary>
+SF Pi collects no active runtime telemetry. It opts out of Pi's anonymous
+install/update ping when the user has not already chosen a setting, while
+preserving explicit user preferences. Repository automation may archive
+aggregate GitHub metrics.
 
-- Install SF Pi only for the current project with
-  `pi install -l git:github.com/salesforce/sf-pi`.
-- If terminal glyphs appear as `?`, run `/sf-setup-fonts` and select
-  **MesloLGM Nerd Font Mono** in your terminal.
-- Update the three core installations with:
-
-  ```bash
-  pi update --self
-  pi update git:github.com/salesforce/sf-pi
-  npm install --global @salesforce/cli@latest
-  ```
-
-macOS, Linux, and WSL are the primary targets. Native Windows is supported,
-with WSL recommended for parity with Unix shell tooling. SF Pi's stable Pi
-range is currently
-`>=0.82.0 <1.0.0`. `/sf-pi doctor` reports whether the installed Pi and SF Pi
-versions are current.
-
-</details>
-
-## Telemetry and aggregate metrics
-
-sf-pi does **not** collect active runtime telemetry. No bundled extension sends
-prompts, responses, tool calls, file paths, Salesforce org identifiers, Slack
-identifiers, environment variables, or command usage from your machine.
-
-<details>
-<summary><strong>Privacy settings and aggregate metrics</strong></summary>
-
-### Pi runtime defaults
-
-The pi runtime itself emits one anonymous install/update version ping to
-`https://pi.dev/api/report-install` after a fresh install or changelog-detected
-update. **sf-pi opts you out of this ping by default**: on the first session
-after installing sf-pi, `enableInstallTelemetry: false` is written to pi's
-global `settings.json` if (and only if) the key is currently unset. An explicit
-user opt-in (`true`) is always preserved.
-
-The sf-welcome splash shows a `Privacy: telemetry off (sf-pi default)` row at
-every launch so the posture is auditable at a glance. Manage it via:
-
-```text
-/sf-pi telemetry status     # show the current state and source
-/sf-pi telemetry on         # opt back in (writes enableInstallTelemetry: true)
-/sf-pi telemetry off        # opt out (writes enableInstallTelemetry: false)
-```
-
-What sf-pi's default does **not** touch (intentional):
-
-- **Latest-version probe** to `https://pi.dev/api/latest-version` stays
-  enabled so users still see security/feature update nudges. Disable
-  separately with `PI_SKIP_VERSION_CHECK=1` or master-kill with `PI_OFFLINE=1`.
-- **`PI_OFFLINE` / `PI_TELEMETRY` env vars or shell rc files** — sf-pi never
-  edits your shell environment. The default lives only in pi's `settings.json`.
-- **LLM provider traffic** — always determined by the provider you configure.
-
-Maintainers archive aggregate GitHub metrics, such as repository views,
-repository clones, and release download counts, through a scheduled GitHub
-Actions workflow. These platform metrics help measure discovery and distribution
-without adding client-side telemetry.
-
-See [`docs/privacy.md`](./docs/privacy.md) for the full privacy and telemetry policy.
-
-</details>
+See the complete [privacy and telemetry policy](./docs/privacy.md).
 
 ## Announcements
 
-<details>
-<summary><strong>Announcement controls</strong></summary>
-
-The startup splash can show a small **Announcements** panel for sf-pi
-maintainer notes and update nudges. Announcements come from the bundled
-[`catalog/announcements.json`](./catalog/announcements.json), optionally merge
-with a hosted JSON feed, and fail silently when offline.
-
-Useful commands and controls:
-
-```text
-/sf-pi announcements                  # list active announcements
-/sf-pi announcements dismiss <id>     # hide one item
-/sf-pi announcements reset            # clear local dismissals
-SF_PI_ANNOUNCEMENTS=off pi            # disable the feature for one run
-SF_PI_ANNOUNCEMENTS_FEED=off pi       # keep bundled notes, skip remote feed
-```
-
-Persistent opt-out can also live in Pi settings:
-
-```json
-{ "sfPi": { "announcements": false } }
-```
-
-Or keep bundled/update notices while disabling only the hosted feed:
-
-```json
-{ "sfPi": { "announcements": { "feedEnabled": false } } }
-```
-
-</details>
+The startup surface can show bundled release and maintainer notices. Nothing is
+installed automatically. Use `/sf-pi announcements` to inspect or dismiss them;
+use `/sf-pi` for all package-level settings and status.
 
 ## Command Reference
 
@@ -271,105 +137,34 @@ Open `/sf-pi` for the interactive manager. The essential commands are:
 Use `/sf-pi help` or the [command reference](./docs/commands.md) for advanced
 settings, project scope, recommendations, and repair commands.
 
-## Recommended Extensions
+## Recommended extensions
 
-Beyond the extensions that ship inside this package, sf-pi maintains a
-curated list of **recommended** open-source pi extensions. sf-pi does not
-redistribute these packages — it points at their upstream sources, so
-updates and credit flow through the original authors.
-
-Install them all in one shot:
+SF Pi can install a curated optional companion bundle:
 
 ```text
 /sf-pi recommended install bundle:default
+/sf-pi recommended status
 ```
 
-Or inspect individual packages with `/sf-pi recommended`.
+All eight packages are installed only after explicit user action:
 
-<details>
-<summary><strong>Default bundle contents and checklist behavior</strong></summary>
+- `pi-skills`
+- `pi-web-access`
+- `pi-aliases`
+- `pi-interview`
+- `glimpseui`
+- `pi-tool-display`
+- `pi-subagents`
+- `pi-herdr`
 
-### The default bundle
+The machine-readable sources, licenses, and rationale live in
+[`catalog/recommendations.json`](./catalog/recommendations.json).
 
-All eight packages are **MIT**-licensed and install per-user (global
-scope) by default.
+## Skills
 
-| Extension                                                               | Why install it                                                                                                                                                                                        |
-| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **[`pi-skills`](https://github.com/badlogic/pi-skills)**                | Baseline skill library for pi. Unlocks search, Google Workspace, browser automation, YouTube transcripts, and more. Most other pi packages assume it's installed.                                     |
-| **[`pi-web-access`](https://github.com/nicobailon/pi-web-access)**      | Web search, URL fetching, GitHub repo cloning, PDF extraction, YouTube + local video analysis. sf-pi itself expects the `web_search` and `fetch_content` tools this package provides.                 |
-| **[`pi-aliases`](https://github.com/xRyul/pi-aliases)**                 | Muscle-memory helpers like `/clear → /new` and `/exit → /quit`. Tiny, low-risk quality-of-life win — especially if you're coming from Claude Code or Codex CLI.                                       |
-| **[`pi-interview`](https://github.com/nicobailon/pi-interview-tool)**   | Gives pi a structured `interview` tool for multi-question requirement gathering and trade-off exploration. Pairs naturally with `sf-agentscript` and other sf-pi scaffolding workflows.               |
-| **[`glimpseui`](https://github.com/hazat/glimpse)**                     | Cross-platform micro-UI for scripts and agents — native WebView windows for rich visual explainers, charts, and HTML previews without launching a full browser. Used by the `visual-explainer` skill. |
-| **[`pi-tool-display`](https://github.com/MasuRii/pi-tool-display)**     | Compact tool-call rendering, diff visualization, and output truncation. Significant quality-of-life boost for Salesforce workflows that inspect large metadata or log files.                          |
-| **[`pi-subagents`](https://github.com/nicobailon/pi-subagents)**        | Delegates work to single, chained, parallel, async, and forked-context subagents. Useful for advisory review, implementation handoffs, and larger planning flows.                                     |
-| **[`pi-herdr`](https://github.com/ogulcancelik/pi-extensions)** / Herdr | Alpha workspace, tab, and pane orchestration for pi. Enables command-scoped Salesforce workflow lanes for tests, log tails, previews, evals, servers, and cleanup.                                    |
-
-Full manifest with source URLs, license info, and per-item `rationale`
-strings: [`catalog/recommendations.json`](./catalog/recommendations.json).
-
-### How the checklist works
-
-- **Open it:** `/sf-pi recommended`
-- **One-liner install:** `/sf-pi recommended install <id>`
-- **Whole bundle:** `/sf-pi recommended install bundle:default`
-- **Decline + forget:** pick `Never` in the checklist or `/sf-pi recommended remove <id>`
-
-First-run behavior:
-
-- On every `session_start`, sf-pi checks whether the manifest's `revision`
-  differs from what you've already acknowledged. If it does, a one-line
-  nudge appears in the footer status (`✨ sf-pi: N new recommended …`).
-- Nothing installs automatically. You stay in control — run
-  `/sf-pi recommended` when you're ready, pick what you want with Space,
-  press Enter to apply.
-- Decisions are sticky: items you installed or declined are never
-  re-prompted across sessions.
-- Opt out entirely with `SF_PI_RECOMMENDATIONS=off` in your environment.
-
-Proposing a new recommendation: see
-[CONTRIBUTING.md](./CONTRIBUTING.md#proposing-a-recommended-extension).
-
-</details>
-
-## Using Skills from Claude Code, Codex, or Cursor
-
-<details>
-<summary><strong>Advanced: connect existing skill directories</strong></summary>
-
-Pi natively loads skills from `~/.pi/agent/skills/` and `~/.agents/skills/`.
-Skill libraries from other harnesses — Claude Code (`~/.claude/skills`),
-OpenAI Codex (`~/.codex/skills`), and Cursor (`~/.cursor/skills`) — require
-a one-line settings edit to load in pi:
-
-```json
-// ~/.pi/agent/settings.json
-{
-  "skills": ["~/.claude/skills", "~/.codex/skills"]
-}
-```
-
-`/sf-pi skills` does this for you. Run it and sf-pi:
-
-1. Scans those three directories on disk, counts the skills it sees in each,
-   and cross-references the list with your current `settings.skills[]`.
-2. Opens a checklist — Space toggles a root, Enter applies.
-3. Writes the delta back to `~/.pi/agent/settings.json` and reloads so the
-   newly wired skills load immediately.
-
-The splash also shows a single-line nudge under **Recommended** whenever it
-detects an external root on disk that isn't yet in your settings:
-
-```
-• Interop  2 external skill roots (41 skills detected)
-  → /sf-pi skills
-```
-
-Skills work side-by-side across harnesses — wiring a Claude Code directory
-here does not copy, move, or touch the files in any way. Pi reads them in
-place and Claude Code continues to use them unchanged.
-
-</details>
+`sf-skills` manages Salesforce skill libraries and optional external skill roots
+through Pi's native settings. Start with `/sf-skills`; see the
+[SF Skills extension page](./docs/extensions/sf-skills.md) for details.
 
 ## Bundled Extensions
 
