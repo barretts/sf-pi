@@ -1148,7 +1148,6 @@ function generateAgentOrientationDoc(manifests) {
     "## Automation shortcuts",
     "",
     "- `npm run docs:health:check` — documentation drift and public-safety lint.",
-    "- `npm run docs:changed` — changed-file impact summary for docs review.",
     "- `npm run test:runtime-surface` — real-factory manifest registration attestation.",
     "- `npm run validate:ci` — local approximation of CI's validation lane.",
   );

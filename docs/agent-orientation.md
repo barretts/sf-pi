@@ -77,6 +77,5 @@ Do not edit these by hand; edit the source manifest/docs and run `npm run genera
 ## Automation shortcuts
 
 - `npm run docs:health:check` — documentation drift and public-safety lint.
-- `npm run docs:changed` — changed-file impact summary for docs review.
 - `npm run test:runtime-surface` — real-factory manifest registration attestation.
 - `npm run validate:ci` — local approximation of CI's validation lane.

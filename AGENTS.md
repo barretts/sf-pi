@@ -159,7 +159,6 @@ npm run validate:ci
 Documentation-only helpers:
 
 ```bash
-npm run docs:changed
 npm run docs:health:check
 npm run docs:build
 ```

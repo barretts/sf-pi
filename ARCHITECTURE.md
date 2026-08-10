@@ -77,7 +77,6 @@ ones agents and maintainers most often need:
 | `scripts/generate-catalog.mjs`            | Regenerates catalog files, generated docs, and generated README marker blocks.                                       |
 | `scripts/check-staged-catalog.mjs`        | Exports the Git index to a temporary root and checks its generated catalog without mutating local state.             |
 | `scripts/docs-health.mjs`                 | Checks factual doc drift contracts and public-safe examples.                                                         |
-| `scripts/docs-changed.mjs`                | Summarizes which docs are implicated by a diff.                                                                      |
 | `scripts/instruction-surface-report.mjs`  | Writes sanitized SF Pi instruction-size JSON and Markdown through the exact Pi runtime.                              |
 | `scripts/e2e/instruction-behavior/run.ts` | Runs the opt-in model routing regression with local reads allowed and every non-local tool blocked before execution. |
 | `scripts/add-spdx-headers.mjs`            | Adds or checks SPDX headers for source scripts. Pre-commit auto-adds missing headers; CI uses the check path.        |

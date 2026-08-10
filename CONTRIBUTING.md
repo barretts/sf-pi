@@ -172,7 +172,6 @@ The most common entry points, grouped by purpose:
 | SPDX headers             | `npm run spdx`                                                               | `npm run spdx:check`                    |
 | Docs health              | `npm run docs:health`                                                        | `npm run docs:health:check`             |
 | Docs site                | `npm run docs:dev` / `npm run docs:preview`                                  | `npm run docs:build`                    |
-| Docs impact summary      | —                                                                            | `npm run docs:changed`                  |
 | ESLint                   | `npm run eslint:fix`                                                         | `npm run eslint`                        |
 | Type check               | —                                                                            | `npm run check`                         |
 | Run tests                | `npm test`                                                                   | —                                       |
