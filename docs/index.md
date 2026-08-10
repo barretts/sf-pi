@@ -77,7 +77,5 @@ more discoverable way to work with Salesforce projects from one terminal UI.
 - [Quickstart](./quickstart.md) — verify SF Pi and try your first commands.
 - [Browse extensions](./extensions.md) — choose a workflow by intent.
 - [Troubleshooting](./troubleshooting.md) — recover from install, org, font, or auth issues.
-- [Security model](./security-model.md) — understand Guardrail mediation, high-value mutations, and headless behavior.
-- [Prompt-injection controls](./prompt-injection-controls.md) — map prompt-injection risk to SF Pi's mediation and audit controls.
-- [Threat model](./threat-model.md) — review trust boundaries, mitigations, evidence, and residual risks.
+- [Security model](./security-model.md) — understand trust surfaces, Guardrail mediation, prompt-injection impact controls, and residual risks.
 - [Public sanitization](./public-sanitization.md) — keep public docs, examples, tests, and diagnostics source-agnostic.

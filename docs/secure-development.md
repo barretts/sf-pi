@@ -7,16 +7,17 @@ description: Security-relevant development practices, checks, and review evidenc
 
 This page summarizes the secure-development practices used by SF Pi. It is a
 public, source-agnostic reference for maintainers, contributors, and reviewers.
-The public threat model and secure-design remediation evidence are recorded in
-[Threat model and secure-design review](./threat-model.md).
+The evergreen trust and threat posture is documented in the
+[security model](./security-model.md); current code and Behavior Proofs provide
+implementation evidence.
 
 ## Review posture
 
 SF Pi is a public Salesforce open-source project. Changes should be small,
 reviewable, and aligned with the extension ownership model:
 
-- Extension behavior starts from `extensions/<id>/manifest.json` and the
-  extension README.
+- Runtime code and Behavior Proofs define extension behavior; manifests declare
+  the attested public routing and documentation contract.
 - Generated catalogs and generated docs are refreshed with
   `npm run generate-catalog`.
 - Security-sensitive changes should update the relevant README, ADR, or security
