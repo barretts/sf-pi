@@ -58,7 +58,6 @@ sf-pi/
 │   ├── commands.md             ← GENERATED per-extension command reference
 │   ├── agent-orientation.md    ← GENERATED agent navigation map
 │   ├── contributing.md         ← contributor site entry point
-│   ├── doc-ownership.json      ← doc ↔ source-of-truth map
 │   └── adr/                    ← architecture decision records
 ├── scripts/                    ← catalog/docs/SPDX/validate helpers; see ARCHITECTURE.md
 ├── themes/                     ← TUI themes (sf-dark.json, …)
@@ -124,7 +123,6 @@ When an agent (or human) needs to change something, start here:
 | Generated agent orientation                     | `docs/agent-orientation.md` — **generated, do not edit**                        |
 | VitePress documentation site                    | `docs/.vitepress/`, `docs/index.md`, and curated docs pages                     |
 | Contributor site entry point                    | `docs/contributing.md`                                                          |
-| Documentation source/check map                  | `docs/doc-ownership.json`                                                       |
 | Generated bundled-extension table               | Inside `README.md` between `GENERATED:bundled-extensions` markers               |
 | Generated command-reference block               | Inside `README.md` between `GENERATED:command-reference` markers                |
 | Generated folder layout                         | Inside `ARCHITECTURE.md` between `GENERATED:folder-layout` markers              |

@@ -316,18 +316,6 @@ function checkPublicSafety() {
   }
 }
 
-function checkDocOwnership() {
-  if (!existsSync(path.join(ROOT, "docs/doc-ownership.json"))) {
-    fail("docs/doc-ownership.json", "Doc ownership map is missing.");
-    return;
-  }
-  try {
-    readJson("docs/doc-ownership.json");
-  } catch (error) {
-    fail("docs/doc-ownership.json", `Invalid JSON: ${error.message}`);
-  }
-}
-
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -341,7 +329,6 @@ function run() {
   checkStateStoreLocation();
   checkChangelog();
   checkPublicSafety();
-  checkDocOwnership();
 
   const errors = findings.filter((finding) => finding.level === "error");
   if (JSON_MODE) {

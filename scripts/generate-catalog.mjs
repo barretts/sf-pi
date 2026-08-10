@@ -1003,7 +1003,6 @@ function generateFolderLayout(manifests) {
     "\u2502   \u251c\u2500\u2500 commands.md             \u2190 GENERATED per-extension command reference",
     "\u2502   \u251c\u2500\u2500 agent-orientation.md    \u2190 GENERATED agent navigation map",
     "\u2502   \u251c\u2500\u2500 contributing.md         \u2190 contributor site entry point",
-    "\u2502   \u251c\u2500\u2500 doc-ownership.json      \u2190 doc \u2194 source-of-truth map",
     "\u2502   \u2514\u2500\u2500 adr/                    \u2190 architecture decision records",
     "\u251c\u2500\u2500 scripts/                    \u2190 catalog/docs/SPDX/validate helpers; see ARCHITECTURE.md",
     "\u251c\u2500\u2500 themes/                     \u2190 TUI themes (sf-dark.json, \u2026)",
