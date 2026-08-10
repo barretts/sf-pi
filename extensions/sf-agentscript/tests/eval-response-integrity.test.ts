@@ -171,6 +171,78 @@ describe("summarizeEvalResponseIntegrity", () => {
     expect(summarize("The value is 1.5. The value is 1.6.").surface_repeated_turns).toBe(0);
   });
 
+  test("reports mirrored safety aliases without failing physical response integrity", () => {
+    const responseText = "Sorry, I can't assist with that.";
+    const prompt = "shared safety prompt";
+    const response: EvalApiResponse = {
+      results: [
+        {
+          id: "safety_alias",
+          outputs: [
+            { type: "agent.send_message", id: "turn1", response: responseText },
+            {
+              type: "agent.get_state",
+              id: "state1",
+              response: {
+                planner_response: {
+                  sessionProperties: { planId: "plan-safety" },
+                  lastExecution: {
+                    agentResponse: responseText,
+                    llmEvents: [
+                      [
+                        {
+                          agent_name: "Agent Router",
+                          prompt_name: "Agent Router_prompt",
+                          prompt_content: prompt,
+                          prompt_response: promptResponse(responseText),
+                          startExecutionTime: 1000,
+                          endExecutionTime: 1100,
+                        },
+                        {
+                          agent_name: "Prompt_Injection",
+                          prompt_name: "Prompt_Injection_prompt",
+                          prompt_content: prompt,
+                          prompt_response: promptResponse(responseText),
+                          startExecutionTime: 1000,
+                          endExecutionTime: 1101,
+                        },
+                      ],
+                    ],
+                  },
+                },
+              } as never,
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(summarizeEvalResponseIntegrity(response)).toEqual({
+      turns_total: 1,
+      turns_pass: 1,
+      turns_warning: 0,
+      turns_unavailable: 0,
+      max_non_empty_content_count: 1,
+      surface_repeated_turns: 0,
+      mirrored_aliases: 1,
+      observations: [
+        {
+          test_id: "safety_alias",
+          turn_id: "turn1",
+          plan_id: "plan-safety",
+          status: "pass",
+          llm_call_count: 1,
+          non_empty_content_count: 1,
+          raw_llm_event_count: 2,
+          physical_llm_call_count: 1,
+          raw_non_empty_content_count: 2,
+          physical_non_empty_content_count: 1,
+          mirrored_alias_count: 1,
+        },
+      ],
+    });
+  });
+
   test("summarizes warnings, passes, and unavailable turns without changing verdicts", () => {
     const response: EvalApiResponse = {
       results: [

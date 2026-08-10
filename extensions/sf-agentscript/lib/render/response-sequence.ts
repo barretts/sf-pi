@@ -32,16 +32,24 @@ export function responseSequenceLines(
       `  ${success("✓")} ${dim(`${sequence.non_empty_content_count} non-empty completion${sequence.non_empty_content_count === 1 ? "" : "s"}`)}`,
     );
   }
+  if (sequence.mirrored_alias_count > 0) {
+    lines.push(
+      `  ${dim("↳")} ${dim(`${sequence.raw_llm_event_count} raw events · ${sequence.physical_llm_call_count} physical call${sequence.physical_llm_call_count === 1 ? "" : "s"} · ${sequence.mirrored_alias_count} mirrored safety alias${sequence.mirrored_alias_count === 1 ? "" : "es"}`)}`,
+    );
+  }
 
   for (const event of sequence.events) {
     const actor = event.agent_name ?? event.prompt_name ?? "LLM";
     const label = eventLabel(event);
     const detail = eventDetail(event);
-    const glyph = event.matches_final_response
-      ? success("✅")
-      : event.kind === "content" || event.kind === "malformed"
-        ? warning("⚠")
-        : dim(event.kind === "tool_only" ? "🛠" : "·");
+    const glyph =
+      event.mirrored_alias_of !== undefined
+        ? dim("↳")
+        : event.matches_final_response
+          ? success("✅")
+          : event.kind === "content" || event.kind === "malformed"
+            ? warning("⚠")
+            : dim(event.kind === "tool_only" ? "🛠" : "·");
     lines.push(
       `  ${glyph} ${code(String(event.index + 1).padStart(2, " "))} ${code(actor)} ${label}${detail ? ` · ${detail}` : ""}`,
     );
@@ -50,6 +58,9 @@ export function responseSequenceLines(
 }
 
 function eventLabel(event: LlmResponseEventEvidence): string {
+  if (event.mirrored_alias_of !== undefined) {
+    return `mirrored alias of ${event.mirrored_alias_of + 1}`;
+  }
   if (event.matches_final_response) return "final content";
   if (event.kind === "content") return "candidate content";
   if (event.kind === "tool_only") return "tool-only";

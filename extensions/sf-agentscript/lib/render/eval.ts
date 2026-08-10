@@ -296,6 +296,10 @@ function formatRunBody(
         (responseIntegrity.surface_repeated_turns ?? 0) > 0
           ? `  ${err(`↻ ${responseIntegrity.surface_repeated_turns ?? 0} surface repeat${responseIntegrity.surface_repeated_turns === 1 ? "" : "s"}`)}`
           : ""
+      }${
+        (responseIntegrity.mirrored_aliases ?? 0) > 0
+          ? `  ${dim(`↳ ${responseIntegrity.mirrored_aliases} mirrored safety alias${responseIntegrity.mirrored_aliases === 1 ? "" : "es"}`)}`
+          : ""
       }`,
     );
     for (const observation of responseIntegrity.observations

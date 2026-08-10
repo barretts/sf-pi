@@ -26,6 +26,8 @@ export interface LlmResponseEventEvidence {
   started_at?: number;
   ended_at?: number;
   matches_final_response: boolean;
+  /** Raw telemetry row that mirrors an earlier physical safety generation. */
+  mirrored_alias_of?: number;
 }
 
 export interface TurnResponseIntegrity {
@@ -35,9 +37,17 @@ export interface TurnResponseIntegrity {
 }
 
 export interface TurnResponseSequence {
+  /** Every telemetry event in API order, including strict mirrored aliases. */
   events: LlmResponseEventEvidence[];
+  /** Physical LLM generations after strict safety-alias reconciliation. */
   llm_call_count: number;
+  raw_llm_event_count: number;
+  physical_llm_call_count: number;
+  /** Physical caller-facing completions used by the integrity verdict. */
   non_empty_content_count: number;
+  raw_non_empty_content_count: number;
+  physical_non_empty_content_count: number;
+  mirrored_alias_count: number;
   tool_only_count: number;
   malformed_count: number;
   final_response?: string;
@@ -48,6 +58,7 @@ export interface TurnResponseSequence {
 interface RawLlmEvent {
   agent_name?: unknown;
   prompt_name?: unknown;
+  prompt_content?: unknown;
   prompt_response?: unknown;
   execution_latency?: unknown;
   executionLatency?: unknown;
@@ -69,6 +80,7 @@ export function buildLlmResponseSequence(
 ): TurnResponseSequence {
   const maxNonEmptyContents = options.maxNonEmptyContents ?? 1;
   const events: LlmResponseEventEvidence[] = [];
+  const rawRows: RawLlmEvent[] = [];
   const groups = Array.isArray(rawEvents) ? rawEvents : [];
   const normalizedFinal = normalizeText(finalResponse);
 
@@ -80,7 +92,7 @@ export function buildLlmResponseSequence(
       if (!raw || typeof raw !== "object") continue;
       const event = raw as RawLlmEvent;
       const parsed = parsePromptResponse(event.prompt_response);
-      events.push({
+      const evidence: LlmResponseEventEvidence = {
         index: events.length,
         batch_index: batchIndex,
         event_index: eventIndex,
@@ -96,23 +108,103 @@ export function buildLlmResponseSequence(
         ...numberField(event.endExecutionTime, "ended_at"),
         matches_final_response:
           normalizedFinal.length > 0 && normalizeText(parsed.content) === normalizedFinal,
-      });
+      };
+      const mirroredAliasOf = rawRows.findIndex(
+        (candidate, candidateIndex) =>
+          events[candidateIndex]?.mirrored_alias_of === undefined &&
+          isMirroredSafetyAlias(candidate, event),
+      );
+      if (mirroredAliasOf >= 0) evidence.mirrored_alias_of = mirroredAliasOf;
+      events.push(evidence);
+      rawRows.push(event);
     }
   }
 
-  const nonEmptyContentCount = events.filter((event) => event.kind === "content").length;
-  const finalMatch = [...events].reverse().find((event) => event.matches_final_response);
+  const physicalEvents = events.filter((event) => event.mirrored_alias_of === undefined);
+  const rawNonEmptyContentCount = events.filter((event) => event.kind === "content").length;
+  const physicalNonEmptyContentCount = physicalEvents.filter(
+    (event) => event.kind === "content",
+  ).length;
+  const finalMatch = [...physicalEvents].reverse().find((event) => event.matches_final_response);
 
   return {
     events,
-    llm_call_count: events.length,
-    non_empty_content_count: nonEmptyContentCount,
-    tool_only_count: events.filter((event) => event.kind === "tool_only").length,
-    malformed_count: events.filter((event) => event.kind === "malformed").length,
+    llm_call_count: physicalEvents.length,
+    raw_llm_event_count: events.length,
+    physical_llm_call_count: physicalEvents.length,
+    non_empty_content_count: physicalNonEmptyContentCount,
+    raw_non_empty_content_count: rawNonEmptyContentCount,
+    physical_non_empty_content_count: physicalNonEmptyContentCount,
+    mirrored_alias_count: events.length - physicalEvents.length,
+    tool_only_count: physicalEvents.filter((event) => event.kind === "tool_only").length,
+    malformed_count: physicalEvents.filter((event) => event.kind === "malformed").length,
     ...(finalResponse !== undefined ? { final_response: finalResponse } : {}),
     ...(finalMatch ? { final_response_event_index: finalMatch.index } : {}),
-    integrity: integrity(events.length, nonEmptyContentCount, maxNonEmptyContents),
+    integrity: integrity(physicalEvents.length, physicalNonEmptyContentCount, maxNonEmptyContents),
   };
+}
+
+const SYSTEM_SAFETY_AGENTS = new Set(["promptinjection", "inappropriatecontent"]);
+
+/**
+ * Salesforce can project one system-safety generation under both the router
+ * and resolved safety-topic labels. Reconcile only the strict telemetry alias:
+ * same raw prompt/response, same start, and effectively the same end time.
+ * Content equality by itself is intentionally insufficient.
+ */
+function isMirroredSafetyAlias(first: RawLlmEvent, second: RawLlmEvent): boolean {
+  const firstAgent = normalizedLabel(first.agent_name);
+  const secondAgent = normalizedLabel(second.agent_name);
+  const labelsMatch =
+    (firstAgent === "agentrouter" && SYSTEM_SAFETY_AGENTS.has(secondAgent)) ||
+    (secondAgent === "agentrouter" && SYSTEM_SAFETY_AGENTS.has(firstAgent));
+  if (!labelsMatch) return false;
+
+  const firstStart = finiteNumber(first.startExecutionTime);
+  const secondStart = finiteNumber(second.startExecutionTime);
+  const firstEnd = finiteNumber(first.endExecutionTime);
+  const secondEnd = finiteNumber(second.endExecutionTime);
+  if (
+    firstStart === undefined ||
+    secondStart === undefined ||
+    firstEnd === undefined ||
+    secondEnd === undefined ||
+    firstStart !== secondStart ||
+    Math.abs(firstEnd - secondEnd) > 1
+  ) {
+    return false;
+  }
+
+  const firstPrompt = rawSignature(first.prompt_content);
+  const secondPrompt = rawSignature(second.prompt_content);
+  const firstResponse = rawSignature(first.prompt_response);
+  const secondResponse = rawSignature(second.prompt_response);
+  return (
+    firstPrompt !== undefined &&
+    secondPrompt !== undefined &&
+    firstResponse !== undefined &&
+    secondResponse !== undefined &&
+    firstPrompt === secondPrompt &&
+    firstResponse === secondResponse
+  );
+}
+
+function normalizedLabel(value: unknown): string {
+  return typeof value === "string" ? value.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+}
+
+function rawSignature(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (value === undefined || value === null) return undefined;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function parsePromptResponse(raw: unknown): ParsedPromptResponse {

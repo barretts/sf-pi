@@ -17,6 +17,11 @@ export interface ResponseIntegrityObservation {
   status: "pass" | "warning" | "unavailable";
   llm_call_count: number;
   non_empty_content_count: number;
+  raw_llm_event_count?: number;
+  physical_llm_call_count?: number;
+  raw_non_empty_content_count?: number;
+  physical_non_empty_content_count?: number;
+  mirrored_alias_count?: number;
   surface_repeat_count?: number;
   surface_repeat_preview?: string;
   message?: string;
@@ -29,6 +34,7 @@ export interface EvalResponseIntegritySummary {
   turns_unavailable: number;
   max_non_empty_content_count: number;
   surface_repeated_turns?: number;
+  mirrored_aliases?: number;
   observations: ResponseIntegrityObservation[];
 }
 
@@ -185,6 +191,15 @@ export function summarizeEvalResponseIntegrity(
         status,
         llm_call_count: sequence.llm_call_count,
         non_empty_content_count: sequence.non_empty_content_count,
+        ...(sequence.mirrored_alias_count > 0
+          ? {
+              raw_llm_event_count: sequence.raw_llm_event_count,
+              physical_llm_call_count: sequence.physical_llm_call_count,
+              raw_non_empty_content_count: sequence.raw_non_empty_content_count,
+              physical_non_empty_content_count: sequence.physical_non_empty_content_count,
+              mirrored_alias_count: sequence.mirrored_alias_count,
+            }
+          : {}),
         ...(repeated.count > 0
           ? {
               surface_repeat_count: repeated.count,
@@ -200,6 +215,11 @@ export function summarizeEvalResponseIntegrity(
     }
   }
 
+  const mirroredAliases = observations.reduce(
+    (sum, row) => sum + (row.mirrored_alias_count ?? 0),
+    0,
+  );
+
   return {
     turns_total: observations.length,
     turns_pass: observations.filter((row) => row.status === "pass").length,
@@ -211,6 +231,7 @@ export function summarizeEvalResponseIntegrity(
     ),
     surface_repeated_turns: observations.filter((row) => (row.surface_repeat_count ?? 0) > 0)
       .length,
+    ...(mirroredAliases > 0 ? { mirrored_aliases: mirroredAliases } : {}),
     observations,
   };
 }

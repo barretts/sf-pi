@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { describe, expect, test } from "vitest";
 import { buildLlmResponseSequence } from "../lib/llm-response-sequence.ts";
+import { responseSequenceLines } from "../lib/render/response-sequence.ts";
 
 function jsonResponse(content: string, tools: string[] = []): string {
   return JSON.stringify({
@@ -76,6 +77,161 @@ describe("buildLlmResponseSequence", () => {
       max_non_empty_contents: 1,
       message: "2 non-empty LLM completions exceed the configured maximum of 1.",
     });
+  });
+
+  test("collapses mirrored router and system-safety aliases into one physical completion", () => {
+    const prompt = "system safety prompt";
+    const response = jsonResponse("Sorry, I can't assist with that.");
+    const sequence = buildLlmResponseSequence(
+      [
+        [
+          {
+            agent_name: "Agent Router",
+            prompt_name: "Agent Router_prompt",
+            prompt_content: prompt,
+            prompt_response: response,
+            startExecutionTime: 1000,
+            endExecutionTime: 1100,
+          },
+          {
+            agent_name: "Prompt_Injection",
+            prompt_name: "Prompt_Injection_prompt",
+            prompt_content: prompt,
+            prompt_response: response,
+            startExecutionTime: 1000,
+            endExecutionTime: 1100,
+          },
+        ],
+      ],
+      "Sorry, I can't assist with that.",
+    );
+
+    expect(sequence.events).toHaveLength(2);
+    expect(sequence.events[1].mirrored_alias_of).toBe(0);
+    expect(sequence.raw_llm_event_count).toBe(2);
+    expect(sequence.llm_call_count).toBe(1);
+    expect(sequence.physical_llm_call_count).toBe(1);
+    expect(sequence.raw_non_empty_content_count).toBe(2);
+    expect(sequence.non_empty_content_count).toBe(1);
+    expect(sequence.physical_non_empty_content_count).toBe(1);
+    expect(sequence.mirrored_alias_count).toBe(1);
+    expect(sequence.integrity.status).toBe("pass");
+    const rendered = responseSequenceLines(sequence).join("\n");
+    expect(rendered).toContain("2 raw events · 1 physical call · 1 mirrored safety alias");
+    expect(rendered).toContain("mirrored alias of 1");
+  });
+
+  test("allows one millisecond end-time drift for strict safety aliases", () => {
+    const prompt = "system safety prompt";
+    const response = jsonResponse("Safe refusal");
+    const sequence = buildLlmResponseSequence([
+      [
+        {
+          agent_name: "Agent Router",
+          prompt_name: "Agent Router_prompt",
+          prompt_content: prompt,
+          prompt_response: response,
+          startExecutionTime: 2000,
+          endExecutionTime: 2100,
+        },
+        {
+          agent_name: "Inappropriate_Content",
+          prompt_name: "Inappropriate_Content_prompt",
+          prompt_content: prompt,
+          prompt_response: response,
+          startExecutionTime: 2000,
+          endExecutionTime: 2101,
+        },
+      ],
+    ]);
+
+    expect(sequence.mirrored_alias_count).toBe(1);
+    expect(sequence.non_empty_content_count).toBe(1);
+    expect(sequence.integrity.status).toBe("pass");
+  });
+
+  test("keeps sequential repeated completions as distinct failures", () => {
+    const prompt = "same prompt";
+    const response = jsonResponse("Repeated response");
+    const sequence = buildLlmResponseSequence([
+      [
+        {
+          agent_name: "Agent Router",
+          prompt_name: "Agent Router_prompt",
+          prompt_content: prompt,
+          prompt_response: response,
+          startExecutionTime: 3000,
+          endExecutionTime: 3100,
+        },
+        {
+          agent_name: "Prompt_Injection",
+          prompt_name: "Prompt_Injection_prompt",
+          prompt_content: prompt,
+          prompt_response: response,
+          startExecutionTime: 3200,
+          endExecutionTime: 3300,
+        },
+      ],
+    ]);
+
+    expect(sequence.mirrored_alias_count).toBe(0);
+    expect(sequence.non_empty_content_count).toBe(2);
+    expect(sequence.integrity.status).toBe("warning");
+  });
+
+  test("does not collapse safety labels when raw prompt evidence is missing", () => {
+    const response = jsonResponse("Same response");
+    const sequence = buildLlmResponseSequence([
+      [
+        {
+          agent_name: "Agent Router",
+          prompt_name: "Agent Router_prompt",
+          prompt_response: response,
+          startExecutionTime: 3500,
+          endExecutionTime: 3600,
+        },
+        {
+          agent_name: "Prompt_Injection",
+          prompt_name: "Prompt_Injection_prompt",
+          prompt_response: response,
+          startExecutionTime: 3500,
+          endExecutionTime: 3600,
+        },
+      ],
+    ]);
+
+    expect(sequence.mirrored_alias_count).toBe(0);
+    expect(sequence.non_empty_content_count).toBe(2);
+    expect(sequence.integrity.status).toBe("warning");
+  });
+
+  test("does not collapse simultaneous events from ordinary agent labels", () => {
+    const prompt = "same prompt";
+    const response = jsonResponse("Same response");
+    const sequence = buildLlmResponseSequence([
+      [
+        {
+          agent_name: "Agent Router",
+          prompt_name: "Agent Router_prompt",
+          prompt_content: prompt,
+          prompt_response: response,
+          startExecutionTime: 4000,
+          endExecutionTime: 4100,
+        },
+        {
+          agent_name: "Appointments",
+          prompt_name: "Appointments_prompt",
+          prompt_content: prompt,
+          prompt_response: response,
+          startExecutionTime: 4000,
+          endExecutionTime: 4100,
+        },
+      ],
+    ]);
+
+    expect(sequence.mirrored_alias_count).toBe(0);
+    expect(sequence.non_empty_content_count).toBe(2);
+    expect(sequence.integrity.status).toBe("warning");
   });
 
   test("supports flat event arrays and legacy plain-text responses", () => {
