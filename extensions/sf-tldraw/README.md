@@ -181,7 +181,6 @@ extensions/sf-tldraw/
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata
   README.md                 ← human + agent walkthrough
-  ROADMAP.md                ← extension-specific phased roadmap
 ```
 
 <!-- GENERATED:file-structure:end -->

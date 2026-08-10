@@ -145,8 +145,8 @@ weakening remains deferred — see `ROADMAP.md`.
 ## Architecture References
 
 SF Guardrail is intentionally a **Safety Mediator**, not a general policy
-engine. The canonical terms live in `CONTEXT.md`; the redesign plan lives in
-`REDESIGN.md`; stable trade-offs are recorded in repo ADRs, especially:
+engine. Canonical terms live in `CONTEXT.md`, and stable trade-offs are recorded
+in repo ADRs, especially:
 
 - ADR 0004 — fail-closed guardrail behavior
 - ADR 0033 — safety mediator posture

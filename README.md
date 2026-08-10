@@ -172,8 +172,7 @@ repository clones, and release download counts, through a scheduled GitHub
 Actions workflow. These platform metrics help measure discovery and distribution
 without adding client-side telemetry.
 
-See [`docs/telemetry.md`](./docs/telemetry.md) for the full privacy policy and
-future telemetry requirements.
+See [`docs/privacy.md`](./docs/privacy.md) for the full privacy and telemetry policy.
 
 </details>
 

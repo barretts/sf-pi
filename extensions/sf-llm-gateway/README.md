@@ -330,7 +330,6 @@ extensions/sf-llm-gateway/
     transport.test.ts       ← unit / smoke test
     wire-trace.test.ts      ← unit / smoke test
   AGENTS.md                 ← extension-specific agent editing rules
-  CREDITS.md                ← extension attribution
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata
   README.md                 ← human + agent walkthrough

@@ -577,7 +577,6 @@ extensions/sf-slack/
     user-cache-from-search.test.ts← unit / smoke test
   AGENT_GUIDE.md            ← supporting file
   AGENTS.md                 ← extension-specific agent editing rules
-  CREDITS.md                ← extension attribution
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata
   README.md                 ← human + agent walkthrough

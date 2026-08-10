@@ -216,7 +216,6 @@ extensions/sf-pi-manager/
     recommendations-manifest.test.ts← unit / smoke test
     recommendations-state.test.ts← unit / smoke test
     skill-sources.test.ts   ← unit / smoke test
-  CREDITS.md                ← extension attribution
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata
   README.md                 ← human + agent walkthrough

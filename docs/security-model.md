@@ -152,7 +152,6 @@ Guardrail or explicitly documented as out of scope with a separate design review
 ## Related references
 
 - [SF Guardrail extension](./extensions/sf-guardrail.md)
-- [Security remediation plan](./security-remediation-plan.md)
 - [Public sanitization](./public-sanitization.md)
 - [Secure development](./secure-development.md)
 - [Prompt-injection controls](./prompt-injection-controls.md)

@@ -7,11 +7,10 @@ Repo-level rules still apply; see root `AGENTS.md`.
 
 1. `extensions/sf-guardrail/README.md` — feature list and flow diagram
 2. `extensions/sf-guardrail/CONTEXT.md` — canonical safety language
-3. `extensions/sf-guardrail/REDESIGN.md` — simplification plan and target architecture
-4. `extensions/sf-guardrail/ROADMAP.md` — what is explicitly out of MVP
-5. `extensions/sf-guardrail/index.ts` — event wiring
-6. `extensions/sf-guardrail/lib/types.ts` — schema boundary
-7. The specific `lib/*.ts` module you're editing
+3. `extensions/sf-guardrail/ROADMAP.md` — unresolved work and non-goals
+4. `extensions/sf-guardrail/index.ts` — event wiring
+5. `extensions/sf-guardrail/lib/types.ts` — schema boundary
+6. The specific `lib/*.ts` module you're editing
 
 ## File map (what lives where)
 

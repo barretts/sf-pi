@@ -80,7 +80,6 @@ extensions/sf-ohana-spinner/
     config-panel.test.ts    ← unit / smoke test
     lifecycle.test.ts       ← unit / smoke test
     settings.test.ts        ← unit / smoke test
-  CREDITS.md                ← extension attribution
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata
   README.md                 ← human + agent walkthrough

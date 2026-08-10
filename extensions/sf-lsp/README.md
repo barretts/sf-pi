@@ -186,7 +186,6 @@ extensions/sf-lsp/
     reload-safety.test.ts   ← unit / smoke test
     smoke.test.ts           ← unit / smoke test
     transcript.test.ts      ← unit / smoke test
-  CREDITS.md                ← extension attribution
   index.ts                  ← Pi extension entry point
   manifest.json             ← source-of-truth extension metadata
   README.md                 ← human + agent walkthrough

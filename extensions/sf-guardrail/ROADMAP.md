@@ -41,7 +41,7 @@ are not promises — priority is the rough order.
 ## Shipped (simplification/redesign slices)
 
 - [x] Extension-specific `CONTEXT.md` with canonical safety language.
-- [x] Redesign ADRs 0033–0041 and `REDESIGN.md` implementation plan.
+- [x] Redesign ADRs 0033–0041 and the completed implementation sequence.
 - [x] Safety Kernel seam (`lib/safety-kernel.ts`) over current evaluation.
 - [x] Safety Subject normalization (`lib/safety-subject.ts`).
 - [x] Safety Envelope builder seam (`lib/safety-envelope.ts`).
@@ -69,8 +69,7 @@ are not promises — priority is the rough order.
 - [x] Command-gate per-pattern behavior semantics and settings toggles.
 - [x] Rule-only settings model; bulk posture presets removed in favor of per-rule behavior.
 - [ ] **README user-facing cleanup follow-up** — keep detailed rationale in
-      `CONTEXT.md`, `REDESIGN.md`, and ADRs; keep README focused on usage and
-      troubleshooting.
+      `CONTEXT.md` and ADRs; keep README focused on usage and troubleshooting.
 - [ ] **Events bus** — emit `sf-guardrail:blocked`,
       `sf-guardrail:confirmed`, `sf-guardrail:dangerous` so sf-devbar can show
       a live block count pill.

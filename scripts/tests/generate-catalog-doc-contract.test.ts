@@ -43,7 +43,7 @@ const CURRENT_COPY_SURFACES = [
   "docs/extensions/sf-brain.md",
   "docs/extensions/sf-docs.md",
   "docs/extensions/sf-herdr.md",
-  "docs/human-orientation.md",
+  "docs/contributing.md",
   "extensions/sf-brain/manifest.json",
   "extensions/sf-brain/README.md",
   "extensions/sf-docs/manifest.json",

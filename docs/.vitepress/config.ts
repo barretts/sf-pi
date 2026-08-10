@@ -51,11 +51,9 @@ export default defineConfig({
         collapsed: true,
         items: [
           { text: "Contributing", link: "/contributing" },
-          { text: "Human Orientation", link: "/human-orientation" },
           { text: "Agent Orientation", link: "/agent-orientation" },
           { text: "Settings Surfaces", link: "/settings-surfaces" },
           { text: "Secure Development", link: "/secure-development" },
-          { text: "Documentation Health", link: "/health-report" },
         ],
       },
     ],
