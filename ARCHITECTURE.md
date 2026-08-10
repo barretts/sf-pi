@@ -74,22 +74,23 @@ sf-pi/
 The generated tree above intentionally stays compact. These scripts are the
 ones agents and maintainers most often need:
 
-| Script                                    | Purpose                                                                                                                   |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `scripts/generate-catalog.mjs`            | Regenerates catalog files, generated docs, and generated README marker blocks.                                            |
-| `scripts/docs-health.mjs`                 | Checks factual doc drift contracts and public-safe examples.                                                              |
-| `scripts/docs-changed.mjs`                | Summarizes which docs are implicated by a diff.                                                                           |
-| `scripts/instruction-surface-report.mjs`  | Writes sanitized SF Pi instruction-size JSON and Markdown through the exact Pi runtime.                                   |
-| `scripts/e2e/instruction-behavior/run.ts` | Runs the opt-in model routing regression with local reads allowed and every non-local tool blocked before execution.      |
-| `scripts/add-spdx-headers.mjs`            | Adds or checks SPDX headers for source scripts. Pre-commit auto-adds missing headers; CI uses the check path.             |
-| `scripts/check-llm-artifacts.sh`          | CI guard for unresolved conflict markers, prompt-template tokens, and LLM TODO markers.                                   |
-| `scripts/scaffold.mjs`                    | Creates a new extension folder and refreshes generated catalog/docs.                                                      |
-| `scripts/validate.sh`                     | Agent-friendly local validation: generate catalog, SPDX check, docs health/build checks, format check, type check, tests. |
-| `scripts/preview-pi-salesforce.mjs`       | Local visual preview for the animated `sf-welcome` Pi + SALESFORCE header.                                                |
-| `scripts/preview-sf-logo.mjs`             | Local visual preview for the compact Salesforce wordmark.                                                                 |
-| `scripts/render-splash-header.mjs`        | Renders splash-header frames for review / screenshots.                                                                    |
+| Script                                    | Purpose                                                                                                              |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `scripts/generate-catalog.mjs`            | Regenerates catalog files, generated docs, and generated README marker blocks.                                       |
+| `scripts/check-staged-catalog.mjs`        | Exports the Git index to a temporary root and checks its generated catalog without mutating local state.             |
+| `scripts/docs-health.mjs`                 | Checks factual doc drift contracts and public-safe examples.                                                         |
+| `scripts/docs-changed.mjs`                | Summarizes which docs are implicated by a diff.                                                                      |
+| `scripts/instruction-surface-report.mjs`  | Writes sanitized SF Pi instruction-size JSON and Markdown through the exact Pi runtime.                              |
+| `scripts/e2e/instruction-behavior/run.ts` | Runs the opt-in model routing regression with local reads allowed and every non-local tool blocked before execution. |
+| `scripts/add-spdx-headers.mjs`            | Adds or checks SPDX headers for source scripts. Pre-commit auto-adds missing headers; CI uses the check path.        |
+| `scripts/check-llm-artifacts.sh`          | CI guard for unresolved conflict markers, prompt-template tokens, and LLM TODO markers.                              |
+| `scripts/scaffold.mjs`                    | Creates a new extension folder and refreshes generated catalog/docs.                                                 |
+| `scripts/validate.sh`                     | Local validation across generated drift, docs health/build, formatting/types, structural checks, and tests.          |
+| `scripts/preview-pi-salesforce.mjs`       | Local visual preview for the animated `sf-welcome` Pi + SALESFORCE header.                                           |
+| `scripts/preview-sf-logo.mjs`             | Local visual preview for the compact Salesforce wordmark.                                                            |
+| `scripts/render-splash-header.mjs`        | Renders splash-header frames for review / screenshots.                                                               |
 
-CI additionally runs ESLint, docs-health, the VitePress docs build, and `scripts/check-llm-artifacts.sh`; use `npm run validate:ci` when you want to mirror CI locally.
+`npm run lint` covers formatting, generated-data/catalog drift, docs/SPDX and shared-policy checks, plus ESLint. `npm run validate` already covers generated checks, docs health and the VitePress build, formatting/types, structural checks, and tests without rewriting generated artifacts. `npm run validate:ci` adds the remaining CI-facing lint/artifact guard and reasserts docs health.
 
 ## Where does X live? (agent quick-reference)
 
@@ -393,6 +394,6 @@ npm run check
 # Run tests
 npm test
 
-# Full validation (generate + SPDX + docs health + format + check + test)
+# Full validation (generated checks + docs/build + formatting/types + structural checks + tests)
 npm run validate
 ```

@@ -26,7 +26,13 @@ import prettier from "prettier";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ROOT = path.resolve(__dirname, "..");
+const SCRIPT_ROOT = path.resolve(__dirname, "..");
+// Production always resolves from this script. Tests may isolate the real CLI
+// against a temporary minimal repository without changing normal cwd semantics.
+const ROOT =
+  process.env.NODE_ENV === "test" && process.env.SF_PI_GENERATE_CATALOG_ROOT
+    ? path.resolve(process.env.SF_PI_GENERATE_CATALOG_ROOT)
+    : SCRIPT_ROOT;
 const EXTENSIONS_DIR = path.join(ROOT, "extensions");
 const CATALOG_DIR = path.join(ROOT, "catalog");
 const DOCS_DIR = path.join(ROOT, "docs");
@@ -105,82 +111,150 @@ let hasDiff = false;
 // Discover manifests
 // -------------------------------------------------------------------------------------------------
 
+function fail(message) {
+  console.error(`❌ ${message}`);
+  process.exit(1);
+}
+
 function discoverManifests() {
   const entries = readdirSync(EXTENSIONS_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .sort((left, right) => left.name.localeCompare(right.name));
 
+  if (entries.length === 0) {
+    fail("No extension directories found under extensions/");
+  }
+
   const results = [];
 
   for (const entry of entries) {
+    const relativeManifestPath = `extensions/${entry.name}/manifest.json`;
     const manifestPath = path.join(EXTENSIONS_DIR, entry.name, "manifest.json");
     if (!existsSync(manifestPath)) {
-      console.warn(`⚠ Skipping ${entry.name}/ — no manifest.json`);
-      continue;
+      fail(`${relativeManifestPath} is missing`);
     }
 
+    const relativeIndexPath = `extensions/${entry.name}/index.ts`;
     const indexPath = path.join(EXTENSIONS_DIR, entry.name, "index.ts");
     if (!existsSync(indexPath)) {
-      console.warn(`⚠ Skipping ${entry.name}/ — no index.ts`);
-      continue;
+      fail(`${relativeIndexPath} is missing`);
     }
 
+    let manifest;
     try {
-      const raw = readFileSync(manifestPath, "utf8");
-      const manifest = JSON.parse(raw);
-
-      if (!manifest.id || !manifest.name || !manifest.description || !manifest.category) {
-        console.warn(`⚠ Skipping ${entry.name}/ — manifest.json missing required fields`);
-        continue;
-      }
-
-      if (!VALID_CATEGORIES.has(manifest.category)) {
-        console.error(
-          `❌ ${entry.name}/manifest.json has invalid category "${manifest.category}". Allowed: ${[...VALID_CATEGORIES].join(", ")}`,
-        );
-        process.exit(1);
-      }
-
-      if (manifest.maturity && !VALID_MATURITIES.has(manifest.maturity)) {
-        console.error(
-          `❌ ${entry.name}/manifest.json has invalid maturity "${manifest.maturity}". Allowed: ${[...VALID_MATURITIES].join(", ")}`,
-        );
-        process.exit(1);
-      }
-
-      // Mandate docs.summary + docs.primaryFiles so generated agent-orientation
-      // and the manager UI never fall back to the terse description. Optional
-      // for the few extensions opted into DOCS_OPTIONAL_FOR.
-      if (!DOCS_OPTIONAL_FOR.has(manifest.id)) {
-        const docs = manifest.docs;
-        if (
-          !docs ||
-          typeof docs.summary !== "string" ||
-          docs.summary.length === 0 ||
-          !Array.isArray(docs.primaryFiles) ||
-          docs.primaryFiles.length === 0
-        ) {
-          console.error(
-            `❌ ${entry.name}/manifest.json must populate docs.summary (non-empty string) and docs.primaryFiles (non-empty string[]). See docs/adr/0006-extension-consistency-baseline.md.`,
-          );
-          process.exit(1);
-        }
-        validatePrimaryFiles(entry.name, docs.primaryFiles);
-      }
-
-      if (manifest.id !== entry.name) {
-        console.warn(
-          `⚠ Warning: ${entry.name}/manifest.json id "${manifest.id}" doesn't match directory name`,
-        );
-      }
-
-      results.push({ dir: entry.name, manifest });
+      manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
     } catch (error) {
-      console.warn(`⚠ Skipping ${entry.name}/ — invalid manifest.json: ${error}`);
+      fail(`${relativeManifestPath} is not valid JSON: ${error.message}`);
+    }
+
+    if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+      fail(`${relativeManifestPath} must contain a JSON object`);
+    }
+
+    for (const field of ["id", "name", "description", "category"]) {
+      if (typeof manifest[field] !== "string" || manifest[field].length === 0) {
+        fail(`${relativeManifestPath} required field ${field} must be a non-empty string`);
+      }
+    }
+    if (typeof manifest.defaultEnabled !== "boolean") {
+      fail(`${relativeManifestPath} required field defaultEnabled must be a boolean`);
+    }
+
+    if (!VALID_CATEGORIES.has(manifest.category)) {
+      fail(
+        `${relativeManifestPath} has invalid category "${manifest.category}". Allowed: ${[...VALID_CATEGORIES].join(", ")}`,
+      );
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(manifest, "maturity") &&
+      !VALID_MATURITIES.has(manifest.maturity)
+    ) {
+      fail(
+        `${relativeManifestPath} has invalid maturity "${manifest.maturity}". Allowed: ${[...VALID_MATURITIES].join(", ")}`,
+      );
+    }
+
+    // Mandate docs.summary + docs.primaryFiles so generated agent-orientation
+    // and the manager UI never fall back to the terse description. Optional
+    // for the few extensions opted into DOCS_OPTIONAL_FOR.
+    if (!DOCS_OPTIONAL_FOR.has(manifest.id)) {
+      const docs = manifest.docs;
+      if (
+        !docs ||
+        typeof docs.summary !== "string" ||
+        docs.summary.length === 0 ||
+        !Array.isArray(docs.primaryFiles) ||
+        docs.primaryFiles.length === 0
+      ) {
+        fail(
+          `${relativeManifestPath} must populate docs.summary (non-empty string) and docs.primaryFiles (non-empty string[]). See docs/adr/0006-extension-consistency-baseline.md.`,
+        );
+      }
+      validatePrimaryFiles(entry.name, docs.primaryFiles);
+    }
+
+    results.push({ dir: entry.name, manifest });
+  }
+
+  // Identity validation is deliberately global: duplicate ids always win
+  // over directory/id mismatches, regardless of directory sort order.
+  const idDirectories = new Map();
+  for (const { dir, manifest } of results) {
+    const firstDirectory = idDirectories.get(manifest.id);
+    if (firstDirectory) {
+      fail(
+        `duplicate manifest id "${manifest.id}" in extensions/${firstDirectory}/manifest.json and extensions/${dir}/manifest.json`,
+      );
+    }
+    idDirectories.set(manifest.id, dir);
+  }
+
+  for (const { dir, manifest } of results) {
+    if (manifest.id !== dir) {
+      fail(
+        `extensions/${dir}/manifest.json manifest id "${manifest.id}" does not match directory "${dir}"`,
+      );
     }
   }
 
   return results;
+}
+
+function validatePackageExtensions(manifests) {
+  const packagePath = path.join(ROOT, "package.json");
+  let pkg;
+  try {
+    pkg = JSON.parse(readFileSync(packagePath, "utf8"));
+  } catch (error) {
+    fail(`package.json is not valid JSON: ${error.message}`);
+  }
+
+  const packageExtensions = pkg?.pi?.extensions;
+  if (!Array.isArray(packageExtensions)) {
+    fail("package.json pi.extensions must be an array");
+  }
+
+  const seen = new Set();
+  for (const entry of packageExtensions) {
+    if (typeof entry !== "string" || !/^\.\/extensions\/[^/]+\/index\.ts$/.test(entry)) {
+      fail(`noncanonical pi.extensions entry: ${String(entry)}`);
+    }
+    if (seen.has(entry)) {
+      fail(`duplicate pi.extensions entry: ${entry}`);
+    }
+    seen.add(entry);
+  }
+
+  const discovered = new Set(manifests.map(({ dir }) => `./extensions/${dir}/index.ts`));
+  const missing = [...discovered].filter((entry) => !seen.has(entry)).sort();
+  const packageOnly = [...seen].filter((entry) => !discovered.has(entry)).sort();
+  if (missing.length > 0 || packageOnly.length > 0) {
+    const details = [];
+    if (missing.length > 0) details.push(`missing discovered entries: ${missing.join(", ")}`);
+    if (packageOnly.length > 0) details.push(`package-only entries: ${packageOnly.join(", ")}`);
+    fail(`package.json pi.extensions does not match discovered extensions; ${details.join("; ")}`);
+  }
 }
 
 function validatePrimaryFiles(extensionDir, primaryFiles) {
@@ -360,7 +434,16 @@ function sortByIntentThenName(manifests, extensionCopy) {
 }
 
 function readExtensionCopy(manifests) {
-  const copy = JSON.parse(readFileSync(EXTENSION_COPY_PATH, "utf8"));
+  let copy;
+  try {
+    copy = JSON.parse(readFileSync(EXTENSION_COPY_PATH, "utf8"));
+  } catch (error) {
+    fail(`docs/extension-copy.json is not valid JSON: ${error.message}`);
+  }
+  if (!copy || typeof copy !== "object" || Array.isArray(copy)) {
+    fail("docs/extension-copy.json must contain a JSON object");
+  }
+
   const manifestIds = new Set(manifests.map(({ manifest }) => manifest.id));
   const extraIds = Object.keys(copy).filter((id) => !manifestIds.has(id));
   if (extraIds.length > 0) {
@@ -1161,18 +1244,37 @@ function writeOrCheck(filePath, content, label) {
   console.log(`✅ ${label}`);
 }
 
-async function replaceMarkedBlock(filePath, label, startMarker, endMarker, rawBlock) {
+function readMarkedFile(filePath, startMarker, endMarker) {
   const current = readFileSync(filePath, "utf8");
   const startIndex = current.indexOf(startMarker);
   const endIndex = current.indexOf(endMarker);
 
   if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
-    console.error(
-      `❌ ${path.relative(ROOT, filePath)} is missing markers: ${startMarker} / ${endMarker}`,
-    );
-    process.exit(1);
+    fail(`${path.relative(ROOT, filePath)} is missing markers: ${startMarker} / ${endMarker}`);
   }
 
+  return { current, startIndex, endIndex };
+}
+
+function preflightRequiredMarkers(manifests) {
+  readMarkedFile(README_PATH, README_START_MARKER, README_END_MARKER);
+  readMarkedFile(README_PATH, README_COMMANDS_START_MARKER, README_COMMANDS_END_MARKER);
+  readMarkedFile(ARCHITECTURE_PATH, ARCH_FOLDER_START_MARKER, ARCH_FOLDER_END_MARKER);
+  readMarkedFile(
+    TROUBLESHOOTING_DOC_PATH,
+    TROUBLESHOOTING_INDEX_START_MARKER,
+    TROUBLESHOOTING_INDEX_END_MARKER,
+  );
+
+  for (const { dir } of manifests) {
+    const readmePath = path.join(EXTENSIONS_DIR, dir, "README.md");
+    if (!existsSync(readmePath)) continue;
+    readMarkedFile(readmePath, EXT_FILE_STRUCTURE_START_MARKER, EXT_FILE_STRUCTURE_END_MARKER);
+  }
+}
+
+async function replaceMarkedBlock(filePath, label, startMarker, endMarker, rawBlock) {
+  const { current, startIndex, endIndex } = readMarkedFile(filePath, startMarker, endMarker);
   const generatedBlock = (await prettier.format(rawBlock, { parser: "markdown" })).trim();
 
   const before = current.slice(0, startIndex).replace(/\s*$/, "");
@@ -1231,18 +1333,26 @@ async function writeOrCheckExtensionsDoc(manifests, extensionCopy) {
 }
 
 async function writeOrCheckExtensionDetailDocs(manifests, extensionCopy) {
-  mkdirSync(EXTENSION_DOCS_DIR, { recursive: true });
   const expectedFiles = new Set(manifests.map(({ dir }) => `${dir}.md`));
 
-  for (const entry of readdirSync(EXTENSION_DOCS_DIR, { withFileTypes: true })) {
-    if (entry.isFile() && entry.name.endsWith(".md") && !expectedFiles.has(entry.name)) {
-      const stalePath = path.join(EXTENSION_DOCS_DIR, entry.name);
-      if (CHECK_ONLY) {
-        hasDiff = true;
-        console.error(`❌ docs/extensions/${entry.name} is stale. Run: npm run generate-catalog`);
-      } else {
-        unlinkSync(stalePath);
-        console.log(`✅ removed stale docs/extensions/${entry.name}`);
+  if (!existsSync(EXTENSION_DOCS_DIR)) {
+    if (CHECK_ONLY) {
+      hasDiff = true;
+      console.error("❌ docs/extensions directory is missing. Run: npm run generate-catalog");
+    } else {
+      mkdirSync(EXTENSION_DOCS_DIR, { recursive: true });
+    }
+  } else {
+    for (const entry of readdirSync(EXTENSION_DOCS_DIR, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith(".md") && !expectedFiles.has(entry.name)) {
+        const stalePath = path.join(EXTENSION_DOCS_DIR, entry.name);
+        if (CHECK_ONLY) {
+          hasDiff = true;
+          console.error(`❌ docs/extensions/${entry.name} is stale. Run: npm run generate-catalog`);
+        } else {
+          unlinkSync(stalePath);
+          console.log(`✅ removed stale docs/extensions/${entry.name}`);
+        }
       }
     }
   }
@@ -1269,12 +1379,16 @@ async function writeOrCheckExtensionSidebar(manifests, extensionCopy) {
 // -------------------------------------------------------------------------------------------------
 
 const manifests = discoverManifests();
+validatePackageExtensions(manifests);
 const extensionCopy = readExtensionCopy(manifests);
+const recommendationsPath = path.join(CATALOG_DIR, "recommendations.json");
+const announcementsPath = path.join(CATALOG_DIR, "announcements.json");
 
-if (manifests.length === 0) {
-  console.error("❌ No valid manifests found in extensions/*/manifest.json");
-  process.exit(1);
-}
+// Complete every fallible input/marker validation before the first generated
+// write so write mode cannot leave a partially refreshed tree.
+validateRecommendations(recommendationsPath, true);
+validateAnnouncements(announcementsPath, true);
+preflightRequiredMarkers(manifests);
 
 writeOrCheck(
   path.join(CATALOG_DIR, "registry.ts"),
@@ -1304,9 +1418,9 @@ await writeOrCheckAgentOrientationDoc(manifests);
 
 await writeOrCheckExtensionReadmes(manifests);
 
-refreshAnnouncementsFromChangelog(path.join(CATALOG_DIR, "announcements.json"));
-validateRecommendations(path.join(CATALOG_DIR, "recommendations.json"));
-validateAnnouncements(path.join(CATALOG_DIR, "announcements.json"));
+refreshAnnouncementsFromChangelog(announcementsPath);
+validateRecommendations(recommendationsPath);
+validateAnnouncements(announcementsPath);
 
 if (CHECK_ONLY && hasDiff) {
   process.exit(1);
@@ -1324,9 +1438,11 @@ if (CHECK_ONLY && hasDiff) {
  * whole catalog's invariants — schema shape, unique ids, bundle references
  * that resolve, and license allow-list.
  */
-function validateRecommendations(filePath) {
+function validateRecommendations(filePath, quiet = false) {
   if (!existsSync(filePath)) {
-    console.log("ℹ catalog/recommendations.json missing (optional) — skipping validation");
+    if (!quiet) {
+      console.log("ℹ catalog/recommendations.json missing (optional) — skipping validation");
+    }
     return;
   }
 
@@ -1340,17 +1456,21 @@ function validateRecommendations(filePath) {
 
   const errors = [];
 
-  if (manifest.schemaVersion !== 1) {
-    errors.push(`schemaVersion must be 1 (got ${JSON.stringify(manifest.schemaVersion)})`);
-  }
-  if (typeof manifest.revision !== "string" || manifest.revision.length === 0) {
-    errors.push("revision must be a non-empty string");
-  }
-  if (!Array.isArray(manifest.bundles)) {
-    errors.push("bundles must be an array");
-  }
-  if (!manifest.items || typeof manifest.items !== "object") {
-    errors.push("items must be an object keyed by item id");
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+    errors.push("root must be an object");
+  } else {
+    if (manifest.schemaVersion !== 1) {
+      errors.push(`schemaVersion must be 1 (got ${JSON.stringify(manifest.schemaVersion)})`);
+    }
+    if (typeof manifest.revision !== "string" || manifest.revision.length === 0) {
+      errors.push("revision must be a non-empty string");
+    }
+    if (!Array.isArray(manifest.bundles)) {
+      errors.push("bundles must be an array");
+    }
+    if (!manifest.items || typeof manifest.items !== "object" || Array.isArray(manifest.items)) {
+      errors.push("items must be an object keyed by item id");
+    }
   }
 
   if (errors.length === 0) {
@@ -1417,11 +1537,13 @@ function validateRecommendations(filePath) {
     process.exit(1);
   }
 
-  const itemCount = Object.keys(manifest.items).length;
-  const bundleCount = manifest.bundles.length;
-  console.log(
-    `✅ catalog/recommendations.json — ${itemCount} item(s), ${bundleCount} bundle(s), revision ${manifest.revision}`,
-  );
+  if (!quiet) {
+    const itemCount = Object.keys(manifest.items).length;
+    const bundleCount = manifest.bundles.length;
+    console.log(
+      `✅ catalog/recommendations.json — ${itemCount} item(s), ${bundleCount} bundle(s), revision ${manifest.revision}`,
+    );
+  }
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -1552,9 +1674,11 @@ function truncateBody(text) {
 // enforce structural invariants on every `npm run generate-catalog` run.
 // -------------------------------------------------------------------------------------------------
 
-function validateAnnouncements(filePath) {
+function validateAnnouncements(filePath, quiet = false) {
   if (!existsSync(filePath)) {
-    console.log("ℹ catalog/announcements.json missing (optional) — skipping validation");
+    if (!quiet) {
+      console.log("ℹ catalog/announcements.json missing (optional) — skipping validation");
+    }
     return;
   }
 
@@ -1568,20 +1692,24 @@ function validateAnnouncements(filePath) {
 
   const errors = [];
 
-  if (manifest.schemaVersion !== 1) {
-    errors.push(`schemaVersion must be 1 (got ${JSON.stringify(manifest.schemaVersion)})`);
-  }
-  if (typeof manifest.revision !== "string" || manifest.revision.length === 0) {
-    errors.push("revision must be a non-empty string");
-  }
-  if (manifest.latestVersion !== undefined && typeof manifest.latestVersion !== "string") {
-    errors.push("latestVersion must be a string when set");
-  }
-  if (manifest.feedUrl !== undefined && typeof manifest.feedUrl !== "string") {
-    errors.push("feedUrl must be a string when set");
-  }
-  if (!Array.isArray(manifest.announcements)) {
-    errors.push("announcements must be an array");
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+    errors.push("root must be an object");
+  } else {
+    if (manifest.schemaVersion !== 1) {
+      errors.push(`schemaVersion must be 1 (got ${JSON.stringify(manifest.schemaVersion)})`);
+    }
+    if (typeof manifest.revision !== "string" || manifest.revision.length === 0) {
+      errors.push("revision must be a non-empty string");
+    }
+    if (manifest.latestVersion !== undefined && typeof manifest.latestVersion !== "string") {
+      errors.push("latestVersion must be a string when set");
+    }
+    if (manifest.feedUrl !== undefined && typeof manifest.feedUrl !== "string") {
+      errors.push("feedUrl must be a string when set");
+    }
+    if (!Array.isArray(manifest.announcements)) {
+      errors.push("announcements must be an array");
+    }
   }
 
   if (errors.length === 0) {
@@ -1638,9 +1766,11 @@ function validateAnnouncements(filePath) {
     process.exit(1);
   }
 
-  const count = manifest.announcements.length;
-  const latestSuffix = manifest.latestVersion ? `, latestVersion ${manifest.latestVersion}` : "";
-  console.log(
-    `✅ catalog/announcements.json — ${count} item(s), revision ${manifest.revision}${latestSuffix}`,
-  );
+  if (!quiet) {
+    const count = manifest.announcements.length;
+    const latestSuffix = manifest.latestVersion ? `, latestVersion ${manifest.latestVersion}` : "";
+    console.log(
+      `✅ catalog/announcements.json — ${count} item(s), revision ${manifest.revision}${latestSuffix}`,
+    );
+  }
 }

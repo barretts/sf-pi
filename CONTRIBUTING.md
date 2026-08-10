@@ -146,8 +146,9 @@ npm install
 
 `npm install` runs the `prepare` script, which installs Husky hooks:
 
-- `pre-commit` runs gitleaks on the staged diff when available, lint-staged
-  formatting/fixes, and catalog regeneration when extension manifests change.
+- `pre-commit` runs gitleaks on the staged diff when available, applies
+  lint-staged formatting/fixes, then exports and checks the staged Git snapshot
+  for generated catalog drift without changing the index or working tree.
 - `commit-msg` validates
   [Conventional Commits](https://www.conventionalcommits.org/).
 - `pre-push` blocks force-pushes and deletion of `main`; CI remains the source
@@ -163,31 +164,41 @@ pi install .
 
 The most common entry points, grouped by purpose:
 
-| Purpose                  | Command                                            | Check-only variant                    |
-| ------------------------ | -------------------------------------------------- | ------------------------------------- |
-| Regenerate catalog       | `npm run generate-catalog`                         | `npm run generate-catalog:check`      |
-| Format                   | `npm run format`                                   | `npm run format:check`                |
-| SPDX headers             | `npm run spdx`                                     | `npm run spdx:check`                  |
-| Docs health              | `npm run docs:health`                              | `npm run docs:health:check`           |
-| Docs site                | `npm run docs:dev` / `npm run docs:preview`        | `npm run docs:build`                  |
-| Docs impact summary      | —                                                  | `npm run docs:changed`                |
-| ESLint                   | `npm run eslint:fix`                               | `npm run eslint`                      |
-| Type check               | —                                                  | `npm run check`                       |
-| Run tests                | `npm test`                                         | —                                     |
-| Tests + coverage         | `npm run test:coverage`                            | —                                     |
-| Watch tests              | `npm run test:watch`                               | —                                     |
-| Lint bundle              | —                                                  | `npm run lint`                        |
-| Full local validation    | —                                                  | `npm run validate`                    |
-| CI-like local validation | —                                                  | `npm run validate:ci`                 |
-| CI artifact guard        | —                                                  | `bash scripts/check-llm-artifacts.sh` |
-| Instruction surface      | `npm run instruction-surface:report`               | —                                     |
-| Instruction behavior     | `npm run e2e:instruction-behavior -- --model ...`  | —                                     |
-| Scaffold a new extension | `npm run scaffold -- --id sf-my-ext --category ui` | —                                     |
+| Purpose                  | Command                                            | Check-only variant                      |
+| ------------------------ | -------------------------------------------------- | --------------------------------------- |
+| Regenerate catalog       | `npm run generate-catalog`                         | `npm run generate-catalog:check`        |
+| Check staged catalog     | —                                                  | `npm run generate-catalog:check-staged` |
+| Format                   | `npm run format`                                   | `npm run format:check`                  |
+| SPDX headers             | `npm run spdx`                                     | `npm run spdx:check`                    |
+| Docs health              | `npm run docs:health`                              | `npm run docs:health:check`             |
+| Docs site                | `npm run docs:dev` / `npm run docs:preview`        | `npm run docs:build`                    |
+| Docs impact summary      | —                                                  | `npm run docs:changed`                  |
+| ESLint                   | `npm run eslint:fix`                               | `npm run eslint`                        |
+| Type check               | —                                                  | `npm run check`                         |
+| Run tests                | `npm test`                                         | —                                       |
+| Tests + coverage         | `npm run test:coverage`                            | —                                       |
+| Watch tests              | `npm run test:watch`                               | —                                       |
+| Lint bundle              | —                                                  | `npm run lint`                          |
+| Full local validation    | —                                                  | `npm run validate`                      |
+| CI-like local validation | —                                                  | `npm run validate:ci`                   |
+| CI artifact guard        | —                                                  | `bash scripts/check-llm-artifacts.sh`   |
+| Instruction surface      | `npm run instruction-surface:report`               | —                                       |
+| Instruction behavior     | `npm run e2e:instruction-behavior -- --model ...`  | —                                       |
+| Scaffold a new extension | `npm run scaffold -- --id sf-my-ext --category ui` | —                                       |
 
-`npm run lint` is a convenience bundle that runs `format:check`,
-`generate-catalog:check`, `docs:health:check`, `spdx:check`, and `eslint`
-in order. Prefer `npm run validate:ci` before opening a PR — it runs the
-full validation path, ESLint, docs-health, docs-site build, and the LLM-artifact guard.
+`npm run lint` covers formatting, generated Data 360/catalog drift, docs and
+SPDX policy, shared connection/lifecycle policy, and ESLint. `npm run validate`
+covers the broader local lane: generated checks, docs health and site build,
+formatting and types, structural/runtime import checks, and the full test
+suite. Both validate generated artifacts without regenerating them.
+`npm run validate:ci` wraps that lane with the remaining CI-facing lint and
+artifact checks and reasserts docs health.
+
+If generated drift is reported, run `npm run generate-catalog` explicitly,
+review the complete diff, and stage the intended outputs. The pre-commit check
+uses only the Git index, so coherent partial commits are allowed even when
+unrelated changes remain unstaged. The lint-staged SPDX, Prettier, and ESLint
+fixes remain intentionally mutating for staged files.
 
 ## Source of truth
 

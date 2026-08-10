@@ -59,6 +59,7 @@
   "scripts": {
     "generate-catalog": "node scripts/generate-catalog.mjs",
     "generate-catalog:check": "node scripts/generate-catalog.mjs --check",
+    "generate-catalog:check-staged": "node scripts/check-staged-catalog.mjs",
     "import-d360-upstream": "node scripts/import-d360-upstream.mjs",
     "import-d360-upstream:check": "node scripts/import-d360-upstream.mjs --check",
     "generate-d360-registry": "node scripts/generate-d360-registry.mjs",
@@ -128,6 +129,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.3.0",
     "prettier": "^3.9.6",
+    "string-argv": "^0.3.2",
     "typebox": "^1.3.11",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.66.0",

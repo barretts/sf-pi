@@ -6,9 +6,9 @@
 #
 # 1. Gitleaks on the staged diff. Catches secrets before they land in
 #    history. Skipped (with a warning) if gitleaks isn't installed.
-# 2. lint-staged (prettier + eslint on changed files).
-# 3. Regenerate the catalog if any extension manifest is staged, and
-#    stage the regenerated outputs so the commit stays consistent.
+# 2. lint-staged applies staged-file SPDX, Prettier, and ESLint fixes.
+# 3. The catalog check exports and validates the staged Git snapshot without
+#    writing or staging generated artifacts.
 
 set -eu
 
@@ -23,11 +23,5 @@ fi
 # --- 2. lint-staged ------------------------------------------------------
 npx lint-staged
 
-# --- 3. catalog regen if a manifest changed -----------------------------
-# Only regenerate when an extension manifest was staged; avoids running
-# node on every single commit.
-if git diff --cached --name-only | grep -qE '^extensions/[^/]+/manifest\.json$'; then
-  echo "[pre-commit] extension manifest changed — regenerating catalog."
-  npm run generate-catalog --silent
-  git add catalog/index.json catalog/registry.ts README.md ARCHITECTURE.md docs/commands.md 2>/dev/null || true
-fi
+# --- 3. staged generated catalog drift check ----------------------------
+npm run generate-catalog:check-staged --silent

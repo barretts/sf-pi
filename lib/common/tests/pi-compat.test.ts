@@ -85,17 +85,16 @@ describe("pi version floor", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("declares every bundled extension in package.json so Pi can load it", () => {
+  it("declares exactly one package entry for every bundled registry extension", () => {
     const pkg = JSON.parse(readFileSync(path.resolve("package.json"), "utf8")) as {
       pi?: { extensions?: string[] };
     };
-    const packageExtensions = new Set(
-      (pkg.pi?.extensions ?? []).map((entry) => entry.replace(/^\.\//, "")),
-    );
+    const packageExtensions = (pkg.pi?.extensions ?? []).map((entry) => entry.replace(/^\.\//, ""));
+    const registryExtensions = SF_PI_REGISTRY.map((extension) => extension.file);
 
-    for (const extension of SF_PI_REGISTRY) {
-      expect(packageExtensions).toContain(extension.file);
-    }
+    expect(new Set(packageExtensions).size).toBe(packageExtensions.length);
+    expect(new Set(registryExtensions).size).toBe(registryExtensions.length);
+    expect([...packageExtensions].sort()).toEqual([...registryExtensions].sort());
   });
 
   it("tracks the forward-compatible peer range and exact audited development SDK", () => {
