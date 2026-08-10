@@ -1,8 +1,10 @@
+---
+id: "0005"
+status: accepted
+date: 2026-05-06
+---
+
 # ADR 0005: Standard Pi-Native Command Panels
-
-## Status
-
-Accepted; the no-args navigation decision is superseded by ADR 0051
 
 > **Implementation status:** Manager-first no-args navigation remains the target
 > contract. `sf-apex`, `sf-lwc`, and `sf-soql` are current local-panel

@@ -1,8 +1,10 @@
+---
+id: "0053"
+status: accepted
+date: 2026-06-16
+---
+
 # ADR 0053: Agent Script Uses a Language Override Canary
-
-## Status
-
-Accepted; canary retired after upstream package convergence
 
 ## Context
 

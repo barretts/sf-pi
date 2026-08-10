@@ -1,8 +1,10 @@
+---
+id: "0006"
+status: accepted
+date: 2026-05-09
+---
+
 # ADR 0006: Extension Consistency Baseline
-
-## Status
-
-Accepted
 
 ## Context
 

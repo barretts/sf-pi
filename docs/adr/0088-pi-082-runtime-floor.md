@@ -1,6 +1,10 @@
-# ADR 0088: Pi 0.82.0 Runtime Floor
+---
+id: "0088"
+status: accepted
+date: 2026-07-27
+---
 
-Status: accepted
+# ADR 0088: Pi 0.82.0 Runtime Floor
 
 SF Pi raises its **Pi Runtime Floor** from `0.81.1` to `0.82.0` so production source can use Pi 0.82 extension Interfaces without compatibility shims or an untested “loadable but unsupported” tier. Stable runtimes below `0.82.0`, prereleases, and Pi 1.x or later are blocked with exact `pi update --self` repair guidance. SF Pi does not retain a pre-floor bootstrap Module or automatically mutate the runtime that is currently hosting it. Required compatibility CI starts at exact Pi `0.82.0`; ADR 0079's forward-compatibility behavior for newer stable Pi 0.x releases remains in force.
 

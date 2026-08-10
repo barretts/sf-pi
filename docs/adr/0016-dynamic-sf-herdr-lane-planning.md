@@ -1,8 +1,10 @@
+---
+id: "0016"
+status: accepted
+date: 2026-05-25
+---
+
 # ADR 0016: Dynamic SF Herdr Lane Planning
-
-## Status
-
-Accepted; runtime Interface, settings, and explicit-planning details amended by [ADR 0102](./0102-forward-only-current-herdr-tools.md).
 
 ## Context
 

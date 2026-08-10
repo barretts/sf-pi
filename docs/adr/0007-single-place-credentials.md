@@ -1,8 +1,11 @@
+---
+id: "0007"
+status: superseded
+date: 2026-05-09
+supersededBy: ["0078"]
+---
+
 # ADR 0007: Single-place credential entry per integration
-
-## Status
-
-Superseded by [ADR 0078: Pi-Native Credential Ownership](./0078-pi-native-credential-ownership.md). This record remains as the historical rationale for the earlier panel-owned credential flow.
 
 ### Sign-off additions
 

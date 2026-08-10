@@ -1,5 +1,8 @@
 ---
-status: superseded by ADR-0052
+id: "0045"
+status: superseded
+date: 2026-06-13
+supersededBy: ["0052"]
 ---
 
 # SF Guardrail hard-block themes start with two presets

@@ -1,3 +1,9 @@
+---
+id: "0033"
+status: accepted
+date: 2026-06-13
+---
+
 # SF Guardrail is a safety mediator, not a policy engine
 
 SF Guardrail will remain an opinionated Salesforce-aware safety mediator that turns risky agent actions into allow, block, or human-approval decisions. We will support narrow tuning and advanced overrides where they reduce repeated friction, but we will not grow the extension into a general-purpose policy engine, governance framework, shell sandbox, or security scanner.

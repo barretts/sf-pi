@@ -1,3 +1,9 @@
+---
+id: "0032"
+status: accepted
+date: 2026-06-13
+---
+
 # ADR 0032: SF Guardrail uses risk-tiered approval grants
 
 SF Guardrail keeps the fail-closed posture from ADR 0004, but reduces repeated human-in-the-loop prompts by adding explicit, TTL-bound approval grants for narrow Safety Envelopes. V1 deliberately does not add a cross-tab approval inbox: grant-eligible prompts keep a simple three-choice shape where the middle option becomes a scoped project grant, such as allowing verified production deploys to one org in one project for 60 minutes or allowing deletion of one verified non-production org target for 30 minutes. Guessed orgs, credential-reveal commands, broad dangerous local commands, production data mutations, anonymous Apex, and destructive REST calls do not receive persisted grants by default.

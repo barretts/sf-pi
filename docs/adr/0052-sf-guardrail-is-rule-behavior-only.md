@@ -1,3 +1,10 @@
+---
+id: "0052"
+status: accepted
+date: 2026-06-15
+supersedes: ["0044", "0045"]
+---
+
 # SF Guardrail is rule-behavior only
 
 SF Guardrail no longer has bulk posture modes, hard-block themes, broad feature master switches, or an internal enabled flag. When the extension is enabled, mediation is controlled by per-rule Rule Behavior only: `off`, `confirm`, or `block`.

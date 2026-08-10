@@ -1,3 +1,9 @@
+---
+id: "0043"
+status: accepted
+date: 2026-06-13
+---
+
 # SF Guardrail relies on detected Salesforce org type
 
 SF Guardrail will keep org classification simple and rely on the Salesforce org facts already available through `@salesforce/core` and the SF Pi environment cache. It will not add a separate demo-org taxonomy or broad non-production alias lists to reduce prompts.

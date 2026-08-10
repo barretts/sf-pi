@@ -1,3 +1,10 @@
+---
+id: "0047"
+status: superseded
+date: 2026-06-15
+supersededBy: ["0049"]
+---
+
 # SF Guardrail settings use a section chooser
 
 > Superseded by ADR 0049. The section chooser was the interim extension-owned settings surface; routine preferences now live in Pi settings and are edited from the SF Pi Manager config panel.

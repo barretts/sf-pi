@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const GENERATOR_PATH = path.join(ROOT, "scripts", "generate-catalog.mjs");
+const ADR_LIFECYCLE_PATH = path.join(ROOT, "scripts", "lib", "adr-lifecycle.mjs");
 const CHECKER_PATH = path.join(ROOT, "scripts", "check-staged-catalog.mjs");
 const PRETTIER_ROOT = path.dirname(createRequire(import.meta.url).resolve("prettier/package.json"));
 
@@ -138,8 +139,24 @@ function createRepository(): void {
   );
   writeText("catalog/.keep", "fixture\n");
   writeText("docs/.vitepress/.keep", "fixture\n");
-  mkdirSync(path.join(repository, "scripts"), { recursive: true });
+  writeText(
+    "docs/adr/0001-fixture-decision.md",
+    [
+      "---",
+      'id: "0001"',
+      "status: accepted",
+      "date: 2026-01-01",
+      "---",
+      "",
+      "# Fixture decision",
+      "",
+      "Fixture rationale.",
+      "",
+    ].join("\n"),
+  );
+  mkdirSync(path.join(repository, "scripts/lib"), { recursive: true });
   cpSync(GENERATOR_PATH, path.join(repository, "scripts/generate-catalog.mjs"));
+  cpSync(ADR_LIFECYCLE_PATH, path.join(repository, "scripts/lib/adr-lifecycle.mjs"));
   cpSync(CHECKER_PATH, path.join(repository, "scripts/check-staged-catalog.mjs"));
 
   mkdirSync(path.join(repository, "node_modules"), { recursive: true });

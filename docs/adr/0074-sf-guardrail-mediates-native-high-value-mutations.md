@@ -1,3 +1,9 @@
+---
+id: "0074"
+status: accepted
+date: 2026-07-05
+---
+
 # SF Guardrail mediates native high-value durable mutations
 
 SF Pi is a pro-code tool and must support mutation, so mutation alone is not the safety boundary. SF Guardrail will mediate known high-value durable mutations exposed through bundled first-party LLM-callable tools by normalizing them into Native Tool Safety Subjects and applying the existing Guardrail Decision, Safety Envelope, Approval Ledger, and Human-in-the-Loop Approval flow.

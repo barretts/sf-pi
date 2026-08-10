@@ -1,10 +1,12 @@
+---
+id: "0030"
+status: accepted
+date: 2026-06-08
+---
+
 # ADR 0030: SF Browser comprehensive navigation via verified Destination Packs and a dev-time hardening harness
 
 To let SF Browser natively navigate broad product areas such as Data Cloud (settings menu, app tabs, and builder pages) without turning the intentionally small curated Setup Destination list into a sitemap, we decided to add a separate, typed, live-verified **Destination Pack** addressed by a new structured route, and to grow and maintain packs through a dev-time **Navigation Hardening Harness** rather than runtime menu scraping. The runtime agent reads only verified pack entries; discovery, verification, screenshots, and candidate proposals happen out-of-band against an explicitly targeted org.
-
-## Status
-
-accepted
 
 ## Context
 

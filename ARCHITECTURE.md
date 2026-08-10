@@ -58,7 +58,7 @@ sf-pi/
 │   ├── commands.md             ← GENERATED per-extension command reference
 │   ├── agent-orientation.md    ← GENERATED agent navigation map
 │   ├── contributing.md         ← contributor site entry point
-│   └── adr/                    ← architecture decision records
+│   └── adr/                    ← ADR records + GENERATED lifecycle index
 ├── scripts/                    ← catalog/docs/SPDX/validate helpers; see ARCHITECTURE.md
 ├── themes/                     ← TUI themes (sf-dark.json, …)
 ├── package.json
@@ -121,6 +121,7 @@ When an agent (or human) needs to change something, start here:
 | Generated docs-site extension sidebar           | `docs/.vitepress/generated-extension-sidebar.ts` — **generated, do not edit**   |
 | Generated command reference                     | `docs/commands.md` — **generated, do not edit**                                 |
 | Generated agent orientation                     | `docs/agent-orientation.md` — **generated, do not edit**                        |
+| Generated ADR lifecycle index                   | `docs/adr/README.md` — **generated, do not edit**                               |
 | VitePress documentation site                    | `docs/.vitepress/`, `docs/index.md`, and curated docs pages                     |
 | Contributor site entry point                    | `docs/contributing.md`                                                          |
 | Generated bundled-extension table               | Inside `README.md` between `GENERATED:bundled-extensions` markers               |

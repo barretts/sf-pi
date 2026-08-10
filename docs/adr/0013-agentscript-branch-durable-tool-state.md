@@ -1,8 +1,10 @@
+---
+id: "0013"
+status: accepted
+date: 2026-05-23
+---
+
 # Agent Script Uses Branch-Durable Tool State for Workflow Pointers
-
-## Status
-
-Accepted
 
 ## Context
 

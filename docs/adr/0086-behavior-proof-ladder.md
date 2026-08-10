@@ -1,6 +1,10 @@
-# ADR 0086: Behavior Proof Ladder
+---
+id: "0086"
+status: accepted
+date: 2026-07-22
+---
 
-Status: accepted
+# ADR 0086: Behavior Proof Ladder
 
 Every **Deletion-Gated Adoption Milestone** must climb the smallest sufficient evidence ladder before removing the old path: pure behavior tests; an integration test against the exact supported Pi package through real runtime/resource/session seams; focused checks plus typechecks at both **Pi Runtime Support Window** edges and the full suite; opt-in live proof for external behavior fixtures cannot establish; and manual narrow/wide TUI QA only when visible rendering changes.
 

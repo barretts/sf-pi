@@ -1,3 +1,9 @@
+---
+id: "0035"
+status: accepted
+date: 2026-06-13
+---
+
 # SF Guardrail uses a Safety Kernel
 
 SF Guardrail will center risky-action evaluation in one pure Safety Kernel that turns a normalized Safety Subject into a Guardrail Decision. The kernel owns rule evaluation, fail-closed classification, org-aware risk detection, and Safety Envelope construction; Pi Runtime concerns such as UI prompts, session entries, persisted grants, notifications, and command panels stay outside the kernel.

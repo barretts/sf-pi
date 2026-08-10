@@ -1,8 +1,10 @@
+---
+id: "0103"
+status: accepted
+date: 2026-08-09
+---
+
 # ADR 0103: Salesforce Org Connections Use One Shared Module
-
-## Status
-
-Accepted
 
 ## Context
 

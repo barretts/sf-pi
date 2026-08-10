@@ -1,3 +1,9 @@
+---
+id: "0050"
+status: accepted
+date: 2026-06-15
+---
+
 # SF Pi Manager configurable extensions use settings drill-in
 
 Configurable extensions in the SF Pi Manager use a detail-to-settings drill-in instead of embedding their config panel directly inside the extension detail page. The extension detail page remains focused on identity, state, and actions. Selecting Settings opens the extension's config panel one page deeper. ADR 0055 refines the detail page into a user-first control page and moves bundle metadata / raw runtime-surface inventories out of the default Manager detail view.

@@ -1,8 +1,10 @@
+---
+id: "0098"
+status: accepted
+date: 2026-08-03
+---
+
 # Agent Script Eval Uses Bounded SOQL Seed Profiles
-
-## Status
-
-Accepted
 
 ## Context
 

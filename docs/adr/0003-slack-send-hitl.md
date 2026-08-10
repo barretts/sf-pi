@@ -1,8 +1,10 @@
+---
+id: "0003"
+status: accepted
+date: 2026-05-03
+---
+
 # ADR 0003: Slack Send Requires Human Confirmation
-
-## Status
-
-Accepted
 
 ## Context
 

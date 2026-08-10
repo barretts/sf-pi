@@ -1,3 +1,9 @@
+---
+id: "0042"
+status: accepted
+date: 2026-06-13
+---
+
 # SF Guardrail uses session-scoped approval envelopes
 
 SF Guardrail will replace minute-based persisted approval grants with session-scoped Safety Envelope approvals. Human approval should suppress repeat prompts for the same narrow envelope during the current Pi session path, but it should not create a wall-clock grant that can surprise the user later.

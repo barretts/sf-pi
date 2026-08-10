@@ -117,6 +117,21 @@ function createFixture(): void {
   );
   writeText("catalog/.keep", "fixture\n");
   writeText("docs/.vitepress/.keep", "fixture\n");
+  writeText(
+    "docs/adr/0001-fixture-decision.md",
+    [
+      "---",
+      'id: "0001"',
+      "status: accepted",
+      "date: 2026-01-01",
+      "---",
+      "",
+      "# Fixture decision",
+      "",
+      "Fixture rationale.",
+      "",
+    ].join("\n"),
+  );
 }
 
 function runGenerator(args: string[] = []): GeneratorResult {
@@ -333,6 +348,11 @@ describe("generate-catalog CLI", () => {
   it("rejects noncanonical package extension paths", () => {
     writePackage(["extensions/alpha/index.ts"]);
     expectFailure("noncanonical pi.extensions entry: extensions/alpha/index.ts");
+  });
+
+  it("rejects invalid ADR lifecycle metadata before changing outputs", () => {
+    writeText("docs/adr/0001-fixture-decision.md", "# Missing frontmatter\n");
+    expectFailure("must start with YAML frontmatter");
   });
 
   it.each([

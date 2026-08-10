@@ -1,3 +1,9 @@
+---
+id: "0058"
+status: accepted
+date: 2026-06-21
+---
+
 # Agent Script Uses Bounded Salesforce Transport
 
 SF Agent Script uses the **Salesforce Connection Module** from ADR 0103 for ordinary target-org identity, credentials, API-version selection, REST, and SOQL. Timeout-sensitive preview, eval, lifecycle, and read-only preflight calls may use its bounded transport; product-specific SFAP, Evaluation, and named-user Agent API adapters remain local. This avoids letting raw jsforce requests become an unbounded failure point while preserving the credential boundary: tokens stay in process, are never logged or persisted, and no new credential entry point is introduced.

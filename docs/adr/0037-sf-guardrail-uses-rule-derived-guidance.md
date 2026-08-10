@@ -1,3 +1,9 @@
+---
+id: "0037"
+status: accepted
+date: 2026-06-13
+---
+
 # SF Guardrail uses rule-derived guidance
 
 SF Guardrail will derive the agent-visible guardrail guidance from the effective ruleset and runtime config instead of maintaining a separate policy prompt as an independent source of truth. Hand-authored prose should stay minimal and generic; the active file protections, dangerous-command gates, org-aware gates, headless behavior, and safer rehearsal hints should come from the same data the Safety Kernel evaluates.

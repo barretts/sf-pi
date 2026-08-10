@@ -1,8 +1,10 @@
+---
+id: "0004"
+status: accepted
+date: 2026-05-03
+---
+
 # ADR 0004: Guardrail Fails Closed
-
-## Status
-
-Accepted
 
 ## Context
 

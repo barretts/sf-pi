@@ -1,8 +1,10 @@
+---
+id: "0027"
+status: accepted
+date: 2026-06-01
+---
+
 # ADR 0027: Data 360 v2 uses pi-native family tools over a shared action registry
-
-## Status
-
-Accepted
 
 ## Context
 

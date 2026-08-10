@@ -1,3 +1,9 @@
+---
+id: "0034"
+status: accepted
+date: 2026-06-13
+---
+
 # SF Guardrail approvals use Safety Envelopes
 
 SF Guardrail human approvals grant a Safety Envelope rather than trusting a raw command string or creating a blanket allow. The envelope must describe the risk gate, project scope when relevant, verified Salesforce org identity when relevant, operation family, TTL for persisted grants, and any safety-relevant target details.

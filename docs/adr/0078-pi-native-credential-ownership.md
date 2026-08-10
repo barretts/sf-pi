@@ -1,6 +1,11 @@
-# ADR 0078: Pi-Native Credential Ownership
+---
+id: "0078"
+status: accepted
+date: 2026-07-22
+supersedes: ["0007"]
+---
 
-Status: accepted; Gateway, Docs, and Slack use shared secure provider login with Pi-owned persistence/logout
+# ADR 0078: Pi-Native Credential Ownership
 
 SF Pi will use Pi provider authentication as the sole credential-mutation seam for SF Docs, SF Slack, and SF LLM Gateway. Pi-native `/login` owns orchestration and persistence, and `/logout` owns removal. A Provider may supply a behavior-proven extension UI for secret entry when the released Pi stock prompt is unsafe; that UI must return a canonical credential to Pi without writing `auth.json` or a second secret store. Integration panels retain non-secret setup, status, diagnostics, credential-source reporting, and native-command handoff. Environment variables remain the automation and headless fallback.
 

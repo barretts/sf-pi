@@ -1,8 +1,10 @@
+---
+id: "0070"
+status: accepted
+date: 2026-06-28
+---
+
 # ADR 0070: SF SOQL is an API-native Query Lifecycle Extension
-
-## Status
-
-Accepted
 
 ## Context
 

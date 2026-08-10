@@ -1,8 +1,10 @@
+---
+id: "0012"
+status: accepted
+date: 2026-05-21
+---
+
 # ADR 0012: VitePress Documentation Site
-
-## Status
-
-Accepted
 
 ## Context
 

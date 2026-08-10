@@ -1,3 +1,9 @@
+---
+id: "0051"
+status: accepted
+date: 2026-06-15
+---
+
 # Extension commands deep-link to the Manager Surface
 
 > **Implementation status:** Manager-first no-args navigation remains the target

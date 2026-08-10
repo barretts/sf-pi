@@ -1,3 +1,10 @@
+---
+id: "0044"
+status: superseded
+date: 2026-06-13
+supersededBy: ["0052"]
+---
+
 # SF Guardrail defaults to confirmable Power Tool mode
 
 > Superseded by ADR 0052. SF Guardrail no longer has bulk posture modes; per-rule Rule Behavior is the only safety model.

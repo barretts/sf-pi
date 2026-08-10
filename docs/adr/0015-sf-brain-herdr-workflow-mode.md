@@ -1,8 +1,11 @@
+---
+id: "0015"
+status: superseded
+date: 2026-05-24
+supersededBy: ["0093"]
+---
+
 # ADR 0015: SF Brain provides conditional Herdr Workflow Mode
-
-## Status
-
-Superseded by ADR 0093
 
 ## Context
 

@@ -1,3 +1,9 @@
+---
+id: "0046"
+status: accepted
+date: 2026-06-13
+---
+
 # SF Guardrail rules use explicit behavior settings
 
 SF Guardrail rules will use explicit per-rule behavior settings: off, confirm, or hard block. Confirm is the default power-tool posture for risky actions; hard block is an opt-in refusal for specific rules; off disables the rule.

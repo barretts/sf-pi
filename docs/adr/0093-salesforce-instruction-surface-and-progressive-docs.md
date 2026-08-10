@@ -1,8 +1,11 @@
+---
+id: "0093"
+status: accepted
+date: 2026-07-29
+supersedes: ["0015"]
+---
+
 # Salesforce Instruction Surface Uses a Constitution and Progressive Docs
-
-## Status
-
-Accepted
 
 ## Context
 

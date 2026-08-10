@@ -1,6 +1,10 @@
-# ADR 0084: Agent-Settled Update Coordinator
+---
+id: "0084"
+status: accepted
+date: 2026-07-22
+---
 
-Status: accepted
+# ADR 0084: Agent-Settled Update Coordinator
 
 SF Pi retains opt-in Auto Update but replaces the one-shot startup timer with an **Agent-Settled Update Coordinator**. When the daily cadence is due, startup records pending work without mutation. The next `agent_settled` boundary rechecks opt-in and idle state, emits a sanitized Human-Only plan before the first mutation, runs eligible targets independently, persists bounded results, and renders final success, failure, skip, and restart evidence.
 

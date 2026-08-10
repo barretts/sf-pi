@@ -1,8 +1,10 @@
+---
+id: "0010"
+status: accepted
+date: 2026-05-19
+---
+
 # ADR 0010: Data 360 capability sweeps are facade-first and fixture-owned
-
-## Status
-
-Accepted
 
 ## Context
 

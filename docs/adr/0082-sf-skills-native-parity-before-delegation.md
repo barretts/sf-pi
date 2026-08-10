@@ -1,6 +1,10 @@
-# ADR 0082: SF Skills Requires Native Parity Before Delegation
+---
+id: "0082"
+status: accepted
+date: 2026-07-22
+---
 
-Status: accepted; E4 complete with current SF Skills governance retained
+# ADR 0082: SF Skills Requires Native Parity Before Delegation
 
 SF Pi will not delete or preserve the full Skill Funnel based only on Pi release notes. A read-only behavior parity harness will compare the Funnel with Pi 0.81's real resource resolver across global/project inherit-load-unload states, package deltas, exact include/exclude paths, duplicate names, project trust, stale roots, and rescope scenarios. No production settings or UI behavior changes during this proof.
 

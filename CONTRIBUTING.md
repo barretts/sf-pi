@@ -219,6 +219,7 @@ Do not edit these manually:
 - `docs/extensions.md`
 - `docs/commands.md`
 - `docs/agent-orientation.md`
+- `docs/adr/README.md`
 - generated sections in `README.md`: bundled extensions and command reference
 - generated troubleshooting index in `docs/troubleshooting.md`
 - generated folder layout in `ARCHITECTURE.md`

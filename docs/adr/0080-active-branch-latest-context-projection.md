@@ -1,6 +1,10 @@
-# ADR 0080: Active-Branch Latest Context Projection
+---
+id: "0080"
+status: accepted
+date: 2026-07-22
+---
 
-Status: implemented
+# ADR 0080: Active-Branch Latest Context Projection
 
 SF Pi will decide hidden model context from the active, compaction-aware session branch rather than from every append-only session entry. Immutable guidance is injected once while it remains live on that branch and is re-injected after compaction removes it. Mutable context—including Salesforce environment, Slack identity, extension/tool availability, and settings-derived Guardrail guidance—is projected so only its latest active-branch value reaches the model.
 

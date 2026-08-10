@@ -1,8 +1,11 @@
+---
+id: "0019"
+status: superseded
+date: 2026-05-29
+supersededBy: ["0031"]
+---
+
 # ADR 0019: Pi 0.77/0.78 compatibility-preserving adoption
-
-## Status
-
-Accepted
 
 ## Context
 

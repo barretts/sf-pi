@@ -1,8 +1,10 @@
+---
+id: "0014"
+status: accepted
+date: 2026-05-23
+---
+
 # Agent Script Public Tool Surface Uses Four Family Tools
-
-## Status
-
-Accepted
 
 ## Context
 

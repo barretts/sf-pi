@@ -1,8 +1,10 @@
+---
+id: "0009"
+status: accepted
+date: 2026-05-18
+---
+
 # ADR 0009: Data 360 parity stays pi-native, generated, and phase-guided
-
-## Status
-
-Accepted
 
 ## Context
 

@@ -1,8 +1,10 @@
+---
+id: "0090"
+status: accepted
+date: 2026-07-27
+---
+
 # Agent Script Generates Stateful Eval Scenarios for One Evaluation Backend
-
-## Status
-
-Accepted
 
 ## Context
 

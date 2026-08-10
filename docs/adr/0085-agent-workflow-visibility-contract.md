@@ -1,6 +1,10 @@
-# ADR 0085: Agent Workflow Visibility Contract
+---
+id: "0085"
+status: accepted
+date: 2026-07-22
+---
 
-Status: accepted
+# ADR 0085: Agent Workflow Visibility Contract
 
 SF Pi will keep agent workflows human-auditable through three existing Pi channels rather than creating a centralized activity timeline. Agent-chosen steps and mutations remain visible tool calls with compact call/result evidence; automatic lifecycle work uses **Human-Only Transcript Rows** for meaningful start and final states; and only actionable findings create agent-visible follow-ups. Routine status never enters model context.
 

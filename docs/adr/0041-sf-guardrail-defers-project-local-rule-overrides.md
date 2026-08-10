@@ -1,3 +1,9 @@
+---
+id: "0041"
+status: accepted
+date: 2026-06-13
+---
+
 # SF Guardrail defers project-local rule overrides
 
 SF Guardrail will defer project-local rule overrides until after the Safety Kernel and Approval Ledger refactor. The current redesign should first simplify the decision and approval seams before adding another configuration layer such as `.pi/sf-guardrail/rules.json`.

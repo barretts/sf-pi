@@ -1,8 +1,11 @@
+---
+id: "0031"
+status: accepted
+date: 2026-06-08
+supersedes: ["0019"]
+---
+
 # ADR 0031: Pi 0.79 agent-workflow alignment
-
-## Status
-
-Accepted
 
 ## Context
 

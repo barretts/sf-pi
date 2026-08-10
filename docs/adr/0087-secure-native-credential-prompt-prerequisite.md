@@ -1,6 +1,10 @@
-# ADR 0087: Shared Secure Credential Prompt Policy
+---
+id: "0087"
+status: accepted
+date: 2026-07-22
+---
 
-Status: accepted; shared SF Pi provider UI implemented for Gateway, Docs, and Slack
+# ADR 0087: Shared Secure Credential Prompt Policy
 
 SF Pi will not pass secrets through Pi 0.81.1-0.82.0's stock `AuthInteraction.prompt({type:"secret"})` because that TUI renders submitted values. Instead, providers that require interactive token entry use one shared, behavior-proven `ctx.ui.custom()` component from `lib/common/secure-credential-prompt.ts`. The component uses a constant-length mask, filters terminal controls, supports Kitty input and bracketed paste, clears its buffer before settlement, and cancels on abort, reload, shutdown, or session replacement.
 

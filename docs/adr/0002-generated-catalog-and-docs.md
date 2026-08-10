@@ -1,8 +1,10 @@
+---
+id: "0002"
+status: accepted
+date: 2026-05-03
+---
+
 # ADR 0002: Generated Catalog and Drift-Resistant Docs
-
-## Status
-
-Accepted
 
 ## Context
 

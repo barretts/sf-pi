@@ -50,8 +50,8 @@ structure and conventions live in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 `extensions/<id>/manifest.json` is the declarative extension contract.
 `npm run generate-catalog` produces the catalog, generated docs pages, sidebar,
-README/architecture marker blocks, troubleshooting index, extension file maps,
-and release announcement metadata.
+ADR lifecycle index, README/architecture marker blocks, troubleshooting index,
+extension file maps, and release announcement metadata.
 
 Never hand-edit:
 
@@ -62,6 +62,7 @@ Never hand-edit:
 - `docs/.vitepress/generated-extension-sidebar.ts`
 - `docs/commands.md`
 - `docs/agent-orientation.md`
+- `docs/adr/README.md`
 - content inside `GENERATED:*` marker pairs
 
 After changing a manifest, generated input, or extension file tree, run

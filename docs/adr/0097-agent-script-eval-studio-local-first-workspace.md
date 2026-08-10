@@ -1,8 +1,10 @@
+---
+id: "0097"
+status: accepted
+date: 2026-08-03
+---
+
 # Agent Script Eval Studio Is a Local-First EvalSpec Workspace
-
-## Status
-
-Accepted
 
 Agent Script uses a Pi-native **Agent Script Eval Studio**, opened by `/sf-agentscript evals`, as the local-first human workspace for source-controlled **Agent Script Eval Suites** and persisted Run evidence. One Suite is one executable EvalSpec JSON file for one Agent API identity; one Scenario contains one shared session, one or more ordered user turns, and at least one Turn- or Scenario-scoped evaluator. EvalSpec JSON remains the only source-controlled authoring format: the Studio projects it into conversations and evidence views but adds no registry, sidecar, or second scenario language. Salesforce is contacted only for an explicit version-resolution or execution action.
 

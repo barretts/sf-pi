@@ -1,8 +1,10 @@
+---
+id: "0104"
+status: accepted
+date: 2026-08-10
+---
+
 # ADR 0104: Manifests Are Attested Against Real Runtime Registration
-
-## Status
-
-Accepted
 
 ## Context
 

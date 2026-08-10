@@ -1,6 +1,10 @@
-# ADR 0102: SF Herdr Is Forward-Only on the Current Split Tools
+---
+id: "0102"
+status: accepted
+date: 2026-08-07
+---
 
-Status: accepted
+# ADR 0102: SF Herdr Is Forward-Only on the Current Split Tools
 
 ## Decision
 

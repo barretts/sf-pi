@@ -1,8 +1,10 @@
+---
+id: "0001"
+status: accepted
+date: 2026-05-03
+---
+
 # ADR 0001: Unified Gateway Provider
-
-## Status
-
-Accepted
 
 ## Context
 

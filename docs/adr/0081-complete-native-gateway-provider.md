@@ -1,6 +1,10 @@
-# ADR 0081: Complete Native Gateway Provider
+---
+id: "0081"
+status: accepted
+date: 2026-07-22
+---
 
-Status: accepted; deployment-routing portions superseded by ADR 0100
+# ADR 0081: Complete Native Gateway Provider
 
 After Pi 0.81 compatibility and credential behavior are proven, SF LLM Gateway will replace its legacy `ProviderConfig` orchestration with one complete Pi `Provider`. The Provider owns Pi-native authentication, synchronous last-known models, provider-scoped refresh persistence, model filtering, and mixed API stream dispatch. SF Pi retains URL normalization, non-callable model filtering, bounded error guidance, diagnostics, and spend reporting; ADR 0100 removes deployment-routing metadata and model-specific transport policy.
 

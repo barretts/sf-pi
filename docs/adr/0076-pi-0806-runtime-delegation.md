@@ -1,6 +1,11 @@
-# ADR 0076: Pi 0.80.6 runtime delegation
+---
+id: "0076"
+status: accepted
+date: 2026-07-12
+supersedes: ["0066"]
+---
 
-Status: accepted
+# ADR 0076: Pi 0.80.6 runtime delegation
 
 SF Pi will raise its **Pi Runtime Floor** to `0.80.6` as a dedicated **Runtime Floor Adoption Slice**, then treat the Pi 0.80.4–0.80.6 feature set as a **Runtime Delegation Program**: prefer Pi-native extension surfaces over duplicate SF Pi runtime mechanics when behavior proof shows the simpler path works.
 

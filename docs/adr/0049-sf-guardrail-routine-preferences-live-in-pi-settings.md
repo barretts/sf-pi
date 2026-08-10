@@ -1,3 +1,10 @@
+---
+id: "0049"
+status: accepted
+date: 2026-06-15
+supersedes: ["0047"]
+---
+
 # SF Guardrail routine preferences live in Pi settings
 
 SF Guardrail routine preferences now live in Pi's native settings file under `sfPi.guardrail`. The SF Pi Manager config surface is the primary mutable UI for these preferences. `/sf-guardrail settings` remains as a compatibility/help entrypoint that points users to the manager surface instead of opening an extension-owned settings editor.

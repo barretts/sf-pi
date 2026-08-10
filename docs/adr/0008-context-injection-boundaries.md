@@ -1,8 +1,10 @@
+---
+id: "0008"
+status: accepted
+date: 2026-05-17
+---
+
 # ADR 0008: Context-injection boundary tags use lowercase snake_case XML
-
-## Status
-
-Accepted
 
 ## Context
 

@@ -1,6 +1,12 @@
-# ADR 0066: Pi 0.80.2 runtime floor
+---
+id: "0066"
+status: superseded
+date: 2026-06-23
+supersedes: ["0059"]
+supersededBy: ["0076"]
+---
 
-Status: accepted
+# ADR 0066: Pi 0.80.2 runtime floor
 
 SF Pi will raise its minimum **Pi Runtime** to `0.80.2` as a clean **Runtime Floor Adoption Slice**. Pi 0.80 moves the old global `pi-ai` streaming/catalog API off the root package and removes the short-lived selective-provider base entrypoints. Pi 0.80.2 restores temporary compatibility aliases for runtime continuity, but SF Pi should not rely on that bridge for source code that typechecks against published package types.
 

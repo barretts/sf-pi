@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-// Generate catalog/registry.ts, catalog/index.json, docs inventory pages, and
-// the root README bundled extension table from extensions/*/manifest.json.
+// Generate catalog/registry.ts, catalog/index.json, docs inventory pages, the
+// ADR lifecycle index, and root documentation blocks from validated sources.
 //
 // Run:
 //   node scripts/generate-catalog.mjs
@@ -23,6 +23,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import prettier from "prettier";
+import { loadAdrRecords, renderAdrIndex } from "./lib/adr-lifecycle.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,6 +46,8 @@ const EXTENSION_COPY_PATH = path.join(DOCS_DIR, "extension-copy.json");
 const EXTENSION_DOCS_DIR = path.join(DOCS_DIR, "extensions");
 const EXTENSION_SIDEBAR_PATH = path.join(DOCS_DIR, ".vitepress", "generated-extension-sidebar.ts");
 const AGENT_ORIENTATION_DOC_PATH = path.join(DOCS_DIR, "agent-orientation.md");
+const ADR_DIR = path.join(DOCS_DIR, "adr");
+const ADR_INDEX_PATH = path.join(ADR_DIR, "README.md");
 const CHECK_ONLY = process.argv.includes("--check");
 const GITHUB_REPO_URL = "https://github.com/salesforce/sf-pi";
 
@@ -1003,7 +1006,7 @@ function generateFolderLayout(manifests) {
     "\u2502   \u251c\u2500\u2500 commands.md             \u2190 GENERATED per-extension command reference",
     "\u2502   \u251c\u2500\u2500 agent-orientation.md    \u2190 GENERATED agent navigation map",
     "\u2502   \u251c\u2500\u2500 contributing.md         \u2190 contributor site entry point",
-    "\u2502   \u2514\u2500\u2500 adr/                    \u2190 architecture decision records",
+    "\u2502   \u2514\u2500\u2500 adr/                    \u2190 ADR records + GENERATED lifecycle index",
     "\u251c\u2500\u2500 scripts/                    \u2190 catalog/docs/SPDX/validate helpers; see ARCHITECTURE.md",
     "\u251c\u2500\u2500 themes/                     \u2190 TUI themes (sf-dark.json, \u2026)",
     "\u251c\u2500\u2500 package.json",
@@ -1195,6 +1198,7 @@ function generateAgentOrientationDoc(manifests) {
     "- `docs/.vitepress/generated-extension-sidebar.ts`",
     "- `docs/commands.md`",
     "- `docs/agent-orientation.md`",
+    "- `docs/adr/README.md`",
     "- generated marker blocks in `README.md` and `ARCHITECTURE.md`",
     "- generated file-structure marker blocks in `extensions/*/README.md`",
     "- normalized `catalog/announcements.json` release entry",
@@ -1214,6 +1218,12 @@ async function writeOrCheckAgentOrientationDoc(manifests) {
   const raw = generateAgentOrientationDoc(manifests);
   const formatted = await prettier.format(raw, { parser: "markdown" });
   writeOrCheck(AGENT_ORIENTATION_DOC_PATH, formatted, "docs/agent-orientation.md");
+}
+
+async function writeOrCheckAdrIndex(records) {
+  const raw = renderAdrIndex(records);
+  const formatted = await prettier.format(raw, { parser: "markdown" });
+  writeOrCheck(ADR_INDEX_PATH, formatted, `docs/adr/README.md — ${records.length} ADR(s)`);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -1385,6 +1395,12 @@ async function writeOrCheckExtensionSidebar(manifests, extensionCopy) {
 const manifests = discoverManifests();
 validatePackageExtensions(manifests);
 const extensionCopy = readExtensionCopy(manifests);
+let adrRecords;
+try {
+  adrRecords = loadAdrRecords(ADR_DIR);
+} catch (error) {
+  fail(error.message);
+}
 const recommendationsPath = path.join(CATALOG_DIR, "recommendations.json");
 const announcementsPath = path.join(CATALOG_DIR, "announcements.json");
 
@@ -1419,6 +1435,8 @@ await writeOrCheckExtensionDetailDocs(manifests, extensionCopy);
 await writeOrCheckExtensionSidebar(manifests, extensionCopy);
 
 await writeOrCheckAgentOrientationDoc(manifests);
+
+await writeOrCheckAdrIndex(adrRecords);
 
 await writeOrCheckExtensionReadmes(manifests);
 

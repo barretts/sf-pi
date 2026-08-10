@@ -1,3 +1,9 @@
+---
+id: "0075"
+status: accepted
+date: 2026-07-06
+---
+
 # SF Guardrail adds persisted Power Tool Mode
 
 SF Guardrail remains HITL-first by default, and per-rule Rule Behavior still controls whether a risk is off, confirmable, or hard-blocked. To support SF Pi as a pro-code developer tool, Guardrail will add an explicit persisted Power Tool Mode for advanced users that can auto-approve confirm-class decisions while preserving hard blocks and auditability.

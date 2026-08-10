@@ -1,6 +1,10 @@
-# SF tldraw uses deterministic Salesforce diagram profiles
+---
+id: "0089"
+status: accepted
+date: 2026-07-25
+---
 
-Status: accepted
+# SF tldraw uses deterministic Salesforce diagram profiles
 
 Delivery: The serial P0–P4 implementation is complete. This ADR records the stable contract; the extension README and generated catalog describe the currently delivered surface.
 

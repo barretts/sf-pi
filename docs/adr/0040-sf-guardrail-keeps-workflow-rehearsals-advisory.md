@@ -1,3 +1,9 @@
+---
+id: "0040"
+status: accepted
+date: 2026-06-13
+---
+
 # SF Guardrail keeps workflow rehearsals advisory
 
 SF Guardrail will hard-enforce true safety boundaries, but workflow-quality improvements such as deploy rehearsal, check-only deploys, Savepoint + rollback patterns for anonymous Apex, and audit-inspection hints will remain advisory recovery guidance by default. The absence of an ideal rehearsal should not by itself block a risky operation that is already routed through the appropriate Guardrail Decision and Human-in-the-Loop Approval.

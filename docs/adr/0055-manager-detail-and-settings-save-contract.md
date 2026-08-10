@@ -1,3 +1,9 @@
+---
+id: "0055"
+status: accepted
+date: 2026-06-18
+---
+
 # Manager detail and settings save contract
 
 > **Implementation status:** Manager-first no-args navigation remains the target

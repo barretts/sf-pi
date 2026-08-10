@@ -1,8 +1,10 @@
+---
+id: "0099"
+status: accepted
+date: 2026-08-04
+---
+
 # Agent Script Eval Supports Deterministic Turn Response Integrity
-
-## Status
-
-Accepted
 
 ## Context
 

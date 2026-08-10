@@ -69,6 +69,7 @@ Do not edit these by hand; edit the source manifest/docs and run `npm run genera
 - `docs/.vitepress/generated-extension-sidebar.ts`
 - `docs/commands.md`
 - `docs/agent-orientation.md`
+- `docs/adr/README.md`
 - generated marker blocks in `README.md` and `ARCHITECTURE.md`
 - generated file-structure marker blocks in `extensions/*/README.md`
 - normalized `catalog/announcements.json` release entry

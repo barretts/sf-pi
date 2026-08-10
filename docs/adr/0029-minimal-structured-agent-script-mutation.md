@@ -1,3 +1,9 @@
+---
+id: "0029"
+status: accepted
+date: 2026-06-04
+---
+
 # Agent Script Uses Minimal Structured Mutation
 
 SF Agent Script keeps the four-family public tool surface and limits structured mutation to edits that clearly beat generic text editing: official quick fixes, reference-safe renames, and targeted scalar field updates. A reference-safe rename changes the declaration and semantic references only; comments, prompt/literal text, and other symbol-like prose are not rename targets. The former whole-source exact-token fallback is removed; direct-transition syntax that is not yet indexed by the official LSP is covered only through a narrow official-CST compatibility adapter. A namespace-changing migration such as `topic` to `subagent` is a distinct internal conversion operation, even when the public `rename` mode routes to it. Broader source construction and deletion remain normal file edits followed by Agent Script compile/check, while SF Pi keeps pre/post-compile workflow guards around structured mutations. Those guards protect the filesystem rather than duplicate language semantics; remove an individual guard only after the pinned upstream package passes its reproducible regression fixture and the public mutation Behavior Proof remains green.

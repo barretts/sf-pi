@@ -1,3 +1,9 @@
+---
+id: "0021"
+status: accepted
+date: 2026-05-30
+---
+
 # ADR 0021: SF Code Analyzer separates targeted auto-scans from explicit broad scans
 
 SF Code Analyzer records supported files changed by agent `write` or `edit` tool results, then runs automatic Code Analyzer as a deferred post-agent quality pass instead of inline file-edit feedback. The deferred scan runs after Pi reports the agent has settled, so automatic retry, compaction retry, or queued follow-up work can finish before quality/security findings steer a repair pass. Project-wide, security, AppExchange, dependency, duplication, and other broad scans remain explicit command or tool actions.

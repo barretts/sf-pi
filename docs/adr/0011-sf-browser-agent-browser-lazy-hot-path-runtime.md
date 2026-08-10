@@ -1,3 +1,9 @@
+---
+id: "0011"
+status: accepted
+date: 2026-05-20
+---
+
 # ADR 0011: SF Browser uses agent-browser as a lazy hot-path runtime
 
 SF Browser is an experimental developer-assistive Bundled Extension for Salesforce UI last-mile work that Salesforce APIs cannot cover; it does not imply a stable Salesforce UI automation contract. We decided to use `agent-browser` as a Lazy Browser Runtime and expose only a cache-first `/sf-browser` command panel plus a Hot-Path Browser Tool Set (`open`, `snapshot`, `click`, `fill`, `press`, `wait`, and Browser Evidence capture), rather than wrapping the full browser automation surface or building a Playwright/Selenium-style driver layer. This keeps SF Pi agent-first, avoids boot-time probes and permission fatigue, preserves `agent-browser`'s fast CDP workflow, and leaves advanced browser work to direct `agent-browser` usage.

@@ -1,3 +1,9 @@
+---
+id: "0039"
+status: accepted
+date: 2026-06-13
+---
+
 # SF Guardrail exposes no LLM tools
 
 SF Guardrail will remain a mediator and command surface, not an LLM-callable tool provider. The extension should enforce safety through Pi Runtime tool-call mediation, human-in-the-loop dialogs, command panels, session entries, and settings rather than registering `sf_guardrail_*` tools that the agent can invoke directly.

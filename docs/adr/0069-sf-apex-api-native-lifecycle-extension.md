@@ -1,8 +1,10 @@
+---
+id: "0069"
+status: accepted
+date: 2026-06-28
+---
+
 # ADR 0069: SF Apex is an API-native Apex Lifecycle Extension
-
-## Status
-
-Accepted
 
 ## Context
 

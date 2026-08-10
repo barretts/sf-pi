@@ -1,3 +1,9 @@
+---
+id: "0020"
+status: accepted
+date: 2026-05-30
+---
+
 # ADR 0020: SF Code Analyzer uses the Salesforce CLI contract first
 
 SF Code Analyzer v1 runs Code Analyzer through the supported `sf code-analyzer` CLI commands and parses generated output files instead of importing `@salesforce/code-analyzer-core` or engine packages directly. This matches the upstream CLI and VS Code integration shape, keeps engine dependencies out of the SF Pi runtime, preserves Salesforce CLI plugin lifecycle behavior, and makes long-running scans visible through normal Pi command/tool surfaces.

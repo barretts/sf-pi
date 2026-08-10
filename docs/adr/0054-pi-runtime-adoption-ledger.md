@@ -1,6 +1,10 @@
-# ADR 0054: Pi Runtime Adoption Ledger
+---
+id: "0054"
+status: accepted
+date: 2026-06-17
+---
 
-Status: accepted
+# ADR 0054: Pi Runtime Adoption Ledger
 
 When Pi Runtime releases add features that overlap with SF Pi, SF Pi will use a **Pi Runtime Adoption Ledger** instead of copying every release note into code. The ledger records whether SF Pi should adopt, defer, ignore, or delete overlapping code for each runtime capability, plus the owning surface and the behavior proof required.
 

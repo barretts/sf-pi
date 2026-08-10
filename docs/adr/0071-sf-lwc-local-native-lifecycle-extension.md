@@ -1,8 +1,10 @@
+---
+id: "0071"
+status: accepted
+date: 2026-06-29
+---
+
 # ADR 0071: SF LWC is a local-native LWC Lifecycle Extension
-
-## Status
-
-Accepted
 
 ## Context
 

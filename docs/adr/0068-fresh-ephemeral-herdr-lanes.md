@@ -1,8 +1,10 @@
+---
+id: "0068"
+status: accepted
+date: 2026-06-24
+---
+
 # ADR 0068: Fresh Ephemeral Herdr Lanes
-
-## Status
-
-Accepted; current tool names and alias-free opaque pane handling amended by [ADR 0102](./0102-forward-only-current-herdr-tools.md).
 
 ## Context
 

@@ -1,3 +1,9 @@
+---
+id: "0038"
+status: accepted
+date: 2026-06-13
+---
+
 # SF Guardrail uses pi-native preferences with advanced rule overrides
 
 > Superseded in part by ADR 0049. Routine preferences still use pi-native settings, but the primary mutable surface is now the SF Pi Manager config panel rather than `/sf-guardrail settings`.

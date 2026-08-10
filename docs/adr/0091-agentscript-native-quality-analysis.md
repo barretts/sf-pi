@@ -1,8 +1,10 @@
+---
+id: "0091"
+status: accepted
+date: 2026-07-28
+---
+
 # Agent Script Quality Analysis Is Native, AST-Grounded, and Separate from Compilation
-
-## Status
-
-Accepted
 
 ## Context
 

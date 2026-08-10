@@ -1,3 +1,9 @@
+---
+id: "0036"
+status: accepted
+date: 2026-06-13
+---
+
 # SF Guardrail uses an Approval Ledger
 
 SF Guardrail will treat audit entries, session approvals, revocation markers, persisted approval grants, grant lookup, grant creation, and recent-decision reads as one Approval Ledger seam. The implementation may keep small private helpers, but callers should interact with one deep module that answers what approvals exist, what Safety Envelopes they cover, and what Guardrail Decisions have been recorded.

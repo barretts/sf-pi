@@ -1,8 +1,10 @@
+---
+id: "0018"
+status: accepted
+date: 2026-05-29
+---
+
 # ADR 0018: Consented file-level conflict resolution
-
-## Status
-
-Accepted — amends [ADR-0017](./0017-skill-funnel-additive-project-scope.md) and remains in force while [ADR-0082](./0082-sf-skills-native-parity-before-delegation.md) validates whether Pi's native resource overrides can replace any conflict behavior.
 
 ## Context
 

@@ -1,6 +1,10 @@
-# ADR 0079: Pi Runtime Forward-Compatibility Policy
+---
+id: "0079"
+status: accepted
+date: 2026-07-22
+---
 
-Status: accepted; hard floor superseded by ADR 0088, soft audit ceiling remains implemented
+# ADR 0079: Pi Runtime Forward-Compatibility Policy
 
 SF Pi distinguishes **loadable** Pi releases from **audited** Pi releases. Lack of an audit is not evidence of incompatibility, so a newly published stable Pi 0.x release must not preemptively disable every SF Pi extension.
 
