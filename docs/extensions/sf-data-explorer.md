@@ -1,50 +1,31 @@
 ---
 title: "SF Data Explorer"
-description: "Browse Salesforce and Data 360 data read-only from a keyboard-first pi interface."
+description: "Read-only interactive TUI explorer for SOQL, SOSL, and Data 360 SQL using sf-pi Salesforce transport plumbing."
 ---
 
 # SF Data Explorer
 
-<p class="sfpi-page-lead">Browse Salesforce and Data 360 data read-only from a keyboard-first pi interface.</p>
+<p class="sfpi-page-lead">Read-only interactive TUI explorer for SOQL, SOSL, and Data 360 SQL using sf-pi Salesforce transport plumbing.</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Read-only data exploration</strong><p>Browse Salesforce and Data 360 data read-only from a keyboard-first pi interface.</p></div>
+## What it does
 
-## Why you'll use it
+Keyboard-first read-only Salesforce data explorer with object/field browsing, editable query text, query execution, result detail view, JSON/CSV export, shortcut help, and explorer switching. Uses sf-pi @salesforce/core connection plumbing; no LLM required.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Explore objects, fields, and query results without writing throwaway scripts.</div>
-<div class="sfpi-benefit-card">Keep exploration read-only by design.</div>
-<div class="sfpi-benefit-card">Switch between SOQL, SOSL, and Data 360 SQL workflows from one UI.</div>
-</div>
+## Start
 
-## Try it first
-
-Open the explorer
+Open the extension from its primary command:
 
 ```text
 /sf-data-explorer
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-data-explorer
 /sf-pi enable sf-data-explorer
 /sf-pi disable sf-data-explorer
 ```
-
-## Common use cases
-
-- Inspect object fields before writing a query.
-- Run small read-only SOQL or SOSL checks.
-- Preview query results and export JSON or CSV when useful.
-- Explore Data 360 SQL results without asking the LLM to hold large tables.
-
-## What you get
-
-- A TUI data explorer with object and field browsing.
-- Editable query text, result detail views, and export shortcuts.
-- Read-only guardrails for safer exploration.
 
 ## Safety notes
 
@@ -61,6 +42,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-data-explorer`
+- **Intent:** Work with Salesforce orgs
 - **Category:** UI
 - **Maturity:** experimental
 - **Default state:** on

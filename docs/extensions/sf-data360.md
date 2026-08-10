@@ -1,50 +1,31 @@
 ---
 title: "SF Data 360"
-description: "Give agents a safe, compact way to discover and run Data Cloud / Data 360 workflows."
+description: "Data Cloud/Data 360 v2 family tools — discover, connect, prepare, harmonize, segment, activate, query, semantic, observe, orchestrate, and raw API escape hatch"
 ---
 
 # SF Data 360
 
-<p class="sfpi-page-lead">Give agents a safe, compact way to discover and run Data Cloud / Data 360 workflows.</p>
+<p class="sfpi-page-lead">Data Cloud/Data 360 v2 family tools — discover, connect, prepare, harmonize, segment, activate, query, semantic, observe, orchestrate, and raw API escape hatch</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Data 360 metadata, SQL, and capabilities</strong><p>Give agents a safe, compact way to discover and run Data Cloud / Data 360 workflows.</p></div>
+## What it does
 
-## Why you'll use it
+Data 360 v2 family tool surface over the generated operation registry: compact action discovery, dry-run planning, shared target/version resolution, safety confirmation, bounded output, journey orchestration, and a raw REST escape hatch through the Salesforce Connection Module.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Discover Data 360 capabilities without memorizing REST endpoints.</div>
-<div class="sfpi-benefit-card">Use dry-runs and compact summaries before broad or mutating calls.</div>
-<div class="sfpi-benefit-card">Inspect DMO/DLO metadata without dumping large catalogs into context.</div>
-</div>
+## Start
 
-## Try it first
-
-Open the Data 360 panel
+Open the extension from its primary command:
 
 ```text
 /sf-data360
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-data360
 /sf-pi enable sf-data360
 /sf-pi disable sf-data360
 ```
-
-## Common use cases
-
-- Probe whether an org has Data 360 surfaces available.
-- List or describe DMO and DLO schemas.
-- Run Data 360 REST calls through Salesforce CLI auth.
-- Use curated capabilities for repeatable Data 360 workflows.
-
-## What you get
-
-- Action discovery and readiness guidance through `data360_discover`.
-- Version-owned REST escape hatch through `data360_api`.
-- Lifecycle-focused `data360_*` tools for metadata, ingestion, query, segmentation, activation, and observability.
 
 ## Safety notes
 
@@ -59,6 +40,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-data360`
+- **Intent:** Work with Data Cloud
 - **Category:** Agent Tool
 - **Maturity:** stable
 - **Default state:** on

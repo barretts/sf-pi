@@ -9,6 +9,7 @@
   "tools": ["sf_lwc"],
   "events": ["session_start"],
   "docs": {
+    "intentGroup": "Build apps",
     "agentGuide": "AGENT_GUIDE.md",
     "summary": "Owns the lean local Lightning Web Component lifecycle loop in pi: SFDX package-directory scans, component inventory and inspection, focused LWC compiler/template diagnostics, style/SLDS signal detection, local Jest discovery/planning/runs, compact LWC Result Cards, recommended skill hints, and persisted LWC Artifacts. Source edits remain normal Pi file operations; deployment, org source synchronization, visual preview, broad static/security scans, and SLDS2 uplift execution remain with other SF Pi surfaces.",
     "primaryFiles": [

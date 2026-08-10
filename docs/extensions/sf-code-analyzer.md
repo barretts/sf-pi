@@ -1,52 +1,31 @@
 ---
 title: "SF Code Analyzer"
-description: "Run Salesforce Code Analyzer scans and setup checks from pi with agent-friendly report summaries and deferred quality feedback."
+description: "Salesforce Code Analyzer workflows for pi: setup readiness, explicit scans, rule discovery, config generation, report artifacts, deferred agent quality passes, and ApexGuru analysis."
 ---
 
 # SF Code Analyzer
 
-<p class="sfpi-page-lead">Run Salesforce Code Analyzer scans and setup checks from pi with agent-friendly report summaries and deferred quality feedback.</p>
+<p class="sfpi-page-lead">Salesforce Code Analyzer workflows for pi: setup readiness, explicit scans, rule discovery, config generation, report artifacts, deferred agent quality passes, and ApexGuru analysis.</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Code quality and security scans</strong><p>Run Salesforce Code Analyzer scans and setup checks from pi with agent-friendly report summaries and deferred quality feedback.</p></div>
+## What it does
 
-## Why you'll use it
+Wraps the supported `sf code-analyzer` CLI contract with a pi-native command panel and one `code_analyzer` family tool for doctor, run, rules, config, ApexGuru, ApexGuru setup-help, and last-report workflows. Reports are written as session-scoped artifacts outside the project tree by default with summary / inline / file_only output modes. Deferred post-agent local quality scans are readiness-gated and run after the agent finishes an edit pass.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Checks Code Analyzer setup without leaving pi.</div>
-<div class="sfpi-benefit-card">Runs explicit scans through the supported Salesforce CLI contract.</div>
-<div class="sfpi-benefit-card">Adds readiness-gated deferred scans after agent edit passes.</div>
-<div class="sfpi-benefit-card">Keeps full reports as artifacts while giving agents actionable summaries.</div>
-</div>
+## Start
 
-## Try it first
-
-Open Code Analyzer status
+Open the extension from its primary command:
 
 ```text
 /sf-code-analyzer
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-code-analyzer
 /sf-pi enable sf-code-analyzer
 /sf-pi disable sf-code-analyzer
 ```
-
-## Common use cases
-
-- Verify Code Analyzer plugin and engine prerequisites.
-- Run recommended, security, AppExchange, or custom rule-selector scans.
-- List rules before choosing scan selectors.
-- Generate effective Code Analyzer configuration for review.
-- Run explicit ApexGuru analysis for one Apex file when the target org supports it.
-
-## What you get
-
-- A `code_analyzer` family tool for doctor, run, rules, config, and last-report workflows.
-- Session-scoped JSON/YAML report artifacts outside the project by default.
-- A standard SF Pi command panel and aggregated doctor contribution.
 
 ## Safety notes
 
@@ -61,6 +40,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-code-analyzer`
+- **Intent:** Build agents
 - **Category:** Agent Tool
 - **Maturity:** experimental
 - **Default state:** on

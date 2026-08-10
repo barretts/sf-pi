@@ -1,50 +1,31 @@
 ---
 title: "SF Docs"
-description: "Search and fetch official Salesforce documentation from pi with cited, agent-friendly results."
+description: "Salesforce documentation lookup for agents and humans, with Pi-owned auth-store credentials, cited results, and a Manager settings surface."
 ---
 
 # SF Docs
 
-<p class="sfpi-page-lead">Search and fetch official Salesforce documentation from pi with cited, agent-friendly results.</p>
+<p class="sfpi-page-lead">Salesforce documentation lookup for agents and humans, with Pi-owned auth-store credentials, cited results, and a Manager settings surface.</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Official Salesforce documentation lookup</strong><p>Search and fetch official Salesforce documentation from pi with cited, agent-friendly results.</p></div>
+## What it does
 
-## Why you'll use it
+Provides one `sf_docs` family tool for Salesforce documentation collections, search, fetch, cited answers, single-document explanations, status, and a lazy cheatsheet. The extension talks directly to the Salesforce Docs MCP-over-HTTP endpoint through a small local JSON-RPC/SSE transport, stores the token in Pi's auth store, and keeps settings limited to non-secret defaults.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Gives agents a first-class docs tool instead of generic web search.</div>
-<div class="sfpi-benefit-card">Lets Pi's auth store own credential persistence, with an environment-variable automation fallback.</div>
-<div class="sfpi-benefit-card">Shows citations and URLs visibly while keeping tool context compact.</div>
-</div>
+## Start
 
-## Try it first
-
-Open Docs setup/status
+Open the extension from its primary command:
 
 ```text
 /sf-docs
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-docs
 /sf-pi enable sf-docs
 /sf-pi disable sf-docs
 ```
-
-## Common use cases
-
-- Find official Salesforce docs for Apex, LWC, Agentforce, Data Cloud, Tableau, MuleSoft, and admin topics.
-- Search docs, fetch source pages, and answer from cited evidence.
-- Discover valid documentation collections, versions, locales, and formats.
-- Configure project-specific docs defaults without storing secrets in project files.
-
-## What you get
-
-- One `sf_docs` family tool for status, collections, search, fetch, answer, explain, and cheatsheet actions.
-- A Manager settings page for non-secret defaults and connection status.
-- A local catalog cache that stores collection metadata only, never document bodies.
 
 ## Safety notes
 
@@ -59,6 +40,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-docs`
+- **Intent:** Build agents
 - **Category:** Agent Tool
 - **Maturity:** experimental
 - **Default state:** on

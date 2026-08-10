@@ -1,50 +1,31 @@
 ---
 title: "SF Browser"
-description: "Use Salesforce Setup and Lightning UI as a safe last-mile tool when APIs are not enough."
+description: "Salesforce-aware browser automation for last-mile UI work using agent-browser."
 ---
 
 # SF Browser
 
-<p class="sfpi-page-lead">Use Salesforce Setup and Lightning UI as a safe last-mile tool when APIs are not enough.</p>
+<p class="sfpi-page-lead">Salesforce-aware browser automation for last-mile UI work using agent-browser.</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Salesforce UI fallback and evidence</strong><p>Use Salesforce Setup and Lightning UI as a safe last-mile tool when APIs are not enough.</p></div>
+## What it does
 
-## Why you'll use it
+Salesforce-aware agent-browser affordance layer for UI last-mile work that Salesforce APIs cannot cover. It registers a cache-first /sf-browser panel plus a small hot-path browser tool set, curated Setup Destinations, Browser Evidence, and lazy agent-browser invocation after explicit command/tool intent.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Open authenticated Salesforce pages without exposing login URLs.</div>
-<div class="sfpi-benefit-card">Inspect Lightning and Setup screens with compact, agent-friendly snapshots.</div>
-<div class="sfpi-benefit-card">Capture browser evidence when a UI step needs visual proof.</div>
-</div>
+## Start
 
-## Try it first
-
-Open the browser panel
+Open the extension from its primary command:
 
 ```text
 /sf-browser
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-browser
 /sf-pi enable sf-browser
 /sf-pi disable sf-browser
 ```
-
-## Common use cases
-
-- Verify a Setup screen after an API or metadata change.
-- Navigate Salesforce UI when there is no stable API for the task.
-- Click, fill, select, press keys, and wait for Lightning state using browser refs.
-- Capture before/after evidence for UI fallback work.
-
-## What you get
-
-- Salesforce-aware browser open, snapshot, click, fill, select, press, wait, and evidence tools.
-- Curated Setup destinations and deterministic Salesforce path resolution.
-- Artifact-first screenshots so the transcript stays readable.
 
 ## Safety notes
 
@@ -59,6 +40,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-browser`
+- **Intent:** Work with Salesforce orgs
 - **Category:** Agent Tool
 - **Maturity:** experimental
 - **Default state:** on

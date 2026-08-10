@@ -1,7 +1,7 @@
 {
   "id": "sf-data360",
   "name": "SF Data 360",
-  "description": "Data Cloud/Data 360 v2 family tools \u2014 discover, connect, prepare, harmonize, segment, activate, query, semantic, observe, orchestrate, and raw API escape hatch",
+  "description": "Data Cloud/Data 360 v2 family tools — discover, connect, prepare, harmonize, segment, activate, query, semantic, observe, orchestrate, and raw API escape hatch",
   "category": "agent-tool",
   "maturity": "stable",
   "defaultEnabled": true,
@@ -22,6 +22,7 @@
   ],
   "events": ["session_start", "session_shutdown", "resources_discover"],
   "docs": {
+    "intentGroup": "Work with Data Cloud",
     "editingRules": "AGENTS.md",
     "agentGuide": "AGENT_GUIDE.md",
     "summary": "Data 360 v2 family tool surface over the generated operation registry: compact action discovery, dry-run planning, shared target/version resolution, safety confirmation, bounded output, journey orchestration, and a raw REST escape hatch through the Salesforce Connection Module.",

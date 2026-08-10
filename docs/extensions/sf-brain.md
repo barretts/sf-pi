@@ -1,49 +1,27 @@
 ---
 title: "SF Brain"
-description: "Give agents the Salesforce Engineering Constitution and a compact routing summary for safer, evidence-backed work."
+description: "Salesforce Engineering Constitution, compact SF Pi routing summary, and advisory Instruction Surface diagnostics"
 ---
 
 # SF Brain
 
-<p class="sfpi-page-lead">Give agents the Salesforce Engineering Constitution and a compact routing summary for safer, evidence-backed work.</p>
+<p class="sfpi-page-lead">Salesforce Engineering Constitution, compact SF Pi routing summary, and advisory Instruction Surface diagnostics</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Salesforce agent guidance</strong><p>Give agents the Salesforce Engineering Constitution and a compact routing summary for safer, evidence-backed work.</p></div>
+## What it does
 
-## Why you'll use it
+Injects the Salesforce Engineering Constitution and tiny disabled-capability routing summary, and provides a content-safe advisory report of model-visible SF Pi instructions, tools, and external Salesforce skill metadata.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Keeps the bundled Salesforce-first engineering baseline present in every session.</div>
-<div class="sfpi-benefit-card">Prioritizes active SF Pi tools before external skills or raw CLI.</div>
-<div class="sfpi-benefit-card">Routes agents to extension-owned guides only when deeper operating detail is useful.</div>
-</div>
+## Start
 
-## Try it first
+This extension is enabled by default and works automatically.
 
-No command needed
-
-```text
-Install SF Pi and start a pi session.
-```
-
-You can manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-brain
 /sf-pi enable sf-brain
 /sf-pi disable sf-brain
 ```
-
-## Common use cases
-
-- Help an agent decide between Metadata API, Tooling API, REST, SOQL, or anonymous Apex.
-- Keep org-safety conventions present across Salesforce work.
-- Point agents to repo-local references without loading everything upfront.
-
-## What you get
-
-- The bundled Salesforce Engineering Constitution.
-- A compact routing summary that reports disabled capability owners when relevant.
-- No user-facing command surface because the extension works in the background.
 
 ## Safety notes
 
@@ -57,6 +35,7 @@ You can manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-brain`
+- **Intent:** Work safely
 - **Category:** Assistive
 - **Maturity:** stable
 - **Default state:** on

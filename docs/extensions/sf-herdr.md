@@ -1,50 +1,31 @@
 ---
 title: "SF Herdr"
-description: "Plan Herdr lanes from explicit Salesforce workflow intent without hiding pane actions."
+description: "Non-mutating Salesforce workflow plans for the current split Herdr tools."
 ---
 
 # SF Herdr
 
-<p class="sfpi-page-lead">Plan Herdr lanes from explicit Salesforce workflow intent without hiding pane actions.</p>
+<p class="sfpi-page-lead">Non-mutating Salesforce workflow plans for the current split Herdr tools.</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Herdr lane planning</strong><p>Plan Herdr lanes from explicit Salesforce workflow intent without hiding pane actions.</p></div>
+## What it does
 
-## Why you'll use it
+Provides command/status/settings surfaces everywhere it loads and conditionally registers a minimal non-mutating planner for the current herdr_layout, herdr_pane, and herdr_agent tool set.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Requires explicit intent and primaryWorkflow values instead of inferring activity.</div>
-<div class="sfpi-benefit-card">Returns visible steps for the current herdr_layout, herdr_pane, and herdr_agent tools.</div>
-<div class="sfpi-benefit-card">Carries the split result's opaque pane ID forward and uses global lifecycle settings to recommend cleanup.</div>
-</div>
+## Start
 
-## Try it first
-
-Open Herdr planning status
+Open the extension from its primary command:
 
 ```text
 /sf-herdr
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-herdr
 /sf-pi enable sf-herdr
 /sf-pi disable sf-herdr
 ```
-
-## Common use cases
-
-- Plan an ephemeral test lane that adds cleanup only after observed success and stays open on failure.
-- Coordinate Agent Script preview or eval work with related Apex log lanes.
-- Keep UI bundle servers or log tails sticky while short validation lanes receive an explicit success-only cleanup step.
-- Review the configured lifecycle for an explicit workflow intent before opening a lane.
-
-## What you get
-
-- A non-mutating `sf_herdr_plan` tool that requires explicit intent and primaryWorkflow inputs.
-- Current split-tool steps that reuse `details.pane.pane_id` as an opaque result reference.
-- Global per-intent lifecycle settings that add a close step only after observed success or recommend leaving panes open.
 
 ## Safety notes
 
@@ -59,6 +40,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-herdr`
+- **Intent:** Work safely
 - **Category:** Agent Tool
 - **Maturity:** experimental
 - **Default state:** on

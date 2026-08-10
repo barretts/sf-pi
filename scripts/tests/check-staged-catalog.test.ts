@@ -109,20 +109,9 @@ function createRepository(): void {
     category: "ui",
     defaultEnabled: true,
     docs: {
+      intentGroup: "Personalize pi",
       summary: "A staged catalog fixture.",
       primaryFiles: ["index.ts"],
-    },
-  });
-  writeJson("docs/extension-copy.json", {
-    alpha: {
-      shortName: "Alpha",
-      intentGroup: "Personalize pi",
-      promise: "Provide a staged fixture.",
-      bestFor: "Staged catalog checks.",
-      benefits: ["Deterministic."],
-      useCases: ["Check staged generation."],
-      whatYouGet: ["One fixture extension."],
-      tryFirst: { label: "Open Alpha", code: "/alpha" },
     },
   });
   writeText(

@@ -1,49 +1,31 @@
 ---
 title: "SF LLM Gateway"
-description: "Connect pi to Salesforce LLM Gateway models when your environment supports that provider."
+description: "Salesforce LLM Gateway provider with model discovery"
 ---
 
 # SF LLM Gateway
 
-<p class="sfpi-page-lead">Connect pi to Salesforce LLM Gateway models when your environment supports that provider.</p>
+<p class="sfpi-page-lead">Salesforce LLM Gateway provider with model discovery</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Model provider setup</strong><p>Connect pi to Salesforce LLM Gateway models when your environment supports that provider.</p></div>
+## What it does
 
-## Why you'll use it
+Complete Pi Provider for the Salesforce LLM Gateway. Pi-owned credential persistence and model storage, authenticated dynamic discovery with offline cache restore, provider-neutral mixed-API dispatch, explicit refresh, diagnostics, and usage status.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Discovers available gateway models for pi.</div>
-<div class="sfpi-benefit-card">Shows provider and usage status in SF Pi surfaces.</div>
-<div class="sfpi-benefit-card">Keeps provider setup separate from other bundled extensions.</div>
-</div>
+## Start
 
-## Try it first
-
-Open gateway panel
+Open the extension from its primary command:
 
 ```text
 /sf-llm-gateway
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-llm-gateway
 /sf-pi enable sf-llm-gateway
 /sf-pi disable sf-llm-gateway
 ```
-
-## Common use cases
-
-- Configure Salesforce LLM Gateway access for pi.
-- Inspect available models and provider health.
-- Debug model routing or usage status.
-
-## What you get
-
-- A pi provider registration for Salesforce LLM Gateway.
-- Model discovery and Manager-surfaced diagnostics.
-- Footer status for model and usage context.
 
 ## Safety notes
 
@@ -58,6 +40,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-llm-gateway`
+- **Intent:** Personalize pi
 - **Category:** Provider
 - **Maturity:** stable
 - **Default state:** on

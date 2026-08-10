@@ -1,42 +1,23 @@
 ---
 title: "SF Pi Manager"
-description: "Use one home base to discover, enable, disable, configure, and diagnose the SF Pi bundle."
+description: "Core manager — provides /sf-pi commands"
 ---
 
 # SF Pi Manager
 
-<p class="sfpi-page-lead">Use one home base to discover, enable, disable, configure, and diagnose the SF Pi bundle.</p>
+<p class="sfpi-page-lead">Core manager — provides /sf-pi commands</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Extension management</strong><p>Use one home base to discover, enable, disable, configure, and diagnose the SF Pi bundle.</p></div>
+## What it does
 
-## Why you'll use it
+Core manager for the sf-pi package. Provides /sf-pi list/enable/disable/status/display/recommended/announcements/skills/doctor/auto-update commands plus the interactive TUI overlay and settings panel. Pi runtime updates remain user-managed, with newer stable 0.x releases loading in forward-compatibility mode. Opt-in Auto Update waits for agent_settled, updates only declared-compatible unpinned global npm Pi packages through Pi, and runs the independent Salesforce CLI stable update. alwaysActive: enable/disable is mediated through this extension only.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Shows every bundled extension in one place.</div>
-<div class="sfpi-benefit-card">Lets users enable or disable optional surfaces by scope.</div>
-<div class="sfpi-benefit-card">Provides status, recommendations, announcements, and doctor checks.</div>
-</div>
+## Start
 
-## Try it first
-
-Open the SF Pi home base
+Open the extension from its primary command:
 
 ```text
 /sf-pi
 ```
-
-## Common use cases
-
-- See which extensions are enabled.
-- Turn optional extensions on or off.
-- Install recommended companion extensions.
-- Run package-level status and doctor checks.
-
-## What you get
-
-- The central SF Pi command panel.
-- Enable/disable and status commands.
-- Recommended extension and announcement surfaces.
 
 ## Safety notes
 
@@ -51,6 +32,7 @@ Open the SF Pi home base
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-pi-manager`
+- **Intent:** Personalize pi
 - **Category:** Manager
 - **Maturity:** stable
 - **Default state:** always-on

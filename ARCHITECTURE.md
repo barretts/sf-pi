@@ -52,7 +52,6 @@ sf-pi/
 │   └── index.json              ← GENERATED machine-readable index
 ├── docs/
 │   ├── .vitepress/             ← VitePress config/theme + generated sidebar for GitHub Pages docs
-│   ├── extension-copy.json     ← Hand-authored public-safe copy for extension docs
 │   ├── extensions.md           ← GENERATED bundled-extension site inventory
 │   ├── extensions/              ← GENERATED one page per bundled extension
 │   ├── commands.md             ← GENERATED per-extension command reference
@@ -115,7 +114,6 @@ When an agent (or human) needs to change something, start here:
 | Shared display profile + diagnostics contract   | `lib/common/display/`                                                           |
 | Generated registry (for runtime extension load) | `catalog/registry.ts` — **generated, do not edit**                              |
 | Generated machine-readable index                | `catalog/index.json` — **generated, do not edit**                               |
-| Extension docs positioning copy                 | `docs/extension-copy.json` — hand-authored public-safe copy used by generator   |
 | Generated docs-site extension inventory         | `docs/extensions.md` — **generated, do not edit**                               |
 | Generated per-extension docs-site pages         | `docs/extensions/*.md` — **generated, do not edit**                             |
 | Generated docs-site extension sidebar           | `docs/.vitepress/generated-extension-sidebar.ts` — **generated, do not edit**   |
@@ -255,7 +253,7 @@ This is greppable, parseable, and doesn't require TypeScript.
 ### Quick way (scaffolding)
 
 ```bash
-npm run scaffold -- --id sf-my-extension --category ui --name "My Extension"
+npm run scaffold -- --id sf-my-extension --category ui --intent "Personalize pi" --name "My Extension"
 ```
 
 This creates the full directory structure with boilerplate and regenerates
@@ -382,7 +380,7 @@ npm install
 pi install .
 
 # Scaffold a new extension
-npm run scaffold -- --id sf-my-ext --category ui
+npm run scaffold -- --id sf-my-ext --category ui --intent "Personalize pi"
 
 # Regenerate catalog after editing manifest.json
 npm run generate-catalog

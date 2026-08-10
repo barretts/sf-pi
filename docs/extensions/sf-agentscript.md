@@ -1,50 +1,31 @@
 ---
 title: "SF Agent Script"
-description: "Build, validate, preview, test, and publish Agentforce agents without leaving pi."
+description: "Single-plugin lifecycle for `.agent` files: compile diagnostics, native quality, preview, local-first Eval Studio, exact-version release eval, inactive publication, and gated activation."
 ---
 
 # SF Agent Script
 
-<p class="sfpi-page-lead">Build, validate, preview, test, and publish Agentforce agents without leaving pi.</p>
+<p class="sfpi-page-lead">Single-plugin lifecycle for `.agent` files: compile diagnostics, native quality, preview, local-first Eval Studio, exact-version release eval, inactive publication, and gated activation.</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Agentforce agent authoring</strong><p>Build, validate, preview, test, and publish Agentforce agents without leaving pi.</p></div>
+## What it does
 
-## Why you'll use it
+Owns the entire Agent Script lifecycle: compile and quality hardening, structural review, preview, local-first Eval Studio, exact-version release eval contracts, inactive publication, and Guardrail-mediated activation.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Catch Agent Script errors before you publish.</div>
-<div class="sfpi-benefit-card">Inspect topics, actions, variables, and references quickly.</div>
-<div class="sfpi-benefit-card">Preview and regression-test agent conversations from the same workflow.</div>
-</div>
+## Start
 
-## Try it first
-
-Open the Agent Script panel
+Open the extension from its primary command:
 
 ```text
 /sf-agentscript
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-agentscript
 /sf-pi enable sf-agentscript
 /sf-pi disable sf-agentscript
 ```
-
-## Common use cases
-
-- Create a new `.agent` bundle from a scaffold.
-- Compile and format Agent Script while editing.
-- Preview a local agent against a Salesforce org.
-- Run repeatable eval specs before activating a new agent version.
-
-## What you get
-
-- Compile, create, inspect, mutate, preview, evaluate, publish, and activate tools for agents.
-- Local-first checks before server calls where possible.
-- Planner traces and compact failure summaries for debugging conversations.
 
 ## Safety notes
 
@@ -70,6 +51,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-agentscript`
+- **Intent:** Build agents
 - **Category:** Agent Tool
 - **Maturity:** stable
 - **Default state:** on

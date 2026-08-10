@@ -1,31 +1,21 @@
 ---
 title: "SF Ohana Spinner"
-description: "Make waiting for agent work feel more polished with Salesforce-themed thinking indicators."
+description: "Salesforce-themed rainbow spinner during LLM thinking"
 ---
 
 # SF Ohana Spinner
 
-<p class="sfpi-page-lead">Make waiting for agent work feel more polished with Salesforce-themed thinking indicators.</p>
+<p class="sfpi-page-lead">Salesforce-themed rainbow spinner during LLM thinking</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Session polish</strong><p>Make waiting for agent work feel more polished with Salesforce-themed thinking indicators.</p></div>
+## What it does
 
-## Why you'll use it
+Pi setWorkingIndicator-driven spinner with Ohana and Calm modes. Pi manages start/stop based on streaming activity; this extension owns frame generation and a small mode preference.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Adds a friendly visual cue while the agent is working.</div>
-<div class="sfpi-benefit-card">Keeps waiting-state behavior lightweight and configurable.</div>
-<div class="sfpi-benefit-card">Works passively once enabled.</div>
-</div>
+## Start
 
-## Try it first
+This extension is enabled by default and works automatically.
 
-Manage from SF Pi
-
-```text
-/sf-pi
-```
-
-You can manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-ohana-spinner
@@ -33,24 +23,13 @@ You can manage this extension from the SF Pi home base:
 /sf-pi disable sf-ohana-spinner
 ```
 
-## Common use cases
-
-- Add a branded working indicator to pi sessions.
-- Switch between calm and Ohana-style spinner modes.
-- Keep long-running agent turns easier to follow.
-
-## What you get
-
-- A Salesforce-themed working indicator.
-- Small mode preference surfaced through SF Pi configuration.
-- No command required during normal use.
-
 ## Exact reference
 
 <details>
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-ohana-spinner`
+- **Intent:** Personalize pi
 - **Category:** UI
 - **Maturity:** stable
 - **Default state:** on

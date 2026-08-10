@@ -38,7 +38,6 @@ const CURRENT_COPY_SURFACES = [
   "catalog/index.json",
   "docs/agent-orientation.md",
   "docs/commands.md",
-  "docs/extension-copy.json",
   "docs/extensions.md",
   "docs/extensions/sf-brain.md",
   "docs/extensions/sf-docs.md",
@@ -75,16 +74,18 @@ const RETIRED_CURRENT_COPY = [
 
 type Manifest = {
   id: string;
+  name: string;
+  description: string;
   tools?: string[];
-  docs?: {
-    primaryFiles?: string[];
+  docs: {
+    intentGroup: string;
+    summary: string;
+    primaryFiles: string[];
     editingRules?: string;
     agentGuide?: string;
     contextGlossary?: string;
   };
 };
-
-type ExtensionCopy = Record<string, { intentGroup?: string }>;
 
 function readManifests(): Manifest[] {
   return readdirSync(EXTENSIONS_DIR, { withFileTypes: true })
@@ -120,15 +121,28 @@ describe("generated extension documentation contract", () => {
     expect(sidebarIds).toEqual(expectedIds);
   });
 
-  it("uses a known intent group and one copy entry for every extension", () => {
-    const manifestIds = readManifests()
-      .map((manifest) => manifest.id)
-      .sort();
-    const copy = JSON.parse(readFileSync(EXTENSION_COPY_PATH, "utf8")) as ExtensionCopy;
+  it("uses a known manifest-owned intent group for every extension", () => {
+    for (const manifest of readManifests()) {
+      expect(
+        VALID_INTENT_GROUPS.has(manifest.docs.intentGroup),
+        `${manifest.id}.docs.intentGroup`,
+      ).toBe(true);
+    }
+  });
 
-    expect(Object.keys(copy).sort()).toEqual(manifestIds);
-    for (const [id, item] of Object.entries(copy)) {
-      expect(VALID_INTENT_GROUPS.has(item.intentGroup ?? ""), `${id}.intentGroup`).toBe(true);
+  it("does not maintain a separate extension copy registry", () => {
+    expect(existsSync(EXTENSION_COPY_PATH)).toBe(false);
+  });
+
+  it("generates extension detail copy from manifest facts", () => {
+    for (const manifest of readManifests()) {
+      const detail = readFileSync(path.join(EXTENSION_DETAIL_DIR, `${manifest.id}.md`), "utf8");
+      expect(detail, `${manifest.id}: description`).toContain(manifest.description);
+      const renderedSummary = manifest.docs.summary.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+      expect(detail, `${manifest.id}: summary`).toContain(renderedSummary);
+      expect(detail).not.toContain("## Why you'll use it");
+      expect(detail).not.toContain("## Common use cases");
+      expect(detail).not.toContain("## What you get");
     }
   });
 

@@ -1,49 +1,31 @@
 ---
 title: "SF Feedback"
-description: "Report SF Pi issues with useful, sanitized diagnostics instead of starting from a blank bug report."
+description: "Guided feedback and bug-report flow that collects sanitized SF Pi diagnostics and opens a GitHub issue"
 ---
 
 # SF Feedback
 
-<p class="sfpi-page-lead">Report SF Pi issues with useful, sanitized diagnostics instead of starting from a blank bug report.</p>
+<p class="sfpi-page-lead">Guided feedback and bug-report flow that collects sanitized SF Pi diagnostics and opens a GitHub issue</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>GitHub issue feedback</strong><p>Report SF Pi issues with useful, sanitized diagnostics instead of starting from a blank bug report.</p></div>
+## What it does
 
-## Why you'll use it
+Guided GitHub feedback flow with sanitized diagnostics for SF Pi issues.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Collects helpful context without exposing private data by default.</div>
-<div class="sfpi-benefit-card">Keeps users in control before anything is submitted.</div>
-<div class="sfpi-benefit-card">Makes bug reports easier for maintainers to act on.</div>
-</div>
+## Start
 
-## Try it first
-
-Open feedback flow
+Open the extension from its primary command:
 
 ```text
 /sf-feedback
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-feedback
 /sf-pi enable sf-feedback
 /sf-pi disable sf-feedback
 ```
-
-## Common use cases
-
-- File a bug with environment and extension status context.
-- Draft a feature request from inside pi.
-- Share reproducible information while keeping sensitive details out.
-
-## What you get
-
-- Guided feedback flow.
-- Public-safe diagnostic collection.
-- Optional GitHub issue creation when configured.
 
 ## Safety notes
 
@@ -57,6 +39,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-feedback`
+- **Intent:** Collaborate and improve
 - **Category:** Assistive
 - **Maturity:** stable
 - **Default state:** on

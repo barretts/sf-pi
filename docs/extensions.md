@@ -5,7 +5,7 @@ description: Pick the SF Pi extension that matches what you want to do next.
 
 # Browse SF Pi extensions
 
-SF Pi is useful because it is a bundle: each extension adds a focused Salesforce workflow to pi. Pick the outcome you want, then open the extension page for the first command and common use cases.
+Each extension owns one focused Salesforce workflow. Pick an outcome, then open its page for current behavior, the first command, safety notes, and source links.
 
 <div class="sfpi-callout"><strong>New here?</strong> Start with <a href="./quickstart.html">Quickstart</a>, then come back and choose the extension that matches your first task.</div>
 
@@ -13,27 +13,27 @@ SF Pi is useful because it is a bundle: each extension adds a focused Salesforce
 
 <div class="sfpi-card-grid">
 <a class="sfpi-extension-card" href="./extensions/sf-agentscript">
-  <span class="sfpi-card-kicker">Agentforce agent authoring</span>
-  <strong>Agent Script</strong>
-  <span>Build, validate, preview, test, and publish Agentforce agents without leaving pi.</span>
+  <span class="sfpi-card-kicker">Agent Tool · on</span>
+  <strong>SF Agent Script</strong>
+  <span>Single-plugin lifecycle for `.agent` files: compile diagnostics, native quality, preview, local-first Eval Studio, exact-version release eval, inactive publication, and gated activation.</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-agentscript</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-code-analyzer">
-  <span class="sfpi-card-kicker">Code quality and security scans</span>
-  <strong>Code Analyzer</strong>
-  <span>Run Salesforce Code Analyzer scans and setup checks from pi with agent-friendly report summaries and deferred quality feedback.</span>
+  <span class="sfpi-card-kicker">Agent Tool · on</span>
+  <strong>SF Code Analyzer</strong>
+  <span>Salesforce Code Analyzer workflows for pi: setup readiness, explicit scans, rule discovery, config generation, report artifacts, deferred agent quality passes, and ApexGuru analysis.</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-code-analyzer</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-docs">
-  <span class="sfpi-card-kicker">Official Salesforce documentation lookup</span>
-  <strong>Docs</strong>
-  <span>Search and fetch official Salesforce documentation from pi with cited, agent-friendly results.</span>
+  <span class="sfpi-card-kicker">Agent Tool · on</span>
+  <strong>SF Docs</strong>
+  <span>Salesforce documentation lookup for agents and humans, with Pi-owned auth-store credentials, cited results, and a Manager settings surface.</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-docs</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-lsp">
-  <span class="sfpi-card-kicker">Code diagnostics</span>
-  <strong>LSP</strong>
-  <span>Surface advisory diagnostics for Apex, LWC, and Agent Script files as you edit in pi.</span>
+  <span class="sfpi-card-kicker">Assistive · on</span>
+  <strong>SF LSP</strong>
+  <span>Real-time Salesforce LSP diagnostics on write/edit with a working indicator, transcript rows, and one-line startup readiness in SF Welcome</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-lsp</code></span>
 </a>
 </div>
@@ -42,21 +42,21 @@ SF Pi is useful because it is a bundle: each extension adds a focused Salesforce
 
 <div class="sfpi-card-grid">
 <a class="sfpi-extension-card" href="./extensions/sf-apex">
-  <span class="sfpi-card-kicker">Apex lifecycle workflows</span>
-  <strong>Apex</strong>
-  <span>Author, discover, diagnose, trace, probe, and run targeted Apex tests from pi with API-native workflows.</span>
+  <span class="sfpi-card-kicker">Agent Tool · on</span>
+  <strong>SF Apex</strong>
+  <span>API-native Apex lifecycle workflows for pi: authoring guidance, diagnostics, trace/log/watch, Anonymous Apex, and targeted tests.</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-apex</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-lwc">
-  <span class="sfpi-card-kicker">Lightning Web Component lifecycle workflows</span>
-  <strong>LWC</strong>
-  <span>Scan, inspect, diagnose, and locally test Lightning Web Components from pi with compact cards and artifact-backed evidence.</span>
+  <span class="sfpi-card-kicker">Agent Tool · on</span>
+  <strong>SF LWC</strong>
+  <span>Local-native Lightning Web Component lifecycle workflows for pi: project scan, component inspection, focused diagnostics, targeted Jest tests, and artifacts.</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-lwc</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-tldraw">
-  <span class="sfpi-card-kicker">Editable Salesforce diagrams</span>
-  <strong>tldraw</strong>
-  <span>Turn explicitly grounded Salesforce models and interactions into editable, deterministic tldraw diagrams with visual evidence.</span>
+  <span class="sfpi-card-kicker">Agent Tool · on</span>
+  <strong>SF tldraw</strong>
+  <span>Deterministic, editable Salesforce diagrams rendered through the local tldraw offline Canvas API.</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-tldraw</code></span>
 </a>
 </div>
@@ -65,9 +65,9 @@ SF Pi is useful because it is a bundle: each extension adds a focused Salesforce
 
 <div class="sfpi-card-grid">
 <a class="sfpi-extension-card" href="./extensions/sf-soql">
-  <span class="sfpi-card-kicker">SOQL query lifecycle workflows</span>
-  <strong>SOQL</strong>
-  <span>Search schema, draft, validate, explain, sample, run/export SOQL and SOSL from pi with schema-aware native REST/Tooling workflows.</span>
+  <span class="sfpi-card-kicker">Agent Tool · on</span>
+  <strong>SF SOQL</strong>
+  <span>API-native SOQL lifecycle workflows for pi: schema search/describe, relationship discovery, query drafting, validation, query plans, bounded query/SOSL execution, exports, file diagnostics, and artifacts.</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-soql</code></span>
 </a>
 </div>
@@ -76,21 +76,21 @@ SF Pi is useful because it is a bundle: each extension adds a focused Salesforce
 
 <div class="sfpi-card-grid">
 <a class="sfpi-extension-card" href="./extensions/sf-browser">
-  <span class="sfpi-card-kicker">Salesforce UI fallback and evidence</span>
-  <strong>Browser</strong>
-  <span>Use Salesforce Setup and Lightning UI as a safe last-mile tool when APIs are not enough.</span>
+  <span class="sfpi-card-kicker">Agent Tool · on</span>
+  <strong>SF Browser</strong>
+  <span>Salesforce-aware browser automation for last-mile UI work using agent-browser.</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-browser</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-data-explorer">
-  <span class="sfpi-card-kicker">Read-only data exploration</span>
-  <strong>Data Explorer</strong>
-  <span>Browse Salesforce and Data 360 data read-only from a keyboard-first pi interface.</span>
+  <span class="sfpi-card-kicker">UI · on</span>
+  <strong>SF Data Explorer</strong>
+  <span>Read-only interactive TUI explorer for SOQL, SOSL, and Data 360 SQL using sf-pi Salesforce transport plumbing.</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-data-explorer</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-devbar">
-  <span class="sfpi-card-kicker">Session awareness</span>
-  <strong>DevBar</strong>
-  <span>Keep model, org, git, context, and extension status visible while you work in pi.</span>
+  <span class="sfpi-card-kicker">UI · on</span>
+  <strong>SF DevBar</strong>
+  <span>Bespoke Salesforce developer status bar with org context, model info, git, and context window progress</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-devbar</code></span>
 </a>
 </div>
@@ -99,9 +99,9 @@ SF Pi is useful because it is a bundle: each extension adds a focused Salesforce
 
 <div class="sfpi-card-grid">
 <a class="sfpi-extension-card" href="./extensions/sf-data360">
-  <span class="sfpi-card-kicker">Data 360 metadata, SQL, and capabilities</span>
-  <strong>Data 360</strong>
-  <span>Give agents a safe, compact way to discover and run Data Cloud / Data 360 workflows.</span>
+  <span class="sfpi-card-kicker">Agent Tool · on</span>
+  <strong>SF Data 360</strong>
+  <span>Data Cloud/Data 360 v2 family tools — discover, connect, prepare, harmonize, segment, activate, query, semantic, observe, orchestrate, and raw API escape hatch</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-data360</code></span>
 </a>
 </div>
@@ -110,21 +110,21 @@ SF Pi is useful because it is a bundle: each extension adds a focused Salesforce
 
 <div class="sfpi-card-grid">
 <a class="sfpi-extension-card" href="./extensions/sf-brain">
-  <span class="sfpi-card-kicker">Salesforce agent guidance</span>
-  <strong>Brain</strong>
-  <span>Give agents the Salesforce Engineering Constitution and a compact routing summary for safer, evidence-backed work.</span>
-  <span class="sfpi-card-meta">Works in the background</span>
+  <span class="sfpi-card-kicker">Assistive · on</span>
+  <strong>SF Brain</strong>
+  <span>Salesforce Engineering Constitution, compact SF Pi routing summary, and advisory Instruction Surface diagnostics</span>
+  <span class="sfpi-card-meta">Works automatically</span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-guardrail">
-  <span class="sfpi-card-kicker">Safer Salesforce operations</span>
-  <strong>Guardrail</strong>
-  <span>Add Salesforce-aware safety checks around risky files, shell commands, org mutations, and production work.</span>
+  <span class="sfpi-card-kicker">Safety · on</span>
+  <strong>SF Guardrail</strong>
+  <span>Salesforce-aware safety hooks — file protection policies, dangerous-command gating, org-aware confirmation, and native high-value mutation mediation</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-guardrail</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-herdr">
-  <span class="sfpi-card-kicker">Herdr lane planning</span>
-  <strong>Herdr</strong>
-  <span>Plan Herdr lanes from explicit Salesforce workflow intent without hiding pane actions.</span>
+  <span class="sfpi-card-kicker">Agent Tool · on</span>
+  <strong>SF Herdr</strong>
+  <span>Non-mutating Salesforce workflow plans for the current split Herdr tools.</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-herdr</code></span>
 </a>
 </div>
@@ -133,15 +133,15 @@ SF Pi is useful because it is a bundle: each extension adds a focused Salesforce
 
 <div class="sfpi-card-grid">
 <a class="sfpi-extension-card" href="./extensions/sf-feedback">
-  <span class="sfpi-card-kicker">GitHub issue feedback</span>
-  <strong>Feedback</strong>
-  <span>Report SF Pi issues with useful, sanitized diagnostics instead of starting from a blank bug report.</span>
+  <span class="sfpi-card-kicker">Assistive · on</span>
+  <strong>SF Feedback</strong>
+  <span>Guided feedback and bug-report flow that collects sanitized SF Pi diagnostics and opens a GitHub issue</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-feedback</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-slack">
-  <span class="sfpi-card-kicker">Slack search and collaboration</span>
-  <strong>Slack</strong>
-  <span>Let agents research Slack context safely and send messages only with explicit user confirmation.</span>
+  <span class="sfpi-card-kicker">Agent Tool · on</span>
+  <strong>SF Slack</strong>
+  <span>Slack integration — search messages, read threads, browse channel history</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-slack</code></span>
 </a>
 </div>
@@ -150,38 +150,38 @@ SF Pi is useful because it is a bundle: each extension adds a focused Salesforce
 
 <div class="sfpi-card-grid">
 <a class="sfpi-extension-card" href="./extensions/sf-llm-gateway">
-  <span class="sfpi-card-kicker">Model provider setup</span>
-  <strong>LLM Gateway</strong>
-  <span>Connect pi to Salesforce LLM Gateway models when your environment supports that provider.</span>
+  <span class="sfpi-card-kicker">Provider · on</span>
+  <strong>SF LLM Gateway</strong>
+  <span>Salesforce LLM Gateway provider with model discovery</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-llm-gateway</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-ohana-spinner">
-  <span class="sfpi-card-kicker">Session polish</span>
-  <strong>Ohana Spinner</strong>
-  <span>Make waiting for agent work feel more polished with Salesforce-themed thinking indicators.</span>
-  <span class="sfpi-card-meta">Works in the background</span>
+  <span class="sfpi-card-kicker">UI · on</span>
+  <strong>SF Ohana Spinner</strong>
+  <span>Salesforce-themed rainbow spinner during LLM thinking</span>
+  <span class="sfpi-card-meta">Works automatically</span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-pi-manager">
-  <span class="sfpi-card-kicker">Extension management</span>
-  <strong>Manager</strong>
-  <span>Use one home base to discover, enable, disable, configure, and diagnose the SF Pi bundle.</span>
+  <span class="sfpi-card-kicker">Manager · always-on</span>
+  <strong>SF Pi Manager</strong>
+  <span>Core manager — provides /sf-pi commands</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-pi</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-skills">
-  <span class="sfpi-card-kicker">Skill visibility and setup</span>
-  <strong>Skills</strong>
-  <span>See and manage Salesforce skills that are active in the LLM context.</span>
+  <span class="sfpi-card-kicker">UI · on</span>
+  <strong>SF Skills</strong>
+  <span>Manage skills through one Skill Funnel: catalog every source (Claude/Codex/Cursor/custom/managed) → gate sources → toggle skills per scope (global/project) → resolve name conflicts, all compiled to native settings.skills[]. Plus a passive live-context HUD, forcedotcom/afv-library install, per-skill usage counters, and prune.</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-skills</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-welcome">
-  <span class="sfpi-card-kicker">First-run and session overview</span>
-  <strong>Welcome</strong>
-  <span>Start each pi session with a friendly SF Pi status summary and useful next steps.</span>
+  <span class="sfpi-card-kicker">UI · on</span>
+  <strong>SF Welcome</strong>
+  <span>Salesforce-branded splash screen with environment status, release freshness, and community info</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-welcome</code></span>
 </a>
 </div>
 
 ## Full reference
 
-Need the generated manifest facts? The canonical machine-readable inventory is
+The canonical machine-readable inventory is
 [`catalog/index.json`](https://github.com/salesforce/sf-pi/blob/main/catalog/index.json).

@@ -8,6 +8,7 @@
   "configurable": true,
   "commands": ["/sf-feedback"],
   "docs": {
+    "intentGroup": "Collaborate and improve",
     "summary": "Guided GitHub feedback flow with sanitized diagnostics for SF Pi issues.",
     "primaryFiles": [
       "index.ts",

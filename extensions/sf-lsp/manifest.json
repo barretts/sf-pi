@@ -9,6 +9,7 @@
   "commands": ["/sf-lsp"],
   "events": ["session_start", "session_shutdown", "tool_result"],
   "docs": {
+    "intentGroup": "Build agents",
     "summary": "Advisory LSP diagnostics on write/edit for Apex/LWC/Agent Script files. Surfaces appear as a working indicator, transcript row, one-line SF Welcome readiness row (via sf-lsp-health), and a /sf-lsp doctor + activity panel.",
     "primaryFiles": [
       "index.ts",

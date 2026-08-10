@@ -1,50 +1,31 @@
 ---
 title: "SF Slack"
-description: "Let agents research Slack context safely and send messages only with explicit user confirmation."
+description: "Slack integration — search messages, read threads, browse channel history"
 ---
 
 # SF Slack
 
-<p class="sfpi-page-lead">Let agents research Slack context safely and send messages only with explicit user confirmation.</p>
+<p class="sfpi-page-lead">Slack integration — search messages, read threads, browse channel history</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Slack search and collaboration</strong><p>Let agents research Slack context safely and send messages only with explicit user confirmation.</p></div>
+## What it does
 
-## Why you'll use it
+Full Slack integration. Read-only search/thread/history/channel/user/file/canvas plus confirmed send and scheduled-message management. Tools register only after a token resolves (Pi auth store -&gt; SLACK_USER_TOKEN), keeping the system prompt cache stable when Slack is not configured.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Search messages, threads, users, channels, files, and canvases from pi.</div>
-<div class="sfpi-benefit-card">Resolve fuzzy Slack references before searching.</div>
-<div class="sfpi-benefit-card">Keeps sends human-in-the-loop.</div>
-</div>
+## Start
 
-## Try it first
-
-Open Slack setup/status
+Open the extension from its primary command:
 
 ```text
 /sf-slack
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-slack
 /sf-pi enable sf-slack
 /sf-pi disable sf-slack
 ```
-
-## Common use cases
-
-- Find prior discussions related to a bug or feature.
-- Summarize threads without leaving pi.
-- Resolve people or channels before posting a drafted message.
-- Create or edit canvases when explicitly requested.
-
-## What you get
-
-- Slack research, history, thread, channel, user, file, canvas, and send tools.
-- Deterministic time-range and entity-resolution helpers.
-- Explicit confirmation before any Slack message is posted.
 
 ## Safety notes
 
@@ -60,6 +41,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-slack`
+- **Intent:** Collaborate and improve
 - **Category:** Agent Tool
 - **Maturity:** stable
 - **Default state:** on

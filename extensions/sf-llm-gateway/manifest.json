@@ -16,6 +16,7 @@
     "session_shutdown"
   ],
   "docs": {
+    "intentGroup": "Personalize pi",
     "editingRules": "AGENTS.md",
     "summary": "Complete Pi Provider for the Salesforce LLM Gateway. Pi-owned credential persistence and model storage, authenticated dynamic discovery with offline cache restore, provider-neutral mixed-API dispatch, explicit refresh, diagnostics, and usage status.",
     "primaryFiles": [

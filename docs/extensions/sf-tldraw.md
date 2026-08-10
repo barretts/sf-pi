@@ -1,50 +1,31 @@
 ---
 title: "SF tldraw"
-description: "Turn explicitly grounded Salesforce models and interactions into editable, deterministic tldraw diagrams with visual evidence."
+description: "Deterministic, editable Salesforce diagrams rendered through the local tldraw offline Canvas API."
 ---
 
 # SF tldraw
 
-<p class="sfpi-page-lead">Turn explicitly grounded Salesforce models and interactions into editable, deterministic tldraw diagrams with visual evidence.</p>
+<p class="sfpi-page-lead">Deterministic, editable Salesforce diagrams rendered through the local tldraw offline Canvas API.</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Editable Salesforce diagrams</strong><p>Turn explicitly grounded Salesforce models and interactions into editable, deterministic tldraw diagrams with visual evidence.</p></div>
+## What it does
 
-## Why you'll use it
+Provides one Salesforce-focused `tldraw_canvas` family tool for tldraw offline v1.12 runtime status, explicit document creation, document discovery, and deterministic Data Model, System/Solution Architecture, and Interaction/Sequence profiles. Data Model pages use a title-only header with a configurable stacked Relationships key. Render actions use strict Spec v2 with explicit grounding, inspectable provenance, render-privacy checks, pinned SLDS icons, preserve-by-default updates, and readiness-gated screenshot evidence; generic canvas work stays with the upstream tldraw-offline skill.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Renders Data Model, System/Solution Architecture, and Interaction/Sequence profiles through one local Canvas API tool.</div>
-<div class="sfpi-benefit-card">Uses unchanged SLDS icons and verifies cardinality markers against actual connector terminals.</div>
-<div class="sfpi-benefit-card">Preserves human positioning and annotations by default while blocking completion on layout or lint failures.</div>
-</div>
+## Start
 
-## Try it first
-
-Check tldraw readiness
+Open the extension from its primary command:
 
 ```text
 /sf-tldraw
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-tldraw
 /sf-pi enable sf-tldraw
 /sf-pi disable sf-tldraw
 ```
-
-## Common use cases
-
-- Render a reference-grounded Salesforce data model from official documentation.
-- Visualize an org-described schema without fabricating relationships or sharing facts.
-- Create an editable solution architecture with labeled directional connections.
-- Lay out a static, ordered interaction sequence with screenshot evidence.
-
-## What you get
-
-- One `tldraw_canvas` family tool for runtime operations and three Salesforce render profiles.
-- Deterministic Dagre or fixed-lane placement with transform-correct connector decorations.
-- Full and thumbnail evidence artifacts only after readiness passes.
 
 ## Safety notes
 
@@ -64,6 +45,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-tldraw`
+- **Intent:** Build apps
 - **Category:** Agent Tool
 - **Maturity:** experimental
 - **Default state:** on

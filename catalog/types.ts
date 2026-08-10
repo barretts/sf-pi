@@ -60,6 +60,17 @@ export type ExtensionCategory =
  */
 export type ExtensionMaturity = "stable" | "beta" | "experimental";
 
+/** User outcome used to group extensions in generated discovery surfaces. */
+export type ExtensionIntentGroup =
+  | "Build agents"
+  | "Build apps"
+  | "Query data"
+  | "Work with Salesforce orgs"
+  | "Work with Data Cloud"
+  | "Work safely"
+  | "Collaborate and improve"
+  | "Personalize pi";
+
 export interface SfPiExtension {
   /** Unique slug used in commands (e.g., "sf-ohana-spinner"). */
   id: string;
@@ -96,13 +107,15 @@ export interface SfPiExtension {
 // -------------------------------------------------------------------------------------------------
 
 export interface ExtensionManifestDocs {
-  /** Longer human-facing summary for generated orientation docs. */
-  summary?: string;
+  /** User outcome used to group this extension in generated discovery surfaces. */
+  intentGroup: ExtensionIntentGroup;
+  /** Longer factual summary for generated orientation and detail docs. */
+  summary: string;
   /**
    * Extension-relative files agents should usually read first. `..` traversal
    * is allowed only while the resolved path remains inside the repository root.
    */
-  primaryFiles?: string[];
+  primaryFiles: string[];
   /** Extension-local editing rules loaded when code in this extension is changed. */
   editingRules?: string;
   /** Extension-local operating guide loaded only for deeper tool workflow guidance. */
@@ -131,7 +144,7 @@ export interface ExtensionManifest {
   providers?: string[];
   tools?: string[];
   events?: string[];
-  docs?: ExtensionManifestDocs;
+  docs: ExtensionManifestDocs;
 }
 
 // -------------------------------------------------------------------------------------------------

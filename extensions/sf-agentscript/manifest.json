@@ -15,6 +15,7 @@
   ],
   "events": ["session_start", "session_shutdown", "tool_result", "agent_settled"],
   "docs": {
+    "intentGroup": "Build agents",
     "editingRules": "AGENTS.md",
     "agentGuide": "AGENT_GUIDE.md",
     "summary": "Owns the entire Agent Script lifecycle: compile and quality hardening, structural review, preview, local-first Eval Studio, exact-version release eval contracts, inactive publication, and Guardrail-mediated activation.",

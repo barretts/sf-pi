@@ -1,31 +1,25 @@
 ---
 title: "SF Welcome"
-description: "Start each pi session with a friendly SF Pi status summary and useful next steps."
+description: "Salesforce-branded splash screen with environment status, release freshness, and community info"
 ---
 
 # SF Welcome
 
-<p class="sfpi-page-lead">Start each pi session with a friendly SF Pi status summary and useful next steps.</p>
+<p class="sfpi-page-lead">Salesforce-branded splash screen with environment status, release freshness, and community info</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>First-run and session overview</strong><p>Start each pi session with a friendly SF Pi status summary and useful next steps.</p></div>
+## What it does
 
-## Why you'll use it
+Two-column startup splash with model/environment status, one-line LSP and Herdr readiness, optional gateway usage, and release freshness on the left, plus announcements/recommended extensions/recent sessions on the right. Dismissable overlay (default) or persistent header (quietStartup), plus /sf-welcome and /sf-setup-fonts commands.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Shows environment and privacy posture at launch.</div>
-<div class="sfpi-benefit-card">Surfaces recommendations and announcements without forcing a command.</div>
-<div class="sfpi-benefit-card">Makes new SF Pi sessions feel intentional and discoverable.</div>
-</div>
+## Start
 
-## Try it first
-
-Open welcome surface
+Open the extension from its primary command:
 
 ```text
 /sf-welcome
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-welcome
@@ -33,24 +27,13 @@ You can also manage this extension from the SF Pi home base:
 /sf-pi disable sf-welcome
 ```
 
-## Common use cases
-
-- Review setup status at the start of a session.
-- Install fonts when glyphs do not render correctly.
-- See recommended next steps after installing SF Pi.
-
-## What you get
-
-- Startup splash or quiet header behavior.
-- Release freshness, environment, privacy, and recommendation rows.
-- Font setup helper.
-
 ## Exact reference
 
 <details>
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-welcome`
+- **Intent:** Personalize pi
 - **Category:** UI
 - **Maturity:** stable
 - **Default state:** on

@@ -2,7 +2,7 @@
 
 // Scaffold a new sf-pi extension.
 //
-// Usage: node scripts/scaffold.mjs --id <extension-id> --category <ui|provider|agent-tool|safety|assistive|manager> [--name "Display Name"]
+// Usage: node scripts/scaffold.mjs --id <extension-id> --category <category> --intent <intent-group> [--name "Display Name"]
 // See docs/adr/0006-extension-consistency-baseline.md for the category taxonomy.
 //
 // Creates:
@@ -32,13 +32,15 @@ const EXTENSIONS_DIR = path.join(ROOT, "extensions");
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const result = { id: "", category: "", name: "" };
+  const result = { id: "", category: "", intent: "", name: "" };
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--id" && args[i + 1]) {
       result.id = args[++i];
     } else if (args[i] === "--category" && args[i + 1]) {
       result.category = args[++i];
+    } else if (args[i] === "--intent" && args[i + 1]) {
+      result.intent = args[++i];
     } else if (args[i] === "--name" && args[i + 1]) {
       result.name = args[++i];
     }
@@ -212,7 +214,7 @@ function constName(id) {
   return id.replace(/-/g, "_").toUpperCase();
 }
 
-function manifestJson(id, name, category) {
+function manifestJson(id, name, category, intent) {
   return (
     JSON.stringify(
       {
@@ -228,10 +230,11 @@ function manifestJson(id, name, category) {
         // exports `createConfigPanel: ConfigPanelFactory`. Until then,
         // /sf-pi will skip the drill-down panel for this extension.
         commands: [`/${id}`],
-        // docs.summary + docs.primaryFiles are required by
-        // scripts/generate-catalog.mjs. Replace the TODOs before opening a
-        // PR — the generator refuses to write the catalog otherwise.
+        // docs.intentGroup, docs.summary, and docs.primaryFiles are required
+        // by scripts/generate-catalog.mjs. Replace the TODO descriptions before
+        // opening a PR.
         docs: {
+          intentGroup: intent,
           summary: `TODO: Describe ${name} for generated orientation docs`,
           primaryFiles: ["index.ts"],
         },
@@ -354,15 +357,15 @@ describe("${id}", () => {
 // Main
 // -------------------------------------------------------------------------------------------------
 
-const { id, category, name: rawName } = parseArgs();
+const { id, category, intent, name: rawName } = parseArgs();
 
-if (!id) {
+if (!id || !category || !intent) {
   console.error(
-    'Usage: node scripts/scaffold.mjs --id <extension-id> --category <ui|provider|agent-tool|safety|assistive|manager> [--name "Display Name"]',
+    'Usage: node scripts/scaffold.mjs --id <extension-id> --category <category> --intent <intent-group> [--name "Display Name"]',
   );
   console.error("");
   console.error(
-    'Example: node scripts/scaffold.mjs --id sf-code-analyzer --category agent-tool --name "SF Code Analyzer"',
+    'Example: node scripts/scaffold.mjs --id sf-code-analyzer --category agent-tool --intent "Build agents" --name "SF Code Analyzer"',
   );
   process.exit(1);
 }
@@ -373,6 +376,21 @@ if (!id) {
 const validCategories = ["ui", "provider", "agent-tool", "safety", "assistive", "manager"];
 if (!validCategories.includes(category)) {
   console.error(`Invalid category: "${category}". Must be one of: ${validCategories.join(", ")}`);
+  process.exit(1);
+}
+
+const validIntents = [
+  "Build agents",
+  "Build apps",
+  "Query data",
+  "Work with Salesforce orgs",
+  "Work with Data Cloud",
+  "Work safely",
+  "Collaborate and improve",
+  "Personalize pi",
+];
+if (!validIntents.includes(intent)) {
+  console.error(`Invalid intent: "${intent}". Must be one of: ${validIntents.join(", ")}`);
   process.exit(1);
 }
 
@@ -390,7 +408,7 @@ mkdirSync(path.join(extDir, "tests"), { recursive: true });
 
 // Write files
 writeFileSync(path.join(extDir, "index.ts"), indexTs(id, name));
-writeFileSync(path.join(extDir, "manifest.json"), manifestJson(id, name, category));
+writeFileSync(path.join(extDir, "manifest.json"), manifestJson(id, name, category, intent));
 writeFileSync(path.join(extDir, "README.md"), readmeMd(id, name));
 writeFileSync(path.join(extDir, "tests", "smoke.test.ts"), smokeTestTs(id));
 
@@ -410,7 +428,7 @@ execSync("node scripts/generate-catalog.mjs", { cwd: ROOT, stdio: "inherit" });
 
 console.log("");
 console.log("Next steps:");
-console.log(`  1. Edit extensions/${id}/manifest.json — update the description`);
+console.log(`  1. Edit extensions/${id}/manifest.json — update the description and docs summary`);
 console.log(
   `  2. Edit extensions/${id}/README.md and comments — explain the behavior for agents and reviewers`,
 );

@@ -9,6 +9,7 @@
   "commands": ["/sf-data-explorer"],
   "events": ["session_start", "session_shutdown"],
   "docs": {
+    "intentGroup": "Work with Salesforce orgs",
     "editingRules": "AGENTS.md",
     "summary": "Keyboard-first read-only Salesforce data explorer with object/field browsing, editable query text, query execution, result detail view, JSON/CSV export, shortcut help, and explorer switching. Uses sf-pi @salesforce/core connection plumbing; no LLM required.",
     "primaryFiles": [

@@ -1,31 +1,25 @@
 ---
 title: "SF DevBar"
-description: "Keep model, org, git, context, and extension status visible while you work in pi."
+description: "Bespoke Salesforce developer status bar with org context, model info, git, and context window progress"
 ---
 
 # SF DevBar
 
-<p class="sfpi-page-lead">Keep model, org, git, context, and extension status visible while you work in pi.</p>
+<p class="sfpi-page-lead">Bespoke Salesforce developer status bar with org context, model info, git, and context window progress</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Session awareness</strong><p>Keep model, org, git, context, and extension status visible while you work in pi.</p></div>
+## What it does
 
-## Why you'll use it
+Two non-blocking status bars: a top widget with model/thinking/session/git/context, and a custom footer with project-scoped org info, monthly LLM-gateway budget, and active extension counts.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">See your active Salesforce org without running extra commands.</div>
-<div class="sfpi-benefit-card">Keep model and context status visible at a glance.</div>
-<div class="sfpi-benefit-card">Use quick status commands when something feels off.</div>
-</div>
+## Start
 
-## Try it first
-
-Inspect dev status
+Open the extension from its primary command:
 
 ```text
 /sf-devbar
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-devbar
@@ -33,24 +27,13 @@ You can also manage this extension from the SF Pi home base:
 /sf-pi disable sf-devbar
 ```
 
-## Common use cases
-
-- Confirm which Salesforce org pi is pointed at.
-- Check whether SF Pi status surfaces are active.
-- Use `/sf-org` before org-aware work.
-
-## What you get
-
-- Top and footer status surfaces for pi sessions.
-- Project-scoped Salesforce org information.
-- Quick commands for org and DevBar status.
-
 ## Exact reference
 
 <details>
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-devbar`
+- **Intent:** Work with Salesforce orgs
 - **Category:** UI
 - **Maturity:** stable
 - **Default state:** on

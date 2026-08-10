@@ -1,31 +1,25 @@
 ---
 title: "SF Skills"
-description: "See and manage Salesforce skills that are active in the LLM context."
+description: "Manage skills through one Skill Funnel: catalog every source (Claude/Codex/Cursor/custom/managed) → gate sources → toggle skills per scope (global/project) → resolve name conflicts, all compiled to native settings.skills[]. Plus a passive live-context HUD, forcedotcom/afv-library install, per-skill usage counters, and prune."
 ---
 
 # SF Skills
 
-<p class="sfpi-page-lead">See and manage Salesforce skills that are active in the LLM context.</p>
+<p class="sfpi-page-lead">Manage skills through one Skill Funnel: catalog every source (Claude/Codex/Cursor/custom/managed) → gate sources → toggle skills per scope (global/project) → resolve name conflicts, all compiled to native settings.skills[]. Plus a passive live-context HUD, forcedotcom/afv-library install, per-skill usage counters, and prune.</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Skill visibility and setup</strong><p>See and manage Salesforce skills that are active in the LLM context.</p></div>
+## What it does
 
-## Why you'll use it
+Skills manager built on the Skill Funnel: a five-tab view (Catalog / Sources / Global / Project / Conflicts) over one resolved Skill Catalog. Source Gate decides which roots Pi sees; Skill Gate toggles individual skills at global and project scope; Skill Conflict Resolution picks a winner by exclusion. Every decision compiles to native settings.skills[] (Compiled Skill Resolution) — no SKILL.md files are ever modified. A Source Registry remembers custom paths and gate state; conflicts that touch an auto-discovered default root are report-only. Plus a passive live-context HUD, forcedotcom/afv-library install, per-skill usage counters, and prune.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Shows which Salesforce skills are active right now.</div>
-<div class="sfpi-benefit-card">Helps install and manage curated Salesforce skill libraries.</div>
-<div class="sfpi-benefit-card">Uses native pi settings instead of shadow state.</div>
-</div>
+## Start
 
-## Try it first
-
-Open skills manager
+Open the extension from its primary command:
 
 ```text
 /sf-skills
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-skills
@@ -33,24 +27,13 @@ You can also manage this extension from the SF Pi home base:
 /sf-pi disable sf-skills
 ```
 
-## Common use cases
-
-- Check what Salesforce guidance the agent can currently see.
-- Install or prune managed Salesforce skills.
-- Inspect skill usage and source scope.
-
-## What you get
-
-- A skills manager panel.
-- Passive live-context HUD.
-- Global/project skill source detection.
-
 ## Exact reference
 
 <details>
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-skills`
+- **Intent:** Personalize pi
 - **Category:** UI
 - **Maturity:** stable
 - **Default state:** on

@@ -1,51 +1,31 @@
 ---
 title: "SF Apex"
-description: "Author, discover, diagnose, trace, probe, and run targeted Apex tests from pi with API-native workflows."
+description: "API-native Apex lifecycle workflows for pi: authoring guidance, diagnostics, trace/log/watch, Anonymous Apex, and targeted tests."
 ---
 
 # SF Apex
 
-<p class="sfpi-page-lead">Author, discover, diagnose, trace, probe, and run targeted Apex tests from pi with API-native workflows.</p>
+<p class="sfpi-page-lead">API-native Apex lifecycle workflows for pi: authoring guidance, diagnostics, trace/log/watch, Anonymous Apex, and targeted tests.</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Apex lifecycle workflows</strong><p>Author, discover, diagnose, trace, probe, and run targeted Apex tests from pi with API-native workflows.</p></div>
+## What it does
 
-## Why you'll use it
+Owns the lean Apex lifecycle loop in pi: native Apex discovery/preflight, authoring plan hints, Apex-owned diagnostics handoff, API-native trace flags, log fetch/watch/analyze, Anonymous Apex probes, coverage summaries, and targeted test runs. Source edits remain normal Pi file operations; full evidence is persisted as Apex Artifacts while tool output stays compact.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Keeps Apex authoring, native discovery, diagnostics, logs, Anonymous Apex, coverage, and targeted tests in one lean workflow.</div>
-<div class="sfpi-benefit-card">Uses Salesforce Core plus native Tooling/REST calls as the fast path instead of subprocess stacks.</div>
-<div class="sfpi-benefit-card">Renders human-friendly cards with API Call Rails, log timelines, root-cause summaries, and compact agent-facing digests.</div>
-</div>
+## Start
 
-## Try it first
-
-Open the Apex panel
+Open the extension from its primary command:
 
 ```text
 /sf-apex
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-apex
 /sf-pi enable sf-apex
 /sf-pi disable sf-apex
 ```
-
-## Common use cases
-
-- Plan an Apex change and identify likely targeted tests.
-- Search Apex classes, discover candidate tests, and summarize coverage natively.
-- Start a bounded trace and watch for the next Apex log.
-- Run Anonymous Apex probes and analyze the resulting log.
-- Run specified Apex test classes or methods and inspect failures.
-
-## What you get
-
-- One sf_apex family tool for discovery, authoring guidance, trace/log workflows, Anonymous Apex, coverage, and targeted tests.
-- Human-friendly Apex Result Cards with API Call Rails, Apex Log Timelines, Root Cause sections, File Gates, and Test Run summaries.
-- Apex Artifacts under the global agent directory for raw logs, digests, Anonymous Apex bodies/results, and test results.
 
 ## Safety notes
 
@@ -61,6 +41,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-apex`
+- **Intent:** Build apps
 - **Category:** Agent Tool
 - **Maturity:** experimental
 - **Default state:** on

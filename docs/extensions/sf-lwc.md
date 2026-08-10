@@ -1,50 +1,31 @@
 ---
 title: "SF LWC"
-description: "Scan, inspect, diagnose, and locally test Lightning Web Components from pi with compact cards and artifact-backed evidence."
+description: "Local-native Lightning Web Component lifecycle workflows for pi: project scan, component inspection, focused diagnostics, targeted Jest tests, and artifacts."
 ---
 
 # SF LWC
 
-<p class="sfpi-page-lead">Scan, inspect, diagnose, and locally test Lightning Web Components from pi with compact cards and artifact-backed evidence.</p>
+<p class="sfpi-page-lead">Local-native Lightning Web Component lifecycle workflows for pi: project scan, component inspection, focused diagnostics, targeted Jest tests, and artifacts.</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Lightning Web Component lifecycle workflows</strong><p>Scan, inspect, diagnose, and locally test Lightning Web Components from pi with compact cards and artifact-backed evidence.</p></div>
+## What it does
 
-## Why you'll use it
+Owns the lean local Lightning Web Component lifecycle loop in pi: SFDX package-directory scans, component inventory and inspection, focused LWC compiler/template diagnostics, style/SLDS signal detection, local Jest discovery/planning/runs, compact LWC Result Cards, recommended skill hints, and persisted LWC Artifacts. Source edits remain normal Pi file operations; deployment, org source synchronization, visual preview, broad static/security scans, and SLDS2 uplift execution remain with other SF Pi surfaces.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Keeps local LWC bundle inventory, component inspection, focused diagnostics, and targeted Jest tests in one lean workflow.</div>
-<div class="sfpi-benefit-card">Uses local SFDX project structure plus public LWC compiler packages instead of Salesforce CLI fallback machinery.</div>
-<div class="sfpi-benefit-card">Renders human-friendly LWC Result Cards with Local Rails, diagnostics, test summaries, recommended skill hints, and full artifacts for scans and Jest output.</div>
-</div>
+## Start
 
-## Try it first
-
-Open the LWC panel
+Open the extension from its primary command:
 
 ```text
 /sf-lwc
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-lwc
 /sf-pi enable sf-lwc
 /sf-pi disable sf-lwc
 ```
-
-## Common use cases
-
-- Scan registered SFDX package directories for Lightning Web Component bundles.
-- Inspect a component's files, metadata exposure, public API surface, imports, child tags, style/SLDS signals, and test coverage signals.
-- Diagnose LWC HTML, JavaScript, TypeScript, and metadata files before or after edits.
-- Discover, plan, and run the smallest useful local LWC Jest test without starting watch mode.
-
-## What you get
-
-- One sf_lwc family tool for local project scans, component listing/inspection, file diagnostics, test discovery/planning/runs, and rerun history.
-- Human-friendly LWC Result Cards with Local Rails, bundle signals, diagnostic summaries, root-cause hints, and next-step guidance.
-- LWC Artifacts under the global agent directory for project scans, component inspections, diagnostics JSON, Jest JSON, stdout/stderr, and markdown summaries.
 
 ## Safety notes
 
@@ -61,6 +42,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-lwc`
+- **Intent:** Build apps
 - **Category:** Agent Tool
 - **Maturity:** experimental
 - **Default state:** on

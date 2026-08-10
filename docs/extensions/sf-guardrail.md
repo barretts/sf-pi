@@ -1,49 +1,31 @@
 ---
 title: "SF Guardrail"
-description: "Add Salesforce-aware safety checks around risky files, shell commands, org mutations, and production work."
+description: "Salesforce-aware safety hooks — file protection policies, dangerous-command gating, org-aware confirmation, and native high-value mutation mediation"
 ---
 
 # SF Guardrail
 
-<p class="sfpi-page-lead">Add Salesforce-aware safety checks around risky files, shell commands, org mutations, and production work.</p>
+<p class="sfpi-page-lead">Salesforce-aware safety hooks — file protection policies, dangerous-command gating, org-aware confirmation, and native high-value mutation mediation</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Safer Salesforce operations</strong><p>Add Salesforce-aware safety checks around risky files, shell commands, org mutations, and production work.</p></div>
+## What it does
 
-## Why you'll use it
+Salesforce-aware safety layer for pi: file-protection policies, AST-matched command gating, org-aware confirmation on production deploys/Apex/DML/destructive REST, native high-value mutation mediation, plus a once-per-session prompt-injection that teaches the LLM the gating categories and validate-first workflow.
 
-<div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Blocks sensitive local file edits that should never happen from an agent.</div>
-<div class="sfpi-benefit-card">Prompts before dangerous shell and production org operations.</div>
-<div class="sfpi-benefit-card">Teaches the agent the active safety categories each session.</div>
-</div>
+## Start
 
-## Try it first
-
-Review guardrail status
+Open the extension from its primary command:
 
 ```text
 /sf-guardrail
 ```
 
-You can also manage this extension from the SF Pi home base:
+Manage its package state with:
 
 ```text
 /sf-pi status sf-guardrail
 /sf-pi enable sf-guardrail
 /sf-pi disable sf-guardrail
 ```
-
-## Common use cases
-
-- Prevent accidental edits to Salesforce CLI state or secret-like files.
-- Require confirmation before production deploys or data mutations.
-- Audit which guardrails are active in a pi session.
-
-## What you get
-
-- File-protection policies.
-- Dangerous-command confirmation.
-- Production-aware Salesforce operation confirmation.
 
 ## Safety notes
 
@@ -60,6 +42,7 @@ You can also manage this extension from the SF Pi home base:
 <summary>Show commands, tools, providers, and hooks</summary>
 
 - **Extension id:** `sf-guardrail`
+- **Intent:** Work safely
 - **Category:** Safety
 - **Maturity:** stable
 - **Default state:** on

@@ -26,23 +26,11 @@ const BASE_MANIFEST = {
   category: "ui",
   defaultEnabled: true,
   docs: {
+    intentGroup: "Personalize pi",
     summary: "Minimal fixture extension for catalog generation.",
     primaryFiles: ["index.ts"],
   },
 };
-
-function validCopy() {
-  return {
-    shortName: "Alpha",
-    intentGroup: "Personalize pi",
-    promise: "Provide a minimal fixture.",
-    bestFor: "Catalog tests.",
-    benefits: ["Small and deterministic."],
-    useCases: ["Exercise catalog generation."],
-    whatYouGet: ["One fixture extension."],
-    tryFirst: { label: "Open Alpha", code: "/alpha" },
-  };
-}
 
 type GeneratorResult = ReturnType<typeof spawnSync>;
 type Manifest = typeof BASE_MANIFEST & Record<string, unknown>;
@@ -70,14 +58,9 @@ function writePackage(entries: unknown = ["./extensions/alpha/index.ts"]): void 
   writeJson("package.json", { pi: { extensions: entries } });
 }
 
-function writeCopy(copy: Record<string, unknown>): void {
-  writeJson("docs/extension-copy.json", copy);
-}
-
 function createFixture(): void {
   writePackage();
   createExtension("alpha", { ...BASE_MANIFEST });
-  writeCopy({ alpha: validCopy() });
   writeText(
     "README.md",
     [
@@ -209,7 +192,6 @@ describe("generate-catalog CLI", () => {
   it("fails closed when an extension manifest is missing", () => {
     createExtension("beta", { ...BASE_MANIFEST, id: "beta", name: "Beta" });
     writePackage(["./extensions/beta/index.ts"]);
-    writeCopy({ beta: validCopy() });
     unlinkSync(path.join(root, "extensions/alpha/manifest.json"));
     expectFailure("extensions/alpha/manifest.json is missing");
   });
@@ -217,7 +199,6 @@ describe("generate-catalog CLI", () => {
   it("fails closed when an extension entry point is missing", () => {
     createExtension("beta", { ...BASE_MANIFEST, id: "beta", name: "Beta" });
     writePackage(["./extensions/beta/index.ts"]);
-    writeCopy({ beta: validCopy() });
     unlinkSync(path.join(root, "extensions/alpha/index.ts"));
     expectFailure("extensions/alpha/index.ts is missing");
   });
@@ -242,7 +223,6 @@ describe("generate-catalog CLI", () => {
   it("rejects duplicate manifest ids before directory mismatch", () => {
     createExtension("beta", { ...BASE_MANIFEST });
     writePackage(["./extensions/alpha/index.ts", "./extensions/beta/index.ts"]);
-    writeCopy({ alpha: validCopy(), beta: validCopy() });
     expectFailure('duplicate manifest id "alpha"');
   });
 
@@ -250,7 +230,6 @@ describe("generate-catalog CLI", () => {
     createExtension("beta", { ...BASE_MANIFEST, id: "zeta", name: "Zeta" });
     writeJson("extensions/alpha/manifest.json", { ...BASE_MANIFEST, id: "zeta" });
     writePackage(["./extensions/alpha/index.ts", "./extensions/beta/index.ts"]);
-    writeCopy({ zeta: validCopy() });
     expectFailure('duplicate manifest id "zeta"');
   });
 
@@ -258,27 +237,18 @@ describe("generate-catalog CLI", () => {
     rmSync(path.join(root, "extensions/alpha"), { recursive: true });
     createExtension("beta", { ...BASE_MANIFEST });
     writePackage(["./extensions/beta/index.ts"]);
-    writeCopy({ alpha: validCopy() });
     expectFailure('manifest id "alpha" does not match directory "beta"');
   });
 
-  it("rejects extension-copy entries without a discovered extension", () => {
-    writeCopy({ alpha: validCopy(), ghost: validCopy() });
-    expectFailure("entries with no discovered manifest: ghost");
-  });
-
-  it("rejects a missing extension-copy entry", () => {
-    writeCopy({});
-    expectFailure("extension-copy.json is missing alpha");
-  });
-
   it.each([
-    ["malformed JSON", "{ invalid\n", "docs/extension-copy.json is not valid JSON"],
-    ["null", "null\n", "docs/extension-copy.json must contain a JSON object"],
-    ["an array", "[]\n", "docs/extension-copy.json must contain a JSON object"],
-  ])("rejects extension-copy containing %s", (_label, contents, fragment) => {
-    writeText("docs/extension-copy.json", contents);
-    expectFailure(fragment);
+    ["missing", undefined],
+    ["unknown", "Ship rockets"],
+  ])("rejects a %s manifest-owned intent group", (_label, intentGroup) => {
+    writeJson("extensions/alpha/manifest.json", {
+      ...BASE_MANIFEST,
+      docs: { ...BASE_MANIFEST.docs, intentGroup },
+    });
+    expectFailure("docs.intentGroup");
   });
 
   it("rejects an explicitly empty maturity", () => {

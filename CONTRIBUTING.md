@@ -164,28 +164,28 @@ pi install .
 
 The most common entry points, grouped by purpose:
 
-| Purpose                  | Command                                            | Check-only variant                      |
-| ------------------------ | -------------------------------------------------- | --------------------------------------- |
-| Regenerate catalog       | `npm run generate-catalog`                         | `npm run generate-catalog:check`        |
-| Check staged catalog     | —                                                  | `npm run generate-catalog:check-staged` |
-| Format                   | `npm run format`                                   | `npm run format:check`                  |
-| SPDX headers             | `npm run spdx`                                     | `npm run spdx:check`                    |
-| Docs health              | `npm run docs:health`                              | `npm run docs:health:check`             |
-| Docs site                | `npm run docs:dev` / `npm run docs:preview`        | `npm run docs:build`                    |
-| Docs impact summary      | —                                                  | `npm run docs:changed`                  |
-| ESLint                   | `npm run eslint:fix`                               | `npm run eslint`                        |
-| Type check               | —                                                  | `npm run check`                         |
-| Run tests                | `npm test`                                         | —                                       |
-| Runtime surface contract | `npm run test:runtime-surface`                     | —                                       |
-| Tests + coverage         | `npm run test:coverage`                            | —                                       |
-| Watch tests              | `npm run test:watch`                               | —                                       |
-| Lint bundle              | —                                                  | `npm run lint`                          |
-| Full local validation    | —                                                  | `npm run validate`                      |
-| CI-like local validation | —                                                  | `npm run validate:ci`                   |
-| CI artifact guard        | —                                                  | `bash scripts/check-llm-artifacts.sh`   |
-| Instruction surface      | `npm run instruction-surface:report`               | —                                       |
-| Instruction behavior     | `npm run e2e:instruction-behavior -- --model ...`  | —                                       |
-| Scaffold a new extension | `npm run scaffold -- --id sf-my-ext --category ui` | —                                       |
+| Purpose                  | Command                                                                      | Check-only variant                      |
+| ------------------------ | ---------------------------------------------------------------------------- | --------------------------------------- |
+| Regenerate catalog       | `npm run generate-catalog`                                                   | `npm run generate-catalog:check`        |
+| Check staged catalog     | —                                                                            | `npm run generate-catalog:check-staged` |
+| Format                   | `npm run format`                                                             | `npm run format:check`                  |
+| SPDX headers             | `npm run spdx`                                                               | `npm run spdx:check`                    |
+| Docs health              | `npm run docs:health`                                                        | `npm run docs:health:check`             |
+| Docs site                | `npm run docs:dev` / `npm run docs:preview`                                  | `npm run docs:build`                    |
+| Docs impact summary      | —                                                                            | `npm run docs:changed`                  |
+| ESLint                   | `npm run eslint:fix`                                                         | `npm run eslint`                        |
+| Type check               | —                                                                            | `npm run check`                         |
+| Run tests                | `npm test`                                                                   | —                                       |
+| Runtime surface contract | `npm run test:runtime-surface`                                               | —                                       |
+| Tests + coverage         | `npm run test:coverage`                                                      | —                                       |
+| Watch tests              | `npm run test:watch`                                                         | —                                       |
+| Lint bundle              | —                                                                            | `npm run lint`                          |
+| Full local validation    | —                                                                            | `npm run validate`                      |
+| CI-like local validation | —                                                                            | `npm run validate:ci`                   |
+| CI artifact guard        | —                                                                            | `bash scripts/check-llm-artifacts.sh`   |
+| Instruction surface      | `npm run instruction-surface:report`                                         | —                                       |
+| Instruction behavior     | `npm run e2e:instruction-behavior -- --model ...`                            | —                                       |
+| Scaffold a new extension | `npm run scaffold -- --id sf-my-ext --category ui --intent "Personalize pi"` | —                                       |
 
 `npm run lint` covers formatting, generated Data 360/catalog drift, docs and
 SPDX policy, shared connection/lifecycle policy, and ESLint. `npm run validate`
@@ -203,12 +203,10 @@ fixes remain intentionally mutating for staged files.
 
 ## Source of truth
 
-Use this order:
-
-1. `extensions/<id>/manifest.json`
-2. `catalog/index.json` and `catalog/registry.ts` (generated)
-3. `extensions/<id>/README.md`
-4. root `README.md`
+Runtime code and Behavior Proofs define implemented behavior. Each
+`extensions/<id>/manifest.json` declares the public routing and documentation
+contract attested against that runtime. Generated catalog/docs project the
+manifest; the extension README owns human explanation.
 
 ### Generated files
 
@@ -217,6 +215,8 @@ Do not edit these manually:
 - `catalog/registry.ts`
 - `catalog/index.json`
 - `docs/extensions.md`
+- `docs/extensions/*.md`
+- `docs/.vitepress/generated-extension-sidebar.ts`
 - `docs/commands.md`
 - `docs/agent-orientation.md`
 - `docs/adr/README.md`
@@ -270,8 +270,14 @@ for examples. Phased roadmaps live in the extension's own `ROADMAP.md`
 Scaffold a new extension with:
 
 ```bash
-npm run scaffold -- --id sf-my-extension --category ui --name "My Extension"
+npm run scaffold -- --id sf-my-extension --category ui --intent "Personalize pi" --name "My Extension"
 ```
+
+The manifest's `description` is its concise factual catalog description.
+`docs.summary` is the longer factual explanation, and `docs.intentGroup` is
+one of the generated browse-page outcomes defined in `catalog/types.ts`.
+Do not create a second copy registry or repeat marketing lists in generated
+metadata.
 
 The `--category` must be one of the six values defined by
 `catalog/types.ts`:
