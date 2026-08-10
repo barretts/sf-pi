@@ -73,6 +73,8 @@ You can also manage this extension from the SF Pi home base:
 
 - [Full extension README](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-data360/README.md)
 - [Source folder](https://github.com/salesforce/sf-pi/tree/main/extensions/sf-data360)
+- [Agent editing rules](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-data360/AGENTS.md)
+- [Agent operating guide](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-data360/AGENT_GUIDE.md)
 
 ## Troubleshooting
 

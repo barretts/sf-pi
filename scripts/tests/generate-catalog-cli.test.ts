@@ -286,6 +286,27 @@ describe("generate-catalog CLI", () => {
     expectFailure(fragment);
   });
 
+  it("requires a role declaration for an existing extension AGENTS file", () => {
+    writeText("extensions/alpha/AGENTS.md", "# Alpha editing rules\n");
+    expectFailure('docs.editingRules must be "AGENTS.md"');
+  });
+
+  it("rejects a declared role whose extension-local file is missing", () => {
+    writeJson("extensions/alpha/manifest.json", {
+      ...BASE_MANIFEST,
+      docs: { ...BASE_MANIFEST.docs, agentGuide: "AGENT_GUIDE.md" },
+    });
+    expectFailure('docs.agentGuide declares missing file "AGENT_GUIDE.md"');
+  });
+
+  it("requires an operating guide for a manifest with LLM tools", () => {
+    writeJson("extensions/alpha/manifest.json", {
+      ...BASE_MANIFEST,
+      tools: ["alpha_tool"],
+    });
+    expectFailure("must declare docs.agentGuide for its LLM tool workflow");
+  });
+
   it.each([
     ["missing", { pi: {} }],
     ["non-array", { pi: { extensions: "./extensions/alpha/index.ts" } }],

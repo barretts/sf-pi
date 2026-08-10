@@ -105,7 +105,9 @@ When an agent (or human) needs to change something, start here:
 | Extension tests                                 | `extensions/<id>/tests/*.test.ts` (vitest)                                      |
 | Manifest/runtime registration attestation       | `scripts/runtime-surface/`, `scripts/tests/runtime-surface-attestation.test.ts` |
 | Extension human-facing docs                     | `extensions/<id>/README.md`                                                     |
-| Extension-specific agent rules                  | `extensions/<id>/AGENTS.md` (optional, see below)                               |
+| Extension-specific agent rules                  | Manifest `docs.editingRules` → `extensions/<id>/AGENTS.md`                      |
+| Extension agent operating guide                 | Manifest `docs.agentGuide` → `extensions/<id>/AGENT_GUIDE.md`                   |
+| Extension domain glossary                       | Manifest `docs.contextGlossary` → `extensions/<id>/CONTEXT.md`                  |
 | Extension-specific roadmap                      | `extensions/<id>/ROADMAP.md` (optional, see below)                              |
 | Slash command handlers                          | `extensions/<id>/index.ts` — most handle their own commands                     |
 | Shared Pi-runtime shims                         | `lib/common/pi-compat.ts`, `lib/common/pi-paths.ts`                             |

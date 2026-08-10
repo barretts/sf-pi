@@ -72,6 +72,7 @@ You can also manage this extension from the SF Pi home base:
 
 - [Full extension README](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-llm-gateway/README.md)
 - [Source folder](https://github.com/salesforce/sf-pi/tree/main/extensions/sf-llm-gateway)
+- [Agent editing rules](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-llm-gateway/AGENTS.md)
 
 ## Troubleshooting
 

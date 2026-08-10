@@ -78,6 +78,8 @@ You can also manage this extension from the SF Pi home base:
 
 - [Full extension README](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-tldraw/README.md)
 - [Source folder](https://github.com/salesforce/sf-pi/tree/main/extensions/sf-tldraw)
+- [Agent editing rules](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-tldraw/AGENTS.md)
+- [Agent operating guide](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-tldraw/AGENT_GUIDE.md)
 
 ## Troubleshooting
 

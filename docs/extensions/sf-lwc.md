@@ -75,6 +75,7 @@ You can also manage this extension from the SF Pi home base:
 
 - [Full extension README](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-lwc/README.md)
 - [Source folder](https://github.com/salesforce/sf-pi/tree/main/extensions/sf-lwc)
+- [Agent operating guide](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-lwc/AGENT_GUIDE.md)
 
 ## Troubleshooting
 

@@ -75,8 +75,12 @@ const RETIRED_CURRENT_COPY = [
 
 type Manifest = {
   id: string;
+  tools?: string[];
   docs?: {
     primaryFiles?: string[];
+    editingRules?: string;
+    agentGuide?: string;
+    contextGlossary?: string;
   };
 };
 
@@ -149,6 +153,29 @@ describe("generated extension documentation contract", () => {
         expect(existsSync(resolved), `${manifest.id}: ${primaryFile}`).toBe(true);
         expect(resolvedPaths.has(resolved), `${manifest.id}: duplicate ${primaryFile}`).toBe(false);
         resolvedPaths.add(resolved);
+      }
+    }
+  });
+
+  it("declares every extension-local agent document by its role", () => {
+    const roles = [
+      ["editingRules", "AGENTS.md"],
+      ["agentGuide", "AGENT_GUIDE.md"],
+      ["contextGlossary", "CONTEXT.md"],
+    ] as const;
+
+    for (const manifest of readManifests()) {
+      const extensionRoot = path.join(EXTENSIONS_DIR, manifest.id);
+      for (const [field, relativePath] of roles) {
+        const present = existsSync(path.join(extensionRoot, relativePath));
+        expect(manifest.docs?.[field], `${manifest.id}: docs.${field}`).toBe(
+          present ? relativePath : undefined,
+        );
+      }
+      if ((manifest.tools?.length ?? 0) > 0) {
+        expect(manifest.docs?.agentGuide, `${manifest.id}: tool operating guide`).toBe(
+          "AGENT_GUIDE.md",
+        );
       }
     }
   });

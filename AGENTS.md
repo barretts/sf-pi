@@ -1,392 +1,173 @@
 # AGENTS.md
 
-Agent instructions for `sf-pi`.
+Repository instructions for `sf-pi`.
 
 ## Goals
 
-Optimize this repo for:
+1. **Agents first:** fast owner discovery, clear authority, safe edits, observable proof.
+2. **Humans second:** simple code, explicit flow, and reviewable changes.
 
-1. **Agents first** — fast navigation, clear source of truth, safe edits
-2. **Humans second** — simple code, explicit flow, easy review, helpful comments
+## Authority and discovery
 
-## Start here (agent orientation)
+Code and Behavior Proofs define what is implemented. Manifests declare the
+runtime/documentation contract; generated catalog and docs project that contract.
+When prose and code disagree, inspect the public runtime seam and correct the
+manifest/docs rather than preserving stale wording.
 
-If you have just landed in this repo, read in this order:
+Use this path:
 
-1. [`catalog/index.json`](./catalog/index.json) — canonical list of every
-   bundled extension with its id, category, commands, tools, events, and
-   `srcLoc`. Tells you what exists and roughly how big each extension is.
-2. [`docs/agent-orientation.md`](./docs/agent-orientation.md) — generated
-   agent map of extensions, commands, tools, providers, and runtime surfaces.
-3. [`docs/extensions.md`](./docs/extensions.md) — generated user-facing
-   bundled-extension inventory for the documentation site.
-4. [`docs/commands.md`](./docs/commands.md) — every slash command grouped
-   by extension, with default-enabled state. Generated from manifests.
-5. The specific extension's `README.md` — behavior, commands, runtime
-   flow, generated file structure.
-6. The extension's `AGENTS.md` if it exists — editing rules specific to
-   that extension.
-7. The extension's `index.ts` header comment — behavior matrix.
-8. The `lib/` module you're changing, then the matching test file.
+1. If the owner is unknown, query one record in
+   [`catalog/index.json`](./catalog/index.json). Do not read every generated
+   inventory first.
+2. Open `extensions/<id>/manifest.json` for declared commands, providers, tools,
+   events, and document roles.
+3. For code changes, read the manifest-declared `docs.editingRules` when present,
+   then `index.ts`, the relevant implementation module, and its focused test.
+4. For tool operation, use the active tool schema first. Read the declared
+   `docs.agentGuide` only when deeper ordering, recovery, or troubleshooting is
+   useful.
+5. Use the extension README for human-facing behavior. Read a specific ADR or
+   context glossary only for rationale or terminology.
 
-For shared code (used by multiple extensions), start at
-[`lib/common/README.md`](./lib/common/README.md).
-
-## Repo map
-
-- `AGENTS.md` — contributor/agent rules for this repo (this file)
-- `ARCHITECTURE.md` — repo structure and conventions
-- `CONTRIBUTING.md` — contributor workflow and commands
-- `README.md` — user-facing install and usage guide
-- `ROADMAP.md` — shipped / in-flight / non-goals
-- `docs/extension-copy.json` — hand-authored public-safe extension positioning copy for generated docs
-- `docs/extensions.md` — GENERATED bundled-extension site inventory
-- `docs/extensions/*.md` — GENERATED per-extension documentation pages
-- `docs/commands.md` — GENERATED per-extension command reference
-- `docs/agent-orientation.md` — GENERATED agent navigation map
-- `docs/human-orientation.md` — contributor-facing repo walkthrough
-- `docs/doc-ownership.json` — machine-readable doc source/check map
-- `docs/adr/` — architecture decision records for stable rationale
-- `catalog/index.json` — canonical machine-readable list of bundled extensions
-- `catalog/registry.ts` — generated TypeScript registry from manifests
-- `extensions/<id>/` — one self-contained extension per folder
-- `extensions/<id>/AGENTS.md` — optional per-extension rules (see convention below)
-- `extensions/<id>/ROADMAP.md` — optional per-extension phased roadmap
-- `lib/common/` — shared helpers (see its own `README.md`)
-- `scripts/generate-catalog.mjs` — regenerates the catalog + generated doc sections
-- `scripts/docs-health.mjs` — checks doc drift contracts and public-safe examples
-- `scripts/docs-changed.mjs` — summarizes docs impacted by a diff
-- `scripts/scaffold.mjs` — scaffolds a new extension
-
-## Source of truth
-
-Use these in order:
-
-1. `extensions/<id>/manifest.json` — extension identity and bundle metadata
-2. `catalog/index.json` / `catalog/registry.ts` — generated from manifests
-3. `extensions/<id>/README.md` — extension walkthrough and file map
-4. `README.md` — high-level summary only
-
-### Important
-
-- **Do not edit `catalog/registry.ts` manually.**
-- If you change any `manifest.json`, run `npm run generate-catalog`.
-- Prefer deriving extension lists from `catalog/index.json` or `catalog/registry.ts` instead of hardcoding them.
-
-### Standardized `/sf-*` command pattern
-
-Manager-first navigation is the target for every bundled extension command so
-users do not have to relearn each extension. Apex, LWC, and SOQL are the three
-current exceptions: `/sf-apex`, `/sf-lwc`, and `/sf-soql` still open local
-panels for interactive no-args calls and remain migration targets. All other
-commands, plus new and newly touched commands, follow this model:
-
-1. With no arguments and interactive UI, open that extension's detail page in
-   the SF Pi Manager through `openExtensionInManager`.
-2. Explicit subcommands such as `doctor`, `status`, or `refresh` execute
-   directly and remain scriptable.
-3. Specialized or full-screen workflows launch from an explicit subcommand or
-   Manager action; they do not replace the no-args Manager route.
-4. Non-interactive no-args invocations return concise text status/help instead
-   of attempting to open TUI-only UI.
-5. Simple command grammars declare action metadata once and reuse it for
-   parsing, completion, help, Manager actions, and docs where practical.
-
-Local `openCommandPanel` surfaces remain available for explicit actions that
-need grouped TUI interaction, but they are not an alternative no-args
-navigation standard. ADR 0051 supersedes the no-args portion of ADR 0005.
-Existing nonconforming commands are migration targets; new and newly touched
-commands follow the Manager-first contract.
-
-### Boot-path contract
-
-Pi's extension docs make startup explicit: extension modules are loaded
-through jiti, factories run before `session_start`, then `session_start`
-runs before `resources_discover`. In sf-pi, 13 extensions share
-`lib/common/**`, so boot-path work multiplies quickly. Treat startup as a
-constrained API.
-
-During module load, extension factory execution, and `session_start`, code
-may:
-
-- register commands, tools, providers, renderers, flags, and event handlers
-- read small local config/state files needed for first paint
-- render cached state from `lib/common` stores or persisted state
-- schedule bounded background refreshes without awaiting them
-
-During that same boot path, code should not:
-
-- perform live Salesforce org checks or Metadata/Tooling/Data API calls
-- spawn `sf`, `npm`, `git`, or other subprocesses unless deferred and bounded
-- import Salesforce SDKs (`@salesforce/core`, SDR, jsforce) just to expose
-  small startup helpers; prefer type-only imports or lazy dynamic imports
-- scan large directory trees or parse session/history files synchronously
-- await network probes in `session_start` unless first-turn correctness
-  depends on the result
-
-Design rule: first paint should be **cache-first**. Live verification belongs
-in explicit commands (`/sf-org refresh`, `/sf-llm-gateway usage-probe
---trace`), tool execution, first-turn hooks, or deferred background work.
-If a startup task must be awaited, document the first-turn correctness reason
-in the nearby comment and add/update boot-timing coverage.
-
-### State persistence decision tree
-
-ADR 0006 pins one rule for "where do I put state X?". Walk top-down,
-stop at the first match. The `npm run docs:health:check` lint enforces
-the Q4 case (no `state-store.ts` outside `lib/common/`).
-
-```
-Q1. Is the state tied to the current conversation/session?
-    YES → use pi.appendEntry<T>(customType, data)
-          (auto-replays on resume/fork/reload; no disk plumbing required)
-          Examples: send audit, allow-for-this-session, kernel injection
-
-Q2. Is the state read by 2+ extensions in the same process?
-    YES → register a shared store under lib/common/<topic>/store.ts
-          Producer pushes via setState; consumers subscribe via onChange.
-          Examples: sf-environment, monthly-usage, slack-status, sf-lsp-health
-
-Q3. Is the state a user-facing pi setting they'd hand-edit?
-    YES → mutate pi settings.json via lib/common/sf-pi-settings.ts helpers
-          Project > global precedence; never write opaque blobs there.
-          Examples: package filter list, provider/model config, thinking level
-
-Q4. Otherwise (per-user persisted state, sf-pi only) →
-    use the shared lib/common/state-store.ts helper.
-    File path: <globalAgentDir>/sf-pi/<namespace>/<filename>.json
-    Always: schemaVersion, atomic write, safe defaults on parse error.
-    Pass `mode: 0o600` for files that hold a token or other secret.
-```
-
-Reference implementations: `extensions/sf-welcome/lib/state-store.ts`,
-`lib/common/catalog-state/announcements-state.ts`,
-`lib/common/catalog-state/recommendations-state.ts`.
-
-### Tool registration convention
-
-When an extension contributes LLM tools (anything in `manifest.tools`):
-
-1. Prefer **one registration file per independently defined tool**, named
-   `lib/<tool-name>-tool.ts`. A family-tool registry such as Data 360 can keep
-   several related definitions in one owning module when they share one schema
-   and dispatcher.
-2. Export a `register<PascalCase>Tool(pi)` function from an individual tool file.
-   The entry point or lifecycle handler calls it. Shared transport and formatting
-   stay in supporting modules rather than being copied into registrations.
-3. Declare tool names as exported constants when individually registered so
-   panels and tests do not rely on repeated magic strings.
-4. `npm run test:runtime-surface` executes every real extension factory and
-   controlled registration lifecycle, then compares commands, providers, tools,
-   and events bidirectionally with the manifest. This runtime proof—not a source
-   string scan—owns manifest agreement.
-5. If tool registration depends on a product-specific availability condition
-   beyond ordinary extension enablement, add an extension-local
-   `tests/runtime-surface-scenarios.ts` adapter with positive and negative cases.
-   The adapter invokes the real lifecycle handler and must not call registration
-   helpers or duplicate manifest tool names.
-
-Reference implementations: the individually registered tools under
-`extensions/sf-slack/lib/*-tool.ts` and the family registry in
-`extensions/sf-data360/lib/v2/tools.ts`.
-
-### Canonical panel filenames
-
-ADR 0005 reserves three filenames for the three panel surfaces. The
-`npm run check:panels` lint refuses the deprecated names.
-
-| Filename                   | Purpose                                                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `lib/command-panel.ts`     | The no-args slash-command status & actions panel (built on `lib/common/command-panel.ts`).                          |
-| `lib/config-panel.ts`      | The `ConfigPanelFactory` invoked by sf-pi-manager when `manifest.configurable === true`. Required for that surface. |
-| `lib/preferences-panel.ts` | A separate mutable user-preferences UI when distinct from `config-panel.ts` (e.g. opened by `/sf-<id> settings`).   |
-
-Most extensions inline their command panel directly in `index.ts` and
-never need a separate file; pull it out only when the panel logic
-exceeds ~50 lines.
+For shared code, start at [`lib/common/README.md`](./lib/common/README.md).
+Contributor workflow lives in [`CONTRIBUTING.md`](./CONTRIBUTING.md); repository
+structure and conventions live in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ## Editing rules
 
-### Keep the code simple
+- Make the smallest change that satisfies the request.
+- Do not refactor, reformat, or delete adjacent code without a direct reason.
+- Match existing style and keep extensions self-contained.
+- Split by concrete responsibility, not by generic abstraction.
+- Put comments on non-obvious contracts and rationale, not obvious syntax.
+- Remove only the dead code or generated output made obsolete by your change.
+- Define observable success before editing and verify narrowly before broad
+  validation.
 
-Prefer:
+## Stable repository contracts
 
-- small files with one clear responsibility
-- direct control flow
-- explicit names
-- straightforward conditionals
-- local helper functions over clever abstractions
+### Manifests and generated files
 
-Avoid:
+`extensions/<id>/manifest.json` is the declarative extension contract.
+`npm run generate-catalog` produces the catalog, generated docs pages, sidebar,
+README/architecture marker blocks, troubleshooting index, extension file maps,
+and release announcement metadata.
 
-- hidden behavior
-- broad utility layers with mixed responsibilities
-- clever metaprogramming
-- unnecessary indirection
-- cross-extension coupling unless there is a strong reason
+Never hand-edit:
 
-### Split by responsibility, not by abstraction
+- `catalog/index.json`
+- `catalog/registry.ts`
+- `docs/extensions.md`
+- `docs/extensions/*.md`
+- `docs/.vitepress/generated-extension-sidebar.ts`
+- `docs/commands.md`
+- `docs/agent-orientation.md`
+- content inside `GENERATED:*` marker pairs
 
-Good splits:
+After changing a manifest, generated input, or extension file tree, run
+`npm run generate-catalog`, review the complete diff, and stage the intended
+outputs. Validation and pre-commit checks detect drift but do not repair it.
 
-- command routing
-- settings file I/O
-- status formatting
-- session scanning
-- registry/state parsing
+### Runtime surface attestation
 
-Bad splits:
+`npm run test:runtime-surface` executes every real extension factory and
+controlled registration lifecycle. It compares runtime commands, providers,
+tools, and events bidirectionally with manifests.
 
-- abstract base helpers with vague names
-- generic utilities that hide repo-specific behavior
+- Runtime registration—not source-string matching—owns manifest agreement.
+- A product-specific conditional tool surface requires an extension-local
+  `tests/runtime-surface-scenarios.ts` with positive and negative cases.
+- Scenario adapters invoke real lifecycle handlers. They must not call
+  registration helpers or duplicate manifest tool names.
+- Factory/startup registration must remain cache-first and must not require live
+  credentials, orgs, network calls, or subprocesses merely to expose tools.
 
-### Comments matter
+Prefer one registration file per independently defined tool. Family registries
+such as Data 360 may keep related definitions together when they share one schema
+and dispatcher.
 
-Keep comments focused on **why** and **behavior contracts**.
+### Slash-command navigation
 
-Add comments when:
+Manager-first no-args navigation is the target contract. Apex, LWC, and SOQL are
+the three current exceptions: `/sf-apex`, `/sf-lwc`, and `/sf-soql` still open
+local panels and remain migration targets.
 
-- a function follows Pi-specific precedence rules
-- a fallback exists for reliability
-- a settings mutation is subtle
-- a best-effort or non-obvious behavior would confuse reviewers
+For Manager-first commands:
 
-Do not add comments that only restate obvious code.
+- interactive no-args opens the extension detail page through
+  `openExtensionInManager`;
+- explicit subcommands stay direct and scriptable;
+- specialized/full-screen workflows use an explicit action;
+- non-interactive no-args returns concise status/help;
+- simple grammars reuse one action catalog for parsing, completion, help, and
+  Manager actions.
 
-## Working in an extension
+Canonical panel files are `lib/command-panel.ts`, `lib/config-panel.ts`, and
+`lib/preferences-panel.ts`. See ADR 0051 and [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+for the full UI contract.
 
-When editing an extension, read in this order:
+### Boot path
 
-1. `extensions/<id>/README.md`
-2. `extensions/<id>/AGENTS.md` if present
-3. `extensions/<id>/index.ts`
-4. relevant files in `extensions/<id>/lib/`
-5. tests in `extensions/<id>/tests/`
+Module load, factory execution, and `session_start` are constrained startup
+surfaces. They may register runtime surfaces, read small local state needed for
+first paint, render cached state, or schedule bounded background refreshes.
+They must not synchronously perform live Salesforce calls, spawn unbounded
+subprocesses, scan large trees, or import heavy SDKs merely to expose helpers.
+First paint is cache-first; live verification belongs in explicit commands,
+tool calls, first-turn hooks, or bounded deferred work.
 
-Each extension should stay self-contained.
+### State placement
 
-### Per-extension `AGENTS.md` (optional)
+Use the first matching rule:
 
-Add `extensions/<id>/AGENTS.md` when the extension has:
+1. Conversation/session state → `pi.appendEntry<T>(customType, data)`.
+2. In-process state read by multiple extensions → a shared store under
+   `lib/common/<topic>/store.ts`.
+3. User-editable preference → Pi `settings.json` through
+   `lib/common/sf-pi-settings.ts`.
+4. Other per-user SF Pi state → `lib/common/state-store.ts` under
+   `<globalAgentDir>/sf-pi/<namespace>/`, with schema versioning, atomic writes,
+   safe parse defaults, and mode `0o600` for secrets.
 
-- non-obvious editing rules that don't fit the top-level `AGENTS.md`
-- a file map worth pinning so agents stop inventing new module locations
-- invariants that are easy to violate by accident (e.g. HITL confirm for
-  `slack_send`)
+### Public repository safety
 
-Keep it short. A good per-extension `AGENTS.md`:
+Public code, docs, examples, tests, comments, screenshots, metadata, and commit
+messages must not contain secrets, private endpoints, customer or employee
+identifiers, real org/workspace ids, internal links, or copied private-source
+wording. Use fresh generic examples and follow
+[`docs/public-sanitization.md`](./docs/public-sanitization.md).
 
-1. Points at the extension's `README.md` for behavior
-2. Has a single "file map" table (responsibility → file)
-3. Lists conventions that are specific to this extension
-4. Lists explicit non-goals
+## Validation
 
-See `extensions/sf-slack/AGENTS.md` and
-`extensions/sf-llm-gateway/AGENTS.md` as references.
-
-### Per-extension `ROADMAP.md` (optional)
-
-Add `extensions/<id>/ROADMAP.md` when the extension has phased work that
-doesn't belong in the top-level `ROADMAP.md`. See
-`extensions/sf-skills/ROADMAP.md` as a reference.
-
-## Drift-proof docs
-
-Several doc sections are **generated** from `extensions/*/manifest.json`
-to prevent drift. Never edit inside these marker pairs; edit the
-manifest instead and rerun `npm run generate-catalog`.
-
-| File                        | Generated section                           |
-| --------------------------- | ------------------------------------------- |
-| `catalog/registry.ts`       | entire file                                 |
-| `catalog/index.json`        | entire file                                 |
-| `README.md`                 | bundled-extensions table, command reference |
-| `ARCHITECTURE.md`           | folder layout                               |
-| `docs/troubleshooting.md`   | extension troubleshooting index             |
-| `docs/extensions.md`        | entire file                                 |
-| `docs/extensions/*.md`      | entire file                                 |
-| `docs/commands.md`          | entire file                                 |
-| `docs/agent-orientation.md` | entire file                                 |
-| `extensions/*/README.md`    | file-structure marker block                 |
-
-The documentation-site troubleshooting index is auto-built from each
-extension's `## Troubleshooting` section by scanning for bolded question
-entries (lines shaped like `**Symptom...:**` or `**Symptom...?**`). Add a new
-bullet under that heading in any extension README and it will appear in
-`docs/troubleshooting.md` after `npm run generate-catalog`.
-
-Marker format:
-
-```
-<!-- GENERATED:<section-name>:start -->
-… generated content …
-<!-- GENERATED:<section-name>:end -->
-```
-
-If you need new content for the whole repo to read from manifests,
-prefer adding a new generated marker over another source of truth.
-
-## Generated and derived files
-
-- `catalog/registry.ts` — generated
-- `catalog/index.json` — generated
-- `docs/extensions.md` — generated
-- `docs/extensions/*.md` — generated
-- `docs/.vitepress/generated-extension-sidebar.ts` — generated
-- bundled-extension section in `README.md` — generated by `scripts/generate-catalog.mjs`
-
-If you add or rename an extension:
-
-- update `manifest.json`
-- run `npm run generate-catalog`
-- verify the generated README bundled-extension section looks right
-
-## Validation checklist
-
-Before finishing code changes, run:
+Run focused tests while iterating. Before finishing a normal change:
 
 ```bash
-npm run generate-catalog
+npm run generate-catalog:check
 npm run format:check
 npm run check
 npm test
 ```
 
-Or run the full validation:
+Use the full local/CI-like paths for broad or release-visible work:
 
 ```bash
-npm run validate
+npm run lint
+npm run validate:ci
 ```
 
-## Git workflow (solo fast path)
+Documentation-only helpers:
 
-This repo is optimized for **push straight to `main`**. Do not create a
-feature branch and PR unless the user explicitly asks for one, or the
-change is risky (destructive migrations, breaking API changes, sweeping
-refactors).
+```bash
+npm run docs:changed
+npm run docs:health:check
+npm run docs:build
+```
 
-- Default: `git commit` + `git push` on `main`.
-- CI (`ci.yml`) runs format/lint/tsc/test/audit — ~2–3 min.
-- `release-please` auto-opens a release PR and auto-merges it when CI
-  is green. No human click is required to cut a release.
-- `pre-push` only blocks force-push and deletion of `main`. It does
-  **not** run lint/typecheck locally; CI is the source of truth.
+Report changed files, commands and outcomes, generated artifacts, and residual
+risks. Never claim success without observed evidence.
 
-When you _should_ suggest a PR instead:
+## Git workflow
 
-- The change rewrites history, renames public APIs, or removes an
-  extension.
-- The change needs a reviewer the user named explicitly.
-- You are mid-refactor and want a checkpoint visible on GitHub.
-
-Otherwise push and move on.
-
-## Review expectations
-
-A good change in this repo should be:
-
-- easy for another agent to continue
-- easy for a human to review in one pass
-- low surprise
-- documented where behavior is non-obvious
-- consistent with existing extension structure
+The maintainer fast path is commit and push directly to `main`; use a PR for
+breaking APIs, destructive migrations, sweeping refactors, or a named-reviewer
+requirement. Never force-push or delete `main`. CI is the final backstop.

@@ -65,6 +65,7 @@ You can manage this extension from the SF Pi home base:
 
 - [Full extension README](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-ohana-spinner/README.md)
 - [Source folder](https://github.com/salesforce/sf-pi/tree/main/extensions/sf-ohana-spinner)
+- [Domain glossary](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-ohana-spinner/CONTEXT.md)
 
 ## Troubleshooting
 

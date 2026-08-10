@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -38,11 +38,22 @@ describe("Salesforce Engineering Constitution", () => {
     expect(CONSTITUTION_ENTRY_TYPE).toBe("sf-brain-constitution");
   });
 
-  it("contains direct progressive guide paths instead of a reference-map hop", () => {
+  it("routes every tool owner directly to its manifest-declared operating guide", () => {
     const constitution = readBundledConstitution();
-    expect(constitution).toContain("extensions/sf-agentscript/AGENT_GUIDE.md");
-    expect(constitution).toContain("extensions/sf-apex/AGENT_GUIDE.md");
-    expect(constitution).toContain("extensions/sf-soql/AGENT_GUIDE.md");
+    const extensionsRoot = path.resolve(import.meta.dirname, "../..");
+    const expected = readdirSync(extensionsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) =>
+        JSON.parse(readFileSync(path.join(extensionsRoot, entry.name, "manifest.json"), "utf8")),
+      )
+      .filter((manifest) => (manifest.tools?.length ?? 0) > 0)
+      .map((manifest) => `extensions/${manifest.id}/${manifest.docs.agentGuide}`)
+      .sort();
+    const actual = [...constitution.matchAll(/extensions\/(sf-[a-z0-9-]+)\/(AGENT_GUIDE\.md)/g)]
+      .map((match) => `extensions/${match[1]}/${match[2]}`)
+      .sort();
+
+    expect(actual).toEqual(expected);
     expect(constitution).not.toContain("SF_REFERENCE_MAP.md");
   });
 

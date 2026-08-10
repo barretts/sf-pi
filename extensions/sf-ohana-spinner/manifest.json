@@ -8,6 +8,7 @@
   "configurable": true,
   "events": ["session_start", "session_shutdown"],
   "docs": {
+    "contextGlossary": "CONTEXT.md",
     "summary": "Pi setWorkingIndicator-driven spinner with Ohana and Calm modes. Pi manages start/stop based on streaming activity; this extension owns frame generation and a small mode preference.",
     "primaryFiles": [
       "index.ts",

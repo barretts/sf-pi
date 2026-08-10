@@ -10,6 +10,8 @@
   "tools": ["tldraw_canvas"],
   "events": ["session_start", "session_shutdown"],
   "docs": {
+    "editingRules": "AGENTS.md",
+    "agentGuide": "AGENT_GUIDE.md",
     "summary": "Provides one Salesforce-focused `tldraw_canvas` family tool for tldraw offline v1.12 runtime status, explicit document creation, document discovery, and deterministic Data Model, System/Solution Architecture, and Interaction/Sequence profiles. Data Model pages use a title-only header with a configurable stacked Relationships key. Render actions use strict Spec v2 with explicit grounding, inspectable provenance, render-privacy checks, pinned SLDS icons, preserve-by-default updates, and readiness-gated screenshot evidence; generic canvas work stays with the upstream tldraw-offline skill.",
     "primaryFiles": [
       "index.ts",

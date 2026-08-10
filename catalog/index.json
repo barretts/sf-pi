@@ -25,6 +25,8 @@
       "agent_settled"
     ],
     "docs": {
+      "editingRules": "AGENTS.md",
+      "agentGuide": "AGENT_GUIDE.md",
       "summary": "Owns the entire Agent Script lifecycle: compile and quality hardening, structural review, preview, local-first Eval Studio, exact-version release eval contracts, inactive publication, and Guardrail-mediated activation.",
       "primaryFiles": [
         "index.ts",
@@ -116,6 +118,7 @@
       "tool_result"
     ],
     "docs": {
+      "agentGuide": "AGENT_GUIDE.md",
       "summary": "Owns the lean Apex lifecycle loop in pi: native Apex discovery/preflight, authoring plan hints, Apex-owned diagnostics handoff, API-native trace flags, log fetch/watch/analyze, Anonymous Apex probes, coverage summaries, and targeted test runs. Source edits remain normal Pi file operations; full evidence is persisted as Apex Artifacts while tool output stays compact.",
       "primaryFiles": [
         "index.ts",
@@ -168,6 +171,7 @@
       "context"
     ],
     "docs": {
+      "agentGuide": "AGENT_GUIDE.md",
       "summary": "Injects the Salesforce Engineering Constitution and tiny disabled-capability routing summary, and provides a content-safe advisory report of model-visible SF Pi instructions, tools, and external Salesforce skill metadata.",
       "primaryFiles": [
         "index.ts",
@@ -226,6 +230,7 @@
       "session_shutdown"
     ],
     "docs": {
+      "agentGuide": "AGENT_GUIDE.md",
       "summary": "Salesforce-aware agent-browser affordance layer for UI last-mile work that Salesforce APIs cannot cover. It registers a cache-first /sf-browser panel plus a small hot-path browser tool set, curated Setup Destinations, Browser Evidence, and lazy agent-browser invocation after explicit command/tool intent.",
       "primaryFiles": [
         "index.ts",
@@ -294,6 +299,7 @@
       "session_shutdown"
     ],
     "docs": {
+      "agentGuide": "AGENT_GUIDE.md",
       "summary": "Wraps the supported `sf code-analyzer` CLI contract with a pi-native command panel and one `code_analyzer` family tool for doctor, run, rules, config, ApexGuru, ApexGuru setup-help, and last-report workflows. Reports are written as session-scoped artifacts outside the project tree by default with summary / inline / file_only output modes. Deferred post-agent local quality scans are readiness-gated and run after the agent finishes an edit pass.",
       "primaryFiles": [
         "index.ts",
@@ -348,6 +354,7 @@
       "session_shutdown"
     ],
     "docs": {
+      "editingRules": "AGENTS.md",
       "summary": "Keyboard-first read-only Salesforce data explorer with object/field browsing, editable query text, query execution, result detail view, JSON/CSV export, shortcut help, and explorer switching. Uses sf-pi @salesforce/core connection plumbing; no LLM required.",
       "primaryFiles": [
         "index.ts",
@@ -406,6 +413,8 @@
       "resources_discover"
     ],
     "docs": {
+      "editingRules": "AGENTS.md",
+      "agentGuide": "AGENT_GUIDE.md",
       "summary": "Data 360 v2 family tool surface over the generated operation registry: compact action discovery, dry-run planning, shared target/version resolution, safety confirmation, bounded output, journey orchestration, and a raw REST escape hatch through the Salesforce Connection Module.",
       "primaryFiles": [
         "index.ts",
@@ -502,6 +511,8 @@
       "session_shutdown"
     ],
     "docs": {
+      "editingRules": "AGENTS.md",
+      "agentGuide": "AGENT_GUIDE.md",
       "summary": "Provides one `sf_docs` family tool for Salesforce documentation collections, search, fetch, cited answers, single-document explanations, status, and a lazy cheatsheet. The extension talks directly to the Salesforce Docs MCP-over-HTTP endpoint through a small local JSON-RPC/SSE transport, stores the token in Pi's auth store, and keeps settings limited to non-secret defaults.",
       "primaryFiles": [
         "index.ts",
@@ -601,6 +612,8 @@
       "context"
     ],
     "docs": {
+      "editingRules": "AGENTS.md",
+      "contextGlossary": "CONTEXT.md",
       "summary": "Salesforce-aware safety layer for pi: file-protection policies, AST-matched command gating, org-aware confirmation on production deploys/Apex/DML/destructive REST, native high-value mutation mediation, plus a once-per-session prompt-injection that teaches the LLM the gating categories and validate-first workflow.",
       "primaryFiles": [
         "index.ts",
@@ -669,6 +682,7 @@
       "tool_result"
     ],
     "docs": {
+      "agentGuide": "AGENT_GUIDE.md",
       "summary": "Provides command/status/settings surfaces everywhere it loads and conditionally registers a minimal non-mutating planner for the current herdr_layout, herdr_pane, and herdr_agent tool set.",
       "primaryFiles": [
         "index.ts",
@@ -725,6 +739,7 @@
       "session_shutdown"
     ],
     "docs": {
+      "editingRules": "AGENTS.md",
       "summary": "Complete Pi Provider for the Salesforce LLM Gateway. Pi-owned credential persistence and model storage, authenticated dynamic discovery with offline cache restore, provider-neutral mixed-API dispatch, explicit refresh, diagnostics, and usage status.",
       "primaryFiles": [
         "index.ts",
@@ -816,6 +831,7 @@
       "session_start"
     ],
     "docs": {
+      "agentGuide": "AGENT_GUIDE.md",
       "summary": "Owns the lean local Lightning Web Component lifecycle loop in pi: SFDX package-directory scans, component inventory and inspection, focused LWC compiler/template diagnostics, style/SLDS signal detection, local Jest discovery/planning/runs, compact LWC Result Cards, recommended skill hints, and persisted LWC Artifacts. Source edits remain normal Pi file operations; deployment, org source synchronization, visual preview, broad static/security scans, and SLDS2 uplift execution remain with other SF Pi surfaces.",
       "primaryFiles": [
         "index.ts",
@@ -867,6 +883,7 @@
       "session_shutdown"
     ],
     "docs": {
+      "contextGlossary": "CONTEXT.md",
       "summary": "Pi setWorkingIndicator-driven spinner with Ohana and Calm modes. Pi manages start/stop based on streaming activity; this extension owns frame generation and a small mode preference.",
       "primaryFiles": [
         "index.ts",
@@ -1023,6 +1040,8 @@
       "context"
     ],
     "docs": {
+      "editingRules": "AGENTS.md",
+      "agentGuide": "AGENT_GUIDE.md",
       "summary": "Full Slack integration. Read-only search/thread/history/channel/user/file/canvas plus confirmed send and scheduled-message management. Tools register only after a token resolves (Pi auth store -> SLACK_USER_TOKEN), keeping the system prompt cache stable when Slack is not configured.",
       "primaryFiles": [
         "index.ts",
@@ -1079,6 +1098,7 @@
       "session_start"
     ],
     "docs": {
+      "agentGuide": "AGENT_GUIDE.md",
       "summary": "Owns the schema-aware SOQL query loop in pi: native org preflight, sObject search/describe, relationship discovery, query drafting, validation, query explain, bounded sample/run/count/queryAll, SOSL run, query export, file diagnostics, history rerun, compact SOQL Run Digests, human SOQL Result Cards, and persisted SOQL Artifacts. Broad data exploration remains with sf-data-explorer; data mutation remains out of scope.",
       "primaryFiles": [
         "index.ts",
@@ -1141,6 +1161,8 @@
       "session_shutdown"
     ],
     "docs": {
+      "editingRules": "AGENTS.md",
+      "agentGuide": "AGENT_GUIDE.md",
       "summary": "Provides one Salesforce-focused `tldraw_canvas` family tool for tldraw offline v1.12 runtime status, explicit document creation, document discovery, and deterministic Data Model, System/Solution Architecture, and Interaction/Sequence profiles. Data Model pages use a title-only header with a configurable stacked Relationships key. Render actions use strict Spec v2 with explicit grounding, inspectable provenance, render-privacy checks, pinned SLDS icons, preserve-by-default updates, and readiness-gated screenshot evidence; generic canvas work stays with the upstream tldraw-offline skill.",
       "primaryFiles": [
         "index.ts",

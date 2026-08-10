@@ -76,6 +76,7 @@ You can also manage this extension from the SF Pi home base:
 
 - [Full extension README](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-soql/README.md)
 - [Source folder](https://github.com/salesforce/sf-pi/tree/main/extensions/sf-soql)
+- [Agent operating guide](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-soql/AGENT_GUIDE.md)
 
 ## Troubleshooting
 

@@ -11,6 +11,8 @@
   "tools": ["sf_docs"],
   "events": ["session_start", "session_shutdown"],
   "docs": {
+    "editingRules": "AGENTS.md",
+    "agentGuide": "AGENT_GUIDE.md",
     "summary": "Provides one `sf_docs` family tool for Salesforce documentation collections, search, fetch, cited answers, single-document explanations, status, and a lazy cheatsheet. The extension talks directly to the Salesforce Docs MCP-over-HTTP endpoint through a small local JSON-RPC/SSE transport, stores the token in Pi's auth store, and keeps settings limited to non-secret defaults.",
     "primaryFiles": [
       "index.ts",

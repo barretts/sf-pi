@@ -21,6 +21,7 @@
   ],
   "events": ["session_start", "session_shutdown"],
   "docs": {
+    "agentGuide": "AGENT_GUIDE.md",
     "summary": "Salesforce-aware agent-browser affordance layer for UI last-mile work that Salesforce APIs cannot cover. It registers a cache-first /sf-browser panel plus a small hot-path browser tool set, curated Setup Destinations, Browser Evidence, and lazy agent-browser invocation after explicit command/tool intent.",
     "primaryFiles": [
       "index.ts",

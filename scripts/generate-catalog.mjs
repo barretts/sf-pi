@@ -192,6 +192,7 @@ function discoverManifests() {
         );
       }
       validatePrimaryFiles(entry.name, docs.primaryFiles);
+      validateManifestDocRoles(entry.name, manifest);
     }
 
     results.push({ dir: entry.name, manifest });
@@ -254,6 +255,37 @@ function validatePackageExtensions(manifests) {
     if (missing.length > 0) details.push(`missing discovered entries: ${missing.join(", ")}`);
     if (packageOnly.length > 0) details.push(`package-only entries: ${packageOnly.join(", ")}`);
     fail(`package.json pi.extensions does not match discovered extensions; ${details.join("; ")}`);
+  }
+}
+
+function validateManifestDocRoles(extensionDir, manifest) {
+  const extensionRoot = path.join(EXTENSIONS_DIR, extensionDir);
+  const docs = manifest.docs ?? {};
+  const roles = [
+    ["editingRules", "AGENTS.md"],
+    ["agentGuide", "AGENT_GUIDE.md"],
+    ["contextGlossary", "CONTEXT.md"],
+  ];
+
+  for (const [field, expectedPath] of roles) {
+    const fileExists = existsSync(path.join(extensionRoot, expectedPath));
+    const declaredPath = docs[field];
+    if (fileExists && declaredPath !== expectedPath) {
+      fail(
+        `extensions/${extensionDir}/manifest.json docs.${field} must be "${expectedPath}" because that file exists`,
+      );
+    }
+    if (!fileExists && declaredPath !== undefined) {
+      fail(
+        `extensions/${extensionDir}/manifest.json docs.${field} declares missing file "${String(declaredPath)}"`,
+      );
+    }
+  }
+
+  if (Array.isArray(manifest.tools) && manifest.tools.length > 0 && !docs.agentGuide) {
+    fail(
+      `extensions/${extensionDir}/manifest.json must declare docs.agentGuide for its LLM tool workflow`,
+    );
   }
 }
 
@@ -815,6 +847,15 @@ function generateExtensionDetailDoc(dir, manifest, copy) {
     "",
     `- [Full extension README](${sourceFileLink(dir, "README.md")})`,
     `- [Source folder](${sourceTreeLink(`extensions/${dir}`)})`,
+    ...(manifest.docs?.editingRules
+      ? [`- [Agent editing rules](${sourceFileLink(dir, manifest.docs.editingRules)})`]
+      : []),
+    ...(manifest.docs?.agentGuide
+      ? [`- [Agent operating guide](${sourceFileLink(dir, manifest.docs.agentGuide)})`]
+      : []),
+    ...(manifest.docs?.contextGlossary
+      ? [`- [Domain glossary](${sourceFileLink(dir, manifest.docs.contextGlossary)})`]
+      : []),
     "",
     "## Troubleshooting",
     "",
@@ -1104,22 +1145,30 @@ function generateAgentOrientationDoc(manifests) {
     "",
     "## Start here",
     "",
-    `1. [\`catalog/index.json\`](${sourceLink("catalog/index.json")}) — canonical machine-readable extension inventory.`,
-    "2. [`docs/extensions.md`](./extensions.md) — generated bundled-extension inventory.",
-    "3. [`docs/commands.md`](./commands.md) — generated slash-command reference.",
-    `4. [\`ARCHITECTURE.md\`](${sourceLink("ARCHITECTURE.md")}) — repo structure and editing conventions.`,
-    "5. `extensions/<id>/README.md` — behavior and runtime flow for a specific extension.",
-    "6. `extensions/<id>/AGENTS.md` — extension-specific editing rules when present.",
+    `1. [\`AGENTS.md\`](${sourceLink("AGENTS.md")}) — automatically loaded repository rules and authority order.`,
+    `2. Query [\`catalog/index.json\`](${sourceLink("catalog/index.json")}) only when the owning extension is unknown.`,
+    "3. Read `extensions/<id>/manifest.json` for declared surfaces and document roles.",
+    "4. For code changes, read the declared `docs.editingRules`, then the relevant source and Behavior Proof.",
+    "5. For tool operation, use the active schema first and read `docs.agentGuide` only when deeper ordering or recovery guidance is useful.",
+    "6. Use the extension README for human explanation and a specific ADR/context glossary for rationale or terminology.",
     "",
     "## Extension map",
     "",
-    "| Extension | Category | Maturity | Default | Summary | Commands | Tools | Providers | Events | Key path |",
-    "| --------- | -------- | -------- | ------- | ------- | -------- | ----- | --------- | ------ | -------- |",
+    "Use this table to locate the owner. Exact summaries, maturity, defaults, providers, tool names, events, safety notes, state paths, and environment variables remain in `catalog/index.json`.",
+    "",
+    "| Extension | Category | Commands | Tools | Editing rules | Operating guide | Entry point |",
+    "| --------- | -------- | -------- | ----: | ------------- | --------------- | ----------- |",
   ];
 
   for (const { dir, manifest } of sorted) {
+    const editingRules = manifest.docs?.editingRules
+      ? `[rules](${sourceFileLink(dir, manifest.docs.editingRules)})`
+      : "_none_";
+    const agentGuide = manifest.docs?.agentGuide
+      ? `[guide](${sourceFileLink(dir, manifest.docs.agentGuide)})`
+      : "_none_";
     lines.push(
-      `| [${manifest.name}](${sourceTreeLink(`extensions/${dir}`)}) | ${manifest.category} | ${manifest.maturity ?? "stable"} | ${defaultLabel(manifest)} | ${manifest.docs?.summary ?? manifest.description} | ${generatedList(manifest.commands ?? [])} | ${generatedList(manifest.tools ?? [])} | ${generatedList(manifest.providers ?? [])} | ${generatedList(manifest.events ?? [])} | \`extensions/${dir}/index.ts\` |`,
+      `| [${manifest.name}](${sourceTreeLink(`extensions/${dir}`)}) | ${manifest.category} | ${generatedList(manifest.commands ?? [])} | ${(manifest.tools ?? []).length} | ${editingRules} | ${agentGuide} | \`extensions/${dir}/index.ts\` |`,
     );
   }
 
@@ -1127,7 +1176,7 @@ function generateAgentOrientationDoc(manifests) {
     "",
     "## Manifest doc metadata",
     "",
-    "Every extension manifest must provide non-empty `docs.summary` and `docs.primaryFiles` fields. `docs.stateFiles`, `docs.env`, and `docs.safety` are optional.",
+    "Every extension manifest must provide non-empty `docs.summary` and `docs.primaryFiles` fields. Extension-local `AGENTS.md`, `AGENT_GUIDE.md`, and `CONTEXT.md` files are declared explicitly as `docs.editingRules`, `docs.agentGuide`, and `docs.contextGlossary`. Tool-owning extensions require an agent guide. `docs.stateFiles`, `docs.env`, and `docs.safety` remain optional.",
     "",
     "Each `docs.primaryFiles` entry is extension-relative. It may use `..` traversal only when the normalized path remains inside the repository root, and it must resolve to an existing unique path.",
     "",

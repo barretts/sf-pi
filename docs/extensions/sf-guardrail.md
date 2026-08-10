@@ -74,6 +74,8 @@ You can also manage this extension from the SF Pi home base:
 
 - [Full extension README](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-guardrail/README.md)
 - [Source folder](https://github.com/salesforce/sf-pi/tree/main/extensions/sf-guardrail)
+- [Agent editing rules](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-guardrail/AGENTS.md)
+- [Domain glossary](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-guardrail/CONTEXT.md)
 
 ## Troubleshooting
 

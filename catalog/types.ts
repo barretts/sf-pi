@@ -103,6 +103,12 @@ export interface ExtensionManifestDocs {
    * is allowed only while the resolved path remains inside the repository root.
    */
   primaryFiles?: string[];
+  /** Extension-local editing rules loaded when code in this extension is changed. */
+  editingRules?: string;
+  /** Extension-local operating guide loaded only for deeper tool workflow guidance. */
+  agentGuide?: string;
+  /** Extension-local canonical terminology, when the extension owns a domain glossary. */
+  contextGlossary?: string;
   /** User/global/project state files this extension reads or writes. */
   stateFiles?: string[];
   /** Environment variables this extension recognizes. */
