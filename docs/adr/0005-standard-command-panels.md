@@ -4,6 +4,10 @@
 
 Accepted; the no-args navigation decision is superseded by ADR 0051
 
+> **Implementation status:** Manager-first no-args navigation remains the target
+> contract. `sf-apex`, `sf-lwc`, and `sf-soql` are current local-panel
+> exceptions until their migration lands.
+
 ## Context
 
 SF Pi now ships enough slash-command surfaces that discoverability is becoming a
@@ -31,11 +35,12 @@ The current baseline is mixed:
 
 ## Decision
 
-> **ADR 0051 amendment:** Every bundled interactive no-args `/sf-*` command now
-> opens that extension's SF Pi Manager detail page. Explicit subcommands remain
-> direct. Specialized/full-screen workflows launch through an explicit action.
-> The panel construction, action metadata, mode fallback, settings, and
-> diagnostics rules below still apply to explicit interactive action surfaces.
+> **ADR 0051 target contract:** After the remaining Apex, LWC, and SOQL
+> migrations land, every bundled interactive no-args `/sf-*` command opens that
+> extension's SF Pi Manager detail page. Explicit subcommands remain direct, and
+> specialized/full-screen workflows launch through an explicit action. The panel
+> construction, action metadata, mode fallback, settings, and diagnostics rules
+> below still apply to explicit interactive action surfaces.
 
 Use Pi-native panel primitives for explicit interactive action surfaces:
 

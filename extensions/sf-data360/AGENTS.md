@@ -4,44 +4,51 @@ Agent rules for editing this extension. Repo-level rules still apply.
 
 ## Read first
 
-1. `extensions/sf-data360/README.md` — behavior and safety model
-2. `extensions/sf-data360/index.ts` — extension wiring
-3. `extensions/sf-data360/lib/facade-tool.ts` — `d360` search/examples/execute capability facade
-4. `extensions/sf-data360/lib/api-tool.ts` — `d360_api` execution flow
-5. `extensions/sf-data360/lib/metadata-tool.ts` — compact DMO/DLO discovery flow
-6. `extensions/sf-data360/references/README.md` — reference-document index
+1. `extensions/sf-data360/README.md` — current behavior and safety model
+2. `extensions/sf-data360/index.ts` — extension wiring and Manager-first command routing
+3. `extensions/sf-data360/lib/v2/tools.ts` — public `data360_*` tool registration
+4. `extensions/sf-data360/lib/v2/dispatcher.ts` — current action dispatch and execution
+5. `extensions/sf-data360/lib/v2/action-registry.ts` — generated action-registry reader
+6. `extensions/sf-data360/registry/v2/action-overrides.json` and
+   `action-rules.json` — curated v2 action ownership and names
+7. `extensions/sf-data360/references/README.md` — progressive reference index
 
 ## File map
 
-| Responsibility                                          | File                                |
-| ------------------------------------------------------- | ----------------------------------- |
-| Extension entry, command, and tool registration         | `index.ts`                          |
-| Registry facade and deterministic runbooks              | `lib/facade-tool.ts`, `lib/facade/` |
-| Tool registration and shared Salesforce REST execution  | `lib/api-tool.ts`                   |
-| Compact DMO/DLO metadata list and describe helper       | `lib/metadata-tool.ts`              |
-| Read-only Data 360 readiness probe                      | `lib/probe-tool.ts`                 |
-| Read-only sf-pi manager settings panel                  | `lib/config-panel.ts`               |
-| Connection, API version, REST paths, auth, and timeouts | `lib/common/sf-conn/index.ts`       |
-| Method/path safety classification                       | `lib/safety.ts`                     |
-| Output truncation                                       | `lib/truncation.ts`                 |
-| Progressive-disclosure guidance                         | `references/*.md`                   |
-| Generated phase references                              | `references/phases/*.md`            |
+| Responsibility                                            | File                                                                                                |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Extension entry, command, and tool registration           | `index.ts`                                                                                          |
+| Public v2 family-tool schemas and registration            | `lib/v2/tools.ts`                                                                                   |
+| V2 action routing, local helpers, journeys, and execution | `lib/v2/dispatcher.ts`, `lib/v2/`                                                                   |
+| Runtime v2 action lookup                                  | `lib/v2/action-registry.ts`                                                                         |
+| Curated v2 action ownership and naming                    | `registry/v2/action-overrides.json`, `registry/v2/action-rules.json`                                |
+| Generated v2 action catalog                               | `registry/v2/actions.json`                                                                          |
+| Method/path safety classification                         | `lib/safety.ts`                                                                                     |
+| Manager settings                                          | `lib/config-panel.ts`, `lib/settings.ts`                                                            |
+| Shared connection, API version, auth, and timeouts        | `../../lib/common/sf-conn/`                                                                         |
+| Progressive-disclosure guidance                           | `references/*.md`                                                                                   |
+| Legacy facade and adapters                                | `lib/facade-tool.ts`, `lib/api-tool.ts`, `lib/metadata-tool.ts`, `lib/probe-tool.ts`, `lib/facade/` |
 
 ## Conventions
 
-- Do not add upstream server/runtime support here.
-- Do not add hundreds of always-on endpoint-specific tools. Prefer extending
-  the `d360` registry facade with verified D360 capabilities.
-- Do not add extension-owned Agent Skills for Data 360. Put guidance in
-  `references/` files and rely on the `data360_*` tools for agent routing.
-- Use the public upstream Data 360 reference repo,
-  <https://github.com/forcedotcom/d360-mcp-server>, as the first external
-  reference for action-family and payload-shape questions before broad web
-  search. Curate findings into Pi-native `data360_*` actions; do not document
-  upstream setup/auth flows in SF Data360 user docs.
-- If new mutating paths are added, update `lib/safety.ts` and tests.
+- Extend the public `data360_*` surface through the v2 tools, dispatcher, and
+  action registry. Do not add public guidance for legacy `d360*` tools.
+- Treat legacy infrastructure as compatibility-only for the public surface. It
+  still supports the facade-first E2E sweep and selected v2 adapters/tests, so
+  do not remove or bypass it without matching behavior proof. Do not make it
+  the primary editing path.
+- Do not add upstream server/runtime support or hundreds of always-on
+  endpoint-specific tools.
+- Do not add extension-owned Agent Skills for Data 360. Put deeper guidance in
+  `references/` and route agents through the `data360_*` tools.
+- Use the public upstream Data 360 reference repository,
+  <https://github.com/forcedotcom/d360-mcp-server>, for action-family and
+  payload-shape questions before broad web search. Curate findings into
+  Pi-native actions; do not copy upstream setup or authentication flows into
+  SF Data 360 user docs.
+- If mutating paths change, update `lib/safety.ts` and focused tests.
 - Keep examples generic and public-safe; do not include real org aliases,
-  instance URLs, customer data, internal links, or secrets.
+  instance URLs, customer data, private links, or secrets.
 
 ## Non-goals
 

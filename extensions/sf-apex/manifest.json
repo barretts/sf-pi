@@ -23,7 +23,7 @@
       "lib/tests.ts",
       "lib/log-parser.ts",
       "lib/artifacts.ts",
-      "docs/adr/0069-sf-apex-api-native-lifecycle-extension.md",
+      "../../docs/adr/0069-sf-apex-api-native-lifecycle-extension.md",
       "AGENT_GUIDE.md"
     ],
     "stateFiles": [

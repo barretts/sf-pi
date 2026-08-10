@@ -1,106 +1,51 @@
 # Roadmap
 
-This is the rough plan for what `sf-pi` wants to be, listed roughly by
-priority. Nothing here is a promise. The project is maintained in spare
-time.
+This roadmap lists unresolved outcomes in rough priority order. It is not a
+release promise. Propose concrete designs through a GitHub issue or discussion.
 
-If you want something on this list to move faster, file an issue with a
-design proposal and — ideally — a PR.
+## Now
 
-## Shipped
-
-- [x] Apache-2.0 release + non-affiliation disclaimers
-- [x] Public CI (lint, typecheck, tests, coverage, SPDX, gitleaks, CodeQL)
-- [x] Dependabot for npm + GitHub Actions
-- [x] Governance, security, and contribution docs
-- [x] release-please automation, including release-PR auto-merge hardening
-- [x] Agent-friendly validation output in `scripts/validate.sh`
-- [x] SPDX pre-commit / CI enforcement and LLM-artifact CI guard
-- [x] In-process Agent Script authoring companion (`sf-agentscript`)
-      using official packages with deterministic quick fixes and version coherence checks
-- [x] `slack_send` with human-in-the-loop confirm + audit trail
-- [x] Scope probing + dynamic tool gating for `sf-slack`
-- [x] Unified one-provider gateway design with OpenAI-compat + native
-      Anthropic transport routing in `sf-llm-gateway`
-- [x] pi `>=0.73.0` runtime floor with per-model thinking/baseUrl support
-- [x] Auto-generated catalog, command reference, troubleshooting index, and
-      folder layout (drift-proof docs via `npm run generate-catalog`)
-- [x] First-boot auto-install for Apex + LWC language servers
-      (`/sf-lsp install`, async prompt on `session_start`, always-latest
-      upstream tracking, Windows prints manual steps)
-- [x] Announcements panel and update nudge in `sf-welcome` / `sf-pi-manager`
-- [x] `/sf-pi skills` external skill-root wiring for Claude Code, Codex, and Cursor
-- [x] Recommended external-extension bundle, including `pi-subagents`
-- [x] Static public splash screenshot in the root README
-- [x] Animated Pi + SALESFORCE splash wordmark with local preview scripts
-- [x] GitHub aggregate metrics archival with no active runtime telemetry
-
-## Now (0.x — pre-1.0)
-
-- [x] Pi 0.81 runtime adoption through behavior/deletion gates: runtime window, shared secure Gateway/Docs/Slack provider login, M2A–M2F corrections, E4 retain evidence, M3A/M3B Gateway replacement and cutoff, and M6 agent-settled updates. The Browser progressive-tool proposal was stopped before implementation; Pi's eager tool set remains unchanged ([implementation plan](./docs/pi-081-runtime-adoption-plan.md))
-- [ ] Animated GIF / short terminal capture of the TUI + splash
-- [ ] Ratchet coverage floor toward 60%
-- [ ] Promote remaining warn-level ESLint rules to errors where practical
-- [ ] `NO_COLOR=1` support across splash, spinner, devbar
-- [ ] Executable standards program, delivered as four independently green serial milestones: make the Manager-first command contract blocking, update the extension scaffold to emit the current pattern, attest tool/event registration by executing extension factories, and make catalog integrity fail closed before broader simplification work begins
-      (see [`docs/pi-native-reuse-audit-2026-07-24.md`](./docs/pi-native-reuse-audit-2026-07-24.md))
-- [ ] Standardize SF Pi slash-command panels and subcommand descriptions
-      (see [`docs/adr/0005-standard-command-panels.md`](./docs/adr/0005-standard-command-panels.md))
-- [ ] `sf-skills` Phase 2 (see
-      [`extensions/sf-skills/ROADMAP.md`](./extensions/sf-skills/ROADMAP.md))
+- Make extension discovery, manifest validation, generated documentation, and
+  runtime registration attestation fail closed with focused Behavior Proofs.
+- Finish Manager-first no-args command migration for Apex, LWC, and SOQL, then
+  enforce the command contract for every bundled extension.
+- Simplify current documentation authorities and agent discovery without
+  removing behavior or safety guidance.
+- Ratchet test coverage toward 60% and promote remaining useful warn-level
+  ESLint rules to errors.
+- Add consistent `NO_COLOR=1` behavior across splash, spinner, and DevBar.
+- Complete the open `sf-skills` Phase 2 outcomes documented in
+  [`extensions/sf-skills/ROADMAP.md`](./extensions/sf-skills/ROADMAP.md).
 
 ## Next
 
-- [ ] Pi-native product-surface simplification program, after the Pi 0.82
-      adoption/deletion slice is complete: - reduce SF Welcome to Salesforce-specific, cache-first orientation and
-      remove duplicate Pi release/session/resource mechanics only after
-      ownership and behavior parity are proven; - compare SF DevBar with Pi's native footer, retaining prominent
-      Salesforce org, production, diagnostics, and gateway signals; - thin SF Pi Manager onto Pi package-resolution and TUI primitives only
-      where resolver and navigation parity are proven; - compare the advisory SF Herdr planning tool with a compact Pi skill and
-      retain the extension only if deterministic plans or managed preferences
-      demonstrate product leverage.
-- [ ] Generic OpenAI-compatible gateway alternative to `sf-llm-gateway`
-      that works for external users
-- [ ] Per-extension telemetry opt-in proposal, if ever needed, with explicit privacy review
-- [ ] Docs site (Astro Starlight, deployed via GitHub Pages)
-- [ ] Example fixtures and walkthroughs for each extension in `docs/`
-- [ ] Stable plugin API for third-party community extensions
+- Simplify SF Welcome, SF DevBar, SF Pi Manager, and SF Herdr where Pi-native
+  behavior parity is proven, while retaining Salesforce-specific status,
+  safety, and workflow value.
+- Offer a generic OpenAI-compatible gateway path for environments that cannot
+  use Salesforce LLM Gateway.
+- Add public, generic example fixtures and focused walkthroughs for bundled
+  extension workflows.
+- Define a stable plugin API for third-party community extensions.
+- Consider per-extension telemetry only if a concrete need justifies an
+  explicit privacy review and opt-in design.
 
-## Later (pre-1.0)
+## Later
 
-- [ ] First-class Windows (non-WSL) support
-- [ ] Programmatic SDK so scripts can drive the extension manager
-- [ ] Richer splash — dynamic tips from the catalog, keyboard shortcuts cheat sheet
-- [ ] Internationalization scaffolding (even if only en-US ships)
-
-## Graduation to 1.0
-
-`1.0.0` requires:
-
-- Public API stability commitment (no breaking changes without a major
-  bump).
-- 70%+ code coverage on `extensions/` and `lib/`.
-- Two or more active maintainers in [`GOVERNANCE.md`](./GOVERNANCE.md).
-- At least one external-user integration tested against a generic
-  gateway.
-- Published security policy with documented response SLAs that the
-  maintainers have honored for at least 6 months.
+- Support first-class Windows environments outside WSL.
+- Provide a programmatic SDK for extension-manager workflows.
+- Add catalog-driven splash tips and a compact keyboard-shortcut reference.
+- Prepare internationalization boundaries while continuing to ship en-US.
+- Establish the maintainership, coverage, external integration, security
+  operations, and public API commitments required for a stable 1.0 release.
 
 ## Non-goals
 
-Just as important as the "what we'll do":
-
-- `sf-pi` does **not** want to be an IDE. Pi is an agent runtime.
-- `sf-pi` does **not** ship official Salesforce features. Anything
-  Salesforce-specific must be documented as community-built.
-- `sf-pi` does **not** collect active runtime telemetry. Aggregate GitHub
-  metrics may be archived by GitHub Actions, but installed copies of sf-pi do
-  not send usage events.
-- `sf-pi` does **not** take PRs that introduce Salesforce-internal
-  hostnames, keys, or other confidential endpoints into source.
-
----
-
-Have an idea that isn't on this list? Open a
-[Discussion](https://github.com/salesforce/sf-pi/discussions) and make your
-case.
+- SF Pi is not an IDE; Pi remains the agent runtime.
+- SF Pi does not present community-built extensions as official Salesforce
+  product features.
+- Installed copies do not send active runtime telemetry. Repository automation
+  may archive aggregate public GitHub metrics.
+- Public source, docs, tests, and examples must not contain confidential
+  endpoints, credentials, customer data, private org identifiers, or internal
+  discussion artifacts.

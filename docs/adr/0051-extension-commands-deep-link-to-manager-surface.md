@@ -1,5 +1,9 @@
 # Extension commands deep-link to the Manager Surface
 
+> **Implementation status:** Manager-first no-args navigation remains the target
+> contract. `sf-apex`, `sf-lwc`, and `sf-soql` are current local-panel
+> exceptions until their migration lands.
+
 Bundled extension no-args slash commands should act as shortcuts to that extension's SF Pi Manager detail page when an interactive UI is available. Explicit subcommands remain stable for scriptable and direct workflows.
 
 For example, `/sf-guardrail` opens the Manager Surface directly at `SF Pi › SF Guardrail`, while `/sf-guardrail audit`, `/sf-guardrail forget`, and other subcommands still execute directly. `/sf-pi open <extension-id> [settings]` provides the generic deep-link command used by extension shortcuts and by users who want to jump to a specific page.
@@ -18,7 +22,9 @@ Manager-first checker blocking. Existing commands are not grandfathered, and
 the old exemption path is deleted rather than retained as a warning-only
 transition.
 
-CI loads every bundled command-bearing extension, invokes its interactive
-no-args command, and verifies that it opens the matching Manager detail route.
-Extensions without slash commands are non-applicable rather than exempt, and
-the Manager itself remains the destination-specific special case.
+The blocking checker introduced with the package-wide cutover must load every
+bundled command-bearing extension, invoke its interactive no-args command, and
+verify that it opens the matching Manager detail route. Until that cutover,
+Apex, LWC, and SOQL remain explicit local-panel exceptions. Extensions without
+slash commands are non-applicable, and the Manager itself remains the
+destination-specific special case.

@@ -38,6 +38,40 @@ SF Pi is useful because it is a bundle: each extension adds a focused Salesforce
 </a>
 </div>
 
+## Build apps
+
+<div class="sfpi-card-grid">
+<a class="sfpi-extension-card" href="./extensions/sf-apex">
+  <span class="sfpi-card-kicker">Apex lifecycle workflows</span>
+  <strong>Apex</strong>
+  <span>Author, discover, diagnose, trace, probe, and run targeted Apex tests from pi with API-native workflows.</span>
+  <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-apex</code></span>
+</a>
+<a class="sfpi-extension-card" href="./extensions/sf-lwc">
+  <span class="sfpi-card-kicker">Lightning Web Component lifecycle workflows</span>
+  <strong>LWC</strong>
+  <span>Scan, inspect, diagnose, and locally test Lightning Web Components from pi with compact cards and artifact-backed evidence.</span>
+  <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-lwc</code></span>
+</a>
+<a class="sfpi-extension-card" href="./extensions/sf-tldraw">
+  <span class="sfpi-card-kicker">Editable Salesforce diagrams</span>
+  <strong>tldraw</strong>
+  <span>Turn explicitly grounded Salesforce models and interactions into editable, deterministic tldraw diagrams with visual evidence.</span>
+  <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-tldraw</code></span>
+</a>
+</div>
+
+## Query data
+
+<div class="sfpi-card-grid">
+<a class="sfpi-extension-card" href="./extensions/sf-soql">
+  <span class="sfpi-card-kicker">SOQL query lifecycle workflows</span>
+  <strong>SOQL</strong>
+  <span>Search schema, draft, validate, explain, sample, run/export SOQL and SOSL from pi with schema-aware native REST/Tooling workflows.</span>
+  <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-soql</code></span>
+</a>
+</div>
+
 ## Work with Salesforce orgs
 
 <div class="sfpi-card-grid">
@@ -78,7 +112,7 @@ SF Pi is useful because it is a bundle: each extension adds a focused Salesforce
 <a class="sfpi-extension-card" href="./extensions/sf-brain">
   <span class="sfpi-card-kicker">Salesforce agent guidance</span>
   <strong>Brain</strong>
-  <span>Give the agent a compact Salesforce operating guide so it chooses safer APIs and verification loops.</span>
+  <span>Give agents the Salesforce Engineering Constitution and a compact routing summary for safer, evidence-backed work.</span>
   <span class="sfpi-card-meta">Works in the background</span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-guardrail">
@@ -90,7 +124,7 @@ SF Pi is useful because it is a bundle: each extension adds a focused Salesforce
 <a class="sfpi-extension-card" href="./extensions/sf-herdr">
   <span class="sfpi-card-kicker">Herdr lane planning</span>
   <strong>Herdr</strong>
-  <span>Plan dynamic Herdr lanes for Salesforce workflows without hiding pane actions.</span>
+  <span>Plan Herdr lanes from explicit Salesforce workflow intent without hiding pane actions.</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-herdr</code></span>
 </a>
 </div>

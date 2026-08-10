@@ -13,7 +13,7 @@ description: "Search and fetch official Salesforce documentation from pi with ci
 
 <div class="sfpi-benefit-grid">
 <div class="sfpi-benefit-card">Gives agents a first-class docs tool instead of generic web search.</div>
-<div class="sfpi-benefit-card">Keeps credentials local in Pi auth with an env-var automation fallback.</div>
+<div class="sfpi-benefit-card">Lets Pi's auth store own credential persistence, with an environment-variable automation fallback.</div>
 <div class="sfpi-benefit-card">Shows citations and URLs visibly while keeping tool context compact.</div>
 </div>
 

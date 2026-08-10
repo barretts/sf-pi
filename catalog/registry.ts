@@ -39,7 +39,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
   {
     id: "sf-brain",
     name: "SF Brain",
-    description: "Salesforce operator kernel, extension-priority context, and advisory Instruction Surface diagnostics",
+    description: "Salesforce Engineering Constitution, compact SF Pi routing summary, and advisory Instruction Surface diagnostics",
     file: "extensions/sf-brain/index.ts",
     category: "assistive",
     maturity: "stable",
@@ -132,7 +132,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
   {
     id: "sf-docs",
     name: "SF Docs",
-    description: "Salesforce documentation lookup for agents and humans, with local credential storage, cited results, and a Manager settings surface.",
+    description: "Salesforce documentation lookup for agents and humans, with Pi-owned auth-store credentials, cited results, and a Manager settings surface.",
     file: "extensions/sf-docs/index.ts",
     category: "agent-tool",
     maturity: "experimental",

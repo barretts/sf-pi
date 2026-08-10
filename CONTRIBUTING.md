@@ -260,15 +260,16 @@ Scaffold a new extension with:
 npm run scaffold -- --id sf-my-extension --category ui --name "My Extension"
 ```
 
-The `--category` must be one of:
+The `--category` must be one of the six values defined by
+`catalog/types.ts`:
 
-- **`core`** — runtime-critical extensions (the manager, tool-registering
-  integrations like Slack, LSP diagnostics). These usually register slash
-  commands and/or tools.
-- **`provider`** — LLM providers or auth integrations that plug into pi's
-  provider system (e.g. `sf-llm-gateway`).
-- **`ui`** — status bars, splashes, overlays, spinners. UI-only; never
-  register tools that the LLM can call.
+- **`manager`** — the SF Pi Manager meta surface.
+- **`provider`** — model or identity providers registered with Pi.
+- **`agent-tool`** — extensions that contribute LLM tools or skills.
+- **`safety`** — gating, permission, or guardrail extensions.
+- **`assistive`** — helpers, diagnostics, prompts, or feedback flows.
+- **`ui`** — purely visual surfaces such as splashes, status bars, HUDs, and
+  spinners.
 
 ### Extension README conventions
 

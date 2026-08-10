@@ -198,19 +198,19 @@ The catalog generator reads these files and produces:
 
 ### Manifest schema
 
-| Field            | Type                               | Required | Description                                                                       |
-| ---------------- | ---------------------------------- | -------- | --------------------------------------------------------------------------------- |
-| `id`             | string                             | ✅       | Unique slug, must match directory name                                            |
-| `name`           | string                             | ✅       | Human-readable display name                                                       |
-| `description`    | string                             | ✅       | One-line description                                                              |
-| `category`       | `"ui"` \| `"provider"` \| `"core"` | ✅       | Category for grouping                                                             |
-| `defaultEnabled` | boolean                            | ✅       | Enabled on first install?                                                         |
-| `alwaysActive`   | boolean                            |          | Cannot be disabled                                                                |
-| `configurable`   | boolean                            |          | Has a config panel (requires `lib/config-panel.ts` exporting `createConfigPanel`) |
-| `commands`       | string[]                           |          | Slash commands shown in the manager detail page                                   |
-| `providers`      | string[]                           |          | Providers/auth integrations shown in manager details                              |
-| `tools`          | string[]                           |          | Tool names shown in the manager detail page                                       |
-| `events`         | string[]                           |          | Pi runtime hooks shown in the manager detail page                                 |
+| Field            | Type                                                                                   | Required | Description                                                                       |
+| ---------------- | -------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------- |
+| `id`             | string                                                                                 | ✅       | Unique slug, must match directory name                                            |
+| `name`           | string                                                                                 | ✅       | Human-readable display name                                                       |
+| `description`    | string                                                                                 | ✅       | One-line description                                                              |
+| `category`       | `"manager"` \| `"provider"` \| `"agent-tool"` \| `"safety"` \| `"assistive"` \| `"ui"` | ✅       | Category for grouping                                                             |
+| `defaultEnabled` | boolean                                                                                | ✅       | Enabled on first install?                                                         |
+| `alwaysActive`   | boolean                                                                                |          | Cannot be disabled                                                                |
+| `configurable`   | boolean                                                                                |          | Has a config panel (requires `lib/config-panel.ts` exporting `createConfigPanel`) |
+| `commands`       | string[]                                                                               |          | Slash commands shown in the manager detail page                                   |
+| `providers`      | string[]                                                                               |          | Providers/auth integrations shown in manager details                              |
+| `tools`          | string[]                                                                               |          | Tool names shown in the manager detail page                                       |
+| `events`         | string[]                                                                               |          | Pi runtime hooks shown in the manager detail page                                 |
 
 ### Enable/disable mechanism
 
@@ -317,10 +317,14 @@ type signature.
 
 ### Slash-command navigation and discoverability
 
-ADR 0051 supersedes ADR 0005's original no-args navigation rule.
+ADR 0051 supersedes ADR 0005's original no-args navigation rule. Manager-first
+navigation is the target contract for all bundled commands. `sf-apex`, `sf-lwc`,
+and `sf-soql` are the three current exceptions: their interactive no-args
+commands still open local panels and remain explicit migration targets.
 
-- Every bundled `/sf-*` command with an interactive no-args invocation opens
-  that extension's detail page in the SF Pi Manager.
+- Except for those three current local-panel commands, every bundled `/sf-*`
+  command with an interactive no-args invocation opens that extension's detail
+  page in the SF Pi Manager.
 - Explicit subcommands remain direct and scriptable. Full-screen workflows use
   an explicit subcommand or Manager action rather than replacing no-args
   navigation.

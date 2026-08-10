@@ -30,7 +30,7 @@ under `lib/common/`.
 | Add/change command metadata     | `extensions/<id>/manifest.json`                                    | `npm run generate-catalog`                                                   |
 | Change extension behavior       | `extensions/<id>/index.ts` or `lib/*.ts`                           | tests for that extension, then `npm run validate`                            |
 | Add/change Manager Settings     | `docs/settings-surfaces.md`, `extensions/<id>/lib/config-panel.ts` | targeted settings tests, `npm run generate-catalog`, then `npm run validate` |
-| Add a new extension             | `npm run scaffold -- --id sf-my-ext --category core`               | fill README, tests, `npm run validate`                                       |
+| Add a new extension             | `npm run scaffold -- --id sf-my-ext --category agent-tool`         | fill README, tests, `npm run validate`                                       |
 | Change recommendation bundle    | `catalog/recommendations.json`                                     | `npm run generate-catalog`, `npm run docs:health:check`                      |
 | Change release-visible behavior | `CHANGELOG.md`                                                     | `npm run generate-catalog` to refresh announcements                          |
 | Change CI/scripts               | `.github/workflows/`, `scripts/`                                   | update `CONTRIBUTING.md` / `ARCHITECTURE.md` if behavior changed             |

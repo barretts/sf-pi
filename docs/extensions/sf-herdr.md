@@ -1,20 +1,20 @@
 ---
 title: "SF Herdr"
-description: "Plan dynamic Herdr lanes for Salesforce workflows without hiding pane actions."
+description: "Plan Herdr lanes from explicit Salesforce workflow intent without hiding pane actions."
 ---
 
 # SF Herdr
 
-<p class="sfpi-page-lead">Plan dynamic Herdr lanes for Salesforce workflows without hiding pane actions.</p>
+<p class="sfpi-page-lead">Plan Herdr lanes from explicit Salesforce workflow intent without hiding pane actions.</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Herdr lane planning</strong><p>Plan dynamic Herdr lanes for Salesforce workflows without hiding pane actions.</p></div>
+<div class="sfpi-action-card"><span>Best for</span><strong>Herdr lane planning</strong><p>Plan Herdr lanes from explicit Salesforce workflow intent without hiding pane actions.</p></div>
 
 ## Why you'll use it
 
 <div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Turns workflow context into pane plans for tests, logs, previews, evals, servers, and reviews.</div>
-<div class="sfpi-benefit-card">Keeps actual pane mutations visible through the upstream Herdr tool.</div>
-<div class="sfpi-benefit-card">Uses workflow profiles and recent activity signals instead of fixed permanent panes.</div>
+<div class="sfpi-benefit-card">Requires explicit intent and primaryWorkflow values instead of inferring activity.</div>
+<div class="sfpi-benefit-card">Returns visible steps for the current herdr_layout, herdr_pane, and herdr_agent tools.</div>
+<div class="sfpi-benefit-card">Carries the split result's opaque pane ID forward and uses global lifecycle settings to recommend cleanup.</div>
 </div>
 
 ## Try it first
@@ -35,16 +35,16 @@ You can also manage this extension from the SF Pi home base:
 
 ## Common use cases
 
-- Plan an ephemeral test lane that closes on success and stays open on failure.
+- Plan an ephemeral test lane that adds cleanup only after observed success and stays open on failure.
 - Coordinate Agent Script preview or eval work with related Apex log lanes.
-- Keep UI bundle servers or log tails sticky while short validation lanes clean themselves up.
-- Inspect which workflow SF Pi currently infers from recent tool activity.
+- Keep UI bundle servers or log tails sticky while short validation lanes receive an explicit success-only cleanup step.
+- Review the configured lifecycle for an explicit workflow intent before opening a lane.
 
 ## What you get
 
-- A non-mutating `sf_herdr_plan` tool for phased lane guidance.
-- Managed Herdr workflow profiles and status surfaces.
-- Branch-scoped workflow signal inference from recent tool calls and file edits.
+- A non-mutating `sf_herdr_plan` tool that requires explicit intent and primaryWorkflow inputs.
+- Current split-tool steps that reuse `details.pane.pane_id` as an opaque result reference.
+- Global per-intent lifecycle settings that add a close step only after observed success or recommend leaving panes open.
 
 ## Safety notes
 

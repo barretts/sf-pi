@@ -7,7 +7,11 @@ process.env.TZ = "UTC";
 
 export default defineConfig({
   test: {
-    include: ["extensions/**/tests/**/*.test.ts", "lib/**/tests/**/*.test.ts"],
+    include: [
+      "extensions/**/tests/**/*.test.ts",
+      "lib/**/tests/**/*.test.ts",
+      "scripts/tests/**/*.test.ts",
+    ],
     environment: "node",
     coverage: {
       provider: "v8",

@@ -76,7 +76,7 @@ _Data Cloud/Data 360 v2 family tools — discover, connect, prepare, harmonize, 
 
 ### [SF Docs](./extensions/sf-docs)
 
-_Salesforce documentation lookup for agents and humans, with local credential storage, cited results, and a Manager settings surface._
+_Salesforce documentation lookup for agents and humans, with Pi-owned auth-store credentials, cited results, and a Manager settings surface._
 
 - Default: **on**
 - Commands: `/sf-docs`
@@ -137,7 +137,7 @@ _Salesforce-aware safety hooks — file protection policies, dangerous-command g
 
 ### [SF Brain](./extensions/sf-brain)
 
-_Salesforce operator kernel, extension-priority context, and advisory Instruction Surface diagnostics_
+_Salesforce Engineering Constitution, compact SF Pi routing summary, and advisory Instruction Surface diagnostics_
 
 - Default: **on**
 - Commands: _none_

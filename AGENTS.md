@@ -75,9 +75,11 @@ Use these in order:
 
 ### Standardized `/sf-*` command pattern
 
-Every bundled extension command (`/sf-slack`, `/sf-devbar`,
-`/sf-data360`, ...) follows one navigation model so users do not have to
-relearn each extension:
+Manager-first navigation is the target for every bundled extension command so
+users do not have to relearn each extension. Apex, LWC, and SOQL are the three
+current exceptions: `/sf-apex`, `/sf-lwc`, and `/sf-soql` still open local
+panels for interactive no-args calls and remain migration targets. All other
+commands, plus new and newly touched commands, follow this model:
 
 1. With no arguments and interactive UI, open that extension's detail page in
    the SF Pi Manager through `openExtensionInManager`.

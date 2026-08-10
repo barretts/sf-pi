@@ -98,7 +98,10 @@ export interface SfPiExtension {
 export interface ExtensionManifestDocs {
   /** Longer human-facing summary for generated orientation docs. */
   summary?: string;
-  /** Files agents should usually read first for this extension. */
+  /**
+   * Extension-relative files agents should usually read first. `..` traversal
+   * is allowed only while the resolved path remains inside the repository root.
+   */
   primaryFiles?: string[];
   /** User/global/project state files this extension reads or writes. */
   stateFiles?: string[];

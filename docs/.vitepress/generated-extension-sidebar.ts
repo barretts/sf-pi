@@ -3,14 +3,14 @@
 // Regenerate: npm run generate-catalog
 
 export const extensionSidebarItems = [
-  { text: "Apex", link: "/extensions/sf-apex" },
-  { text: "LWC", link: "/extensions/sf-lwc" },
-  { text: "SOQL", link: "/extensions/sf-soql" },
-  { text: "tldraw", link: "/extensions/sf-tldraw" },
   { text: "Agent Script", link: "/extensions/sf-agentscript" },
   { text: "Code Analyzer", link: "/extensions/sf-code-analyzer" },
   { text: "Docs", link: "/extensions/sf-docs" },
   { text: "LSP", link: "/extensions/sf-lsp" },
+  { text: "Apex", link: "/extensions/sf-apex" },
+  { text: "LWC", link: "/extensions/sf-lwc" },
+  { text: "tldraw", link: "/extensions/sf-tldraw" },
+  { text: "SOQL", link: "/extensions/sf-soql" },
   { text: "Browser", link: "/extensions/sf-browser" },
   { text: "Data Explorer", link: "/extensions/sf-data-explorer" },
   { text: "DevBar", link: "/extensions/sf-devbar" },

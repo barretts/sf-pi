@@ -362,7 +362,7 @@ if (!id) {
   );
   console.error("");
   console.error(
-    'Example: node scripts/scaffold.mjs --id sf-code-analyzer --category core --name "SF Code Analyzer"',
+    'Example: node scripts/scaffold.mjs --id sf-code-analyzer --category agent-tool --name "SF Code Analyzer"',
   );
   process.exit(1);
 }

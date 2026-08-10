@@ -72,12 +72,15 @@ const VALID_CATEGORIES = new Set(README_CATEGORY_ORDER);
 const VALID_MATURITIES = new Set(["stable", "beta", "experimental"]);
 const EXTENSION_INTENT_ORDER = [
   "Build agents",
+  "Build apps",
+  "Query data",
   "Work with Salesforce orgs",
   "Work with Data Cloud",
   "Work safely",
   "Collaborate and improve",
   "Personalize pi",
 ];
+const VALID_EXTENSION_INTENTS = new Set(EXTENSION_INTENT_ORDER);
 // Extensions whose only doc surface is the manifest description — they have
 // no slash command, no LLM tool, and no provider, so populating docs.* would
 // be busywork. The lint below only requires docs.summary + docs.primaryFiles
@@ -162,6 +165,7 @@ function discoverManifests() {
           );
           process.exit(1);
         }
+        validatePrimaryFiles(entry.name, docs.primaryFiles);
       }
 
       if (manifest.id !== entry.name) {
@@ -177,6 +181,52 @@ function discoverManifests() {
   }
 
   return results;
+}
+
+function validatePrimaryFiles(extensionDir, primaryFiles) {
+  const extensionRoot = path.join(EXTENSIONS_DIR, extensionDir);
+  const resolvedPaths = new Set();
+
+  for (const primaryFile of primaryFiles) {
+    if (typeof primaryFile !== "string" || primaryFile.length === 0) {
+      console.error(
+        `❌ ${extensionDir}/manifest.json docs.primaryFiles must contain only non-empty strings.`,
+      );
+      process.exit(1);
+    }
+    if (path.isAbsolute(primaryFile)) {
+      console.error(
+        `❌ ${extensionDir}/manifest.json docs.primaryFiles entry "${primaryFile}" must be extension-relative.`,
+      );
+      process.exit(1);
+    }
+
+    const resolved = path.resolve(extensionRoot, primaryFile);
+    const relativeToRoot = path.relative(ROOT, resolved);
+    if (
+      relativeToRoot === "" ||
+      relativeToRoot === ".." ||
+      relativeToRoot.startsWith(`..${path.sep}`)
+    ) {
+      console.error(
+        `❌ ${extensionDir}/manifest.json docs.primaryFiles entry "${primaryFile}" escapes the repository root.`,
+      );
+      process.exit(1);
+    }
+    if (!existsSync(resolved)) {
+      console.error(
+        `❌ ${extensionDir}/manifest.json docs.primaryFiles entry "${primaryFile}" does not exist.`,
+      );
+      process.exit(1);
+    }
+    if (resolvedPaths.has(resolved)) {
+      console.error(
+        `❌ ${extensionDir}/manifest.json docs.primaryFiles contains duplicate path "${primaryFile}".`,
+      );
+      process.exit(1);
+    }
+    resolvedPaths.add(resolved);
+  }
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -311,6 +361,15 @@ function sortByIntentThenName(manifests, extensionCopy) {
 
 function readExtensionCopy(manifests) {
   const copy = JSON.parse(readFileSync(EXTENSION_COPY_PATH, "utf8"));
+  const manifestIds = new Set(manifests.map(({ manifest }) => manifest.id));
+  const extraIds = Object.keys(copy).filter((id) => !manifestIds.has(id));
+  if (extraIds.length > 0) {
+    console.error(
+      `❌ docs/extension-copy.json contains entries with no discovered manifest: ${extraIds.join(", ")}.`,
+    );
+    process.exit(1);
+  }
+
   for (const { manifest } of manifests) {
     const item = copy[manifest.id];
     if (!item) {
@@ -324,6 +383,12 @@ function readExtensionCopy(manifests) {
         );
         process.exit(1);
       }
+    }
+    if (!VALID_EXTENSION_INTENTS.has(item.intentGroup)) {
+      console.error(
+        `❌ docs/extension-copy.json ${manifest.id}.intentGroup "${item.intentGroup}" is invalid. Allowed: ${EXTENSION_INTENT_ORDER.join(", ")}.`,
+      );
+      process.exit(1);
     }
     for (const field of ["benefits", "useCases", "whatYouGet"]) {
       if (!Array.isArray(item[field]) || item[field].length === 0) {
@@ -507,6 +572,7 @@ function renderCodeChip(text) {
 
 function generateExtensionsDoc(manifests, extensionCopy) {
   const sorted = sortByIntentThenName(manifests, extensionCopy);
+  const renderedIds = [];
   const lines = [
     "---",
     "title: Browse SF Pi Extensions",
@@ -529,6 +595,7 @@ function generateExtensionsDoc(manifests, extensionCopy) {
 
     lines.push(`## ${group}`, "", '<div class="sfpi-card-grid">');
     for (const { dir, manifest } of inGroup) {
+      renderedIds.push(manifest.id);
       const copy = extensionCopy[manifest.id];
       const command =
         Array.isArray(manifest.commands) && manifest.commands.length > 0
@@ -544,6 +611,18 @@ function generateExtensionsDoc(manifests, extensionCopy) {
       );
     }
     lines.push("</div>", "");
+  }
+
+  const expectedIds = manifests.map(({ manifest }) => manifest.id).sort();
+  const actualIds = [...renderedIds].sort();
+  if (
+    actualIds.length !== expectedIds.length ||
+    actualIds.some((id, index) => id !== expectedIds[index])
+  ) {
+    console.error(
+      `❌ Generated extension browse cards must cover every discovered manifest exactly once. Expected ${expectedIds.length}, rendered ${actualIds.length}.`,
+    );
+    process.exit(1);
   }
 
   lines.push(
@@ -961,7 +1040,9 @@ function generateAgentOrientationDoc(manifests) {
     "",
     "## Manifest doc metadata",
     "",
-    "Extensions may optionally add `docs.summary`, `docs.primaryFiles`, `docs.stateFiles`, `docs.env`, and `docs.safety` to their manifest. When present, those fields flow into generated inventories without adding another source of truth.",
+    "Every extension manifest must provide non-empty `docs.summary` and `docs.primaryFiles` fields. `docs.stateFiles`, `docs.env`, and `docs.safety` are optional.",
+    "",
+    "Each `docs.primaryFiles` entry is extension-relative. It may use `..` traversal only when the normalized path remains inside the repository root, and it must resolve to an existing unique path.",
     "",
     "## Runtime surfaces",
     "",

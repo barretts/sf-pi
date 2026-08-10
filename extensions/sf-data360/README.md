@@ -31,9 +31,9 @@ It registers the v2 `data360_*` family tool surface:
 - `data360_api` — raw REST escape hatch for endpoints not yet promoted to a
   family action.
 
-Legacy `d360`, `d360_api`, `d360_metadata`, and `d360_probe` implementations stay
-in the codebase as migration adapters and fallback references, but the visible
-public tool surface is `data360_*`.
+Legacy modules are compatibility-only for the public surface, but they still
+support the facade-first E2E sweep, selected v2 adapters, and compatibility
+tests. Current user and agent workflows use only `data360_*` tools and actions.
 
 It is enabled by default and ships plain reference documentation under
 `references/`. It does not contribute Agent Skills; explicitly disabling the
@@ -60,8 +60,9 @@ The intended balance is:
 
 ```
 Extension loads
-  ├─ register data360_* family tools
-  ├─ register /sf-data360
+  ├─ register /sf-data360 and Manager/doctor surfaces
+  ├─ session_start
+  │    └─ register data360_* family tools when enabled
   └─ resources_discover
        └─ re-register tools on reload; no Agent Skill contribution
 
@@ -198,7 +199,8 @@ Result digests remain artifact-first, but discovery actions include bounded prev
 
 ## Commands
 
-- `/sf-data360` — open the standardized command panel (status, help, close).
+- `/sf-data360` — open SF Data 360 in the SF Pi Manager when interactive; print
+  concise status when non-interactive.
 - `/sf-data360 status` — print enablement, registered tools, target org, and API version.
 - `/sf-data360 help` — show usage guidance.
 
@@ -315,55 +317,20 @@ Run targeted tests:
 npm test -- extensions/sf-data360/tests
 ```
 
-Run the facade-first capability sweep against a disposable Data 360 org:
+Run the facade-first compatibility sweep against a disposable Data 360 org.
+Replace the example alias with an org created only for this test:
 
 ```bash
-npm run e2e:d360-sweep -- --target-org AgentforceSTDM --dry-run-only
-npm run e2e:d360-sweep -- --target-org AgentforceSTDM --max-live 20
+npm run e2e:d360-sweep -- --target-org disposable-data360-org --dry-run-only
 ```
 
-Run the sweep-owned DMO, DLO, DLO-to-DMO mapping, semantic model shell, semantic data-object, semantic calculated-field, semantic metric, semantic relationship, data transform, data action, calculated insight, segment, activation target, and activation mutation lifecycles only against the disposable sweep org:
-
-```bash
-D360_SWEEP_ALLOW_DESTRUCTIVE=AgentforceSTDM npm run e2e:d360-sweep -- \
-  --target-org AgentforceSTDM \
-  --dry-run-only \
-  --mutate
-```
-
-Useful sweep controls:
-
-```bash
-# Run only one or more mutation lifecycles.
-D360_SWEEP_ALLOW_DESTRUCTIVE=AgentforceSTDM npm run e2e:d360-sweep -- \
-  --target-org AgentforceSTDM \
-  --dry-run-only \
-  --mutate \
-  --only-lifecycle \
-  --lifecycle transform \
-  --lifecycle data-action \
-  --lifecycle calculated-insight \
-  --lifecycle segment \
-  --lifecycle activation-target \
-  --lifecycle activation
-
-# Enforce coverage expectations directly or through a preset.
-npm run e2e:d360-sweep -- \
-  --target-org AgentforceSTDM \
-  --preset agentforce-stdm-mutate \
-  --require-outcome d360_transform_create=mutation_ok \
-  --min-mutation-ok 10
-
-# Cleanup known sweep-owned resources for a previous run id or discover stale sweep-owned resources.
-D360_SWEEP_ALLOW_DESTRUCTIVE=AgentforceSTDM npm run e2e:d360-sweep -- \
-  --target-org AgentforceSTDM \
-  --cleanup-run-id 20260519170330
-D360_SWEEP_ALLOW_DESTRUCTIVE=AgentforceSTDM npm run e2e:d360-sweep -- \
-  --target-org AgentforceSTDM \
-  --cleanup-stale
-```
-
-The sweep writes JSON and Markdown artifacts to a temp directory and reports expected org-state limitations as structured non-failing outcomes. Pending lifecycle work is tracked in [`ROADMAP.md`](./ROADMAP.md).
+This executable characterizes the legacy facade and selected adapters; it does
+not prove every v2 action family. Maintainers working on mutation or cleanup
+coverage should inspect `scripts/e2e/d360-capability-sweep.ts` and the focused
+`tests/capability-sweep.test.ts` and `tests/v2-action-sweep.test.ts` suites. The
+sweep writes JSON and Markdown artifacts to a temp directory and reports
+expected org-state limitations as structured non-failing outcomes. Pending
+lifecycle work is tracked in [`ROADMAP.md`](./ROADMAP.md).
 
 Covered by unit tests:
 
@@ -375,13 +342,19 @@ Covered by unit tests:
 - HTTP errors from the shared request seam surface as `{ status, body }` and are classified by `responseLooksLikeError`; tools emit error envelopes instead of retrying under another version.
 - Salesforce REST error arrays embedded in 2xx responses are still classified as failed calls.
 - Generated phase references are committed, reproducible from `registry/phases.json`, and checked in the normal lint path.
-- The capability sweep plans dry-run coverage for every facade capability, runs bounded read/safe-post live checks, dynamically follows list responses into detail reads when public-safe identifiers are available, can run focused sweep-owned mutation lifecycles behind an explicit destructive gate, writes a family summary table, supports coverage thresholds, and includes run-id cleanup helpers.
+- The facade-first compatibility sweep plans dry-run coverage for facade capabilities, runs bounded read/safe-post live checks, dynamically follows list responses into detail reads when public-safe identifiers are available, and exercises selected sweep-owned lifecycles behind explicit gates.
 
 ## Troubleshooting
 
-**A simple DMO list returns too much data:** Use `d360_metadata` with `action: "list_dmos"`, `category`, and `max_results` instead of broad `/ssot/data-model-objects` calls.
+**A simple DMO list returns too much data:** Use `data360_harmonize` with
+`action: "dmo.list"`, narrow by `category`, and choose a bounded output mode
+instead of calling `/ssot/data-model-objects` broadly.
 
-**Metadata search fails but DMO/DLO lists work:** Treat this as search-plane readiness. Fall back to `d360_metadata` or `/ssot/metadata-entities`, then fetch one entity with `/ssot/metadata` or the DMO/DLO describe endpoint.
+**Metadata search fails but DMO/DLO lists work:** Treat this as search-plane
+readiness. Use `data360_query` with `action: "metadata.entities"` and
+`params: { "entityType": "DataModelObject" }`, then inspect one result with
+`action: "metadata.get"` and `params: { "entityName": "<api-name>" }`, or use
+the matching `data360_harmonize` / `data360_prepare` get action.
 
 **Connector detail returns `NOT_FOUND`:** Use the connector catalog `name` from `GET /ssot/connectors`, not necessarily the `connectorType` shown on a connection.
 

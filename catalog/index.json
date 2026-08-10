@@ -130,7 +130,7 @@
         "lib/tests.ts",
         "lib/log-parser.ts",
         "lib/artifacts.ts",
-        "docs/adr/0069-sf-apex-api-native-lifecycle-extension.md",
+        "../../docs/adr/0069-sf-apex-api-native-lifecycle-extension.md",
         "AGENT_GUIDE.md"
       ],
       "stateFiles": [
@@ -154,7 +154,7 @@
   {
     "id": "sf-brain",
     "name": "SF Brain",
-    "description": "Salesforce operator kernel, extension-priority context, and advisory Instruction Surface diagnostics",
+    "description": "Salesforce Engineering Constitution, compact SF Pi routing summary, and advisory Instruction Surface diagnostics",
     "category": "assistive",
     "maturity": "stable",
     "defaultEnabled": true,
@@ -480,7 +480,7 @@
   {
     "id": "sf-docs",
     "name": "SF Docs",
-    "description": "Salesforce documentation lookup for agents and humans, with local credential storage, cited results, and a Manager settings surface.",
+    "description": "Salesforce documentation lookup for agents and humans, with Pi-owned auth-store credentials, cited results, and a Manager settings surface.",
     "category": "agent-tool",
     "maturity": "experimental",
     "defaultEnabled": true,
@@ -824,7 +824,7 @@
         "lib/tests.ts",
         "lib/artifacts.ts",
         "lib/render.ts",
-        "docs/adr/0071-sf-lwc-local-native-lifecycle-extension.md",
+        "../../docs/adr/0071-sf-lwc-local-native-lifecycle-extension.md",
         "AGENT_GUIDE.md"
       ],
       "stateFiles": [
@@ -1094,7 +1094,7 @@
         "lib/flattener.ts",
         "lib/artifacts.ts",
         "lib/render.ts",
-        "docs/adr/0070-sf-soql-api-native-query-lifecycle-extension.md",
+        "../../docs/adr/0070-sf-soql-api-native-query-lifecycle-extension.md",
         "AGENT_GUIDE.md"
       ],
       "stateFiles": [

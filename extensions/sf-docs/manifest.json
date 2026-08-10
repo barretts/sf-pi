@@ -1,7 +1,7 @@
 {
   "id": "sf-docs",
   "name": "SF Docs",
-  "description": "Salesforce documentation lookup for agents and humans, with local credential storage, cited results, and a Manager settings surface.",
+  "description": "Salesforce documentation lookup for agents and humans, with Pi-owned auth-store credentials, cited results, and a Manager settings surface.",
   "category": "agent-tool",
   "maturity": "experimental",
   "defaultEnabled": true,

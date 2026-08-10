@@ -1,20 +1,20 @@
 ---
 title: "SF Brain"
-description: "Give the agent a compact Salesforce operating guide so it chooses safer APIs and verification loops."
+description: "Give agents the Salesforce Engineering Constitution and a compact routing summary for safer, evidence-backed work."
 ---
 
 # SF Brain
 
-<p class="sfpi-page-lead">Give the agent a compact Salesforce operating guide so it chooses safer APIs and verification loops.</p>
+<p class="sfpi-page-lead">Give agents the Salesforce Engineering Constitution and a compact routing summary for safer, evidence-backed work.</p>
 
-<div class="sfpi-action-card"><span>Best for</span><strong>Salesforce agent guidance</strong><p>Give the agent a compact Salesforce operating guide so it chooses safer APIs and verification loops.</p></div>
+<div class="sfpi-action-card"><span>Best for</span><strong>Salesforce agent guidance</strong><p>Give agents the Salesforce Engineering Constitution and a compact routing summary for safer, evidence-backed work.</p></div>
 
 ## Why you'll use it
 
 <div class="sfpi-benefit-grid">
-<div class="sfpi-benefit-card">Keeps Salesforce safety rules available without flooding every prompt.</div>
-<div class="sfpi-benefit-card">Routes agents to the right SF Pi surface when deeper help is needed.</div>
-<div class="sfpi-benefit-card">Encourages retrieve-before-edit and describe-before-query behavior.</div>
+<div class="sfpi-benefit-card">Keeps the bundled Salesforce-first engineering baseline present in every session.</div>
+<div class="sfpi-benefit-card">Prioritizes active SF Pi tools before external skills or raw CLI.</div>
+<div class="sfpi-benefit-card">Routes agents to extension-owned guides only when deeper operating detail is useful.</div>
 </div>
 
 ## Try it first
@@ -41,8 +41,8 @@ You can manage this extension from the SF Pi home base:
 
 ## What you get
 
-- A once-per-session Salesforce operator kernel.
-- A compact reference map for deeper SF Pi and Salesforce workflows.
+- The bundled Salesforce Engineering Constitution.
+- A compact routing summary that reports disabled capability owners when relevant.
 - No user-facing command surface because the extension works in the background.
 
 ## Safety notes

@@ -41,7 +41,9 @@
 
 ## Manifest doc metadata
 
-Extensions may optionally add `docs.summary`, `docs.primaryFiles`, `docs.stateFiles`, `docs.env`, and `docs.safety` to their manifest. When present, those fields flow into generated inventories without adding another source of truth.
+Every extension manifest must provide non-empty `docs.summary` and `docs.primaryFiles` fields. `docs.stateFiles`, `docs.env`, and `docs.safety` are optional.
+
+Each `docs.primaryFiles` entry is extension-relative. It may use `..` traversal only when the normalized path remains inside the repository root, and it must resolve to an existing unique path.
 
 ## Runtime surfaces
 
