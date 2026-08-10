@@ -1,4 +1,4 @@
-# SF Guardrail — Code Walkthrough
+# SF Guardrail
 
 ## What It Does
 
@@ -84,31 +84,6 @@ Plus:
   `SF_GUARDRAIL_OPERATOR_AUTO_APPROVE=allow-confirm-actions-for-this-process`
   to auto-allow confirm-class decisions with audit. Hard blocks still apply.
 
-## Runtime Flow
-
-```
-Extension loads
-  ├─ session_start    → hydrate session allow-memory from entries
-  ├─ session_tree     → rehydrate after tree navigation
-  ├─ before_agent_start
-  │    ├─ prompt entry already in session → skip
-  │    └─ first call                      → inject rule-derived guidance
-  │                                        as a hidden custom message
-  └─ tool_call
-       ├─ policies hit + protection blocks this tool     → { block: true, reason }, audit
-       ├─ commandGate hit (safe temp cleanup)             → pass through, audit as allow_auto
-       ├─ commandGate hit (allow)                         → pass through
-       ├─ commandGate hit (autoDeny)                      → { block }, audit
-       ├─ commandGate hit (confirm) OR orgAwareGate hit
-       │  OR nativeToolGate hit                           →
-       │      previously granted for this session         → pass through, audit as allow_session
-       │      interactive                                 → ctx.ui.select (Allow once / Allow for session / Block)
-       │      operator auto-approve env set               → pass through, audit as operator_auto_approve
-       │      headless + env opt-in                       → pass through, audit as headless_pass
-       │      headless + no opt-in                        → { block }, audit as headless_block
-       └─ no rule matched                                 → pass through
-```
-
 ## Config Layers
 
 Bundled defaults live in `SF_GUARDRAIL_DEFAULTS.json` next to `index.ts`.
@@ -169,30 +144,6 @@ in repo ADRs, especially:
 - ADR 0052 — rule behavior is the only safety model
 - ADR 0074 — native high-value durable mutation mediation
 
-## Behavior Matrix
-
-| Event              | Condition                               | Result                                           |
-| ------------------ | --------------------------------------- | ------------------------------------------------ |
-| session_start      | —                                       | Hydrate allow-memory from entries                |
-| session_tree       | —                                       | Rehydrate allow-memory from new branch           |
-| before_agent_start | prompt entry already in session         | Skip                                             |
-| before_agent_start | first call, prompt not already injected | Inject hidden kernel message                     |
-| tool_call          | policies protection blocks tool         | `{ block: true, reason }`, audit                 |
-| tool_call          | commandGate safe temp cleanup           | Pass through, audit as allow_auto                |
-| tool_call          | commandGate allowedPatterns             | Pass through                                     |
-| tool_call          | commandGate autoDenyPatterns            | `{ block }`, audit                               |
-| tool_call          | `herdr_pane.run` command matches a gate | same confirmation path as `bash`                 |
-| tool_call          | native high-value mutation matches      | same confirmation path as other confirm gates    |
-| tool_call          | previously allowed (session memory)     | Pass through, audit as allow_session             |
-| tool_call          | interactive confirmation                | `ctx.ui.select`, status/notify, audit per choice |
-| tool_call          | operator auto-approve env set           | Pass through, audit as operator_auto_approve     |
-| tool_call          | headless + env opt-in                   | Pass through, audit as headless_pass             |
-| tool_call          | headless + no env opt-in                | `{ block }`, audit as headless_block             |
-| /sf-guardrail      | UI available                            | Open `SF Pi › SF Guardrail` in Manager Surface   |
-| /sf-guardrail      | no UI                                   | Show status summary                              |
-| Manager aliases    | detail action selected                  | Open native input action page                    |
-| Manager forget     | detail action selected                  | Confirm in-page before clearing approvals        |
-
 ## File Structure
 
 <!-- GENERATED:file-structure:start -->
@@ -210,57 +161,6 @@ extensions/sf-guardrail/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Run: `npm test`
-
-Covered by unit tests:
-
-- Tokenizer handles quoting, escapes, and pipeline terminators.
-- Command matcher expands common shell wrappers (`bash -c`, `sudo bash -c`,
-  `xargs`) and structural bypasses (`curl|bash`, base64 decode to shell,
-  `find -delete`, `find -exec rm`) without LLM calls or subprocesses.
-- Pi credential-output commands are confirmed structurally across direct, common-wrapper,
-  environment-prefixed, and `npx` invocation forms; ordinary auth readiness
-  checks remain allowed.
-- AST matcher supports alternatives, leading flags, `flagIn` constraints,
-  and `--flag=value` shorthand.
-- Target-org extraction prefers `-o` over `--target-org`, returns
-  undefined when absent.
-- Glob compiler: `**` crosses slashes, `*` does not; dots are escaped.
-- `matchPath` routes basename patterns vs full-path patterns correctly,
-  honors `allowedPatterns`, picks strongest protection when rules
-  overlap, and respects `enabled: false`.
-- `evaluateCommand` matches multi-word patterns only as consecutive
-  tokens (so `echo "sf org delete"` does not misfire), single-word
-  patterns as individual tokens, checks simple shell chains, and
-  short-circuits on allowed/autoDeny.
-- Strict temp cleanup validation only auto-allows literal, single-target
-  `rm -rf` / `rm -fr` commands under the real OS temp directory.
-- `resolveOrgContext` prefers `-o` over default alias, honors
-  `productionAliases`, resolves explicit aliases through a bounded cached
-  lookup when needed, and fails closed to "production" on unknown aliases.
-- Safety Subject normalization covers file tools, `bash.command`, and
-  `herdr_pane.run.command`.
-- Safety Kernel characterization tests preserve end-to-end decisions for
-  protected files, dangerous commands, org-aware gates, Herdr mediation,
-  and safe temp cleanup.
-- Safety Envelope builders preserve exact-command, production deploy, and
-  non-production org-delete approval coverage.
-- Approval Ledger tests cover audit entries, session approvals, revocation,
-  legacy persisted grant rendering, and clearing.
-- Rule-derived guidance reflects the effective config and preserves the
-  user override prompt path.
-- Pi-native preferences are stored under `sfPi.guardrail`, surfaced from nested
-  SF Pi Manager settings pages, and preserve advanced JSON overrides.
-- Envelope-first HIL detail renders risk gate, subject, target org, approval
-  coverage, session duration, and advisory recovery guidance.
-- Safety Kernel contract tests produce the right decision for representative
-  `read`/`write`/`bash`/`herdr_pane.run` tool calls with the bundled config.
-- Config loader parses bundled defaults, merges user override by id,
-  disables bundled rules via `enabled: false`, and falls back silently
-  on malformed JSON.
 
 ## Troubleshooting
 

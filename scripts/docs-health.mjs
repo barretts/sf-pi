@@ -4,8 +4,8 @@
  *
  * This script intentionally checks factual, easy-to-drift documentation
  * contracts instead of trying to judge prose quality. It is a guardrail for
- * agents and humans: generated blocks stay generated, hand-written docs keep
- * required sections, and public-facing docs avoid obvious private artifacts.
+ * agents and humans: generated blocks stay generated, extension READMEs retain
+ * a purpose statement, and public-facing docs avoid obvious private artifacts.
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -18,14 +18,7 @@ const EXTENSIONS_DIR = path.join(ROOT, "extensions");
 const CHECK_ONLY = process.argv.includes("--check");
 const JSON_MODE = process.argv.includes("--json");
 
-const REQUIRED_README_SECTIONS = [
-  "What It Does",
-  "Runtime Flow",
-  "Behavior Matrix",
-  "File Structure",
-  "Testing Strategy",
-  "Troubleshooting",
-];
+const REQUIRED_README_SECTIONS = ["What It Does"];
 
 const GENERATED_FILES = [
   "catalog/index.json",
@@ -203,6 +196,9 @@ function checkExtensionReadmes() {
     }
 
     const manifest = readJson(`${base}/manifest.json`);
+    if (!new RegExp(`^#\\s+${escapeRegex(manifest.name)}\\s*$`, "m").test(readme)) {
+      fail(readmePath, `H1 must match manifest name: # ${manifest.name}`);
+    }
     for (const command of manifest.commands ?? []) {
       if (!readme.includes(command))
         warn(readmePath, `Command ${command} is not mentioned in README.`);

@@ -1,4 +1,4 @@
-# SF Slack — Code Walkthrough
+# SF Slack
 
 ## What It Does
 
@@ -24,53 +24,6 @@ this repo such as the shared Salesforce environment runtime and `sf-lsp`:
 3. **Keep formatters pure** — `format.ts` works on named interfaces, not loose bags of data.
 4. **Keep tool fallbacks explicit** — missing-scope paths stay readable and local.
 5. **Avoid `any` in implementation code** — prefer named interfaces and small helper functions.
-
-## Runtime Flow
-
-```
-Extension loads
-  ├─ registerProvider("sf-slack")           ← existing credential resolution + refresh
-  ├─ registerCommand("sf-slack")            ← status / refresh / help
-  │
-  │  Note: no Slack tools are registered at load.
-  │  Registration is gated on token availability to keep the
-  │  system prompt Slack-free when sf-slack is not configured.
-  │
-  └─ on("session_start")
-       ├─ Resolve token (pi auth → SLACK_USER_TOKEN env)
-       ├─ If no token → keep footer hidden, DO NOT register tools
-       └─ If token found:
-            ├─ ensureSlackToolsRegistered()  ← registers 9 slack* tools
-            ├─ auth.test → validate token, detect identity, capture
-            │              X-OAuth-Scopes
-            ├─ gateToolsFromGrantedScopes() → disable tools whose scopes Slack
-            │                                did not grant, using the header
-            │                                captured from auth.test
-            ├─ Set an adaptive compact footer (`Slack ✓ Connected` when healthy)
-            │  and add a short qualifier only for limited scopes or token constraints
-            └─ fire-and-forget cache prewarm:
-               ├─ users.list → pre-warm user cache
-               └─ conversations.list → pre-warm channel cache
-
-            Only auth.test + local scope gating are awaited so turn-1 already
-            ships the final gated tool set. Cache prewarm is display-quality
-            only; raw IDs remain valid fallbacks until it finishes.
-  on("session_shutdown")
-       └─ Clear footer status
-  on("before_agent_start")
-       ├─ If no Slack tool is active in systemPromptOptions.selectedTools → skip
-       └─ Inject <slack_workspace> identity anchors (User + Team) only
-            (cache sizes and gated counts are intentionally omitted — they drift
-             turn-to-turn and would invalidate prompt cache)
-  /sf-slack
-       ├─ UI available + no args → open SF Slack in the SF Pi Manager
-       ├─ Manager Connect        → prefill native /login with fixed-mask entry
-       ├─ Manager Disconnect     → prefill native /logout for review
-       └─ no UI + no args        → show auth status
-  /sf-slack refresh
-       ├─ If a token resolves now but tools were not registered earlier → ensureSlackToolsRegistered()
-       └─ Re-probe scopes, re-warm caches
-```
 
 ## Connecting
 
@@ -475,20 +428,6 @@ follows the shared `/sf-pi display` profile:
 Explicit tool arguments still win. For example, `fields: "full"` always
 returns full bodies regardless of the shared display profile.
 
-## Behavior Matrix
-
-| Event/Trigger        | Condition                       | Result                                                                                          |
-| -------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `session_start`      | token available                 | Register slack\* tools, detect identity, probe scopes, cache users, set adaptive compact footer |
-| `session_start`      | no token                        | Skip tool registration entirely, keep footer hidden                                             |
-| `session_shutdown`   | —                               | Clear footer status                                                                             |
-| `before_agent_start` | identity + at least one slack\* | Inject minimal workspace context (User + Team only)                                             |
-| `before_agent_start` | no identity / no slack tools    | Skip injection                                                                                  |
-| `/sf-slack`          | UI available                    | Open SF Slack in the SF Pi Manager                                                              |
-| `/sf-slack`          | no UI                           | Show auth status                                                                                |
-| `/sf-slack refresh`  | token resolves now              | Register tools if needed, re-probe scopes, refresh cache                                        |
-| any tool call        | no auth                         | Return setup instructions (defensive; normally unreachable)                                     |
-
 ## Environment Variables
 
 | Variable                    | Required | Description                                                                                                        |
@@ -518,27 +457,6 @@ extensions/sf-slack/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-All formatters and helpers are pure functions — no network calls in tests:
-
-- `smoke.test.ts` — module export check
-- `auth.test.ts` — token masking, expiry formatting
-- `format.test.ts` — search results, messages, structured data extraction
-- `field-modes.test.ts` — summary/preview/full body trimming contract
-- `extra-format.test.ts` — channel info, user info, file info formatters
-- `api.test.ts` — limit clamping, timestamp conversion, error summarization
-- `tools.test.ts` — tool module export verification
-- `time-range.test.ts` — deterministic Slack time-range normalization
-- `render-helpers.test.ts` — collapsed preview clipping + OSC 8 permalinks
-- `preferences-stats.test.ts` — preferences sanitize + stats counters
-- `scope-probe.test.ts` — scope probe module export
-- `status.test.ts` — readiness classification and adaptive compact footer states
-- `resolve.test.ts` — resolver helper behavior
-- `search-plan.test.ts` — search operator planner behavior
-
-Run: `npm test`
 
 ## Troubleshooting
 

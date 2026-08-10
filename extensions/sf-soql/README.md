@@ -1,4 +1,4 @@
-# SF SOQL — Code Walkthrough
+# SF SOQL
 
 ## What It Does
 
@@ -13,21 +13,6 @@ It deliberately does **not** become a data explorer, record browser, data export
 product, report builder, or CLI wrapper. Broad human exploration remains with
 `sf-data-explorer`; data mutation and bulk data operations remain outside
 `sf-soql`.
-
-## Runtime Flow
-
-```text
-Extension loads
-  ├─ register /sf-soql command
-  └─ session_start → register sf_soql tool
-
-sf_soql action
-  ├─ enters the shared Salesforce Connection Module
-  ├─ resolves target + latest/configured-fallback API version lazily
-  ├─ runs bounded native REST/Tooling API calls
-  ├─ writes raw/flattened evidence as SOQL Artifacts
-  └─ returns compact SOQL Run Digest + human SOQL Result Card
-```
 
 ## Key Architecture Decisions
 
@@ -50,24 +35,6 @@ sf_soql action
   `querying-soql` skill for deeper syntax, relationship-query, aggregate-query,
   selector-pattern, and anti-pattern guidance, but `sf_soql` remains the native
   execution authority.
-
-## Behavior Matrix
-
-| Event/Trigger             | Condition                       | Result                                                                  |
-| ------------------------- | ------------------------------- | ----------------------------------------------------------------------- |
-| extension load            | always                          | Register `/sf-soql` command.                                            |
-| session_start             | extension enabled               | Register `sf_soql`; the shared Module owns connection lifecycle.        |
-| `/sf-soql`                | interactive                     | Open the SF SOQL panel.                                                 |
-| `/sf-soql status`         | any mode                        | Print concise extension status.                                         |
-| `sf_soql org.preflight`   | explicit tool call              | Check native query readiness.                                           |
-| `sf_soql schema.describe` | object provided                 | Describe object fields and relationships.                               |
-| `sf_soql query.validate`  | query provided                  | Parse and describe-validate query shape.                                |
-| `sf_soql query.explain`   | query provided                  | Retrieve the native query plan.                                         |
-| `sf_soql query.sample`    | query provided                  | Run a small bounded sample.                                             |
-| `sf_soql query.run`       | bounded query or explicit cap   | Run a read-only query, show a bounded row preview, and write artifacts. |
-| `sf_soql query.run`       | no LIMIT and no explicit cap    | Return a safety review card instead of running.                         |
-| `sf_soql query.queryAll`  | explicit tool call              | Run queryAll and show a scope warning.                                  |
-| `sf_soql history.rerun`   | previous runnable action exists | Rerun the previous SOQL action.                                         |
 
 ## Commands
 
@@ -117,37 +84,6 @@ extensions/sf-soql/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Run targeted tests while developing:
-
-```bash
-npm test -- extensions/sf-soql/tests
-```
-
-Before finishing broader changes:
-
-```bash
-npm run generate-catalog
-npm run format:check
-npm run check -- --pretty false
-npm test -- extensions/sf-soql/tests extensions/sf-brain/tests/extension-context.test.ts
-```
-
-For live-org smoke, use a sandbox/dev org and exercise the native loop:
-
-```bash
-npm run e2e:sf-soql -- --org <alias>
-```
-
-For deterministic parent-to-child subquery coverage in a non-production org, pass
-`--harness-data`. This creates temporary Account/Contact records and deletes them
-in a `finally` cleanup block:
-
-```bash
-npm run e2e:sf-soql -- --org <alias> --harness-data
-```
 
 ## Troubleshooting
 

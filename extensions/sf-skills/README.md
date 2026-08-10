@@ -1,4 +1,4 @@
-# SF Skills — Code Walkthrough
+# SF Skills
 
 ## What It Does
 
@@ -77,25 +77,6 @@ scans happen only on explicit `/sf-skills` open. This is enforced by
 `tests/boot-path.test.ts`, which spies on the Pi loader and fails if any
 lifecycle hook triggers a catalog build. First paint stays cache-first.
 
-## Runtime Flow
-
-```text
-Extension loads
-  ├─ session_start / message_end / session_tree / session_compact
-  │   └─ rebuild HUD from in-memory branch + context (NO catalog work)
-  ├─ before_agent_start
-  │   └─ /skill:<name> in prompt → bump usage counters
-  ├─ /sf-skills
-  │   ├─ no args, hasUI → SF Pi Manager detail page
-  │   ├─ funnel        → gather → buildSkillCatalog → Funnel view overlay
-  │   │                  → stage actions → resolution → settings write → reload
-  │   ├─ summary | metrics | help → text output
-  │   ├─ defaults …    → afv-library Managed Source install/update/link/unlink
-  │   └─ prune [--apply] → stale + orphan cleanup
-  └─ session_shutdown
-      └─ dismiss HUD overlay
-```
-
 ## Settings
 
 SF Skills has a Manager Settings page for low-risk preferences stored under `sfPi.skills`:
@@ -104,21 +85,6 @@ SF Skills has a Manager Settings page for low-risk preferences stored under `sfP
 - **Default install scope** (`defaultInstallScope`) — `project` (default) or `global` for `/sf-skills defaults install/update` when the command omits an explicit scope.
 
 The full Skill Funnel remains an action page because it edits native `settings.skills[]` and may reload Pi after applying staged changes.
-
-## Behavior Matrix
-
-| Event / Trigger              | Result                                                              |
-| ---------------------------- | ------------------------------------------------------------------- |
-| `session_start` (UI)         | Mount passive HUD; rebuild in-memory state (no catalog work)        |
-| `message_end` / `session_*`  | Refresh HUD from in-memory branch/context                           |
-| `before_agent_start`         | Bump usage counters on `/skill:<name>`                              |
-| `/sf-skills` (no args, UI)   | Open SF Skills in the SF Pi Manager                                 |
-| `/sf-skills funnel`          | Gather catalog, open the five-tab Funnel view, apply staged changes |
-| `/sf-skills summary`         | HUD summary text                                                    |
-| `/sf-skills metrics`         | Top-N usage counters (global + project)                             |
-| `/sf-skills defaults …`      | Manage the afv-library Managed Source                               |
-| `/sf-skills prune [--apply]` | Stale settings entries + orphan managed clones                      |
-| `session_shutdown`           | Dismiss HUD overlay                                                 |
 
 ## File Structure
 
@@ -135,19 +101,6 @@ extensions/sf-skills/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Run: `npm test`
-
-- `catalog.test.ts` — pure funnel-tag derivation + conflict classification (no mocks)
-- `resolution.test.ts` — compiled add/remove ops, expand-minus-one, ADR-0017 blocks
-- `gather.test.ts` — input assembly with injected loader/commands + temp dirs
-- `funnel-model.test.ts` — funnel counts, per-tab folds, staging reducer
-- `source-registry.test.ts` — persisted sources + gate round-trip, per scope
-- `boot-path.test.ts` — guards that no lifecycle hook builds the catalog
-- `pi-resource-parity.test.ts` — E4 evidence against Pi's public package manager/resource loader; records parity and decision rows without changing production behavior
-- HUD state, usage counters, prune, defaults — carried over
 
 ## Troubleshooting
 

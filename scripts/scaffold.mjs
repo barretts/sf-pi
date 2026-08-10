@@ -246,29 +246,21 @@ function manifestJson(id, name, category, intent) {
 }
 
 function readmeMd(id, name) {
-  return `# ${name} — Code Walkthrough
+  return `# ${name}
 
 ## What It Does
 
-TODO: Describe what this extension does.
+TODO: Describe the current user-visible behavior, how it starts, and when it stays silent.
 
-## Runtime Flow
+## Start
 
-\`\`\`
-Extension loads
-  ├─ TODO: describe initialization
-  └─ TODO: describe event handlers
+\`\`\`text
+/${id}
 \`\`\`
 
-## Key Architecture Decisions
+## Settings and Safety
 
-TODO: Explain why things are built the way they are.
-
-## Behavior Matrix
-
-| Event/Trigger | Condition | Result |
-|---|---|---|
-| session_start | — | TODO |
+TODO: Keep only real settings, credentials, safety boundaries, or recovery guidance. Remove this section if none apply.
 
 ## File Structure
 
@@ -276,24 +268,14 @@ TODO: Explain why things are built the way they are.
 
 \`\`\`
 extensions/${id}/
-  index.ts              ← Pi extension entry point
-  manifest.json         ← source-of-truth extension metadata
-  README.md             ← human + agent walkthrough
-  lib/
-  tests/
-    smoke.test.ts       ← unit / smoke test
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 \`\`\`
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Run: \`npm test\`
-
-## Troubleshooting
-
-**TODO symptom:**
-TODO fix.
 `;
 }
 

@@ -186,7 +186,9 @@ describe("generate-catalog CLI", () => {
       id: string;
     }[];
     expect(catalog.map((entry) => entry.id)).toEqual(["alpha"]);
-    expect(existsSync(path.join(root, "docs/extensions/alpha.md"))).toBe(true);
+    const detailPath = path.join(root, "docs/extensions/alpha.md");
+    expect(existsSync(detailPath)).toBe(true);
+    expect(readFileSync(detailPath, "utf8")).not.toContain("## Troubleshooting");
   });
 
   it("fails closed when an extension manifest is missing", () => {

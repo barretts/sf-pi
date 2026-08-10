@@ -1,4 +1,4 @@
-# SF Browser — Code Walkthrough
+# SF Browser
 
 ## What It Does
 
@@ -11,34 +11,6 @@ It is not a general browser framework, a Playwright replacement, or a stable Sal
 Use SF Browser for agent-driven last-mile UI work: opening authenticated Salesforce pages, taking compact snapshots, performing small fallback interactions, and capturing Browser Evidence when APIs or owning SF Pi extensions cannot fully answer the question.
 
 Use purpose-built UI testing frameworks for repeatable CI regression suites. Page-object and locator-based tools are better suited for durable test code, cross-release maintenance, role/browser matrices, and test reporting. SF Browser can help investigate or document a UI state, but it should not become the source of truth for automated regression tests.
-
-## Runtime Flow
-
-```
-Extension loads
-  ├─ registers /sf-browser
-  ├─ waits for session_start
-  ├─ registers hot-path tools only when the extension is enabled
-  └─ keeps deeper operating guidance in AGENT_GUIDE.md
-
-/sf-browser
-  ├─ UI available + no args → open SF Browser in the SF Pi Manager
-  └─ does not probe agent-browser until doctor or an explicit action runs
-
-sf_browser_open_org
-  ├─ resolves the active Salesforce target org from SF Pi environment cache when available
-  ├─ accepts curated Setup Destinations such as agentforce-agents
-  ├─ accepts structured routes such as object-list, object-new, and record-view
-  ├─ runs sf org open --url-only --json only after explicit intent
-  ├─ passes the session-bearing URL to agent-browser
-  └─ returns redacted next-step guidance
-
-sf_browser_capture_evidence
-  ├─ optionally dismisses known ambient Salesforce overlays
-  ├─ captures a full screenshot into the private Browser Evidence directory
-  ├─ records a monotonic evidence ID in the index
-  └─ optionally returns bounded image content to the model
-```
 
 ## Key Architecture Decisions
 
@@ -56,20 +28,6 @@ sf_browser_capture_evidence
 - Tool results include a user-visible duration so users can understand the cost and compare optimized workflows.
 - V1 avoids permission gates and semantic browser-action mediation to reduce permission fatigue.
 - See [`../../docs/adr/0011-sf-browser-agent-browser-lazy-hot-path-runtime.md`](../../docs/adr/0011-sf-browser-agent-browser-lazy-hot-path-runtime.md).
-
-## Behavior Matrix
-
-| Event/Trigger            | Condition            | Result                                                          |
-| ------------------------ | -------------------- | --------------------------------------------------------------- |
-| extension load           | pi version supported | Register `/sf-browser`; no browser probe                        |
-| `session_start`          | extension enabled    | Register SF Browser tools                                       |
-| `/sf-browser`            | interactive          | Open SF Browser in the SF Pi Manager                            |
-| `/sf-browser status`     | any                  | Print cached runtime status and artifact paths                  |
-| `/sf-browser doctor`     | explicit             | Run `agent-browser --version`, refresh cache, and show guidance |
-| `/sf-browser open`       | explicit             | Open active target org home in `agent-browser`                  |
-| `/sf-browser setup`      | explicit             | Open Salesforce Setup home in `agent-browser`                   |
-| `/sf-browser screenshot` | explicit             | Capture Browser Evidence in thumbnail mode                      |
-| `sf_browser_*` tools     | explicit agent call  | Invoke `agent-browser` in the shared `sf-pi` session            |
 
 ## Commands
 
@@ -230,17 +188,6 @@ extensions/sf-browser/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Run targeted checks while iterating:
-
-```bash
-npm run check
-npm test -- extensions/sf-browser/tests/smoke.test.ts
-```
-
-Before commit, run the repo validation path from the root README/AGENTS guidance.
 
 ## Troubleshooting
 

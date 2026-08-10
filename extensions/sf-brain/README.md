@@ -1,4 +1,4 @@
-# SF Brain — Code Walkthrough
+# SF Brain
 
 ## What It Does
 
@@ -13,45 +13,12 @@ User guidance can extend—but never replace—the bundled constitution through 
 
 SF Brain also provides a content-safe advisory **Instruction Surface Report** in the SF Pi Manager and through a contributor script. It never registers LLM tools.
 
-## Runtime Flow
-
-```text
-before_agent_start
-  ├─ constitution live on active branch? → skip
-  ├─ otherwise resolve cached sf CLI availability
-  ├─ load bundled constitution + optional append-only user guidance
-  └─ inject hidden sf-brain-constitution message
-
-before_agent_start
-  ├─ build tiny routing summary from package-filter state
-  ├─ matching live summary exists? → skip
-  └─ inject hidden sf-pi-routing-summary message
-
-context
-  └─ keep only the latest live constitution/routing-summary message
-```
-
-Compaction-aware session projection re-injects the constitution only when its live entry has been compacted away. Mutable routing state is replaced only when capability enablement changes.
-
-When sf CLI is unavailable, the full constitution remains present and receives a short `<sf_cli_status>` note. SF Brain never fabricates command output or embeds an installation cookbook in always-on context.
-
 ## Why Hidden Custom Messages
 
 - Stable bytes benefit provider prompt caching.
 - `/resume`, `/fork`, and `/reload` retain live context through the session log.
 - Active-branch projection prevents superseded mutable context from accumulating.
 - Static principles remain separate from Pi's generic coding prompt and user/project instructions.
-
-## Behavior Matrix
-
-| Event                | Condition                           | Result                                 |
-| -------------------- | ----------------------------------- | -------------------------------------- |
-| `before_agent_start` | live constitution exists            | skip                                   |
-| `before_agent_start` | constitution absent/post-compaction | inject bundled constitution + addendum |
-| `before_agent_start` | sf CLI unavailable                  | include compact CLI-status note        |
-| `before_agent_start` | routing summary unchanged           | skip                                   |
-| `before_agent_start` | extension enablement changed        | inject updated tiny summary            |
-| `context`            | older SF Brain context exists       | retain latest value only               |
 
 ## Append-Only User Guidance
 
@@ -88,25 +55,6 @@ extensions/sf-brain/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Covered behavior includes:
-
-- the bundled constitution is present with or without sf CLI;
-- user guidance is append-only and legacy `SF_KERNEL.md` is ignored;
-- direct per-extension guide paths are in the constitution;
-- the all-enabled routing summary stays tiny;
-- disabled capability owners include only their enablement path;
-- active-branch and compaction-aware injection deduplication;
-- content-safe Instruction Surface classification, baseline comparison, Manager rendering, and exact-Pi report artifacts;
-- opt-in behavior-eval facts without hidden scoring or tool execution.
-
-Run focused tests with:
-
-```bash
-npx vitest run extensions/sf-brain/tests
-```
 
 ## Troubleshooting
 

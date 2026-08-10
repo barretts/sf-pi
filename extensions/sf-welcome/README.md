@@ -1,4 +1,4 @@
-# SF Welcome — Code Walkthrough
+# SF Welcome
 
 ## What It Does
 
@@ -37,24 +37,6 @@ override)`). Driven by `lib/common/privacy/state.ts` — see
 - Recent sessions with relative timestamps
 - Recommended external pi packages (top 4 pending items) and skill-source nudges
 - Community attribution
-
-## Runtime Flow
-
-```
-Extension loads
-  └─ session_start (reason="startup")
-       ├─ sfPi.welcome.mode=off → skip
-       └─ otherwise → show non-blocking persistent header (Esc dismiss)
-
-Dismissal triggers:
-  ├─ Any keypress (overlay)
-  ├─ Escape (header)
-  ├─ agent_start (LLM responds)
-  └─ tool_call (agent working)
-
-session_shutdown
-  └─ clear overlay/header state, reset animation flags, and unsubscribe shared status listeners
-```
 
 ## Key Architecture Decisions
 
@@ -170,21 +152,6 @@ session_shutdown
     so the prompt never fires again on that machine. `/sf-setup-fonts`
     remains available as an explicit escape hatch.
 
-## Behavior Matrix
-
-| Event/Trigger    | Condition                     | Result                                    |
-| ---------------- | ----------------------------- | ----------------------------------------- |
-| session_start    | reason="startup", mode≠off    | Show persistent header                    |
-| session_start    | reason≠"startup"              | Skip (resume, reload, fork)               |
-| agent_start      | overlay/header visible        | Dismiss                                   |
-| tool_call        | overlay/header visible        | Dismiss                                   |
-| any keypress     | overlay visible               | Dismiss                                   |
-| Escape           | header visible                | Dismiss                                   |
-| session_shutdown | —                             | Clear overlay/header state and listeners  |
-| /sf-welcome      | always                        | Show text summary                         |
-| /sf-setup-fonts  | always                        | Install bundled Nerd Font + refresh cache |
-| session_start    | ascii + no font + never asked | Ask once, persist answer, never re-ask    |
-
 ## File Structure
 
 <!-- GENERATED:file-structure:start -->
@@ -237,16 +204,6 @@ reads it cache-first and refreshes it with a deferred version probe. Native Auto
 Update status lives at `<globalAgentDir>/sf-pi/auto-update/status.json`. sf-pi
 release freshness reuses the announcements state/cache under
 `<globalAgentDir>/state/sf-pi/announcements.json`.
-
-## Testing Strategy
-
-Run: `npm test`
-
-- **Smoke tests**: Module exports, component instantiation, render output shape
-- **Registry alignment tests**: Verifies extension health stays aligned with the generated registry
-- **Narrow terminal handling**: Verifies graceful empty output below minimum width
-- **Announcements / recommendations**: Verifies bundled manifest loading, merge/filter rules, and splash summaries
-- **Manual QA**: Full visual testing in terminal with `pi` or the preview scripts above (overlay rendering, dismissal, animation)
 
 ## Troubleshooting
 

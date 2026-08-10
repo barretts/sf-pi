@@ -1,4 +1,4 @@
-# SF tldraw — Code Walkthrough
+# SF tldraw
 
 ## What It Does
 
@@ -9,39 +9,6 @@
 - Interaction/Sequence
 
 Explicit Mermaid or text requests still win. The extension does not query a Salesforce org or documentation service itself; callers use the appropriate SF Pi capability owner and pass normalized evidence into the diagram spec.
-
-## Runtime Flow
-
-```text
-Extension loads
-  ├─ registers /sf-tldraw and tldraw_canvas
-  ├─ performs no live API or process work during module load
-  └─ session_start publishes local server-config presence as Available
-     without making a loopback request; explicit status, document, create,
-     and render interactions publish verified runtime readiness
-
-Explicit tool/command action
-  ├─ rereads tldraw's per-launch port + bearer token
-  ├─ probes or resolves an already-open document
-  ├─ validates explicit reference/org grounding
-  ├─ compiles a deterministic profile and layout
-  ├─ executes one fixed editor program
-  ├─ checks tldraw lints, connector terminals, and typography
-  └─ captures full + thumbnail evidence only when readiness passes
-```
-
-## Behavior Matrix
-
-| Event/Action        | Condition                                             | Result                                                                         |
-| ------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Extension load      | Always                                                | Registers `/sf-tldraw` and `tldraw_canvas`; performs no live runtime work.     |
-| `session_start`     | Local server config exists                            | Publishes on-demand availability without a loopback request or deferred timer. |
-| `/sf-tldraw`        | Interactive, no arguments                             | Opens the extension in SF Pi Manager.                                          |
-| `/sf-tldraw status` | Explicit invocation                                   | Probes the Canvas API and publishes live readiness or an actionable fault.     |
-| Salesforce render   | Valid grounded spec and open document                 | Reconciles managed shapes, checks readiness, and captures evidence.            |
-| Salesforce render   | Any validation, lint, geometry, or screenshot failure | Returns a blocker and does not report completion.                              |
-| Update              | `render_mode="preserve"`                              | Keeps existing managed-group positions and all user annotations.               |
-| Relayout/replace    | Explicit request                                      | Moves or rebuilds only extension-managed shapes.                               |
 
 ## Canvas API Boundary
 
@@ -155,47 +122,6 @@ extensions/sf-tldraw/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Focused tests cover:
-
-- cache-only startup availability with no deferred loopback probe
-- strict Spec v2-only provider schema, grounding, provenance, and render-privacy validation
-- deterministic graph/lane layout
-- preference inheritance and clearing
-- bearer-authenticated endpoint contracts and redaction
-- transform-correct marker program generation
-- command/tool registration
-- an opt-in live render smoke against an already-open local board
-
-Run targeted tests with:
-
-```bash
-npx vitest run extensions/sf-tldraw/tests
-```
-
-With a local board open, run the 30-case OAuth, SSO, and integration visual-hardening matrix with:
-
-```bash
-SF_TLDRAW_SEQUENCE_MATRIX=1 npx vitest run extensions/sf-tldraw/tests/sequence-matrix.live.test.ts
-```
-
-The matrix runs serially, validates every managed shape, captures full and thumbnail evidence, and writes private `index.json`, `report.html`, and `report.md` artifacts under `tldraw-artifacts/sequence-matrix/`. A case is ready only when label backings mask every intersecting lifeline or activation bar in the verified z-order.
-
-A normalized external Data Model Gallery corpus can be replayed without committing Salesforce/Lucidchart source material. The manifest is a JSON array of `{ index?, slug, category, title, file }`. Every `file` must resolve inside the manifest directory, and slugs must match `[a-z0-9][a-z0-9-]{0,79}`. The stable case identity is `index-slug`, so the same public model title can legitimately recur in different product categories. Reuse one existing page for large corpora so the desktop document's page cap does not affect the run. Pin the expected count/hash for release qualification:
-
-```bash
-SF_TLDRAW_DATA_MODEL_GALLERY_MANIFEST=/path/to/spec-manifest.json \
-SF_TLDRAW_DATA_MODEL_GALLERY_PAGE="Gallery Verification" \
-SF_TLDRAW_DATA_MODEL_GALLERY_EXPECTED_COUNT=230 \
-SF_TLDRAW_DATA_MODEL_GALLERY_EXPECTED_HASH=<sha256> \
-npx vitest run extensions/sf-tldraw/tests/data-model-gallery-matrix.live.test.ts
-```
-
-Set `SF_TLDRAW_DATA_MODEL_GALLERY_LEGEND_RELATIONSHIPS=hide` to qualify the compact title-only layout; omitted means the default `show` mode.
-
-The run validates and compiles every case deterministically, renders serially, requires zero lints and marker overlaps, captures each full/thumbnail artifact, and writes a private index plus Markdown report under `tldraw-artifacts/data-model-gallery-matrix/`. When the corpus hash matches the checked-in qualified baseline, every model also enforces its pinned maximum route-obstruction, independent-crossing, and shared-corridor counts; lower counts are accepted as improvements.
 
 ## Troubleshooting
 

@@ -292,22 +292,23 @@ The `--category` must be one of the six values defined by
 
 ### Extension README conventions
 
-Extension READMEs should include these sections when relevant:
+An extension README is the human behavior and usage page. Keep it focused:
 
-- **What It Does** — one paragraph, user-facing.
-- **Runtime Flow** — event-by-event diagram.
-- **Commands** — one row per slash command with a short description.
-- **Behavior Matrix** — event/trigger → condition → result table.
-- **File Structure** — tree listing `lib/` + `tests/`.
-- **Troubleshooting** — bolded `**Symptom:**` entries with fixes. The
-  catalog generator picks these up and builds the documentation site's
-  troubleshooting index automatically, so every entry you add shows up
-  with a jump link.
+- **What It Does** is required and describes current user-visible behavior.
+- Explain how a human starts the extension and document real commands,
+  settings, credentials, safety boundaries, and recovery steps when relevant.
+- The generated **File Structure** block gives only directory roles and root
+  contract files. Exact agent entrypoints live in `docs.primaryFiles`.
+- Put editing invariants in `AGENTS.md`, tool ordering/recovery in
+  `AGENT_GUIDE.md`, rationale in ADRs, and test commands in this guide unless an
+  extension has a genuine exception.
+- Do not add event-by-event Runtime Flow, Behavior Matrix, or generic Testing
+  Strategy sections merely to satisfy a template.
 
-The `## Troubleshooting` convention specifically parses lines shaped like
-`**Some symptom or question:**` or `**Some question?**` — keep that syntax
-and new entries appear in the root index on the next
-`npm run generate-catalog`.
+When real extension-specific recovery guidance exists, use a
+`## Troubleshooting` section with entries shaped like `**Symptom:**` or
+`**Question?**`. The catalog generator includes those entries in the generated
+troubleshooting index. Omit the section rather than adding placeholders.
 
 ## Proposing a recommended extension
 

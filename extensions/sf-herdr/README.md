@@ -1,4 +1,4 @@
-# SF Herdr — Code Walkthrough
+# SF Herdr
 
 ## What It Does
 
@@ -17,48 +17,6 @@ The standalone [official Herdr skill](https://herdr.dev/docs/agent-skill/) is no
 packed by SF Pi or `npm:@ogulcancelik/pi-herdr`. Herdr owns that content and
 `herdr --skill` prints the release-matched copy; skill installation remains a
 separate follow-up from this structured-tool repair.
-
-## Runtime Flow
-
-```text
-extension load
-  ├─ register /sf-herdr and Manager/doctor surfaces
-  ├─ register session_start gating
-  └─ register exact pane-run result normalization
-
-session_start
-  ├─ inspect the active tool names and Herdr environment
-  └─ register sf_herdr_plan only when the complete current runtime is ready
-
-sf_herdr_plan
-  ├─ require intent and primaryWorkflow
-  ├─ read global sfPi.herdr settings
-  ├─ return structured current tool/action steps
-  ├─ carry split.details.pane.pane_id forward as an opaque result reference
-  └─ use wait_output's bounded snapshot instead of a separate pane read
-
-tool_result
-  └─ normalize only the current successful-empty-body pane run without retrying
-```
-
-The planner does not mutate panes and does not generate a shell command. The
-owning workflow supplies the command, output marker, agent kind, or prompt.
-Ordinary command intents use `herdr_pane`; review uses `herdr_agent`.
-
-## Behavior Matrix
-
-| Event or action      | Condition                                           | Result                                                              |
-| -------------------- | --------------------------------------------------- | ------------------------------------------------------------------- |
-| Extension load       | Supported Pi runtime                                | Register `/sf-herdr`, Manager actions, doctor, and settings only.   |
-| `session_start`      | Herdr environment and all three tools are active    | Register `sf_herdr_plan` for the current session.                   |
-| `session_start`      | Environment or any current Herdr tool is missing    | Keep the planner unregistered; status and setup surfaces remain.    |
-| `/sf-herdr`          | Interactive, no arguments                           | Open the SF Herdr Manager detail page.                              |
-| `/sf-herdr status`   | Any runtime                                         | Report current environment, complete tool readiness, and settings.  |
-| `/sf-herdr settings` | Interactive                                         | Open the global split-direction and intent-lifecycle settings page. |
-| `sf_herdr_plan`      | Explicit `intent` and `primaryWorkflow`             | Return current structured tool/action steps without mutating panes. |
-| `tool_result`        | Exact successful-empty-body `herdr_pane.run` result | Report the submitted command as success without executing it again. |
-| Ephemeral plan       | Workflow success is observed in `wait_output`       | Recommend `herdr_pane.close` for the freshly created pane.          |
-| Any plan             | Failure, timeout, blocked, or ambiguous completion  | Leave the pane open for inspection and explicit cleanup.            |
 
 ## Lifecycle Settings
 
@@ -130,20 +88,6 @@ extensions/sf-herdr/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-```bash
-npm test -- extensions/sf-herdr/tests extensions/sf-welcome/tests/herdr-runtime-status.test.ts extensions/sf-guardrail/tests/safety-subject.test.ts
-npm run check -- --pretty false
-```
-
-Run the opt-in live smoke only from a disposable Herdr session; it is not part
-of default CI:
-
-```bash
-SF_HERDR_LIVE_SMOKE=1 npm run e2e:sf-herdr
-```
 
 ## Troubleshooting
 

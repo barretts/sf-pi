@@ -1,4 +1,4 @@
-# SF LSP — Code Walkthrough
+# SF LSP
 
 ## What It Does
 
@@ -49,34 +49,6 @@ continues to handle `.agent` files exactly as before.
 | LWC          | `.js`, `.html` (in `lwc/` bundles) | lwc-language-server (Node) |
 | Agent Script | `.agent`                           | Agent Script LSP (Node)    |
 
-## Runtime Flow
-
-```
-session_start
-  └─ doctor probe (background) → write sf-lsp-health registry
-                                  → SF Welcome repaints its one-line readiness row
-
-write/edit tool completes
-  │
-  ├─ Is this a supported Salesforce file?
-  │    .cls / .trigger → Apex
-  │    lwc/*/*.js|html → LWC
-  │    .agent → Agent Script
-  │    other → skip
-  │
-  ├─ Discover LSP server
-  │    env vars → .pi/lsp/ → ~/.pi/agent/lsp/ → VS Code extensions → PATH
-  │
-  ├─ Send file to LSP, wait ≤6s for diagnostics (working indicator ticks)
-  │
-  └─ Decide what to append / emit:
-       Has errors?           → "LSP feedback: MyClass.cls\n- L11: …" (to LLM)
-                              + transcript row (user-only)
-       Was error, now clean? → "LSP now clean: MyClass.cls" + transcript row
-       First time unavailable? → "LSP setup note: …" + transcript row
-       Clean and was never broken? → nothing (silent)
-```
-
 ## LSP Server Discovery
 
 Each language has its own discovery chain. The first match wins.
@@ -121,33 +93,6 @@ startup readiness while `/sf-lsp` and its Manager page provide on-demand detail.
 The Manager Settings page exposes the low-risk `sfPi.sfLsp.verbose` preference
 for user-visible transcript row verbosity; diagnostic feedback sent to the agent
 is unchanged.
-
-## Behavior Matrix
-
-### LLM-facing (unchanged)
-
-| Event/Trigger            | Condition                                       | Result                                     |
-| ------------------------ | ----------------------------------------------- | ------------------------------------------ |
-| session_start            | always                                          | Reset LSP session state                    |
-| session_shutdown         | always                                          | Reset state, shut down LSP child processes |
-| tool_result (write/edit) | `.agent` + `sf-agentscript` installed           | Silent (assist extension handles it)       |
-| tool_result (write/edit) | Supported SF file, has errors                   | Append `LSP feedback:` with diagnostics    |
-| tool_result (write/edit) | Supported SF file, was error → now clean        | Append `LSP now clean:`                    |
-| tool_result (write/edit) | Supported SF file, LSP unavailable (first time) | Append `LSP setup note:`                   |
-| tool_result (write/edit) | Supported SF file, clean (no previous error)    | Silent — no modification                   |
-| tool_result (write/edit) | Unsupported file                                | Silent — no modification                   |
-| tool_result (error)      | Any file                                        | Silent — don't diagnose failed writes      |
-
-### TUI-facing (user-only)
-
-| Surface                   | Event/Trigger                                    | Result                                                |
-| ------------------------- | ------------------------------------------------ | ----------------------------------------------------- |
-| Working indicator         | check started / finished                         | Push `⠋ LSP <Lang>…` / restore default                |
-| SF Welcome readiness row  | session_start doctor probe / `/sf-lsp doctor`    | Per-language ✓ available, ✗ unavailable, or ○ unknown |
-| Transcript row (balanced) | error, error→clean transition, first unavailable | Emit one `sf-lsp` custom entry                        |
-| Transcript row (verbose)  | every check                                      | Emit one `sf-lsp` custom entry                        |
-| `/sf-lsp`                 | no args                                          | Open SF LSP in the SF Pi Manager                      |
-| `/sf-lsp doctor`          | —                                                | `ui.notify` with availability report                  |
 
 ## File Structure
 
@@ -249,16 +194,6 @@ Adopted from lsp-pi best practices:
 - **Idle server shutdown**: Servers with no activity for 2 minutes are shut down.
   They restart lazily when the next file is diagnosed.
 - **Path normalization**: Uses `realpathSync` to handle macOS `/var` vs `/private/var`.
-
-## Testing Strategy
-
-- **file-classify.ts**: Pure functions, fully tested with edge cases
-- **feedback.ts**: Pure decision logic and rendering, tested with factory helpers
-- **lsp-client.ts**: Requires real LSP servers — tested via manual QA with
-  `/sf-lsp doctor` and actual file edits against a connected org
-- **activity.ts**: Pure state transitions, fully tested
-
-Run: `npm test`
 
 ## Troubleshooting
 

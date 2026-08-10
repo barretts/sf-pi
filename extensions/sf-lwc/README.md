@@ -1,4 +1,4 @@
-# SF LWC — Code Walkthrough
+# SF LWC
 
 ## What It Does
 
@@ -19,22 +19,6 @@ Apex/server verification remains with `sf-apex`, schema validation remains with
 Full scans, component inspections, diagnostics, and Jest output are persisted as
 **LWC Artifacts** under the global agent directory. Tool output stays compact for
 the LLM and renders as human-friendly **LWC Result Cards** in the TUI.
-
-## Runtime Flow
-
-```text
-Extension loads
-  ├─ register /sf-lwc command
-  └─ session_start
-       └─ register sf_lwc tool
-
-sf_lwc action
-  ├─ resolves the SFDX project from cwd/workspace
-  ├─ scans only packageDirectories from sfdx-project.json
-  ├─ runs focused local compiler/template diagnostics or bounded local Jest
-  ├─ writes full evidence as LWC Artifacts
-  └─ returns compact LWC Run Digest + human LWC Result Card
-```
 
 ## Key Architecture Decisions
 
@@ -63,24 +47,6 @@ sf_lwc action
   `uplifting-components-to-slds2`. These are guidance hints only: `sf_lwc`
   remains the lifecycle evidence authority, Code Analyzer owns explicit SLDS
   scans today, and a future `sf-slds2` extension can own SLDS2 uplift workflows.
-
-## Behavior Matrix
-
-| Event/Trigger              | Condition                     | Result                                                                  |
-| -------------------------- | ----------------------------- | ----------------------------------------------------------------------- |
-| extension load             | always                        | Register `/sf-lwc` command.                                             |
-| session_start              | extension enabled             | Register `sf_lwc` tool.                                                 |
-| `/sf-lwc`                  | interactive                   | Open status/actions panel.                                              |
-| `/sf-lwc status`           | any mode                      | Print concise extension status.                                         |
-| `sf_lwc status`            | explicit tool call            | Report SFDX/LWC Jest/compiler readiness.                                |
-| `sf_lwc project.scan`      | SFDX project                  | Inventory LWC bundles in registered package directories.                |
-| `sf_lwc component.list`    | SFDX project                  | List matching local LWC bundles.                                        |
-| `sf_lwc component.inspect` | component provided            | Summarize bundle shape, imports, diagnostics, style signals, and tests. |
-| `sf_lwc file.diagnose`     | local LWC file(s)             | Run focused HTML/JS/TS/meta diagnostics.                                |
-| `sf_lwc test.discover`     | SFDX project                  | Find local LWC Jest files and runner readiness.                         |
-| `sf_lwc test.plan`         | component/file/test scope     | Recommend the smallest useful local Jest scope.                         |
-| `sf_lwc test.run`          | local runner + test scope     | Run bounded local LWC Jest and write artifacts.                         |
-| `sf_lwc history.rerun`     | previous runnable test exists | Rerun the previous local LWC Jest action.                               |
 
 ## Commands
 
@@ -122,26 +88,6 @@ extensions/sf-lwc/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Run targeted tests while developing:
-
-```bash
-npm test -- extensions/sf-lwc/tests
-```
-
-Before finishing broader changes:
-
-```bash
-npm run generate-catalog
-npm run format:check
-npm run check -- --pretty false
-npm test -- extensions/sf-lwc/tests extensions/sf-brain/tests/extension-context.test.ts
-```
-
-V1 is local-only, so release validation does not require a live Salesforce org.
-Use deterministic local SFDX fixtures for scan/inspect/diagnose/test workflows.
 
 ## Troubleshooting
 

@@ -510,6 +510,13 @@ function extensionDocLink(dir) {
   return `./extensions/${dir}`;
 }
 
+function extensionReadmeHasSection(dir, section) {
+  const readmePath = path.join(EXTENSIONS_DIR, dir, "README.md");
+  if (!existsSync(readmePath)) return false;
+  const readme = readFileSync(readmePath, "utf8");
+  return new RegExp(`^##\\s+${section}\\s*$`, "im").test(readme);
+}
+
 function generateReadmeBundledExtensions(manifests) {
   const sorted = sortByCategoryThenName(manifests);
 
@@ -790,11 +797,16 @@ function generateExtensionDetailDoc(dir, manifest) {
     ...(manifest.docs?.contextGlossary
       ? [`- [Domain glossary](${sourceFileLink(dir, manifest.docs.contextGlossary)})`]
       : []),
-    "",
-    "## Troubleshooting",
-    "",
-    `See the [Troubleshooting section in the full README](${sourceFileLink(dir, "README.md")}#troubleshooting) for extension-specific recovery steps.`,
   );
+
+  if (extensionReadmeHasSection(dir, "Troubleshooting")) {
+    lines.push(
+      "",
+      "## Troubleshooting",
+      "",
+      `See the [Troubleshooting section in the full README](${sourceFileLink(dir, "README.md")}#troubleshooting) for extension-specific recovery steps.`,
+    );
+  }
 
   return lines.join("\n");
 }

@@ -1,4 +1,4 @@
-# SF Code Analyzer — Code Walkthrough
+# SF Code Analyzer
 
 ## What It Does
 
@@ -17,30 +17,6 @@ the supported `sf code-analyzer` CLI commands with:
 - scoped automation preferences with project > global > default precedence
 - `summary`, `inline`, and `file_only` output modes for explicit report actions
 - scan recipes that explain default automatic profiles, broader explicit scans, and Herdr handoff guidance
-
-## Runtime Flow
-
-```text
-Extension loads
-  ├─ register /sf-code-analyzer
-  ├─ register /sf-pi doctor provider
-  └─ session_start
-       ├─ if extension enabled, register code_analyzer tool
-       ├─ schedule deferred readiness-cache refresh
-       └─ collect changed write/edit targets for post-agent scans
-
-agent_settled
-  ├─ if changed supported files exist and cached readiness is ready
-  ├─ run one bounded local Code Analyzer scan
-  ├─ emit human-visible transcript row
-  └─ send bounded LLM follow-up only when actionable findings exist
-
-code_analyzer action='run'
-  ├─ create JSON report path under <globalAgentDir>/sf-pi/code-analyzer/
-  ├─ run sf code-analyzer run --output-file <report>.json
-  ├─ parse JSON report when present
-  └─ return bounded LLM summary + report path in details
-```
 
 ## Key Architecture Decisions
 
@@ -193,25 +169,6 @@ SF Pi Manager detail page, press `S` to switch the active Manager scope; scoped
 automation actions render once and apply to the selected global or project
 scope.
 
-## Behavior Matrix
-
-| Event/Trigger                 | Condition         | Result                                                                   |
-| ----------------------------- | ----------------- | ------------------------------------------------------------------------ |
-| extension load                | always            | Register `/sf-code-analyzer` and `/sf-pi doctor` provider.               |
-| session_start                 | extension enabled | Register the `code_analyzer` tool.                                       |
-| tool_result                   | successful edit   | Collect a supported changed-file target for deferred analysis.           |
-| agent_settled                 | target(s) pending | Run one readiness-gated deferred analysis pass.                          |
-| session_shutdown              | always            | Clear deferred state and the tool-registration latch.                    |
-| `/sf-code-analyzer`           | interactive       | Open SF Code Analyzer in the SF Pi Manager.                              |
-| `/sf-code-analyzer status`    | any mode          | Print extension and tool status.                                         |
-| `/sf-code-analyzer doctor`    | any mode          | Probe Salesforce CLI, Code Analyzer plugin, Java, and Python.            |
-| `code_analyzer` `doctor`      | agent tool        | Return setup readiness to the LLM.                                       |
-| `code_analyzer` `run`         | agent tool        | Run the CLI scan, parse JSON output, and return a bounded summary.       |
-| `code_analyzer` `rules`       | agent tool        | Run rule discovery and save JSON output.                                 |
-| `code_analyzer` `config`      | agent tool        | Write effective Code Analyzer config output.                             |
-| `code_analyzer` `apexguru`    | agent tool        | Run explicit ApexGuru analysis for one Apex file.                        |
-| `code_analyzer` `last_report` | agent tool        | Recover the latest branch-local report summary from tool-result details. |
-
 ## Commands
 
 | Command                    | Description                                                                 |
@@ -254,22 +211,6 @@ extensions/sf-code-analyzer/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Run:
-
-```bash
-npm test -- extensions/sf-code-analyzer/tests
-npm run check
-```
-
-- `display.test.ts` covers the quality-biased finding selection and report
-  summary text.
-- `smoke.test.ts` verifies the extension and tool modules export their entry
-  points.
-- CLI execution is wrapped behind `ExecFn` so later slices can add focused unit
-  tests without shelling out.
 
 ## Troubleshooting
 

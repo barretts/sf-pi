@@ -1,4 +1,4 @@
-# SF Feedback — Code Walkthrough
+# SF Feedback
 
 ## What It Does
 
@@ -10,31 +10,6 @@ prefilled GitHub issue URL.
 
 It also provides `/sf-feedback diagnostics` for copying the sanitized diagnostics
 block without creating an issue.
-
-## Runtime Flow
-
-```
-Extension loads
-  ├─ registers /sf-feedback before Manager action wiring
-  └─ lazily loads diagnostics / GitHub helpers only after an explicit action
-
-/sf-feedback
-  ├─ UI available + no args → open SF Feedback in the SF Pi Manager
-  └─ selected Manager action / explicit subcommand
-     ├─ Manager issue actions drill into a form overview + native field editor flow
-     ├─ collectDiagnostics()
-     ├─ package/runtime versions
-     ├─ OS, shell, terminal, TTY/CI
-     ├─ git state summary
-     ├─ SF CLI version/config summary
-     ├─ enabled/disabled SF Pi extensions
-     └─ GitHub CLI auth status
-  ├─ prompt for issue type/title/details (interactive only)
-  ├─ build sanitized Markdown body
-  ├─ preview + confirm
-  ├─ gh issue create when authenticated
-  └─ otherwise open a prefilled GitHub URL
-```
 
 ## Key Architecture Decisions
 
@@ -95,18 +70,6 @@ SF Feedback has a Manager Settings page for the default issue kind stored under 
 
 The setting is used when no explicit `bug`, `feature`, `setup`, or `feedback` subcommand is provided. It never bypasses preview or final confirmation.
 
-## Behavior Matrix
-
-| Event/Trigger                                | Condition                              | Result                                          |
-| -------------------------------------------- | -------------------------------------- | ----------------------------------------------- |
-| `/sf-feedback`                               | UI available + no args                 | Open SF Feedback in the SF Pi Manager           |
-| `/sf-feedback`                               | no UI + no args                        | Emit generic feedback draft and fallback URL    |
-| `/sf-feedback bug\|feature\|setup\|feedback` | interactive + authenticated `gh`       | Prompt, preview, confirm, create GitHub issue   |
-| `/sf-feedback bug\|feature\|setup\|feedback` | interactive without authenticated `gh` | Prompt, preview, confirm, open prefilled URL    |
-| `/sf-feedback bug\|feature\|setup\|feedback` | headless                               | Emit draft body and fallback URL; do not submit |
-| `/sf-feedback diagnostics`                   | any mode                               | Emit sanitized diagnostics only                 |
-| `/sf-feedback help`                          | any mode                               | Show command help                               |
-
 ## File Structure
 
 <!-- GENERATED:file-structure:start -->
@@ -121,18 +84,6 @@ extensions/sf-feedback/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Run targeted tests:
-
-```bash
-npx vitest run extensions/sf-feedback/tests
-```
-
-Coverage focuses on the public-safety pieces: sanitization, issue-body
-construction, fallback URL generation, and Manager Surface command routing.
-Interactive prompt behavior is manually QA'd inside pi.
 
 ## Troubleshooting
 

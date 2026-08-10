@@ -1,4 +1,4 @@
-# sf-llm-gateway — Code Walkthrough
+# SF LLM Gateway
 
 > **Optional gateway provider.** This extension ships with no default endpoint
 > or credentials. To use it, run `/login sf-llm-gateway`, or provide
@@ -73,22 +73,6 @@ input, context/output, and thinking-map fields while keeping gateway cost at zer
 and discarding provider identity, headers, and provider-specific compatibility.
 Remaining fields use conservative defaults. Pi persists the last successful
 catalog so discovered models remain available offline.
-
-## Runtime Flow
-
-```
-Extension loads
-  ├─ installWireTrace()                 ← opt-in, redacted gateway trace
-  ├─ registerProvider(completeProvider) ← empty baseline + Pi cache restore
-  ├─ registerEntryRenderer()            ← human-only headless report renderer
-  ├─ registerCommand("sf-llm-gateway")
-  ├─ on("session_start")               → bind cwd/UI/model registry; local settings repair
-  ├─ on("turn_end")                    → update footer status; first turn_end also
-  │                                       kicks refreshUsageDetails (daily activity, key list)
-  ├─ on("model_select")                → refresh footer; Pi/user settings retain thinking authority
-  ├─ on("after_provider_response")     → record throttle/upstream signal (gateway provider)
-  └─ on("session_shutdown")            → cancel auth UI; clear cwd/footer/provider state
-```
 
 ## Connecting
 
@@ -222,31 +206,6 @@ information panel, RPC emits notifications, JSON emits state-only custom-entry
 events, and print mode writes the report while appending the same model-invisible
 entry to the active session.
 
-## Behavior Matrix
-
-| Event/Trigger                | Condition                        | Result                                                                                                                                    |
-| ---------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Extension load               | —                                | Register one complete Provider; synchronously expose baseline and restore Pi's model cache offline                                        |
-| session_start                | —                                | Bind cwd/UI/model registry and run local settings repair; no discovery network                                                            |
-| turn_end                     | model is on gateway provider     | Update footer (context + monthly usage); first turn_end also kicks refreshUsageDetails (daily activity, key list)                         |
-| turn_end                     | model is not on gateway provider | Clear footer status                                                                                                                       |
-| model_select                 | any model change                 | Refresh footer; never mutate Pi's active thinking level                                                                                   |
-| after_provider_response      | gateway model + 2xx/3xx          | Clear any live throttle/upstream badge                                                                                                    |
-| after_provider_response      | gateway model + 429              | Record throttle signal, footer shows ⚠ badge for 60s                                                                                      |
-| after_provider_response      | gateway model + >=500            | Record upstream signal, footer shows ⚠ badge for 60s                                                                                      |
-| session_shutdown             | —                                | Cancel credential UI and clear cwd/auth/footer/provider state                                                                             |
-| /command (no args)           | interactive UI                   | Open the SF Pi Manager detail page                                                                                                        |
-| /command (no args)           | no UI                            | Print text status report                                                                                                                  |
-| /command on                  | missing credentials              | Configure endpoint if needed and prefill `/login sf-llm-gateway`                                                                          |
-| /command on                  | credentials present              | Save non-secret scope/default settings and explicitly refresh Pi models                                                                   |
-| /command off                 | additive scope                   | Disable, remove gateway pattern, switch to off-default                                                                                    |
-| /command off                 | exclusive scope                  | Disable, restore previous scoped models, switch to off-default                                                                            |
-| /command refresh             | —                                | Re-discover, refresh monthly usage                                                                                                        |
-| /command usage-probe         | —                                | Force a read-only usage probe and classify key/user spend scope                                                                           |
-| /command usage-probe --trace | —                                | Render the per-endpoint trace (timings + status) from the last refresh                                                                    |
-| Monthly usage fetch          | cached < 60 s old                | Use cache                                                                                                                                 |
-| Monthly usage fetch          | stale or forced                  | Fetch gateway `/v2/user/info`; retry with the `/key/info` user id only when required; fallback to legacy `/user/info` for older gateways. |
-
 ## File Structure
 
 <!-- GENERATED:file-structure:start -->
@@ -262,15 +221,6 @@ extensions/sf-llm-gateway/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Tests cover exported pure helpers. Functions that need Pi runtime context
-(event handlers, command handlers, UI interactions) are tested via manual QA.
-
-To run all unit tests: `npm test`
-
-Exported helpers are marked with `// Exported for unit tests.` in the source.
 
 ## Doctor: `/sf-llm-gateway doctor`
 

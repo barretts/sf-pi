@@ -1,4 +1,4 @@
-# SF Ohana Spinner — Code Walkthrough
+# SF Ohana Spinner
 
 ## What It Does
 
@@ -14,19 +14,6 @@ Modes:
 
 Ohana remains the default for existing users. Users can switch to Calm from the
 `/sf-pi` extension manager settings panel.
-
-## Runtime Flow
-
-```
-session_start
-  ├─ Read sfPi.ohanaSpinner.mode from Pi settings
-  ├─ Ohana: install `Thinking… · <message>` rainbow frames and start message rotation timer (5s)
-  └─ Calm: install stable `Thinking…` frames with no rotation timer
-
-session_shutdown
-  ├─ Clear rotation timer if present
-  └─ Restore Pi's default working indicator
-```
 
 ## Key Architecture Decisions
 
@@ -55,16 +42,6 @@ understand than the problem requires. The Manager settings page saves in place,
 then shows a reload-required hint because the active working indicator is
 installed during `session_start`.
 
-## Behavior Matrix
-
-| Event            | Result                                                      |
-| ---------------- | ----------------------------------------------------------- |
-| session_start    | Install Ohana or Calm frames from the saved mode preference |
-| 5s interval      | Ohana only: rotate to a new random message                  |
-| 150ms interval   | Pi advances the configured working-indicator frames         |
-| session_shutdown | Clear rotation timer, restore default indicator             |
-| No LLM activity  | Silent — Pi only shows the indicator while streaming        |
-
 ## File Structure
 
 <!-- GENERATED:file-structure:start -->
@@ -79,18 +56,6 @@ extensions/sf-ohana-spinner/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Tests focus on user-visible outcomes at the extension boundary:
-
-- session start installs a visible Ohana or Calm working indicator
-- Ohana frames are colorful and include Salesforce-themed personality text
-- Calm frames stay quiet and avoid rainbow color codes or rotating message text
-- session shutdown restores Pi's default working indicator and message
-- mode settings preserve project-over-global precedence
-
-Run: `npm test`
 
 ## Troubleshooting
 

@@ -1,4 +1,4 @@
-# SF Data 360 — Code Walkthrough
+# SF Data 360
 
 ## What It Does
 
@@ -56,29 +56,6 @@ The intended balance is:
 - **Deterministic:** actions route through the generated registry and shared Salesforce Connection Module, which resolves the target org, selects the latest advertised API version (or explicit configured fallback), builds query strings, handles authentication/timeouts, and never uses JSforce's implicit API 50. Risky writes remain gated locally.
 - **Pi-native:** no external server or Java subprocess is used; v2 tools run through the common Salesforce connection, safety, and rendering modules.
 
-## Runtime Flow
-
-```
-Extension loads
-  ├─ register /sf-data360 and Manager/doctor surfaces
-  ├─ session_start
-  │    └─ register data360_* family tools when enabled
-  └─ resources_discover
-       └─ re-register tools on reload; no Agent Skill contribution
-
-Agent calls a data360_* tool
-  ├─ action.describe / actions.search? → local registry lookup, no network call
-  ├─ Resolve action → capability / local helper / journey
-  ├─ For target-org work, enter the shared Salesforce Connection Module
-  ├─ Select org-latest or configured-fallback API version
-  ├─ Build /services/data/v<selected-version>/... paths centrally
-  ├─ Classify safety by action + method + path
-  ├─ dry_run? → return resolved request/plan, no business mutation
-  ├─ confirmation required? → ask user or fail closed in headless mode
-  └─ execute via existing adapters
-       └─ truncate large output and save full result to temp file
-```
-
 ## Tool Shape
 
 Every v2 family tool uses the same compact envelope:
@@ -104,20 +81,6 @@ loading the whole catalog:
 ```json
 { "action": "action.describe", "params": { "action": "stream.create_ingest_api" } }
 ```
-
-## Behavior Matrix
-
-| Event / trigger                                          | Condition                 | Result                                                                      |
-| -------------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------- |
-| Extension load                                           | Extension enabled         | Register `data360_*` family tools and `/sf-data360`.                        |
-| `resources_discover`                                     | Extension enabled         | Re-register tools on reload; no Agent Skill contribution.                   |
-| Extension explicitly disabled + `/reload` or new session | —                         | No `data360_*` tools.                                                       |
-| `actions.search` / `action.describe`                     | Any v2 family tool        | Query local v2 action registry without a network call.                      |
-| REST-backed family action                                | `dry_run: true`           | Resolve target/version and return request/safety without business mutation. |
-| REST-backed family action                                | Read/query/validate/test  | Execute through the shared Salesforce Connection Module.                    |
-| REST-backed family action                                | Confirmed/destructive     | Require dry-run review and confirmation according to safety policy.         |
-| `data360_orchestrate`                                    | `*.plan` action           | Return a cross-phase plan without mutation.                                 |
-| `data360_api`                                            | Raw endpoint escape hatch | Use only when no family action exists yet.                                  |
 
 ## DMO/DLO Discovery Defaults
 
@@ -223,41 +186,6 @@ extensions/sf-data360/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Run targeted tests:
-
-```bash
-npm test -- extensions/sf-data360/tests
-```
-
-Run the facade-first compatibility sweep against a disposable Data 360 org.
-Replace the example alias with an org created only for this test:
-
-```bash
-npm run e2e:d360-sweep -- --target-org disposable-data360-org --dry-run-only
-```
-
-This executable characterizes the legacy facade and selected adapters; it does
-not prove every v2 action family. Maintainers working on mutation or cleanup
-coverage should inspect `scripts/e2e/d360-capability-sweep.ts` and the focused
-`tests/capability-sweep.test.ts` and `tests/v2-action-sweep.test.ts` suites. The
-sweep writes JSON and Markdown artifacts to a temp directory and reports
-expected org-state limitations as structured non-failing outcomes. Pending
-lifecycle work is tracked in [`ROADMAP.md`](./ROADMAP.md).
-
-Covered by unit tests:
-
-- Compact metadata helper builds safe list/describe paths and summarizes DMO/DLO list and field payloads.
-- Caller-owned `/services/data/vNN.N` paths are rejected; callers provide versionless resources and the shared Module owns the selected version.
-- Query-string construction handles repeated values and skips nullish values.
-- Safety classification allows reads/search/query/validation/count/test/preview calls, confirms deletes and operational action paths, and treats unresolved target orgs conservatively.
-- Request resolution prefers the target org's highest advertised API version, uses explicit `org-api-version` only when discovery fails, and otherwise fails before the business request.
-- HTTP errors from the shared request seam surface as `{ status, body }` and are classified by `responseLooksLikeError`; tools emit error envelopes instead of retrying under another version.
-- Salesforce REST error arrays embedded in 2xx responses are still classified as failed calls.
-- Generated phase references are committed, reproducible from `registry/phases.json`, and checked in the normal lint path.
-- The facade-first compatibility sweep plans dry-run coverage for facade capabilities, runs bounded read/safe-post live checks, dynamically follows list responses into detail reads when public-safe identifiers are available, and exercises selected sweep-owned lifecycles behind explicit gates.
 
 ## Troubleshooting
 

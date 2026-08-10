@@ -1,4 +1,4 @@
-# SF DevBar — Code Walkthrough
+# SF DevBar
 
 ## What It Does
 
@@ -16,23 +16,6 @@ A bespoke Salesforce developer status bar that renders two persistent UI surface
 
 Every data source is async and non-blocking. The bars render immediately with
 cached/partial data and fill in as results arrive.
-
-## Runtime Flow
-
-```
-Extension loads
-  ├─ registerCommand("sf-devbar")
-  ├─ registerCommand("sf-org")
-  ├─ registerShortcut(Ctrl+Shift+B)
-  ├─ session_start      → install top/bottom bars, start async data refresh
-  ├─ model_select       → repaint model / gateway badge
-  ├─ session_info_changed → repaint optional Pi session name
-  ├─ thinking_level_select → repaint thinking badge
-  ├─ turn_start         → show thinking indicator
-  ├─ turn_end           → refresh context + footer
-  ├─ agent_end          → refresh git state
-  └─ session_shutdown   → restore Pi defaults
-```
 
 ## How It Differs from the Default Pi Footer
 
@@ -115,25 +98,6 @@ as results arrive:
 | `Ctrl+Shift+B`        | Keyboard toggle                                              |
 | `pi --no-devbar`      | Launch without status bars                                   |
 
-## Behavior Matrix
-
-| Event/Trigger         | Condition        | Result                                                   |
-| --------------------- | ---------------- | -------------------------------------------------------- |
-| session_start         | UI available     | Render bars with cached data                             |
-| session_start         | `--no-devbar`    | Stay silent                                              |
-| model_select          | model changes    | Repaint model/gateway badge                              |
-| session_info_changed  | session renamed  | Repaint bounded Pi session-name segment                  |
-| thinking_level_select | thinking changes | Repaint rainbow thinking badge                           |
-| turn_end / agent_end  | —                | Refresh context, footer, and git state                   |
-| session_shutdown      | —                | Clear custom widget/footer                               |
-| `/sf-devbar`          | UI available     | Open SF Pi Manager detail page for SF DevBar             |
-| `/sf-devbar`          | no UI            | Show current status                                      |
-| `/sf-devbar toggle`   | —                | Toggle enabled state                                     |
-| `/sf-devbar refresh`  | —                | Recreate the target connection and re-detect environment |
-| `/sf-devbar settings` | UI available     | Open SF Pi Manager settings for DevBar colors            |
-| `/sf-org`             | —                | Show Salesforce environment summary                      |
-| `/sf-org refresh`     | —                | Recreate the target connection and re-detect org status  |
-
 ## API Version Status
 
 `/sf-org` keeps project and connection versions distinct:
@@ -208,14 +172,6 @@ extensions/sf-devbar/
   shared runtime cache. Zero duplicate CLI calls.
 - **sf-llm-gateway** — detected by provider name (`sf-llm-gateway`)
   from `ctx.model.provider`. No import dependency, just a string match.
-
-## Testing Strategy
-
-All renderers and helpers are pure and testable:
-
-- `top-bar.ts` / `bottom-bar.ts` — tested with a stub theme that returns marker strings
-- `git-changes.ts` — tested with real porcelain output
-- No real CLI/git calls in tests — everything is mocked
 
 ## Troubleshooting
 

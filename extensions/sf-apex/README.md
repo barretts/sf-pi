@@ -1,4 +1,4 @@
-# SF Apex — Code Walkthrough
+# SF Apex
 
 ## What It Does
 
@@ -24,22 +24,6 @@ Apex-specific lifecycle primitives around those edits:
 Full logs, digests, Anonymous Apex bodies/results, and test results are persisted
 as **Apex Artifacts** under the global agent directory. Tool output stays compact
 for the LLM and renders as human-friendly **Apex Result Cards** in the TUI.
-
-## Runtime Flow
-
-```text
-Extension loads
-  ├─ register /sf-apex command
-  └─ session_start → register sf_apex tool
-
-sf_apex action
-  ├─ local-only actions: author.plan, diagnose.file, log.analyze
-  ├─ API-native actions enter the shared Salesforce Connection Module
-  ├─ latest/configured-fallback API version resolves lazily
-  ├─ Tooling/REST/SDK call runs on the bounded native path
-  ├─ raw evidence is written as Apex Artifacts
-  └─ compact digest returns to the LLM + custom TUI renderer
-```
 
 ## Key Architecture Decisions
 
@@ -97,25 +81,6 @@ cards. A Flow observation smoke can use an existing active Autolaunched Flow via
 `Flow.Interview`; a purpose-built Flow → harness invocable scenario remains
 pending until the Flow-generation MCP pipeline is available.
 
-## Behavior Matrix
-
-| Event/Trigger              | Condition                | Result                                                           |
-| -------------------------- | ------------------------ | ---------------------------------------------------------------- |
-| extension load             | always                   | Register `/sf-apex` command.                                     |
-| session_start              | extension enabled        | Register `sf_apex`; the shared Module owns connection lifecycle. |
-| `/sf-apex`                 | interactive              | Open status/actions panel.                                       |
-| `/sf-apex status`          | any mode                 | Print concise extension status.                                  |
-| `sf_apex author.plan`      | local                    | Return lightweight plan, likely tests, and skill hints.          |
-| `sf_apex org.preflight`    | explicit tool call       | Check native Apex lifecycle readiness in the target org.         |
-| `sf_apex apex.search`      | explicit tool call       | Search active Apex classes/triggers for lifecycle targets.       |
-| `sf_apex test.discover`    | explicit tool call       | Find candidate Apex test classes for targets or query terms.     |
-| `sf_apex test.plan`        | explicit tool call       | Recommend the smallest useful test scope.                        |
-| `sf_apex coverage.summary` | explicit tool call       | Summarize native Tooling coverage for named classes.             |
-| `sf_apex trace.start`      | explicit tool call       | Create/update bounded current-user trace flag.                   |
-| `sf_apex log.watch`        | explicit tool call       | Poll for a new ApexLog and analyze it.                           |
-| `sf_apex anon.run`         | explicit tool call       | Execute Anonymous Apex natively and capture/analyze the log.     |
-| `sf_apex test.run`         | explicit classes/methods | Run native targeted tests and summarize results.                 |
-
 ## Commands
 
 ```text
@@ -165,23 +130,6 @@ extensions/sf-apex/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Run targeted tests while developing:
-
-```bash
-npm test -- extensions/sf-apex/tests
-```
-
-Before finishing broader changes:
-
-```bash
-npm run generate-catalog
-npm run format:check
-npm run check
-npm test
-```
 
 ## Release Checks
 

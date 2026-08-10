@@ -1,28 +1,10 @@
-# SF Docs — Code Walkthrough
+# SF Docs
 
 ## What It Does
 
 SF Docs gives agents and humans a first-class Salesforce documentation lookup surface inside SF Pi. It exposes one `sf_docs` family tool for collection discovery, search, fetch, cited answers, single-document explanations, status, and a lazy cheatsheet.
 
 SF Docs calls the Salesforce Docs service through direct HTTP JSON-RPC/SSE. It does not run a local MCP server and does not install MCP packages.
-
-## Runtime Flow
-
-```
-Extension loads
-  ├─ registers complete auth-only Provider `sf-docs`
-  ├─ binds the shared fixed-mask prompt on session start
-  ├─ registers the `sf_docs` family tool
-  ├─ registers `/sf-docs`
-  └─ registers Manager detail actions
-
-Agent asks for official docs
-  ├─ sf_docs resolves token from Pi auth, then env fallback
-  ├─ sf_docs resolves endpoint default, then env override
-  ├─ client POSTs tools/call to the docs service
-  ├─ SSE parser extracts the JSON-RPC response
-  └─ renderers return compact LLM content + polished human output
-```
 
 ## Key Architecture Decisions
 
@@ -36,22 +18,6 @@ Agent asks for official docs
 - **MCP-native retrieval:** The wrapper uses documented service retrieval language such as `+release:<n>` and bare `guides:<slug>` boosts instead of maintaining a local docs index or release-note resolver.
 - **Evidence gates:** Release-specific answer paths must find matching official evidence before synthesis; if the docs service has no matching release slice, SF Docs reports the coverage gap instead of silently broadening to unrelated docs.
 - **Human output:** The tool separates compact Docs Result Cards from bounded Docs Evidence Packets, and compiled lookups include a visible query plan so humans can catch retrieval drift. Fetch packets include safe source metadata such as filename, source path, product, guide, locale, and release while keeping opaque content hashes in structured details / expanded human render only.
-
-## Behavior Matrix
-
-| Event/Trigger          | Condition            | Result                                                                                                                                                                     |
-| ---------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| extension load         | always               | Registers auth provider, command, tool, and Manager actions.                                                                                                               |
-| `/sf-docs`             | interactive, no args | Opens SF Pi Manager at SF Docs detail page.                                                                                                                                |
-| `/sf-docs status`      | any                  | Shows auth source, endpoint, defaults, and cache status.                                                                                                                   |
-| `/sf-docs connect`     | TUI                  | Prefills native `/login sf-docs`; the provider uses SF Pi's shared fixed-mask component and Pi-owned persistence.                                                          |
-| `/sf-docs disconnect`  | interactive          | Prefills native `/logout sf-docs` for review; environment variables are untouched.                                                                                         |
-| `/sf-docs collections` | connected            | Lists docs collections with balanced capability summaries, using the catalog cache when valid.                                                                             |
-| `/sf-docs refresh`     | connected            | Refetches and caches the collection catalog.                                                                                                                               |
-| `/sf-docs cheatsheet`  | any                  | Shows the lazy extension-owned usage guide.                                                                                                                                |
-| `sf_docs search`       | connected            | Searches one collection/version/locale slice; Salesforce-owned docs locators and seasonal release-note requests are distilled into high-signal MCP-native search variants. |
-| `sf_docs fetch`        | connected            | Fetches source text by IDs or URLs; failed Salesforce-owned docs URL fetches can recover through distilled search and indexed IDs while preserving release filters.        |
-| `sf_docs answer`       | connected            | Returns a cited synthesized answer; release-specific answers first pass an evidence gate.                                                                                  |
 
 ## Collection Coverage
 
@@ -105,16 +71,6 @@ extensions/sf-docs/
 ```
 
 <!-- GENERATED:file-structure:end -->
-
-## Testing Strategy
-
-Targeted tests cover parser, client, auth, preferences, cache, tool routing, and render output. Live docs-service smoke tests are opt-in and should not run in the default suite because they require a real token.
-
-Run:
-
-```bash
-npm test -- extensions/sf-docs
-```
 
 ## Troubleshooting
 

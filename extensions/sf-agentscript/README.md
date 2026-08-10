@@ -1,4 +1,4 @@
-# sf-agentscript
+# SF Agent Script
 
 Agent Script lifecycle tooling for pi — **agent-first** authoring, local-first
 compile, deterministic inspection/review, AST-safe edits, live-org preview,
@@ -168,27 +168,6 @@ Suites can opt into a deterministic release gate:
 
 Release evidence has no arbitrary time expiry. It remains valid while the exact org, BotVersion, baseline identity, and designated-suite digest remain unchanged. Activation uses an atomic exact-identity release-evidence index and validates terminal status, immutable snapshots, raw evidence, and both recorded/current strict verdicts before accepting an entry. A complete current-schema manifest scan rebuilds the release index when needed; the rolling recent-Run index is display convenience, never release authority.
 
-## Runtime Flow
-
-```text
-create/compile/inspect/mutate → preview → publish inactive → run_release → activate
-        ▲                         │             │             │
-        └──────── branch-state + persisted exact-version evidence ────────┘
-```
-
-## Behavior Matrix
-
-| Trigger                                 | Result                                                                 |
-| --------------------------------------- | ---------------------------------------------------------------------- |
-| `session_start`                         | Reset assist state and shared Salesforce connections once per session. |
-| `session_shutdown`                      | Stop runs and clear Agent Script-specific caches/state.                |
-| `tool_result` after `.agent` write/edit | Run compile-on-save diagnostics and enabled edit-time High hardening.  |
-| `agent_settled`                         | Run enabled global quality rules for changed `.agent` files.           |
-| `agentscript_authoring`                 | Create, compile, inspect quality/review, and mutate local source.      |
-| `agentscript_preview`                   | Start/send/end preview sessions and persist traces/transcripts.        |
-| `agentscript_eval`                      | Generate/run regression specs and exact-version release contracts.     |
-| `agentscript_lifecycle`                 | Publish inactive, gate activation, list versions, and manage users.    |
-
 ## Settings
 
 SF Agent Script has a Manager Settings page for low-risk tool defaults stored under `sfPi.agentScript`:
@@ -241,20 +220,6 @@ npm run agentscript:versions
 Refresh direct AgentScript dependencies intentionally with `npm install --save-exact`; `@sf-agentscript/compiler` remains transitive through `@sf-agentscript/agentforce` unless SF Pi imports it directly.
 
 The former npm override canary is retired because the pinned official packages now converge naturally. The version command verifies one effective compiler, dialect, parser, language, LSP, and types graph. See [`ADR 0053`](../../docs/adr/0053-agentscript-language-override-canary.md).
-
-## Testing Strategy
-
-Targeted extension suite:
-
-```bash
-npm test -- extensions/sf-agentscript/tests
-```
-
-Full repo validation:
-
-```bash
-npm run validate
-```
 
 ## Authentication
 
