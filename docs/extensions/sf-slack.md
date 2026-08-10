@@ -66,7 +66,7 @@ You can also manage this extension from the SF Pi home base:
 - **Commands:** `/sf-slack`
 - **LLM tools:** `slack`, `slack_time_range`, `slack_resolve`, `slack_research`, `slack_channel`, `slack_user`, `slack_file`, `slack_canvas`, `slack_send`, `slack_schedule`
 - **Providers:** `sf-slack`
-- **Events/hooks:** `session_start`, `session_shutdown`, `before_agent_start`
+- **Events/hooks:** `session_start`, `session_shutdown`, `before_agent_start`, `context`
 
 </details>
 

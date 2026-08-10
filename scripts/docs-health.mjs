@@ -36,27 +36,6 @@ const GENERATED_FILES = [
   "docs/agent-orientation.md",
 ];
 
-// Cross-file hook registrations need runtime proof because lexical source scans
-// cannot establish that an imported registration helper is actually invoked.
-// Keep this allowlist narrow; each entry points at an exact-factory test that
-// captures every pi.on() registration and compares it with manifest.events.
-const DELEGATED_EVENT_ATTESTATIONS = new Map([
-  [
-    "sf-code-analyzer",
-    {
-      test: "tests/catalog-event-attestation.test.ts",
-      events: new Set(["tool_result", "agent_settled"]),
-    },
-  ],
-  [
-    "sf-agentscript",
-    {
-      test: "tests/catalog-event-attestation.test.ts",
-      events: new Set(["agent_settled"]),
-    },
-  ],
-]);
-
 const PUBLIC_SAFETY_PATTERNS = [
   {
     id: "salesforce-sandbox-host",
@@ -237,62 +216,6 @@ function checkExtensionReadmes() {
   }
 }
 
-function checkManifestToolsMatchCode() {
-  // Enforce two things at once:
-  // 1. Every tool name listed in manifest.tools is actually registered in source.
-  // 2. The tool registration follows the standard module shape so agents always
-  //    know where to look:
-  //      - either lib/<tool>-tool.ts exports `register<PascalCase>Tool`, or
-  //      - any lib/*.ts file in the extension calls `pi.registerTool({ name: "<tool>", ... })`.
-  //
-  // Documented in AGENTS.md → "Tool registration convention".
-  for (const dir of extensionDirs()) {
-    const base = `extensions/${dir}`;
-    const manifestPath = `${base}/manifest.json`;
-    if (!existsSync(path.join(ROOT, manifestPath))) continue;
-    const manifest = readJson(manifestPath);
-    const tools = Array.isArray(manifest.tools) ? manifest.tools : [];
-    if (tools.length === 0) continue;
-
-    const libDir = path.join(ROOT, base, "lib");
-    const libFiles = existsSync(libDir)
-      ? readdirSync(libDir, { withFileTypes: true })
-          .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
-          .map((entry) => path.join(libDir, entry.name))
-      : [];
-    const indexFile = path.join(ROOT, base, "index.ts");
-    const allFiles = [indexFile, ...libFiles];
-    const allSource = allFiles
-      .filter((p) => existsSync(p))
-      .map((p) => readFileSync(p, "utf8"))
-      .join("\n");
-
-    // Two-step check:
-    //   1. Some file in the extension calls pi.registerTool(...).
-    //   2. The exact tool-name string literal appears somewhere in source.
-    // This tolerates the common pattern of declaring `export const X_TOOL_NAME = "x"`
-    // and passing the constant to `name:` (sf-data360), without false positives
-    // from other extensions: a typo in manifest.tools wouldn't match the literal.
-    const hasRegisterCall = /\bpi\.registerTool\s*[<(]/.test(allSource);
-    if (!hasRegisterCall) {
-      fail(
-        manifestPath,
-        `manifest.tools is non-empty but no pi.registerTool() call was found in index.ts or lib/.`,
-      );
-      continue;
-    }
-    for (const tool of tools) {
-      const literalPattern = new RegExp(`["\`']${escapeRegex(tool)}["\`']`);
-      if (!literalPattern.test(allSource)) {
-        fail(
-          manifestPath,
-          `Tool "${tool}" listed in manifest.tools but the exact name literal was not found in index.ts or lib/. Either fix the manifest typo or expose the name via a const string.`,
-        );
-      }
-    }
-  }
-}
-
 // Per-file LOC advisory thresholds. AGENTS.md §3 calls out "if 200 lines
 // could be 50, rewrite it." In practice we use a softer informational
 // threshold so growth is visible during PR review without forcing today's
@@ -362,50 +285,6 @@ function checkStateStoreLocation() {
   }
 }
 
-function checkManifestEventsMatchCode() {
-  for (const dir of extensionDirs()) {
-    const base = `extensions/${dir}`;
-    const manifestPath = `${base}/manifest.json`;
-    const indexPath = `${base}/index.ts`;
-    if (!existsSync(path.join(ROOT, manifestPath)) || !existsSync(path.join(ROOT, indexPath))) {
-      continue;
-    }
-
-    const manifest = readJson(manifestPath);
-    const manifestEvents = new Set(manifest.events ?? []);
-    const code = readText(indexPath);
-    const codeEvents = new Set(
-      [...code.matchAll(/\bpi\.on\(\s*["'`]([^"'`]+)["'`]/g)].map((match) => match[1]),
-    );
-    const delegatedAttestation = DELEGATED_EVENT_ATTESTATIONS.get(manifest.id);
-    if (delegatedAttestation && !existsSync(path.join(ROOT, base, delegatedAttestation.test))) {
-      fail(
-        manifestPath,
-        `Delegated event attestation test does not exist: ${delegatedAttestation.test}`,
-      );
-    }
-
-    for (const event of codeEvents) {
-      if (!manifestEvents.has(event)) {
-        fail(manifestPath, `Missing event from manifest: ${event}`);
-      }
-    }
-    for (const event of manifestEvents) {
-      if (!codeEvents.has(event) && !delegatedAttestation?.events.has(event)) {
-        fail(
-          manifestPath,
-          `Manifest lists delegated event without an exact-factory attestation: ${event}`,
-        );
-      }
-    }
-    for (const event of delegatedAttestation?.events ?? []) {
-      if (!manifestEvents.has(event)) {
-        fail(manifestPath, `Factory-attested event missing from manifest: ${event}`);
-      }
-    }
-  }
-}
-
 function checkChangelog() {
   const changelog = readText("CHANGELOG.md");
   const unreleasedMatch = changelog.match(/^## Unreleased\s*\n([\s\S]*?)(?=^## \[|$)/m);
@@ -460,8 +339,6 @@ function run() {
   checkExtensionReadmes();
   checkExtensionFileSize();
   checkStateStoreLocation();
-  checkManifestEventsMatchCode();
-  checkManifestToolsMatchCode();
   checkChangelog();
   checkPublicSafety();
   checkDocOwnership();

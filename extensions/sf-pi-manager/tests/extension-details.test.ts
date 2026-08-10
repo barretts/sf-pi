@@ -380,7 +380,7 @@ describe("extension detail helpers", () => {
         "slack_send",
         "slack_schedule",
       ],
-      events: ["session_start", "session_shutdown", "before_agent_start"],
+      events: ["session_start", "session_shutdown", "before_agent_start", "context"],
     });
   });
 });

@@ -106,3 +106,4 @@ or accidentally contradicted in extension READMEs.
 - [0101: Canonical Gateway Identity Uses `sf-llm-gateway`](./0101-canonical-gateway-identity.md)
 - [0102: SF Herdr Is Forward-Only on the Current Split Tools](./0102-forward-only-current-herdr-tools.md)
 - [0103: Salesforce Org Connections Use One Shared Module](./0103-shared-salesforce-connection-module.md)
+- [0104: Manifests Are Attested Against Real Runtime Registration](./0104-manifest-runtime-surface-attestation.md)

@@ -273,7 +273,6 @@ extensions/sf-code-analyzer/
     auto-scan-orchestration.test.ts← unit / smoke test
     auto-scan-plan.test.ts  ← unit / smoke test
     auto-scan-transcript.test.ts← unit / smoke test
-    catalog-event-attestation.test.ts← unit / smoke test
     config-panel.test.ts    ← unit / smoke test
     display.test.ts         ← unit / smoke test
     recipes.test.ts         ← unit / smoke test

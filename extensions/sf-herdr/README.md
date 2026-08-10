@@ -130,6 +130,7 @@ extensions/sf-herdr/
   tests/
     config-panel.test.ts    ← unit / smoke test
     plan-render.test.ts     ← unit / smoke test
+    runtime-surface-scenarios.ts← conditional runtime registration scenarios
     smoke.test.ts           ← unit / smoke test
     tool-result-normalizer.test.ts← unit / smoke test
   AGENT_GUIDE.md            ← supporting file

@@ -63,7 +63,7 @@ You can manage this extension from the SF Pi home base:
 - **Commands:** _none_
 - **LLM tools:** _none_
 - **Providers:** _none_
-- **Events/hooks:** `before_agent_start`
+- **Events/hooks:** `before_agent_start`, `context`
 
 </details>
 

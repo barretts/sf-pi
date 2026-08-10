@@ -66,7 +66,7 @@ You can also manage this extension from the SF Pi home base:
 - **Commands:** `/sf-guardrail`
 - **LLM tools:** _none_
 - **Providers:** _none_
-- **Events/hooks:** `session_start`, `session_tree`, `before_agent_start`, `tool_call`
+- **Events/hooks:** `session_start`, `session_tree`, `before_agent_start`, `tool_call`, `context`
 
 </details>
 

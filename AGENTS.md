@@ -167,23 +167,28 @@ Reference implementations: `extensions/sf-welcome/lib/state-store.ts`,
 
 When an extension contributes LLM tools (anything in `manifest.tools`):
 
-1. **One file per tool**, named `lib/<tool-name>-tool.ts`. Examples:
-   `lib/d360_api-tool.ts` would be ideal but the historical names
-   `lib/api-tool.ts` (sf-data360) and `lib/research-tool.ts` (sf-slack)
-   are also acceptable as long as the file owns exactly one tool.
-2. **Export a `register<PascalCase>Tool(pi)` function** from that file.
-   The entry point or session_start handler calls it. Tools with shared
-   plumbing (sf-slack) can keep that plumbing in `lib/api.ts` and reuse
-   it across per-tool files.
-3. **Declare the tool name as an exported `const`** (`export const X_TOOL_NAME = "x";`)
-   so panels and config-panel UIs can reference it without a magic string.
-4. The `npm run docs:health:check` lint enforces that every name in
-   `manifest.tools` resolves to a `pi.registerTool` call and an exact
-   string literal in the extension source. Renaming a tool requires
-   updating the manifest and the const in lockstep.
+1. Prefer **one registration file per independently defined tool**, named
+   `lib/<tool-name>-tool.ts`. A family-tool registry such as Data 360 can keep
+   several related definitions in one owning module when they share one schema
+   and dispatcher.
+2. Export a `register<PascalCase>Tool(pi)` function from an individual tool file.
+   The entry point or lifecycle handler calls it. Shared transport and formatting
+   stay in supporting modules rather than being copied into registrations.
+3. Declare tool names as exported constants when individually registered so
+   panels and tests do not rely on repeated magic strings.
+4. `npm run test:runtime-surface` executes every real extension factory and
+   controlled registration lifecycle, then compares commands, providers, tools,
+   and events bidirectionally with the manifest. This runtime proof—not a source
+   string scan—owns manifest agreement.
+5. If tool registration depends on a product-specific availability condition
+   beyond ordinary extension enablement, add an extension-local
+   `tests/runtime-surface-scenarios.ts` adapter with positive and negative cases.
+   The adapter invokes the real lifecycle handler and must not call registration
+   helpers or duplicate manifest tool names.
 
-Reference implementations: `extensions/sf-data360/lib/{api,metadata,probe}-tool.ts`
-and `extensions/sf-slack/lib/{research,send,canvas,channel,user,file,resolve,time-range}-tool.ts`.
+Reference implementations: the individually registered tools under
+`extensions/sf-slack/lib/*-tool.ts` and the family registry in
+`extensions/sf-data360/lib/v2/tools.ts`.
 
 ### Canonical panel filenames
 

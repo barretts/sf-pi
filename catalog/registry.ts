@@ -44,7 +44,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
     category: "assistive",
     maturity: "stable",
     defaultEnabled: true,
-    events: ["before_agent_start"],
+    events: ["before_agent_start","context"],
   },
   {
     id: "sf-browser",
@@ -122,7 +122,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
     maturity: "stable",
     defaultEnabled: true,
     commands: ["/sf-devbar","/sf-org"],
-    events: ["session_start","session_shutdown","model_select","session_info_changed","thinking_level_select","turn_start","turn_end","agent_end","before_agent_start"],
+    events: ["session_start","session_shutdown","model_select","session_info_changed","thinking_level_select","turn_start","turn_end","agent_end","before_agent_start","context"],
     configurable: true,
     getConfigPanel: async () => {
       const mod = await import("../extensions/sf-devbar/lib/config-panel.ts");
@@ -171,7 +171,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
     maturity: "stable",
     defaultEnabled: true,
     commands: ["/sf-guardrail"],
-    events: ["session_start","session_tree","before_agent_start","tool_call"],
+    events: ["session_start","session_tree","before_agent_start","tool_call","context"],
     configurable: true,
     getConfigPanel: async () => {
       const mod = await import("../extensions/sf-guardrail/lib/config-panel.ts");
@@ -299,7 +299,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
     commands: ["/sf-slack"],
     providers: ["sf-slack"],
     tools: ["slack","slack_time_range","slack_resolve","slack_research","slack_channel","slack_user","slack_file","slack_canvas","slack_send","slack_schedule"],
-    events: ["session_start","session_shutdown","before_agent_start"],
+    events: ["session_start","session_shutdown","before_agent_start","context"],
     configurable: true,
     getConfigPanel: async () => {
       const mod = await import("../extensions/sf-slack/lib/config-panel.ts");

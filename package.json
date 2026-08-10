@@ -87,6 +87,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:runtime-surface": "vitest run scripts/tests/runtime-surface-attestation.test.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "agentscript:versions": "node --experimental-strip-types scripts/agentscript-versions.mjs",

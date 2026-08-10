@@ -408,7 +408,6 @@ extensions/sf-agentscript/
     authoring-tool.test.ts  ← unit / smoke test
     bounded-salesforce-transport.test.ts← unit / smoke test
     bounded-shared-connection.test.ts← unit / smoke test
-    catalog-event-attestation.test.ts← unit / smoke test
     code-actions.test.ts    ← unit / smoke test
     compile-summary.test.ts ← unit / smoke test
     connected-readiness-graph.test.ts← unit / smoke test

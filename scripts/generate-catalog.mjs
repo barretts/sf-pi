@@ -1011,6 +1011,7 @@ function shouldIncludeExtensionFile(rel) {
   if (EXTENSION_FILE_MAP_INCLUDE.has(rel)) return true;
   if (rel.startsWith("lib/") && rel.endsWith(".ts")) return true;
   if (rel.startsWith("tests/") && rel.endsWith(".test.ts")) return true;
+  if (rel.startsWith("tests/") && rel.endsWith("/runtime-surface-scenarios.ts")) return true;
   if (rel.startsWith("assets/fonts/") && (rel.endsWith("LICENSE") || rel.endsWith("SOURCE.md"))) {
     return true;
   }
@@ -1025,6 +1026,9 @@ function fileDescription(rel) {
   if (rel === "ROADMAP.md") return "extension-specific phased roadmap";
   if (rel === "CREDITS.md") return "extension attribution";
   if (rel.endsWith(".test.ts")) return "unit / smoke test";
+  if (rel.endsWith("/runtime-surface-scenarios.ts")) {
+    return "conditional runtime registration scenarios";
+  }
   if (rel.startsWith("lib/") && rel.endsWith(".ts")) return "implementation module";
   if (rel.startsWith("assets/")) return "bundled asset metadata";
   return "supporting file";
@@ -1200,6 +1204,7 @@ function generateAgentOrientationDoc(manifests) {
     "",
     "- `npm run docs:health:check` — documentation drift and public-safety lint.",
     "- `npm run docs:changed` — changed-file impact summary for docs review.",
+    "- `npm run test:runtime-surface` — real-factory manifest registration attestation.",
     "- `npm run validate:ci` — local approximation of CI's validation lane.",
   );
 

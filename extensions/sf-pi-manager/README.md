@@ -202,7 +202,6 @@ extensions/sf-pi-manager/
     auto-update-real-pi.test.ts← unit / smoke test
     auto-update-runtime-orchestration.test.ts← unit / smoke test
     auto-update-transcript.test.ts← unit / smoke test
-    catalog-event-attestation.test.ts← unit / smoke test
     command-parsing.test.ts ← unit / smoke test
     config-panel.test.ts    ← unit / smoke test
     doctor-command.test.ts  ← unit / smoke test

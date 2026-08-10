@@ -176,6 +176,7 @@ The most common entry points, grouped by purpose:
 | ESLint                   | `npm run eslint:fix`                               | `npm run eslint`                        |
 | Type check               | —                                                  | `npm run check`                         |
 | Run tests                | `npm test`                                         | —                                       |
+| Runtime surface contract | `npm run test:runtime-surface`                     | —                                       |
 | Tests + coverage         | `npm run test:coverage`                            | —                                       |
 | Watch tests              | `npm run test:watch`                               | —                                       |
 | Lint bundle              | —                                                  | `npm run lint`                          |

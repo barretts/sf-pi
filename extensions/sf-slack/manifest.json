@@ -20,7 +20,7 @@
     "slack_send",
     "slack_schedule"
   ],
-  "events": ["session_start", "session_shutdown", "before_agent_start"],
+  "events": ["session_start", "session_shutdown", "before_agent_start", "context"],
   "docs": {
     "summary": "Full Slack integration. Read-only search/thread/history/channel/user/file/canvas plus confirmed send and scheduled-message management. Tools register only after a token resolves (Pi auth store -> SLACK_USER_TOKEN), keeping the system prompt cache stable when Slack is not configured.",
     "primaryFiles": [

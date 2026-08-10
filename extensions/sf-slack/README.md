@@ -563,6 +563,7 @@ extensions/sf-slack/
     resolve-tool-clarify-gate.test.ts← unit / smoke test
     resolve.test.ts         ← unit / smoke test
     runtime-cache.test.ts   ← unit / smoke test
+    runtime-surface-scenarios.ts← conditional runtime registration scenarios
     schedule-tool.test.ts   ← unit / smoke test
     scope-probe.test.ts     ← unit / smoke test
     search-plan.test.ts     ← unit / smoke test

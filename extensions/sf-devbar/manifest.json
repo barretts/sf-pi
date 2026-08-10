@@ -16,7 +16,8 @@
     "turn_start",
     "turn_end",
     "agent_end",
-    "before_agent_start"
+    "before_agent_start",
+    "context"
   ],
   "docs": {
     "summary": "Two non-blocking status bars: a top widget with model/thinking/session/git/context, and a custom footer with project-scoped org info, monthly LLM-gateway budget, and active extension counts.",

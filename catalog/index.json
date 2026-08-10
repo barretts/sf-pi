@@ -164,7 +164,8 @@
     "providers": [],
     "tools": [],
     "events": [
-      "before_agent_start"
+      "before_agent_start",
+      "context"
     ],
     "docs": {
       "summary": "Injects the Salesforce Engineering Constitution and tiny disabled-capability routing summary, and provides a content-safe advisory report of model-visible SF Pi instructions, tools, and external Salesforce skill metadata.",
@@ -456,7 +457,8 @@
       "turn_start",
       "turn_end",
       "agent_end",
-      "before_agent_start"
+      "before_agent_start",
+      "context"
     ],
     "docs": {
       "summary": "Two non-blocking status bars: a top widget with model/thinking/session/git/context, and a custom footer with project-scoped org info, monthly LLM-gateway budget, and active extension counts.",
@@ -595,7 +597,8 @@
       "session_start",
       "session_tree",
       "before_agent_start",
-      "tool_call"
+      "tool_call",
+      "context"
     ],
     "docs": {
       "summary": "Salesforce-aware safety layer for pi: file-protection policies, AST-matched command gating, org-aware confirmation on production deploys/Apex/DML/destructive REST, native high-value mutation mediation, plus a once-per-session prompt-injection that teaches the LLM the gating categories and validate-first workflow.",
@@ -1016,7 +1019,8 @@
     "events": [
       "session_start",
       "session_shutdown",
-      "before_agent_start"
+      "before_agent_start",
+      "context"
     ],
     "docs": {
       "summary": "Full Slack integration. Read-only search/thread/history/channel/user/file/canvas plus confirmed send and scheduled-message management. Tools register only after a token resolves (Pi auth store -> SLACK_USER_TOKEN), keeping the system prompt cache stable when Slack is not configured.",

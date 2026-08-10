@@ -5,7 +5,7 @@
   "category": "assistive",
   "maturity": "stable",
   "defaultEnabled": true,
-  "events": ["before_agent_start"],
+  "events": ["before_agent_start", "context"],
   "docs": {
     "summary": "Injects the Salesforce Engineering Constitution and tiny disabled-capability routing summary, and provides a content-safe advisory report of model-visible SF Pi instructions, tools, and external Salesforce skill metadata.",
     "primaryFiles": [
