@@ -108,40 +108,12 @@ sf_soql action
 
 ```
 extensions/sf-soql/
-  lib/
-    api.ts                  ← implementation module
-    artifacts.ts            ← implementation module
-    digest.ts               ← implementation module
-    draft.ts                ← implementation module
-    errors.ts               ← implementation module
-    export.ts               ← implementation module
-    file.ts                 ← implementation module
-    flattener.ts            ← implementation module
-    lsp.ts                  ← implementation module
-    operations.ts           ← implementation module
-    parser.ts               ← implementation module
-    render.ts               ← implementation module
-    result.ts               ← implementation module
-    runner.ts               ← implementation module
-    schema.ts               ← implementation module
-    search.ts               ← implementation module
-    sf-soql-tool.ts         ← implementation module
-    sosl.ts                 ← implementation module
-    status.ts               ← implementation module
-    types.ts                ← implementation module
-    validator.ts            ← implementation module
-  tests/
-    errors.test.ts          ← unit / smoke test
-    export.test.ts          ← unit / smoke test
-    flattener.test.ts       ← unit / smoke test
-    parser.test.ts          ← unit / smoke test
-    render.test.ts          ← unit / smoke test
-    shared-connection.test.ts← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-  AGENT_GUIDE.md            ← supporting file
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENT_GUIDE.md              ← agent operating guide
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

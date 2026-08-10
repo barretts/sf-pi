@@ -191,66 +191,13 @@ session_shutdown
 
 ```
 extensions/sf-welcome/
-  assets/
-    fonts/
-      LICENSE               ← bundled asset metadata
-      SOURCE.md             ← bundled asset metadata
-  lib/
-    ca-bundle-nudge.ts      ← implementation module
-    config-panel.ts         ← implementation module
-    extension-health.ts     ← implementation module
-    font-installer.ts       ← implementation module
-    font-status-cache.ts    ← implementation module
-    font-status.ts          ← implementation module
-    herdr-runtime-status.ts ← implementation module
-    homebrew-status.ts      ← implementation module
-    hunk-status.ts          ← implementation module
-    node-cert-cache.ts      ← implementation module
-    node-cert-status.ts     ← implementation module
-    recommendations-status.ts← implementation module
-    release-status.ts       ← implementation module
-    session-data.ts         ← implementation module
-    sf-cli-status.ts        ← implementation module
-    sf-skills-status.ts     ← implementation module
-    splash-component.ts     ← implementation module
-    splash-data.ts          ← implementation module
-    startup-mode.ts         ← implementation module
-    state-store.ts          ← implementation module
-    types.ts                ← implementation module
-    welcome-settings.ts     ← implementation module
-  tests/
-    announcements-filter.test.ts← unit / smoke test
-    announcements-manifest.test.ts← unit / smoke test
-    announcements-orchestrator.test.ts← unit / smoke test
-    announcements-state.test.ts← unit / smoke test
-    announcements-update.test.ts← unit / smoke test
-    ca-bundle-nudge.test.ts ← unit / smoke test
-    config-panel.test.ts    ← unit / smoke test
-    extension-health.test.ts← unit / smoke test
-    font-installer.test.ts  ← unit / smoke test
-    font-status-cache.test.ts← unit / smoke test
-    herdr-runtime-status.test.ts← unit / smoke test
-    homebrew-status.test.ts ← unit / smoke test
-    hunk-status.test.ts     ← unit / smoke test
-    lsp-status.test.ts      ← unit / smoke test
-    node-cert-status.test.ts← unit / smoke test
-    recommendations-status.test.ts← unit / smoke test
-    release-status.test.ts  ← unit / smoke test
-    sdk-migration.test.ts   ← unit / smoke test
-    session-data.test.ts    ← unit / smoke test
-    sf-cli-status.test.ts   ← unit / smoke test
-    sf-skills-status.test.ts← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    splash-privacy.test.ts  ← unit / smoke test
-    splash-release-status.test.ts← unit / smoke test
-    splash-sf-skills.test.ts← unit / smoke test
-    splash-wordmark-shadow.test.ts← unit / smoke test
-    startup-mode.test.ts    ← unit / smoke test
-    state-store.test.ts     ← unit / smoke test
-  CREDITS.md                ← extension attribution
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  assets/                     ← bundled assets and attribution
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  CREDITS.md                  ← extension attribution
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

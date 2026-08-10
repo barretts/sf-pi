@@ -508,78 +508,13 @@ returns full bodies regardless of the shared display profile.
 
 ```
 extensions/sf-slack/
-  lib/
-    api.ts                  ← implementation module
-    auth.ts                 ← implementation module
-    canvas-tool.ts          ← implementation module
-    capabilities.ts         ← implementation module
-    channel-tool.ts         ← implementation module
-    config-panel.ts         ← implementation module
-    emoji.ts                ← implementation module
-    extension-doctor.ts     ← implementation module
-    file-tool.ts            ← implementation module
-    format.ts               ← implementation module
-    manager-action-panels.ts← implementation module
-    preferences-panel.ts    ← implementation module
-    preferences.ts          ← implementation module
-    recipient-confirm.ts    ← implementation module
-    render.ts               ← implementation module
-    research-tool.ts        ← implementation module
-    resolve-tool.ts         ← implementation module
-    resolve.ts              ← implementation module
-    runtime-cache.ts        ← implementation module
-    schedule-tool.ts        ← implementation module
-    scope-probe.ts          ← implementation module
-    search-plan.ts          ← implementation module
-    send-tool-recipient.ts  ← implementation module
-    send-tool.ts            ← implementation module
-    stats.ts                ← implementation module
-    status.ts               ← implementation module
-    time-range-tool.ts      ← implementation module
-    time-range.ts           ← implementation module
-    tools.ts                ← implementation module
-    truncation.ts           ← implementation module
-    types.ts                ← implementation module
-    user-tool.ts            ← implementation module
-  tests/
-    api.test.ts             ← unit / smoke test
-    auth-status.test.ts     ← unit / smoke test
-    auth.test.ts            ← unit / smoke test
-    canvas-preflight.test.ts← unit / smoke test
-    channel-cache-from-search.test.ts← unit / smoke test
-    channel-types-default.test.ts← unit / smoke test
-    config-panel.test.ts    ← unit / smoke test
-    credential-security.test.ts← unit / smoke test
-    emoji.test.ts           ← unit / smoke test
-    extra-format.test.ts    ← unit / smoke test
-    field-modes.test.ts     ← unit / smoke test
-    format.test.ts          ← unit / smoke test
-    preferences-stats.test.ts← unit / smoke test
-    prompt-surface.test.ts  ← unit / smoke test
-    recipient-confirm.test.ts← unit / smoke test
-    registration-gate.test.ts← unit / smoke test
-    render-helpers.test.ts  ← unit / smoke test
-    render-snapshot.test.ts ← unit / smoke test
-    resolve-tool-clarify-gate.test.ts← unit / smoke test
-    resolve.test.ts         ← unit / smoke test
-    runtime-cache.test.ts   ← unit / smoke test
-    runtime-surface-scenarios.ts← conditional runtime registration scenarios
-    schedule-tool.test.ts   ← unit / smoke test
-    scope-probe.test.ts     ← unit / smoke test
-    search-plan.test.ts     ← unit / smoke test
-    send-tool.test.ts       ← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    status.test.ts          ← unit / smoke test
-    system-prompt-options.test.ts← unit / smoke test
-    time-range.test.ts      ← unit / smoke test
-    tools.test.ts           ← unit / smoke test
-    truncation.test.ts      ← unit / smoke test
-    user-cache-from-search.test.ts← unit / smoke test
-  AGENT_GUIDE.md            ← supporting file
-  AGENTS.md                 ← extension-specific agent editing rules
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENT_GUIDE.md              ← agent operating guide
+  AGENTS.md                   ← agent editing rules
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

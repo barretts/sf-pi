@@ -71,18 +71,11 @@ installed during `session_start`.
 
 ```
 extensions/sf-ohana-spinner/
-  lib/
-    config-panel.ts         ← implementation module
-    messages.ts             ← implementation module
-    rainbow.ts              ← implementation module
-    settings.ts             ← implementation module
-  tests/
-    config-panel.test.ts    ← unit / smoke test
-    lifecycle.test.ts       ← unit / smoke test
-    settings.test.ts        ← unit / smoke test
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

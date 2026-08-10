@@ -156,48 +156,12 @@ pending until the Flow-generation MCP pipeline is available.
 
 ```
 extensions/sf-apex/
-  lib/
-    anonymous-soap.ts       ← implementation module
-    anonymous.ts            ← implementation module
-    api.ts                  ← implementation module
-    artifacts.ts            ← implementation module
-    author.ts               ← implementation module
-    coverage.ts             ← implementation module
-    diagnostics.ts          ← implementation module
-    digest.ts               ← implementation module
-    discovery.ts            ← implementation module
-    errors.ts               ← implementation module
-    log-parser.ts           ← implementation module
-    logs.ts                 ← implementation module
-    operations.ts           ← implementation module
-    render.ts               ← implementation module
-    result.ts               ← implementation module
-    sf-apex-tool.ts         ← implementation module
-    soql.ts                 ← implementation module
-    source.ts               ← implementation module
-    suites.ts               ← implementation module
-    test-targets.ts         ← implementation module
-    tests.ts                ← implementation module
-    trace.ts                ← implementation module
-    types.ts                ← implementation module
-  tests/
-    anonymous.test.ts       ← unit / smoke test
-    artifacts.test.ts       ← unit / smoke test
-    coverage.test.ts        ← unit / smoke test
-    errors.test.ts          ← unit / smoke test
-    log-parser.test.ts      ← unit / smoke test
-    render.test.ts          ← unit / smoke test
-    shared-connection.test.ts← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    source.test.ts          ← unit / smoke test
-    suites.test.ts          ← unit / smoke test
-    test-targets.test.ts    ← unit / smoke test
-    tests.test.ts           ← unit / smoke test
-    trace.test.ts           ← unit / smoke test
-  AGENT_GUIDE.md            ← supporting file
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENT_GUIDE.md              ← agent operating guide
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

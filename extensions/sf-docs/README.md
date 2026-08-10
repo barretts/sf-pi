@@ -94,42 +94,14 @@ See [`docs/cheatsheet.md`](./docs/cheatsheet.md). It is an extension-owned refer
 
 ```
 extensions/sf-docs/
-  lib/
-    auth.ts                 ← implementation module
-    catalog-cache.ts        ← implementation module
-    client.ts               ← implementation module
-    collection-profiles.ts  ← implementation module
-    command-surface.ts      ← implementation module
-    config-panel.ts         ← implementation module
-    developer-reference.ts  ← implementation module
-    manager-action-panels.ts← implementation module
-    preferences.ts          ← implementation module
-    query-distillation.ts   ← implementation module
-    release-notes.ts        ← implementation module
-    render.ts               ← implementation module
-    sf_docs-tool.ts         ← implementation module
-    sse.ts                  ← implementation module
-    status.ts               ← implementation module
-    types.ts                ← implementation module
-  tests/
-    auth.test.ts            ← unit / smoke test
-    catalog-cache.test.ts   ← unit / smoke test
-    client.test.ts          ← unit / smoke test
-    collection-profiles.test.ts← unit / smoke test
-    credential-security.test.ts← unit / smoke test
-    developer-reference.test.ts← unit / smoke test
-    preferences.test.ts     ← unit / smoke test
-    query-distillation.test.ts← unit / smoke test
-    release-notes.test.ts   ← unit / smoke test
-    render.test.ts          ← unit / smoke test
-    sf_docs-tool.test.ts    ← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    sse.test.ts             ← unit / smoke test
-  AGENT_GUIDE.md            ← supporting file
-  AGENTS.md                 ← extension-specific agent editing rules
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  docs/                       ← focused extension references
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENT_GUIDE.md              ← agent operating guide
+  AGENTS.md                   ← agent editing rules
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

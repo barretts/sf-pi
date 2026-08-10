@@ -113,25 +113,11 @@ The setting is used when no explicit `bug`, `feature`, `setup`, or `feedback` su
 
 ```
 extensions/sf-feedback/
-  lib/
-    config-panel.ts         ← implementation module
-    diagnostics.ts          ← implementation module
-    feedback-wizard-panel.ts← implementation module
-    github.ts               ← implementation module
-    issue-template.ts       ← implementation module
-    sanitize.ts             ← implementation module
-    settings.ts             ← implementation module
-    types.ts                ← implementation module
-  tests/
-    feedback-wizard-panel.test.ts← unit / smoke test
-    github.test.ts          ← unit / smoke test
-    issue-template.test.ts  ← unit / smoke test
-    sanitize.test.ts        ← unit / smoke test
-    settings.test.ts        ← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

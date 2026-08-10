@@ -176,49 +176,11 @@ moved to `~/.pi/agent/skills-quarantine/` instead of being deleted.
 
 ```
 extensions/sf-pi-manager/
-  lib/
-    announcements.ts        ← implementation module
-    auto-update-command.ts  ← implementation module
-    auto-update-coordinator.ts← implementation module
-    auto-update-package-plan.ts← implementation module
-    auto-update-runner.ts   ← implementation module
-    auto-update-transcript.ts← implementation module
-    config-panel.ts         ← implementation module
-    doctor-command.ts       ← implementation module
-    extension-aliases.ts    ← implementation module
-    extension-details.ts    ← implementation module
-    overlay.ts              ← implementation module
-    recommendations-install.ts← implementation module
-    recommendations-overlay.ts← implementation module
-    recommendations.ts      ← implementation module
-    render.ts               ← implementation module
-    skill-sources-command.ts← implementation module
-    telemetry-command.ts    ← implementation module
-  tests/
-    announcements-command.test.ts← unit / smoke test
-    auto-update-command.test.ts← unit / smoke test
-    auto-update-coordinator.test.ts← unit / smoke test
-    auto-update-package-plan.test.ts← unit / smoke test
-    auto-update-real-pi.test.ts← unit / smoke test
-    auto-update-runtime-orchestration.test.ts← unit / smoke test
-    auto-update-transcript.test.ts← unit / smoke test
-    command-parsing.test.ts ← unit / smoke test
-    config-panel.test.ts    ← unit / smoke test
-    doctor-command.test.ts  ← unit / smoke test
-    extension-aliases.test.ts← unit / smoke test
-    extension-details.test.ts← unit / smoke test
-    extension-state.test.ts ← unit / smoke test
-    mode-behavior.test.ts   ← unit / smoke test
-    package-detection.test.ts← unit / smoke test
-    package-state.test.ts   ← unit / smoke test
-    recommendations-command.test.ts← unit / smoke test
-    recommendations-install.test.ts← unit / smoke test
-    recommendations-manifest.test.ts← unit / smoke test
-    recommendations-state.test.ts← unit / smoke test
-    skill-sources.test.ts   ← unit / smoke test
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

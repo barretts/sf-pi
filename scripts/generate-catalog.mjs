@@ -1021,101 +1021,52 @@ function generateFolderLayout(manifests) {
 // Extension README file maps + agent orientation docs
 // -------------------------------------------------------------------------------------------------
 
-function listExtensionFiles(dir) {
-  const extDir = path.join(EXTENSIONS_DIR, dir);
-  const files = [];
-
-  function walk(current, relativeDir = "") {
-    const entries = readdirSync(current, { withFileTypes: true }).sort((left, right) => {
-      if (left.isDirectory() !== right.isDirectory()) return left.isDirectory() ? -1 : 1;
-      return left.name.localeCompare(right.name);
-    });
-
-    for (const entry of entries) {
-      const rel = path.posix.join(relativeDir, entry.name);
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name === "vendor") continue;
-        walk(full, rel);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      if (shouldIncludeExtensionFile(rel)) files.push(rel);
-    }
-  }
-
-  walk(extDir);
-  return files;
-}
-
-function shouldIncludeExtensionFile(rel) {
-  if (EXTENSION_FILE_MAP_INCLUDE.has(rel)) return true;
-  if (rel.startsWith("lib/") && rel.endsWith(".ts")) return true;
-  if (rel.startsWith("tests/") && rel.endsWith(".test.ts")) return true;
-  if (rel.startsWith("tests/") && rel.endsWith("/runtime-surface-scenarios.ts")) return true;
-  if (rel.startsWith("assets/fonts/") && (rel.endsWith("LICENSE") || rel.endsWith("SOURCE.md"))) {
-    return true;
-  }
-  return false;
-}
+const EXTENSION_DIRECTORY_DESCRIPTIONS = {
+  assets: "bundled assets and attribution",
+  docs: "focused extension references",
+  lib: "implementation modules",
+  references: "progressive reference material",
+  registry: "generated and curated registry data",
+  tests: "Behavior Proofs and test fixtures",
+};
 
 function fileDescription(rel) {
   if (rel === "index.ts") return "Pi extension entry point";
   if (rel === "manifest.json") return "source-of-truth extension metadata";
-  if (rel === "README.md") return "human + agent walkthrough";
-  if (rel === "AGENTS.md") return "extension-specific agent editing rules";
-  if (rel === "ROADMAP.md") return "extension-specific phased roadmap";
+  if (rel === "README.md") return "human behavior and usage";
+  if (rel === "AGENTS.md") return "agent editing rules";
+  if (rel === "AGENT_GUIDE.md") return "agent operating guide";
+  if (rel === "CONTEXT.md") return "extension domain glossary";
+  if (rel === "ROADMAP.md") return "unresolved extension work";
   if (rel === "CREDITS.md") return "extension attribution";
-  if (rel.endsWith(".test.ts")) return "unit / smoke test";
-  if (rel.endsWith("/runtime-surface-scenarios.ts")) {
-    return "conditional runtime registration scenarios";
-  }
-  if (rel.startsWith("lib/") && rel.endsWith(".ts")) return "implementation module";
-  if (rel.startsWith("assets/")) return "bundled asset metadata";
-  return "supporting file";
-}
-
-function buildTree(files, dir) {
-  const root = { children: new Map() };
-
-  for (const rel of files) {
-    let node = root;
-    const parts = rel.split("/");
-    for (const part of parts) {
-      if (!node.children.has(part)) node.children.set(part, { children: new Map() });
-      node = node.children.get(part);
-    }
-    node.file = true;
-    node.rel = rel;
-  }
-
-  const lines = [`extensions/${dir}/`];
-  function emit(node, depth) {
-    const entries = [...node.children.entries()].sort(([leftName, left], [rightName, right]) => {
-      if (!!left.file !== !!right.file) return left.file ? 1 : -1;
-      return leftName.localeCompare(rightName);
-    });
-    for (const [name, child] of entries) {
-      const indent = "  ".repeat(depth);
-      if (child.file) {
-        const padded = name.padEnd(Math.max(1, 28 - indent.length));
-        lines.push(`${indent}${padded}← ${fileDescription(child.rel)}`);
-      } else {
-        lines.push(`${indent}${name}/`);
-        emit(child, depth + 1);
-      }
-    }
-  }
-  emit(root, 1);
-  return lines.join("\n");
+  if (rel === "SF_CONSTITUTION.md") return "bundled Salesforce Engineering Constitution";
+  if (rel === "SF_GUARDRAIL_DEFAULTS.json") return "bundled Guardrail rule defaults";
+  if (rel === "SF_GUARDRAIL_PROMPT.md") return "bundled Guardrail guidance";
+  return "supporting contract file";
 }
 
 function generateExtensionFileStructure(dir) {
-  const files = listExtensionFiles(dir);
+  const extDir = path.join(EXTENSIONS_DIR, dir);
+  const entries = readdirSync(extDir, { withFileTypes: true }).sort((left, right) =>
+    left.name.localeCompare(right.name),
+  );
+  const lines = [`extensions/${dir}/`];
+
+  for (const entry of entries.filter((candidate) => candidate.isDirectory())) {
+    if (entry.name === "node_modules" || entry.name === "vendor") continue;
+    const description = EXTENSION_DIRECTORY_DESCRIPTIONS[entry.name] ?? "supporting files";
+    lines.push(`  ${(entry.name + "/").padEnd(28)}← ${description}`);
+  }
+  for (const entry of entries.filter(
+    (candidate) => candidate.isFile() && EXTENSION_FILE_MAP_INCLUDE.has(candidate.name),
+  )) {
+    lines.push(`  ${entry.name.padEnd(28)}← ${fileDescription(entry.name)}`);
+  }
+
   return [
     EXT_FILE_STRUCTURE_START_MARKER,
     "```",
-    buildTree(files, dir),
+    lines.join("\n"),
     "```",
     EXT_FILE_STRUCTURE_END_MARKER,
   ].join("\n");

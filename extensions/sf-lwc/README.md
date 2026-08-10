@@ -113,31 +113,12 @@ sf_lwc action
 
 ```
 extensions/sf-lwc/
-  lib/
-    artifacts.ts            ← implementation module
-    component.ts            ← implementation module
-    diagnostics.ts          ← implementation module
-    digest.ts               ← implementation module
-    errors.ts               ← implementation module
-    health.ts               ← implementation module
-    operations.ts           ← implementation module
-    project.ts              ← implementation module
-    render.ts               ← implementation module
-    result.ts               ← implementation module
-    sf-lwc-tool.ts          ← implementation module
-    tests.ts                ← implementation module
-    types.ts                ← implementation module
-  tests/
-    diagnostics.test.ts     ← unit / smoke test
-    operations.test.ts      ← unit / smoke test
-    project.test.ts         ← unit / smoke test
-    render.test.ts          ← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    tests.test.ts           ← unit / smoke test
-  AGENT_GUIDE.md            ← supporting file
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENT_GUIDE.md              ← agent operating guide
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

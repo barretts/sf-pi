@@ -210,101 +210,16 @@ Result digests remain artifact-first, but discovery actions include bounded prev
 
 ```
 extensions/sf-data360/
-  lib/
-    agent-observability/
-      platform-tracing.ts   ← implementation module
-    display/
-      api-card.ts           ← implementation module
-      card.ts               ← implementation module
-      facade-card.ts        ← implementation module
-      metadata-card.ts      ← implementation module
-      probe-card.ts         ← implementation module
-      render.ts             ← implementation module
-    facade/
-      agent-observability.ts← implementation module
-      local-helpers.ts      ← implementation module
-      registry.ts           ← implementation module
-      sql.ts                ← implementation module
-    v2/
-      ingest/
-        auth.ts             ← implementation module
-        interactive-auth.ts ← implementation module
-        tenant-client.ts    ← implementation module
-        types.ts            ← implementation module
-      action-registry.ts    ← implementation module
-      action-types.ts       ← implementation module
-      cleanup.ts            ← implementation module
-      csv-schema.ts         ← implementation module
-      dispatcher.ts         ← implementation module
-      journey-catalog.ts    ← implementation module
-      manifest.ts           ← implementation module
-      render.ts             ← implementation module
-      result-presenter.ts   ← implementation module
-      tools.ts              ← implementation module
-    api-tool.ts             ← implementation module
-    config-panel.ts         ← implementation module
-    extension-doctor.ts     ← implementation module
-    facade-tool.ts          ← implementation module
-    metadata-tool.ts        ← implementation module
-    probe-tool.ts           ← implementation module
-    safety.ts               ← implementation module
-    settings.ts             ← implementation module
-    truncation.ts           ← implementation module
-    v2-tool-names.ts        ← implementation module
-  tests/
-    agent-observability-runbooks.test.ts← unit / smoke test
-    api-card.test.ts        ← unit / smoke test
-    api-tool.test.ts        ← unit / smoke test
-    capability-sweep.test.ts← unit / smoke test
-    config-panel.test.ts    ← unit / smoke test
-    display-card.test.ts    ← unit / smoke test
-    facade-capabilities.test.ts← unit / smoke test
-    facade-card.test.ts     ← unit / smoke test
-    facade-registry.test.ts ← unit / smoke test
-    facade-safety.test.ts   ← unit / smoke test
-    local-helpers.test.ts   ← unit / smoke test
-    metadata-card.test.ts   ← unit / smoke test
-    metadata-tool.test.ts   ← unit / smoke test
-    payload-examples.test.ts← unit / smoke test
-    phase-skills.test.ts    ← unit / smoke test
-    platform-tracing.test.ts← unit / smoke test
-    probe-card.test.ts      ← unit / smoke test
-    probe-tool.test.ts      ← unit / smoke test
-    render-snapshot.test.ts ← unit / smoke test
-    safety.test.ts          ← unit / smoke test
-    settings.test.ts        ← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    truncation.test.ts      ← unit / smoke test
-    v2-action-curation.test.ts← unit / smoke test
-    v2-action-registry.test.ts← unit / smoke test
-    v2-action-sweep.test.ts ← unit / smoke test
-    v2-activate-plan-recommendation.test.ts← unit / smoke test
-    v2-agent-behavior-run.test.ts← unit / smoke test
-    v2-auth-sessions-cleanup.test.ts← unit / smoke test
-    v2-cleanup-discover-owned.test.ts← unit / smoke test
-    v2-dispatcher.test.ts   ← unit / smoke test
-    v2-execute-parity.test.ts← unit / smoke test
-    v2-ingest-auth-exchange.test.ts← unit / smoke test
-    v2-ingest-auth-interactive.test.ts← unit / smoke test
-    v2-ingest-auth.test.ts  ← unit / smoke test
-    v2-ingest-jobs.test.ts  ← unit / smoke test
-    v2-intent-plan.test.ts  ← unit / smoke test
-    v2-journey-hardening.test.ts← unit / smoke test
-    v2-journey-run-actions.test.ts← unit / smoke test
-    v2-legacy-compatibility.test.ts← unit / smoke test
-    v2-make-data-usable-run.test.ts← unit / smoke test
-    v2-orchestrate-manifest.test.ts← unit / smoke test
-    v2-result-presenter.test.ts← unit / smoke test
-    v2-result-ux.test.ts    ← unit / smoke test
-    v2-segment-activate-plan.test.ts← unit / smoke test
-    v2-semantic-retrieval-plan.test.ts← unit / smoke test
-    v2-tools.test.ts        ← unit / smoke test
-  AGENT_GUIDE.md            ← supporting file
-  AGENTS.md                 ← extension-specific agent editing rules
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
-  ROADMAP.md                ← extension-specific phased roadmap
+  lib/                        ← implementation modules
+  references/                 ← progressive reference material
+  registry/                   ← generated and curated registry data
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENT_GUIDE.md              ← agent operating guide
+  AGENTS.md                   ← agent editing rules
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
+  ROADMAP.md                  ← unresolved extension work
 ```
 
 <!-- GENERATED:file-structure:end -->

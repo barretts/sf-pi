@@ -199,73 +199,14 @@ in repo ADRs, especially:
 
 ```
 extensions/sf-guardrail/
-  lib/
-    approval-detail.ts      ← implementation module
-    approval-ledger.ts      ← implementation module
-    approval-scope.ts       ← implementation module
-    bash-ast.ts             ← implementation module
-    command-gate.ts         ← implementation module
-    command-risk-gate.ts    ← implementation module
-    config-panel-model.ts   ← implementation module
-    config-panel.ts         ← implementation module
-    config.ts               ← implementation module
-    extension-doctor.ts     ← implementation module
-    file-policy-gate.ts     ← implementation module
-    fingerprint.ts          ← implementation module
-    guardrail-settings.ts   ← implementation module
-    guidance.ts             ← implementation module
-    hitl.ts                 ← implementation module
-    manager-action-panels.ts← implementation module
-    native-tool-risk-gate.ts← implementation module
-    native-tool-risk-registry.ts← implementation module
-    org-aware-gate.ts       ← implementation module
-    org-aware-risk-gate.ts  ← implementation module
-    org-context.ts          ← implementation module
-    policies.ts             ← implementation module
-    power-tool-mode.ts      ← implementation module
-    preferences.ts          ← implementation module
-    production-aliases-panel.ts← implementation module
-    prompt-injection.ts     ← implementation module
-    rule-behavior.ts        ← implementation module
-    safety-envelope.ts      ← implementation module
-    safety-kernel.ts        ← implementation module
-    safety-subject.ts       ← implementation module
-    status.ts               ← implementation module
-    temp-cleanup.ts         ← implementation module
-    types.ts                ← implementation module
-  tests/
-    approval-detail.test.ts ← unit / smoke test
-    approval-ledger.test.ts ← unit / smoke test
-    approval-scope.test.ts  ← unit / smoke test
-    bash-ast.test.ts        ← unit / smoke test
-    command-gate.test.ts    ← unit / smoke test
-    command-risk-gate.test.ts← unit / smoke test
-    config-panel-ui.test.ts ← unit / smoke test
-    config.test.ts          ← unit / smoke test
-    file-policy-gate.test.ts← unit / smoke test
-    guidance.test.ts        ← unit / smoke test
-    hitl.test.ts            ← unit / smoke test
-    hook-order.test.ts      ← unit / smoke test
-    manager-actions.test.ts ← unit / smoke test
-    org-aware-risk-gate.test.ts← unit / smoke test
-    org-context.test.ts     ← unit / smoke test
-    policies.test.ts        ← unit / smoke test
-    power-tool-mode.test.ts ← unit / smoke test
-    preferences.test.ts     ← unit / smoke test
-    prompt-injection.test.ts← unit / smoke test
-    rule-behavior.test.ts   ← unit / smoke test
-    safety-envelope.test.ts ← unit / smoke test
-    safety-kernel-contract.test.ts← unit / smoke test
-    safety-kernel.test.ts   ← unit / smoke test
-    safety-subject.test.ts  ← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    status.test.ts          ← unit / smoke test
-  AGENTS.md                 ← extension-specific agent editing rules
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
-  ROADMAP.md                ← extension-specific phased roadmap
-  SF_GUARDRAIL_DEFAULTS.json← supporting file
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENTS.md                   ← agent editing rules
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
+  ROADMAP.md                  ← unresolved extension work
+  SF_GUARDRAIL_DEFAULTS.json  ← bundled Guardrail rule defaults
 ```
 
 <!-- GENERATED:file-structure:end -->

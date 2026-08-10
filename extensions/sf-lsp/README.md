@@ -155,41 +155,12 @@ is unchanged.
 
 ```
 extensions/sf-lsp/
-  lib/
-    install/
-      detect.ts             ← implementation module
-      installer.ts          ← implementation module
-      orchestrator.ts       ← implementation module
-      paths.ts              ← implementation module
-      state.ts              ← implementation module
-      types.ts              ← implementation module
-      versioning.ts         ← implementation module
-    activity.ts             ← implementation module
-    command-panel.ts        ← implementation module
-    config-panel.ts         ← implementation module
-    extension-doctor.ts     ← implementation module
-    feedback.ts             ← implementation module
-    file-classify.ts        ← implementation module
-    lsp-client.ts           ← implementation module
-    settings-io.ts          ← implementation module
-    transcript.ts           ← implementation module
-    types.ts                ← implementation module
-    working-indicator.ts    ← implementation module
-  tests/
-    activity.test.ts        ← unit / smoke test
-    config-panel.test.ts    ← unit / smoke test
-    feedback.test.ts        ← unit / smoke test
-    file-classify.test.ts   ← unit / smoke test
-    install-detect.test.ts  ← unit / smoke test
-    install-state.test.ts   ← unit / smoke test
-    install-versioning.test.ts← unit / smoke test
-    reload-safety.test.ts   ← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    transcript.test.ts      ← unit / smoke test
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
-  ROADMAP.md                ← extension-specific phased roadmap
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
+  ROADMAP.md                  ← unresolved extension work
 ```
 
 <!-- GENERATED:file-structure:end -->

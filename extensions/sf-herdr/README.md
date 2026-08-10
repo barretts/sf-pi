@@ -121,22 +121,12 @@ structured plan for quick inspection.
 
 ```
 extensions/sf-herdr/
-  lib/
-    config-panel.ts         ← implementation module
-    settings.ts             ← implementation module
-    sf_herdr_plan-tool.ts   ← implementation module
-    status.ts               ← implementation module
-    tool-result-normalizer.ts← implementation module
-  tests/
-    config-panel.test.ts    ← unit / smoke test
-    plan-render.test.ts     ← unit / smoke test
-    runtime-surface-scenarios.ts← conditional runtime registration scenarios
-    smoke.test.ts           ← unit / smoke test
-    tool-result-normalizer.test.ts← unit / smoke test
-  AGENT_GUIDE.md            ← supporting file
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENT_GUIDE.md              ← agent operating guide
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

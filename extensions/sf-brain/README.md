@@ -78,34 +78,13 @@ Artifacts default to `.pi/state/sf-brain/`. The opt-in behavior regression allow
 
 ```
 extensions/sf-brain/
-  lib/
-    constitution.ts         ← implementation module
-    instruction-surface-artifact.ts← implementation module
-    instruction-surface-baseline.ts← implementation module
-    instruction-surface-manager.ts← implementation module
-    instruction-surface-panel.ts← implementation module
-    instruction-surface-report.ts← implementation module
-    instruction-surface-runtime.ts← implementation module
-    routing-summary.ts      ← implementation module
-  tests/
-    constitution.test.ts    ← unit / smoke test
-    injection.test.ts       ← unit / smoke test
-    instruction-behavior-eval.test.ts← unit / smoke test
-    instruction-surface-artifact.test.ts← unit / smoke test
-    instruction-surface-baseline.test.ts← unit / smoke test
-    instruction-surface-manager.test.ts← unit / smoke test
-    instruction-surface-panel.test.ts← unit / smoke test
-    instruction-surface-report.test.ts← unit / smoke test
-    instruction-surface-runtime.test.ts← unit / smoke test
-    instruction-surface-script.test.ts← unit / smoke test
-    progressive-docs.test.ts← unit / smoke test
-    routing-summary.test.ts ← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-  AGENT_GUIDE.md            ← supporting file
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
-  SF_CONSTITUTION.md        ← supporting file
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENT_GUIDE.md              ← agent operating guide
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
+  SF_CONSTITUTION.md          ← bundled Salesforce Engineering Constitution
 ```
 
 <!-- GENERATED:file-structure:end -->

@@ -253,86 +253,12 @@ entry to the active session.
 
 ```
 extensions/sf-llm-gateway/
-  lib/
-    models-internal/
-      discovery-sentinels.ts← implementation module
-      fetchers.ts           ← implementation module
-    transport-internal/
-      anthropic.ts          ← implementation module
-      openai-chat.ts        ← implementation module
-      openai-responses.ts   ← implementation module
-      shared.ts             ← implementation module
-    ca-bundle-fixer-state.ts← implementation module
-    ca-bundle-fixer.ts      ← implementation module
-    ca-probe-state.ts       ← implementation module
-    claude-code-import.ts   ← implementation module
-    command-surface.ts      ← implementation module
-    config-panel.ts         ← implementation module
-    config.ts               ← implementation module
-    doctor.ts               ← implementation module
-    gateway-url.ts          ← implementation module
-    model-resolution.ts     ← implementation module
-    models.ts               ← implementation module
-    monthly-usage.ts        ← implementation module
-    onboard-action.ts       ← implementation module
-    onboarding-sources.ts   ← implementation module
-    onboarding-state.ts     ← implementation module
-    onboarding.ts           ← implementation module
-    open-url.ts             ← implementation module
-    pi-settings.ts          ← implementation module
-    provider-auth.ts        ← implementation module
-    provider-telemetry.ts   ← implementation module
-    provider.ts             ← implementation module
-    setup-overlay.ts        ← implementation module
-    stale-usage-refresh.ts  ← implementation module
-    status.ts               ← implementation module
-    token-counter.ts        ← implementation module
-    transport.ts            ← implementation module
-    wire-trace.ts           ← implementation module
-  tests/
-    anthropic-transport.test.ts← unit / smoke test
-    ca-bundle-fixer.test.ts ← unit / smoke test
-    ca-probe-state.test.ts  ← unit / smoke test
-    claude-code-import.test.ts← unit / smoke test
-    command-parsing.test.ts ← unit / smoke test
-    command-surface.test.ts ← unit / smoke test
-    compaction-routes-through-gateway.test.ts← unit / smoke test
-    config-panel-manager.test.ts← unit / smoke test
-    config-panel-paste.test.ts← unit / smoke test
-    config.test.ts          ← unit / smoke test
-    cwd-migration.test.ts   ← unit / smoke test
-    doctor-tls-state.test.ts← unit / smoke test
-    doctor.test.ts          ← unit / smoke test
-    fetchers.test.ts        ← unit / smoke test
-    formatting.test.ts      ← unit / smoke test
-    gateway-url.test.ts     ← unit / smoke test
-    global-config.test.ts   ← unit / smoke test
-    lifecycle.test.ts       ← unit / smoke test
-    manager-actions.test.ts ← unit / smoke test
-    manager-setup.test.ts   ← unit / smoke test
-    model-resolution.test.ts← unit / smoke test
-    models.test.ts          ← unit / smoke test
-    monthly-usage.test.ts   ← unit / smoke test
-    native-retry-lifecycle.test.ts← unit / smoke test
-    onboard-action.test.ts  ← unit / smoke test
-    onboarding-sources.test.ts← unit / smoke test
-    onboarding.test.ts      ← unit / smoke test
-    open-url.test.ts        ← unit / smoke test
-    provider-auth.test.ts   ← unit / smoke test
-    provider-telemetry.test.ts← unit / smoke test
-    provider.test.ts        ← unit / smoke test
-    setup-overlay-single-write.test.ts← unit / smoke test
-    stale-usage-refresh.test.ts← unit / smoke test
-    status.test.ts          ← unit / smoke test
-    thinking-level.test.ts  ← unit / smoke test
-    thinking-ownership-runtime.test.ts← unit / smoke test
-    token-counter.test.ts   ← unit / smoke test
-    transport.test.ts       ← unit / smoke test
-    wire-trace.test.ts      ← unit / smoke test
-  AGENTS.md                 ← extension-specific agent editing rules
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENTS.md                   ← agent editing rules
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

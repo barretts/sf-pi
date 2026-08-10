@@ -78,39 +78,12 @@ Extension loads
 
 ```
 extensions/sf-data-explorer/
-  lib/
-    modes/
-      data360-sql.ts        ← implementation module
-      soql.ts               ← implementation module
-      sosl.ts               ← implementation module
-    ui/
-      explorer-spa.ts       ← implementation module
-    cache.ts                ← implementation module
-    command.ts              ← implementation module
-    config-panel.ts         ← implementation module
-    export.ts               ← implementation module
-    result-normalize.ts     ← implementation module
-    settings.ts             ← implementation module
-    text.ts                 ← implementation module
-    transport.ts            ← implementation module
-    types.ts                ← implementation module
-    validators.ts           ← implementation module
-  tests/
-    boot-path.test.ts       ← unit / smoke test
-    builders.test.ts        ← unit / smoke test
-    command.test.ts         ← unit / smoke test
-    config-panel.test.ts    ← unit / smoke test
-    data360-metadata.test.ts← unit / smoke test
-    export.test.ts          ← unit / smoke test
-    result-normalize.test.ts← unit / smoke test
-    settings.test.ts        ← unit / smoke test
-    shared-connection.test.ts← unit / smoke test
-    strategies-transport.test.ts← unit / smoke test
-    validators.test.ts      ← unit / smoke test
-  AGENTS.md                 ← extension-specific agent editing rules
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENTS.md                   ← agent editing rules
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

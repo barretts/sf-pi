@@ -143,44 +143,15 @@ Each field resolves project → global → default. Project **Inherit global** a
 
 ```
 extensions/sf-tldraw/
-  lib/
-    artifacts.ts            ← implementation module
-    assets.ts               ← implementation module
-    canvas-program.ts       ← implementation module
-    command-surface.ts      ← implementation module
-    config-panel.ts         ← implementation module
-    layout.ts               ← implementation module
-    profiles.ts             ← implementation module
-    redaction.ts            ← implementation module
-    renderer.ts             ← implementation module
-    runtime-client.ts       ← implementation module
-    runtime-surface.ts      ← implementation module
-    settings.ts             ← implementation module
-    spec-schema.ts          ← implementation module
-    spec-validation.ts      ← implementation module
-    tldraw_canvas-tool.ts   ← implementation module
-    types.ts                ← implementation module
-  tests/
-    artifacts.test.ts       ← unit / smoke test
-    data-model-gallery-matrix.live.test.ts← unit / smoke test
-    deferred-status.test.ts ← unit / smoke test
-    live-runtime.test.ts    ← unit / smoke test
-    profiles.test.ts        ← unit / smoke test
-    redaction.test.ts       ← unit / smoke test
-    renderer.test.ts        ← unit / smoke test
-    runtime-client.test.ts  ← unit / smoke test
-    sequence-matrix.live.test.ts← unit / smoke test
-    sequence-profile.test.ts← unit / smoke test
-    settings.test.ts        ← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    spec-validation.test.ts ← unit / smoke test
-    tldraw_canvas-tool.test.ts← unit / smoke test
-  AGENT_GUIDE.md            ← supporting file
-  AGENTS.md                 ← extension-specific agent editing rules
-  CREDITS.md                ← extension attribution
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  docs/                       ← focused extension references
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENT_GUIDE.md              ← agent operating guide
+  AGENTS.md                   ← agent editing rules
+  CREDITS.md                  ← extension attribution
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

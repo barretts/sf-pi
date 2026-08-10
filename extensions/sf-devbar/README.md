@@ -192,31 +192,12 @@ active Pi theme.
 
 ```
 extensions/sf-devbar/
-  lib/
-    bottom-bar.ts           ← implementation module
-    colors.ts               ← implementation module
-    config-panel.ts         ← implementation module
-    git-changes.ts          ← implementation module
-    runtime-facts.ts        ← implementation module
-    settings-reader.ts      ← implementation module
-    settings.ts             ← implementation module
-    top-bar.ts              ← implementation module
-  tests/
-    bottom-bar.test.ts      ← unit / smoke test
-    colors.test.ts          ← unit / smoke test
-    config-panel.test.ts    ← unit / smoke test
-    git-changes.test.ts     ← unit / smoke test
-    runtime-facts.test.ts   ← unit / smoke test
-    settings-reader.test.ts ← unit / smoke test
-    settings.test.ts        ← unit / smoke test
-    shutdown-reason.test.ts ← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    system-prompt-options.test.ts← unit / smoke test
-    top-bar.test.ts         ← unit / smoke test
-  CREDITS.md                ← extension attribution
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  CREDITS.md                  ← extension attribution
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->

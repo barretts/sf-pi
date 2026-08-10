@@ -244,48 +244,13 @@ For `run`, `rules`, `config`, and `last_report`, set `output_mode` to `summary` 
 
 ```
 extensions/sf-code-analyzer/
-  lib/
-    apexguru-guidance.ts    ← implementation module
-    apexguru-readiness.ts   ← implementation module
-    apexguru.ts             ← implementation module
-    artifacts.ts            ← implementation module
-    auto-scan-followup.ts   ← implementation module
-    auto-scan-plan.ts       ← implementation module
-    auto-scan-transcript.ts ← implementation module
-    auto-scan.ts            ← implementation module
-    cli.ts                  ← implementation module
-    code_analyzer-tool.ts   ← implementation module
-    config-panel.ts         ← implementation module
-    display.ts              ← implementation module
-    extension-doctor.ts     ← implementation module
-    file-classify.ts        ← implementation module
-    manager-action-panels.ts← implementation module
-    readiness.ts            ← implementation module
-    recipes.ts              ← implementation module
-    report-filter.ts        ← implementation module
-    settings.ts             ← implementation module
-    transcript.ts           ← implementation module
-    types.ts                ← implementation module
-  tests/
-    apexguru-readiness.test.ts← unit / smoke test
-    apexguru-shared-connection.test.ts← unit / smoke test
-    auto-scan-followup.test.ts← unit / smoke test
-    auto-scan-orchestration.test.ts← unit / smoke test
-    auto-scan-plan.test.ts  ← unit / smoke test
-    auto-scan-transcript.test.ts← unit / smoke test
-    config-panel.test.ts    ← unit / smoke test
-    display.test.ts         ← unit / smoke test
-    recipes.test.ts         ← unit / smoke test
-    report-filter.test.ts   ← unit / smoke test
-    settings.test.ts        ← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    tool-actions.test.ts    ← unit / smoke test
-    transcript-format.test.ts← unit / smoke test
-  AGENT_GUIDE.md            ← supporting file
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
-  ROADMAP.md                ← extension-specific phased roadmap
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENT_GUIDE.md              ← agent operating guide
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
+  ROADMAP.md                  ← unresolved extension work
 ```
 
 <!-- GENERATED:file-structure:end -->

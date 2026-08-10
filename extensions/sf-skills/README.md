@@ -126,51 +126,12 @@ The full Skill Funnel remains an action page because it edits native `settings.s
 
 ```
 extensions/sf-skills/
-  lib/
-    funnel-view/
-      index.ts              ← implementation module
-      layout.ts             ← implementation module
-      model.ts              ← implementation module
-      types.ts              ← implementation module
-      viewport.ts           ← implementation module
-    catalog.ts              ← implementation module
-    config-panel.ts         ← implementation module
-    conflict-actions.ts     ← implementation module
-    defaults.ts             ← implementation module
-    gather.ts               ← implementation module
-    hud-component.ts        ← implementation module
-    prune.ts                ← implementation module
-    resolution.ts           ← implementation module
-    settings-coverage.ts    ← implementation module
-    settings.ts             ← implementation module
-    skill-state.ts          ← implementation module
-    skills-command.ts       ← implementation module
-    usage-store.ts          ← implementation module
-  tests/
-    boot-path.test.ts       ← unit / smoke test
-    catalog.test.ts         ← unit / smoke test
-    config-panel.test.ts    ← unit / smoke test
-    conflict-actions.test.ts← unit / smoke test
-    defaults.test.ts        ← unit / smoke test
-    funnel-layout.test.ts   ← unit / smoke test
-    funnel-model.test.ts    ← unit / smoke test
-    gather.test.ts          ← unit / smoke test
-    hud-visibility.test.ts  ← unit / smoke test
-    pi-resource-parity.test.ts← unit / smoke test
-    prune.test.ts           ← unit / smoke test
-    reload-safety.test.ts   ← unit / smoke test
-    resolution.test.ts      ← unit / smoke test
-    settings-coverage.test.ts← unit / smoke test
-    settings.test.ts        ← unit / smoke test
-    skill-state.test.ts     ← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    source-registry.test.ts ← unit / smoke test
-    usage-store.test.ts     ← unit / smoke test
-    viewport.test.ts        ← unit / smoke test
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
-  ROADMAP.md                ← extension-specific phased roadmap
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
+  ROADMAP.md                  ← unresolved extension work
 ```
 
 <!-- GENERATED:file-structure:end -->

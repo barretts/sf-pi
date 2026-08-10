@@ -220,80 +220,13 @@ Then run:
 
 ```
 extensions/sf-browser/
-  lib/
-    agent-browser.ts        ← implementation module
-    artifacts.ts            ← implementation module
-    browser-expression.ts   ← implementation module
-    browser-launch-diagnostics.ts← implementation module
-    classic-setup-submit.ts ← implementation module
-    config-panel.ts         ← implementation module
-    constants.ts            ← implementation module
-    data-cloud-pack.ts      ← implementation module
-    editor-surfaces.ts      ← implementation module
-    evidence-panel.ts       ← implementation module
-    evidence-policy.ts      ← implementation module
-    evidence-report.ts      ← implementation module
-    evidence-target.ts      ← implementation module
-    failure-diagnostics.ts  ← implementation module
-    guidance.ts             ← implementation module
-    in-frame-actions.ts     ← implementation module
-    lightning-state.ts      ← implementation module
-    lightning-wait.ts       ← implementation module
-    operations.ts           ← implementation module
-    overlay-dismissal.ts    ← implementation module
-    redaction.ts            ← implementation module
-    salesforce-open.ts      ← implementation module
-    salesforce-path-resolver.ts← implementation module
-    salesforce-path-schema.ts← implementation module
-    salesforce-route-verifier.ts← implementation module
-    settings.ts             ← implementation module
-    setup-audit-trail.ts    ← implementation module
-    setup-destinations.ts   ← implementation module
-    sf_browser_capture_evidence-tool.ts← implementation module
-    sf_browser_click-tool.ts← implementation module
-    sf_browser_editor-tool.ts← implementation module
-    sf_browser_fill-tool.ts ← implementation module
-    sf_browser_open_org-tool.ts← implementation module
-    sf_browser_press-tool.ts← implementation module
-    sf_browser_resolve_path-tool.ts← implementation module
-    sf_browser_select-tool.ts← implementation module
-    sf_browser_snapshot-tool.ts← implementation module
-    sf_browser_wait-tool.ts ← implementation module
-    snapshot-summary.ts     ← implementation module
-    timing.ts               ← implementation module
-    tool-support.ts         ← implementation module
-  tests/
-    agent-browser-status.test.ts← unit / smoke test
-    agent-browser.test.ts   ← unit / smoke test
-    artifacts.test.ts       ← unit / smoke test
-    browser-expression.test.ts← unit / smoke test
-    classic-setup-submit.test.ts← unit / smoke test
-    config-panel.test.ts    ← unit / smoke test
-    data-cloud-pack.test.ts ← unit / smoke test
-    editor-surfaces.test.ts ← unit / smoke test
-    evidence-panel.test.ts  ← unit / smoke test
-    evidence-policy.test.ts ← unit / smoke test
-    evidence-report.test.ts ← unit / smoke test
-    evidence-target.test.ts ← unit / smoke test
-    failure-diagnostics.test.ts← unit / smoke test
-    in-frame-actions.test.ts← unit / smoke test
-    open-org-invalidation.test.ts← unit / smoke test
-    operations.test.ts      ← unit / smoke test
-    overlay-dismissal.test.ts← unit / smoke test
-    redaction.test.ts       ← unit / smoke test
-    salesforce-path-resolver.test.ts← unit / smoke test
-    salesforce-route-verifier.test.ts← unit / smoke test
-    settings.test.ts        ← unit / smoke test
-    setup-audit-trail.test.ts← unit / smoke test
-    setup-destinations.test.ts← unit / smoke test
-    smoke.test.ts           ← unit / smoke test
-    snapshot-summary.test.ts← unit / smoke test
-    timing.test.ts          ← unit / smoke test
-    wait.test.ts            ← unit / smoke test
-  AGENT_GUIDE.md            ← supporting file
-  index.ts                  ← Pi extension entry point
-  manifest.json             ← source-of-truth extension metadata
-  README.md                 ← human + agent walkthrough
+  docs/                       ← focused extension references
+  lib/                        ← implementation modules
+  tests/                      ← Behavior Proofs and test fixtures
+  AGENT_GUIDE.md              ← agent operating guide
+  index.ts                    ← Pi extension entry point
+  manifest.json               ← source-of-truth extension metadata
+  README.md                   ← human behavior and usage
 ```
 
 <!-- GENERATED:file-structure:end -->
