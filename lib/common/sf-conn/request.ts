@@ -5,9 +5,9 @@
  * client in `extensions/sf-agentscript/lib/eval/sfap.ts` for non-SFAP
  * (instance-URL) routes.
  *
- * The auto-refreshing token, retry on 5xx, and JSON parse all live inside
- * `Connection`; callers just see a typed body and a status. 4xx responses
- * surface as `{ status, body }` too — this helper never raises for HTTP.
+ * Native fetch is bounded and returns HTTP errors as data. Definite expired
+ * sessions share one refresh per Connection and retry once under the same URL
+ * and API version; ordinary permission 403 responses are never replayed.
  *
  * Example:
  *   const conn = await connFromAlias(targetOrg);
@@ -19,6 +19,10 @@
  */
 
 import type { Connection } from "@salesforce/core";
+import {
+  getSalesforceConnectionAccessToken,
+  refreshSalesforceConnectionAuth,
+} from "./auth-refresh.ts";
 
 export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
@@ -53,11 +57,11 @@ export interface ConnResponse<T> {
 }
 
 /**
- * Single HTTP call via `Connection.request`. Never throws on HTTP errors.
+ * One bounded HTTP operation. Never throws on HTTP errors.
  *
- * jsforce auto-refreshes auth, parses JSON responses, and follows the
- * Connection's instance URL. We layer "HTTP errors are data, not exceptions"
- * on top so call sites can write linear code.
+ * When a token is directly available, native fetch preserves status/body and
+ * performs the shared one-time expired-session recovery. Connections without
+ * an exposed token fall back to the bounded SDK request seam.
  */
 export async function connRequest<T = unknown>(
   conn: Connection,
@@ -110,19 +114,48 @@ async function nativeFetchRequest<T>(
   req: NativeFetchRequest,
 ): Promise<ConnResponse<T> | undefined> {
   const instanceUrl = conn.instanceUrl;
-  const accessToken = getAccessToken(conn);
+  const accessToken = getSalesforceConnectionAccessToken(conn);
   if (!accessToken || !instanceUrl) return undefined;
 
-  const url = absoluteUrl(instanceUrl, req.url);
-  const first = await boundedNativeFetch<T>(url, withAuthHeader(req, accessToken));
-  if (![401, 403].includes(first.status)) return first;
+  const deadline = Date.now() + req.timeoutMs;
+  const remaining = (): number => {
+    const value = deadline - Date.now();
+    if (value <= 0) throw new ConnRequestTimeoutError(req.timeoutMs);
+    return value;
+  };
 
-  const refreshed = await refreshConnectionAuth(conn, req);
+  const url = absoluteUrl(instanceUrl, req.url);
+  const first = await boundedNativeFetch<T>(url, {
+    ...withAuthHeader(req, accessToken),
+    timeoutMs: remaining(),
+  });
+  if (!isRefreshableAuthFailure(first)) return first;
+
+  let refreshed: boolean;
+  try {
+    refreshed = await refreshConnectionAuth(
+      conn,
+      {
+        ...req,
+        timeoutMs: remaining(),
+      },
+      accessToken,
+    );
+  } catch (error) {
+    if (error instanceof ConnRequestTimeoutError || error instanceof ConnRequestAbortedError) {
+      throw error;
+    }
+    return first;
+  }
   if (!refreshed) return first;
 
-  const refreshedToken = getAccessToken(conn);
+  const refreshedToken = getSalesforceConnectionAccessToken(conn);
   if (!refreshedToken) return first;
-  return boundedNativeFetch<T>(url, withAuthHeader(req, refreshedToken));
+  const retryUrl = retargetAfterRefresh(req.url, instanceUrl, conn.instanceUrl);
+  return boundedNativeFetch<T>(retryUrl, {
+    ...withAuthHeader(req, refreshedToken),
+    timeoutMs: remaining(),
+  });
 }
 
 function withAuthHeader(req: NativeFetchRequest, accessToken: string): NativeFetchRequest {
@@ -135,23 +168,49 @@ function withAuthHeader(req: NativeFetchRequest, accessToken: string): NativeFet
 async function refreshConnectionAuth(
   conn: Connection,
   req: Pick<NativeFetchRequest, "timeoutMs" | "signal">,
+  failedAccessToken: string,
 ): Promise<boolean> {
-  const refreshAuth = (conn as unknown as { refreshAuth?: () => Promise<unknown> }).refreshAuth;
-  if (typeof refreshAuth !== "function") return false;
-  await boundedConnRequest(refreshAuth.call(conn), req.timeoutMs, req.signal);
+  const pending = refreshSalesforceConnectionAuth(conn, failedAccessToken);
+  if (!pending) return false;
+  await boundedConnRequest(pending, req.timeoutMs, req.signal);
   return true;
 }
 
-function getAccessToken(conn: Connection): string | undefined {
-  return (
-    (conn as unknown as { accessToken?: string }).accessToken ??
-    (conn.getConnectionOptions?.() as { accessToken?: string } | undefined)?.accessToken
+function isRefreshableAuthFailure(response: ConnResponse<unknown>): boolean {
+  if (response.status === 401) return true;
+  if (response.status !== 403) return false;
+  return hasSalesforceErrorCode(response.body, "INVALID_SESSION_ID");
+}
+
+function hasSalesforceErrorCode(body: unknown, expected: string): boolean {
+  const entries = Array.isArray(body) ? body : [body];
+  return entries.some(
+    (entry) =>
+      !!entry &&
+      typeof entry === "object" &&
+      (entry as { errorCode?: unknown }).errorCode === expected,
   );
 }
 
 function absoluteUrl(instanceUrl: string, url: string): string {
   if (/^https?:\/\//i.test(url)) return url;
   return `${instanceUrl.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
+}
+
+function retargetAfterRefresh(
+  requestedUrl: string,
+  previousInstanceUrl: string,
+  refreshedInstanceUrl: string,
+): string {
+  if (!/^https?:\/\//i.test(requestedUrl)) return absoluteUrl(refreshedInstanceUrl, requestedUrl);
+  try {
+    const requested = new URL(requestedUrl);
+    const previous = new URL(previousInstanceUrl);
+    if (requested.origin !== previous.origin) return requestedUrl;
+    return new URL(`${requested.pathname}${requested.search}`, refreshedInstanceUrl).toString();
+  } catch {
+    return requestedUrl;
+  }
 }
 
 async function boundedNativeFetch<T>(

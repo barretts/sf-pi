@@ -22,7 +22,7 @@ import {
   type LifecycleActionId,
 } from "../../lib/common/extension-toggle.ts";
 import { requirePiVersion } from "../../lib/common/pi-compat.ts";
-import { clearConnectionCache } from "../../lib/common/sf-conn/connection.ts";
+import { beginSalesforceConnectionSession } from "../../lib/common/sf-conn/index.ts";
 import { withSafeCommandHandler } from "../../lib/common/safe-command-handler.ts";
 import { registerSfSoqlTool } from "./lib/sf-soql-tool.ts";
 
@@ -49,11 +49,10 @@ const SF_SOQL_ACTIONS: CommandPanelAction<SfSoqlAction>[] = [
 export default function (pi: ExtensionAPI) {
   if (!requirePiVersion(pi, "sf-soql")) return;
 
-  pi.on("session_start", async () => {
-    clearConnectionCache();
+  pi.on("session_start", async (event) => {
+    beginSalesforceConnectionSession(event);
     registerSfSoqlTool(pi);
   });
-  pi.on("session_shutdown", async () => clearConnectionCache());
 
   pi.registerCommand(COMMAND_NAME, {
     description: "SF SOQL — query lifecycle status & controls",

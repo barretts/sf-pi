@@ -181,6 +181,190 @@ describe("connRequest body handling", () => {
     expect(conn.request).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
+
+  test("coalesces concurrent expired-session refreshes for one connection", async () => {
+    let releaseRefresh!: () => void;
+    const refreshGate = new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const authorization = new Headers(init?.headers).get("Authorization");
+      return authorization === "Bearer OLD"
+        ? new Response(JSON.stringify([{ errorCode: "INVALID_SESSION_ID" }]), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          })
+        : new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const conn = {
+      accessToken: "OLD",
+      instanceUrl: "https://example.my.salesforce.com",
+      refreshAuth: vi.fn().mockImplementation(async function (this: { accessToken: string }) {
+        await refreshGate;
+        this.accessToken = "NEW";
+      }),
+      request: vi.fn(),
+    } as unknown as Parameters<typeof connRequest>[0];
+
+    const first = connRequest(conn, { method: "GET", url: "/services/data/v67.0/limits" });
+    const second = connRequest(conn, { method: "GET", url: "/services/data/v67.0/limits" });
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(conn.refreshAuth).toHaveBeenCalledTimes(1);
+    });
+
+    releaseRefresh();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { status: 200, body: { ok: true } },
+      { status: 200, body: { ok: true } },
+    ]);
+    expect(conn.refreshAuth).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    vi.unstubAllGlobals();
+  });
+
+  test("does not refresh or replay a mutating request after a permission 403", async () => {
+    const denied = [{ errorCode: "INSUFFICIENT_ACCESS", message: "denied" }];
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(denied), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const conn = {
+      accessToken: "TOKEN",
+      instanceUrl: "https://example.my.salesforce.com",
+      refreshAuth: vi.fn(),
+      request: vi.fn(),
+    } as unknown as Parameters<typeof connRequest>[0];
+
+    await expect(
+      connRequest(conn, {
+        method: "POST",
+        url: "/services/data/v67.0/sobjects/Account",
+        body: { Name: "Example" },
+      }),
+    ).resolves.toEqual({ status: 403, body: denied });
+    expect(conn.refreshAuth).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  test("preserves the original auth response when token refresh fails", async () => {
+    const expired = [{ errorCode: "INVALID_SESSION_ID" }];
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(expired), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const conn = {
+      accessToken: "OLD",
+      instanceUrl: "https://example.my.salesforce.com",
+      refreshAuth: vi.fn().mockRejectedValue(new Error("refresh unavailable")),
+      request: vi.fn(),
+    } as unknown as Parameters<typeof connRequest>[0];
+
+    await expect(
+      connRequest(conn, { method: "GET", url: "/services/data/v67.0/limits" }),
+    ).resolves.toEqual({ status: 401, body: expired });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  test("retargets the retry when auth refresh changes the instance URL", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ errorCode: "INVALID_SESSION_ID" }]), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const conn = {
+      accessToken: "OLD",
+      instanceUrl: "https://old.example.my.salesforce.com",
+      refreshAuth: vi.fn().mockImplementation(function (this: {
+        accessToken: string;
+        instanceUrl: string;
+      }) {
+        this.accessToken = "NEW";
+        this.instanceUrl = "https://new.example.my.salesforce.com";
+        return Promise.resolve();
+      }),
+      request: vi.fn(),
+    } as unknown as Parameters<typeof connRequest>[0];
+
+    const response = await connRequest(conn, {
+      method: "GET",
+      url: "https://old.example.my.salesforce.com/services/data/v67.0/limits",
+    });
+
+    expect(response.status).toBe(200);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("https://old.example.my.salesforce.com/");
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("https://new.example.my.salesforce.com/");
+    vi.unstubAllGlobals();
+  });
+
+  test("uses one total timeout across fetch, auth refresh, and retry", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          setTimeout(
+            () =>
+              resolve(
+                new Response(JSON.stringify([{ errorCode: "INVALID_SESSION_ID" }]), {
+                  status: 401,
+                  headers: { "Content-Type": "application/json" },
+                }),
+              ),
+            60,
+          );
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const conn = {
+      accessToken: "OLD",
+      instanceUrl: "https://example.my.salesforce.com",
+      refreshAuth: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            setTimeout(resolve, 60);
+          }),
+      ),
+      request: vi.fn(),
+    } as unknown as Parameters<typeof connRequest>[0];
+
+    const pending = connRequest(conn, {
+      method: "GET",
+      url: "/services/data/v67.0/limits",
+      timeoutMs: 100,
+    });
+    await vi.advanceTimersByTimeAsync(60);
+    await vi.advanceTimersByTimeAsync(40);
+
+    await expect(pending).resolves.toMatchObject({
+      status: 408,
+      body: { errorCode: "REQUEST_TIMEOUT" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("connRequest error → status mapping", () => {

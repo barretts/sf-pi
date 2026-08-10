@@ -13,11 +13,16 @@ import path from "node:path";
 
 const configGetInfoMock = vi.fn<(key: string) => unknown>();
 const configCreateMock = vi.fn();
-const orgCreateMock = vi.fn();
+const connectSalesforceMock = vi.fn();
+const getCachedSalesforceTargetMock = vi.fn();
 
 vi.mock("@salesforce/core", () => ({
   ConfigAggregator: { create: () => configCreateMock() },
-  Org: { create: (opts: unknown) => orgCreateMock(opts) },
+}));
+vi.mock("../../sf-conn/index.ts", () => ({
+  connectSalesforce: (options: unknown) => connectSalesforceMock(options),
+  getCachedSalesforceTarget: (options: unknown) => getCachedSalesforceTargetMock(options),
+  clearSalesforceConnectionCache: vi.fn(),
 }));
 
 import {
@@ -34,7 +39,8 @@ beforeEach(async () => {
   configGetInfoMock.mockReset();
   configCreateMock.mockReset();
   configCreateMock.mockResolvedValue({ getInfo: configGetInfoMock });
-  orgCreateMock.mockReset();
+  connectSalesforceMock.mockReset();
+  getCachedSalesforceTargetMock.mockReset();
   // Default: no target-org configured.
   configGetInfoMock.mockReturnValue({ value: undefined });
 
@@ -51,13 +57,25 @@ function createTempDir(): string {
   return dir;
 }
 
-function fakeOrg(alias: string, apiVersion: string) {
-  const conn = {
-    getAuthInfoFields: () => ({ alias }),
+function fakeTarget(alias: string, apiVersion: string) {
+  return {
+    targetOrg: alias,
+    alias,
     instanceUrl: "https://example.sandbox.my.salesforce.com",
-    getApiVersion: () => apiVersion,
+    orgType: "sandbox",
+    apiVersion,
+    apiVersionSource: apiVersion === "50.0" ? "sdk-fallback" : "resolved",
   };
-  return { getConnection: () => conn };
+}
+
+function fakeSession(alias: string, apiVersion: string) {
+  return {
+    target: {
+      ...fakeTarget(alias, apiVersion),
+      maxApiVersion: apiVersion,
+      versionSource: "org-latest",
+    },
+  };
 }
 
 function mockExec(
@@ -190,16 +208,16 @@ describe("getSharedSfEnvironment", () => {
     configGetInfoMock.mockImplementation((key) =>
       key === "target-org" ? { value: "RefreshOrg", location: "Global" } : { value: undefined },
     );
-    orgCreateMock
-      .mockResolvedValueOnce(fakeOrg("RefreshOrg", "50.0"))
-      .mockResolvedValueOnce(fakeOrg("RefreshOrg", "67.0"));
+    getCachedSalesforceTargetMock.mockResolvedValueOnce(fakeTarget("RefreshOrg", "50.0"));
+    connectSalesforceMock.mockResolvedValueOnce(fakeSession("RefreshOrg", "67.0"));
 
     const first = await getSharedSfEnvironment(exec, cwd, { force: true });
     const refreshed = await refreshSharedSfEnvironment(exec, cwd);
 
     expect(first.org.apiVersion).toBe("50.0");
     expect(refreshed.org.apiVersion).toBe("67.0");
-    expect(orgCreateMock).toHaveBeenCalledTimes(2);
+    expect(getCachedSalesforceTargetMock).toHaveBeenCalledTimes(1);
+    expect(connectSalesforceMock).toHaveBeenCalledTimes(1);
     expect(peekSharedSfEnvironment(cwd)).toEqual(refreshed);
   });
 
@@ -210,9 +228,8 @@ describe("getSharedSfEnvironment", () => {
     configGetInfoMock.mockImplementation((key) =>
       key === "target-org" ? { value: "RefreshOrg", location: "Global" } : { value: undefined },
     );
-    orgCreateMock
-      .mockResolvedValueOnce(fakeOrg("RefreshOrg", "50.0"))
-      .mockResolvedValueOnce(fakeOrg("RefreshOrg", "67.0"));
+    getCachedSalesforceTargetMock.mockResolvedValueOnce(fakeTarget("RefreshOrg", "50.0"));
+    connectSalesforceMock.mockResolvedValueOnce(fakeSession("RefreshOrg", "67.0"));
 
     await getSharedSfEnvironment(exec, cwd, { force: true });
     const [first, second] = await Promise.all([
@@ -222,7 +239,8 @@ describe("getSharedSfEnvironment", () => {
 
     expect(first).toEqual(second);
     expect(first.org.apiVersion).toBe("67.0");
-    expect(orgCreateMock).toHaveBeenCalledTimes(2);
+    expect(getCachedSalesforceTargetMock).toHaveBeenCalledTimes(1);
+    expect(connectSalesforceMock).toHaveBeenCalledTimes(1);
   });
 
   it("explicit refresh waits for an in-flight detection, then starts a fresh one", async () => {
@@ -232,9 +250,8 @@ describe("getSharedSfEnvironment", () => {
     configGetInfoMock.mockImplementation((key) =>
       key === "target-org" ? { value: "RefreshOrg", location: "Global" } : { value: undefined },
     );
-    orgCreateMock
-      .mockResolvedValueOnce(fakeOrg("RefreshOrg", "50.0"))
-      .mockResolvedValueOnce(fakeOrg("RefreshOrg", "67.0"));
+    getCachedSalesforceTargetMock.mockResolvedValueOnce(fakeTarget("RefreshOrg", "50.0"));
+    connectSalesforceMock.mockResolvedValueOnce(fakeSession("RefreshOrg", "67.0"));
 
     const initial = getSharedSfEnvironment(exec, cwd, { force: true });
     const refreshed = refreshSharedSfEnvironment(exec, cwd);
@@ -242,7 +259,8 @@ describe("getSharedSfEnvironment", () => {
 
     expect(first.org.apiVersion).toBe("50.0");
     expect(second.org.apiVersion).toBe("67.0");
-    expect(orgCreateMock).toHaveBeenCalledTimes(2);
+    expect(getCachedSalesforceTargetMock).toHaveBeenCalledTimes(1);
+    expect(connectSalesforceMock).toHaveBeenCalledTimes(1);
     expect(peekSharedSfEnvironment(cwd)).toEqual(second);
   });
 
