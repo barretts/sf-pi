@@ -6,9 +6,8 @@ date: 2026-05-06
 
 # ADR 0005: Standard Pi-Native Command Panels
 
-> **Implementation status:** Manager-first no-args navigation remains the target
-> contract. `sf-apex`, `sf-lwc`, and `sf-soql` are current local-panel
-> exceptions until their migration lands.
+> **Implementation status:** ADR 0051's Manager-first no-args cutover is complete.
+> Explicit specialized panels remain governed by this ADR.
 
 ## Context
 
@@ -99,10 +98,9 @@ standard now reserves three names — each for one purpose:
 | `lib/config-panel.ts`      | The `ConfigPanelFactory` invoked by sf-pi-manager when `manifest.configurable === true`. Required for that surface. |
 | `lib/preferences-panel.ts` | A separate mutable user-preferences UI, when distinct from `config-panel.ts` (e.g. opened by `/sf-<id> settings`).  |
 
-The deprecated names `lib/panel.ts` and `lib/settings-panel.ts` are
-rejected by `npm run check:panels`. Most extensions inline their panel
-directly inside `index.ts` and never need a separate file; pull it out
-only when the panel logic exceeds ~50 lines.
+The deprecated names `lib/panel.ts` and `lib/settings-panel.ts` are rejected by
+`npm run check:commands`. Most extensions never need a separate explicit panel;
+keep one local only when an explicit specialized workflow genuinely requires it.
 
 ## Target explicit-action panel shape
 
@@ -125,10 +123,9 @@ Actions
 ↑↓ navigate • enter select • esc close
 ```
 
-For implementation, prefer a small shared helper under
-`lib/common/command-panel/` after at least two more extensions need the same
-component. Until then, copy the simple `sf-lsp/lib/panel.ts` pattern instead of
-building a broad abstraction prematurely.
+For implementation, reuse `lib/common/command-panel.ts` for an explicit grouped
+panel. Do not add another generic panel framework or revive the reserved legacy
+panel filenames.
 
 A shared action type should be intentionally small:
 
@@ -144,17 +141,17 @@ type SfPiCommandAction = {
 };
 ```
 
-## Current migration direction
+## Current implementation
 
-1. Migrate every bundled interactive no-args `/sf-*` command to its Manager
-   detail page.
-2. Preserve explicit subcommands as direct, scriptable paths with noninteractive
-   text fallbacks.
-3. Launch full-screen or specialized UI only through explicit subcommands or
+1. Every bundled extension's primary interactive no-args command routes to its
+   Manager detail page.
+2. Explicit subcommands remain direct and scriptable with noninteractive text
+   fallbacks.
+3. Full-screen or specialized UI launches only through explicit subcommands or
    Manager actions.
-4. Reuse one action catalog for Manager rows, completion, help, and docs when
-   the grammar is simple.
-5. Retain explicit grouped panels only where they add behavior that Manager
+4. Simple grammars reuse one action catalog for Manager rows, completion, help,
+   and docs.
+5. Explicit grouped panels remain only where they add behavior that Manager
    actions and direct commands cannot express cleanly.
 
 ## Consequences

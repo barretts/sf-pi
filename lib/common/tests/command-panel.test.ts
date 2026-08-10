@@ -9,9 +9,8 @@
  *   1. The close-keyword contract — extensions rely on `exit` / `quit`
  *      always closing the panel.
  *   2. The lifecycle-action predicate exported from extension-toggle.ts —
- *      every panel that wires `performToggleExtension` passes this as
- *      `closeBeforeAction`. The lint `npm run check:panels` enforces the
- *      wiring; this test pins the predicate itself.
+ *      specialized panels that wire `performToggleExtension` pass this as
+ *      `closeBeforeAction`. This test pins the predicate itself.
  */
 import { describe, expect, it, vi } from "vitest";
 import { matchesCloseKeyword, openCommandPanel } from "../command-panel.ts";

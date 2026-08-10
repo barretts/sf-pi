@@ -16,15 +16,20 @@
 //
 // Then regenerates catalog/registry.ts and catalog/index.json.
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ROOT = path.resolve(__dirname, "..");
+const SCRIPT_ROOT = path.resolve(__dirname, "..");
+const ROOT =
+  process.env.NODE_ENV === "test" && process.env.SF_PI_SCAFFOLD_ROOT
+    ? path.resolve(process.env.SF_PI_SCAFFOLD_ROOT)
+    : SCRIPT_ROOT;
 const EXTENSIONS_DIR = path.join(ROOT, "extensions");
+const PACKAGE_PATH = path.join(ROOT, "package.json");
 
 // -------------------------------------------------------------------------------------------------
 // Parse args
@@ -73,8 +78,7 @@ function indexTs(id, name) {
  *
  *   Event/Trigger          | Result
  *   -----------------------|--------------------------------------------
- *   session_start          | TODO
- *   /${id} (no args)       | Open the extension in the SF Pi Manager
+ *   /${id} (no args)       | Open the extension detail in the SF Pi Manager
  *   /${id} status          | Print status as plain text (headless-safe)
  *   /${id} help            | Print command usage as plain text
  */
@@ -83,24 +87,17 @@ import type {
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import {
-  type CommandPanelAction,
-  type CommandPanelState,
-  openCommandPanel,
-} from "../../lib/common/command-panel.ts";
-import { openInfoPanel, type InfoPanelSeverity } from "../../lib/common/info-panel.ts";
-import {
-  buildToggleExtensionAction,
-  LIFECYCLE_GROUP,
-  performToggleExtension,
-  type LifecycleActionId,
-} from "../../lib/common/extension-toggle.ts";
+  getFirstTokenCompletionsFromActions,
+  type SfPiCommandAction,
+} from "../../lib/common/command-actions.ts";
+import type { InfoPanelSeverity } from "../../lib/common/info-panel.ts";
+import { openExtensionInManager } from "../../lib/common/manager-deep-link.ts";
+import { withSafeCommandHandler } from "../../lib/common/safe-command-handler.ts";
 
 const COMMAND_NAME = "${id}";
+type ${pascal(id)}Action = "status" | "help";
 
-// Action ids exposed by the panel. Extend as the extension grows.
-type ${pascal(id)}Action = "status" | "help" | "close" | LifecycleActionId;
-
-const ${constName(id)}_ACTIONS: CommandPanelAction<${pascal(id)}Action>[] = [
+const ${constName(id)}_ACTIONS: SfPiCommandAction<${pascal(id)}Action>[] = [
   {
     value: "status",
     label: "Show status",
@@ -113,87 +110,62 @@ const ${constName(id)}_ACTIONS: CommandPanelAction<${pascal(id)}Action>[] = [
     description: "Print command usage and links to references.",
     group: "Reference",
   },
-  {
-    value: "close",
-    label: "Close",
-    description: "Dismiss this panel.",
-    group: LIFECYCLE_GROUP,
-  },
 ];
 
 export default function (pi: ExtensionAPI) {
   pi.registerCommand(COMMAND_NAME, {
     description: "${name} — status & controls",
+    getArgumentCompletions: (prefix: string) =>
+      getFirstTokenCompletionsFromActions(${constName(id)}_ACTIONS, prefix),
     handler: async (args, ctx) => {
-      const sub = (args ?? "").trim().toLowerCase();
-      if (sub === "" && ctx.hasUI) {
-        await handlePanel(ctx);
-        return;
-      }
-      await handleAction(ctx, sub === "" ? "status" : sub, false);
+      await withSafeCommandHandler(ctx, COMMAND_NAME, async () => {
+        const sub = (args ?? "").trim().toLowerCase();
+        if (sub === "" && ctx.hasUI) {
+          await openInManager(pi, ctx);
+          return;
+        }
+        await handleAction(ctx, sub === "" ? "status" : sub);
+      });
     },
   });
 }
 
-async function handlePanel(ctx: ExtensionCommandContext): Promise<void> {
-  const state: CommandPanelState<${pascal(id)}Action> = {};
-  await openCommandPanel(ctx, {
-    title: "✨ ${name} — status & controls",
-    subtitle: "TODO: one-line description.",
-    statusLines: () => [
-      // TODO: replace with key/value lines describing the extension’s state.
-      "• Status placeholder",
-    ],
-    actions: () => buildActions(ctx.cwd),
-    closeValue: "close",
-    state,
-    onAction: (action) => handleAction(ctx, action, true),
+async function openInManager(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<void> {
+  const opened = await openExtensionInManager(pi, ctx, {
+    extensionId: COMMAND_NAME,
+    view: "detail",
   });
-}
-
-function buildActions(cwd: string): CommandPanelAction<${pascal(id)}Action>[] {
-  const toggle = buildToggleExtensionAction({ extensionId: "${id}", cwd });
-  return toggle ? [...${constName(id)}_ACTIONS, toggle] : ${constName(id)}_ACTIONS;
-}
-
-async function handleAction(
-  ctx: ExtensionCommandContext,
-  action: string,
-  fromPanel: boolean,
-): Promise<void> {
-  if (action === "close") return;
-  if (action === "lifecycle.toggle") {
-    await performToggleExtension(ctx, "${id}");
-    return;
+  if (!opened) {
+    ctx.ui.notify("SF Pi Manager is unavailable. Try /sf-pi open ${id}.", "warning");
   }
+}
+
+async function handleAction(ctx: ExtensionCommandContext, action: string): Promise<void> {
   if (action === "status") {
-    await emitOutput(ctx, "${name} status", "TODO: status text", "info", fromPanel);
+    await emitOutput(ctx, "TODO: status text", "info");
     return;
   }
   if (action === "help") {
-    await emitOutput(ctx, "${name} help", "TODO: help text", "info", fromPanel);
+    await emitOutput(
+      ctx,
+      [
+        "Commands:",
+        "  /${id}          Open ${name} in the SF Pi Manager",
+        "  /${id} status   Print extension status",
+        "  /${id} help     Print this help",
+      ].join("\\n"),
+      "info",
+    );
     return;
   }
-  await emitOutput(
-    ctx,
-    "${name} — unknown subcommand",
-    \`Unknown /\${COMMAND_NAME} subcommand: \${action}\`,
-    "warning",
-    fromPanel,
-  );
+  await emitOutput(ctx, \`Unknown /\${COMMAND_NAME} subcommand: \${action}\`, "warning");
 }
 
 async function emitOutput(
   ctx: ExtensionCommandContext,
-  title: string,
   body: string,
   severity: InfoPanelSeverity,
-  fromPanel: boolean,
 ): Promise<void> {
-  if (fromPanel && ctx.hasUI) {
-    await openInfoPanel(ctx, { title, body, severity });
-    return;
-  }
   if (ctx.hasUI) {
     ctx.ui.notify(body, severity === "success" ? "info" : severity);
     return;
@@ -335,6 +307,24 @@ describe("${id}", () => {
 `;
 }
 
+function packageJsonWithExtension(id) {
+  let pkg;
+  try {
+    pkg = JSON.parse(readFileSync(PACKAGE_PATH, "utf8"));
+  } catch (error) {
+    throw new Error(`Cannot read package.json: ${error.message}`, { cause: error });
+  }
+  if (!Array.isArray(pkg.pi?.extensions)) {
+    throw new Error("package.json pi.extensions must be an array before scaffolding");
+  }
+  const entry = `./extensions/${id}/index.ts`;
+  if (pkg.pi.extensions.includes(entry)) {
+    throw new Error(`package.json already contains ${entry}`);
+  }
+  pkg.pi.extensions.push(entry);
+  return `${JSON.stringify(pkg, null, 2)}\n`;
+}
+
 // -------------------------------------------------------------------------------------------------
 // Main
 // -------------------------------------------------------------------------------------------------
@@ -376,6 +366,14 @@ if (!validIntents.includes(intent)) {
   process.exit(1);
 }
 
+let nextPackageJson;
+try {
+  nextPackageJson = packageJsonWithExtension(id);
+} catch (error) {
+  console.error(`❌ ${error.message}`);
+  process.exit(1);
+}
+
 const name = rawName || toDisplayName(id);
 const extDir = path.join(EXTENSIONS_DIR, id);
 
@@ -393,6 +391,7 @@ writeFileSync(path.join(extDir, "index.ts"), indexTs(id, name));
 writeFileSync(path.join(extDir, "manifest.json"), manifestJson(id, name, category, intent));
 writeFileSync(path.join(extDir, "README.md"), readmeMd(id, name));
 writeFileSync(path.join(extDir, "tests", "smoke.test.ts"), smokeTestTs(id));
+writeFileSync(PACKAGE_PATH, nextPackageJson);
 
 // For agent-tool extensions, drop a starter tool module so the convention is
 // obvious from day one. See AGENTS.md → "Tool registration convention".
@@ -406,7 +405,14 @@ console.log("");
 
 // Regenerate catalog
 console.log("Regenerating catalog...");
-execSync("node scripts/generate-catalog.mjs", { cwd: ROOT, stdio: "inherit" });
+execFileSync(process.execPath, [path.join(__dirname, "generate-catalog.mjs")], {
+  cwd: ROOT,
+  stdio: "inherit",
+  env: {
+    ...process.env,
+    ...(ROOT !== SCRIPT_ROOT ? { NODE_ENV: "test", SF_PI_GENERATE_CATALOG_ROOT: ROOT } : {}),
+  },
+});
 
 console.log("");
 console.log("Next steps:");

@@ -154,7 +154,7 @@
     "entry": "extensions/sf-apex/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 4492
+    "srcLoc": 4441
   },
   {
     "id": "sf-brain",
@@ -879,7 +879,7 @@
     "entry": "extensions/sf-lwc/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 2468
+    "srcLoc": 2418
   },
   {
     "id": "sf-ohana-spinner",
@@ -1158,7 +1158,7 @@
     "entry": "extensions/sf-soql/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 3173
+    "srcLoc": 3128
   },
   {
     "id": "sf-tldraw",

@@ -50,8 +50,11 @@ npx prettier --check --log-level=warn .
 banner "Type check"
 npx tsc --noEmit -p tsconfig.json
 
-banner "Panel consistency"
-node scripts/check-panel-consistency.mjs
+banner "Command source contracts"
+node scripts/check-command-contracts.mjs
+
+banner "Manager-first navigation"
+npx vitest run scripts/tests/manager-first-commands.test.ts --reporter=dot
 
 banner "Boot-path import check"
 node scripts/check-boot-path.mjs

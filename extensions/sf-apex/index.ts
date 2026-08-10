@@ -11,7 +11,7 @@
  *   Event/Trigger          | Result
  *   -----------------------|--------------------------------------------
  *   session_start          | Register the sf_apex lifecycle tool
- *   /sf-apex (no args)     | Open the extension in the SF Pi Manager-style panel
+ *   /sf-apex (no args)     | Open the extension detail in the SF Pi Manager
  *   /sf-apex status        | Print status as plain text (headless-safe)
  *   /sf-apex help          | Print command usage as plain text
  */
@@ -22,19 +22,11 @@ import type {
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import {
-  type CommandPanelAction,
-  type CommandPanelState,
-  openCommandPanel,
-} from "../../lib/common/command-panel.ts";
-import { getFirstTokenCompletionsFromActions } from "../../lib/common/command-actions.ts";
-import { openInfoPanel, type InfoPanelSeverity } from "../../lib/common/info-panel.ts";
-import {
-  buildToggleExtensionAction,
-  isLifecycleToggleAction,
-  LIFECYCLE_GROUP,
-  performToggleExtension,
-  type LifecycleActionId,
-} from "../../lib/common/extension-toggle.ts";
+  getFirstTokenCompletionsFromActions,
+  type SfPiCommandAction,
+} from "../../lib/common/command-actions.ts";
+import type { InfoPanelSeverity } from "../../lib/common/info-panel.ts";
+import { openExtensionInManager } from "../../lib/common/manager-deep-link.ts";
 import { requirePiVersion } from "../../lib/common/pi-compat.ts";
 import { beginSalesforceConnectionSession } from "../../lib/common/sf-conn/index.ts";
 import { withSafeCommandHandler } from "../../lib/common/safe-command-handler.ts";
@@ -43,9 +35,9 @@ import { diagnoseApexFile, isApexFile, resolveToolPath } from "./lib/diagnostics
 
 const COMMAND_NAME = "sf-apex";
 
-type SfApexAction = "status" | "help" | "close" | LifecycleActionId;
+type SfApexAction = "status" | "help";
 
-const SF_APEX_ACTIONS: CommandPanelAction<SfApexAction>[] = [
+const SF_APEX_ACTIONS: SfPiCommandAction<SfApexAction>[] = [
   {
     value: "status",
     label: "Show status",
@@ -57,12 +49,6 @@ const SF_APEX_ACTIONS: CommandPanelAction<SfApexAction>[] = [
     label: "Show help",
     description: "Print command and tool usage.",
     group: "Reference",
-  },
-  {
-    value: "close",
-    label: "Close",
-    description: "Dismiss this panel.",
-    group: LIFECYCLE_GROUP,
   },
 ];
 
@@ -78,40 +64,28 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand(COMMAND_NAME, {
     description: "SF Apex — Apex lifecycle status & controls",
     getArgumentCompletions: (prefix: string) =>
-      getFirstTokenCompletionsFromActions(SF_APEX_ACTIONS, prefix, {
-        excludeValues: ["close", "lifecycle.toggle"],
-      }),
+      getFirstTokenCompletionsFromActions(SF_APEX_ACTIONS, prefix),
     handler: async (args, ctx) => {
       await withSafeCommandHandler(ctx, COMMAND_NAME, async () => {
         const sub = (args ?? "").trim().toLowerCase();
         if (sub === "" && ctx.hasUI) {
-          await handlePanel(ctx);
+          await openInManager(pi, ctx);
           return;
         }
-        await handleAction(ctx, sub === "" ? "status" : sub, false);
+        await handleAction(ctx, sub === "" ? "status" : sub);
       });
     },
   });
 }
 
-async function handlePanel(ctx: ExtensionCommandContext): Promise<void> {
-  const state: CommandPanelState<SfApexAction> = {};
-  await openCommandPanel(ctx, {
-    title: "⚡ SF Apex — lifecycle",
-    subtitle:
-      "API-native Apex authoring guidance, diagnostics, trace/logs, Anonymous Apex, and targeted tests.",
-    statusLines: () => [
-      "• Tool: sf_apex",
-      "• Hot path: API-native, no sf apex subprocess fallback",
-      "• Diagnostics: Apex-owned handoff in progress; existing sf-lsp remains fallback",
-      "• Evidence: raw logs/results stored as Apex Artifacts",
-    ],
-    actions: () => buildActions(ctx.cwd),
-    closeValue: "close",
-    state,
-    closeBeforeAction: isLifecycleToggleAction,
-    onAction: (action) => handleAction(ctx, action, true),
+async function openInManager(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<void> {
+  const opened = await openExtensionInManager(pi, ctx, {
+    extensionId: COMMAND_NAME,
+    view: "detail",
   });
+  if (!opened) {
+    ctx.ui.notify("SF Pi Manager is unavailable. Try /sf-pi open sf-apex.", "warning");
+  }
 }
 
 async function handleToolResult(event: ToolResultEvent, ctx: ExtensionContext) {
@@ -144,50 +118,30 @@ function isFileMutationToolResult(event: ToolResultEvent): boolean {
   return event.toolName === "write" || event.toolName === "edit";
 }
 
-function buildActions(cwd: string): CommandPanelAction<SfApexAction>[] {
-  const toggle = buildToggleExtensionAction({ extensionId: "sf-apex", cwd });
-  return toggle ? [...SF_APEX_ACTIONS, toggle] : SF_APEX_ACTIONS;
-}
-
-async function handleAction(
-  ctx: ExtensionCommandContext,
-  action: string,
-  fromPanel: boolean,
-): Promise<void> {
-  if (action === "close") return;
-  if (action === "lifecycle.toggle") {
-    await performToggleExtension(ctx, "sf-apex");
-    return;
-  }
+async function handleAction(ctx: ExtensionCommandContext, action: string): Promise<void> {
   if (action === "status") {
-    await emitOutput(ctx, "SF Apex status", statusText(), "info", fromPanel);
+    await emitOutput(ctx, statusText(), "info");
     return;
   }
   if (action === "help") {
-    await emitOutput(ctx, "SF Apex help", helpText(), "info", fromPanel);
+    await emitOutput(ctx, helpText(), "info");
     return;
   }
-  await emitOutput(
-    ctx,
-    "SF Apex — unknown subcommand",
-    `Unknown /${COMMAND_NAME} subcommand: ${action}`,
-    "warning",
-    fromPanel,
-  );
+  await emitOutput(ctx, `Unknown /${COMMAND_NAME} subcommand: ${action}`, "warning");
 }
 
 function statusText(): string {
   return [
     "SF Apex is installed.",
     "Use the sf_apex tool for API-native Apex lifecycle workflows.",
-    "Use /sf-apex with no args for the interactive panel.",
+    "Use /sf-apex with no args to open its SF Pi Manager detail page.",
   ].join("\n");
 }
 
 function helpText(): string {
   return [
     "Commands:",
-    "  /sf-apex          Open the SF Apex panel",
+    "  /sf-apex          Open SF Apex in the SF Pi Manager",
     "  /sf-apex status   Print extension status",
     "  /sf-apex help     Print this help",
     "",
@@ -204,15 +158,9 @@ function helpText(): string {
 
 async function emitOutput(
   ctx: ExtensionCommandContext,
-  title: string,
   body: string,
   severity: InfoPanelSeverity,
-  fromPanel: boolean,
 ): Promise<void> {
-  if (fromPanel && ctx.hasUI) {
-    await openInfoPanel(ctx, { title, body, severity });
-    return;
-  }
   if (ctx.hasUI) {
     ctx.ui.notify(body, severity === "success" ? "info" : severity);
     return;

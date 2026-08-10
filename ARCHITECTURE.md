@@ -76,6 +76,7 @@ ones agents and maintainers most often need:
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `scripts/generate-catalog.mjs`            | Regenerates catalog files, generated docs, and generated README marker blocks.                                       |
 | `scripts/check-staged-catalog.mjs`        | Exports the Git index to a temporary root and checks its generated catalog without mutating local state.             |
+| `scripts/check-command-contracts.mjs`     | Checks safe slash-command wrapping and reserved command-panel filenames.                                             |
 | `scripts/docs-health.mjs`                 | Checks factual doc drift contracts and public-safe examples.                                                         |
 | `scripts/instruction-surface-report.mjs`  | Writes sanitized SF Pi instruction-size JSON and Markdown through the exact Pi runtime.                              |
 | `scripts/e2e/instruction-behavior/run.ts` | Runs the opt-in model routing regression with local reads allowed and every non-local tool blocked before execution. |
@@ -317,14 +318,13 @@ type signature.
 
 ### Slash-command navigation and discoverability
 
-ADR 0051 supersedes ADR 0005's original no-args navigation rule. Manager-first
-navigation is the target contract for all bundled commands. `sf-apex`, `sf-lwc`,
-and `sf-soql` are the three current exceptions: their interactive no-args
-commands still open local panels and remain explicit migration targets.
+ADR 0051 supersedes ADR 0005's original no-args navigation rule. Every bundled
+extension's primary interactive no-args command opens that extension's detail
+page in the SF Pi Manager.
 
-- Except for those three current local-panel commands, every bundled `/sf-*`
-  command with an interactive no-args invocation opens that extension's detail
-  page in the SF Pi Manager.
+- The Manager-first Behavior Proof invokes every command-bearing extension's
+  real factory and primary command handler and verifies the matching detail
+  route.
 - Explicit subcommands remain direct and scriptable. Full-screen workflows use
   an explicit subcommand or Manager action rather than replacing no-args
   navigation.

@@ -55,8 +55,8 @@ export type LifecycleActionId = "lifecycle.toggle";
  * `ctx.reload()` which invalidates `ctx`; running it while the panel is
  * still mounted leaves the underlying `ctx.ui.custom()` promise dangling
  * (pi's reload-time UI teardown unmounts the panel but never calls `done`),
- * which strands the surrounding slash-command handler. The lint
- * `npm run check:panels` flags panels that omit this and use
+ * which strands the surrounding slash-command handler. Specialized panel
+ * tests must cover this close-before-reload contract when they use
  * {@link performToggleExtension}.
  *
  * Generic in `A` so TypeScript still infers each panel's narrow action

@@ -5,7 +5,7 @@
  * ADR 0005 ("Standard Pi-Native Command Panels") asks each command-bearing
  * extension to define its action metadata once and reuse it for:
  *
- *   1. The no-args slash-command panel rows (open via openCommandPanel)
+ *   1. Manager detail actions or an explicit specialized panel
  *   2. `getArgumentCompletions()` returned to Pi
  *   3. `/<id> help` text
  *   4. The README command table
@@ -15,10 +15,9 @@
  * extensions can declare the catalog in one place and feed it into every
  * surface with helper functions instead of bespoke parallel lists.
  *
- * Adoption is incremental — the existing `CommandPanelAction` type is still
- * exported from `./command-panel.ts`, and `SfPiCommandAction` is structurally
- * a superset, so panels accept both. New code should prefer
- * `SfPiCommandAction`; old code can migrate one extension at a time.
+ * `SfPiCommandAction` remains structurally compatible with
+ * `CommandPanelAction`, so an explicit specialized panel can consume the same
+ * catalog. Primary interactive no-args commands route to the Manager Surface.
  *
  * Example:
  *
@@ -40,7 +39,7 @@
  *   description: "…",
  *   getArgumentCompletions: (prefix) => getFirstTokenCompletionsFromActions(ACTIONS, prefix),
  *   handler: async (args, ctx) => {
- *     if (!args && ctx.hasUI) return openPanel(ctx);
+ *     if (!args && ctx.hasUI) return openInManager(ctx);
  *     if (args.trim() === "help") {
  *       ctx.ui.notify(formatHelpFromActions(ACTIONS, "sf-foo"), "info");
  *       return;

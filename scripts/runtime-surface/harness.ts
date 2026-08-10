@@ -12,6 +12,9 @@ import type {
 } from "./types.ts";
 
 type Handler = (event: unknown, context: unknown) => unknown;
+type CommandDefinition = {
+  handler?: (args: string, context: unknown) => unknown;
+};
 type Factory = (pi: unknown) => unknown;
 
 interface RecorderOptions {
@@ -89,6 +92,7 @@ export function createRuntimeRecorder(options: RecorderOptions = {}) {
   const handlers = new Map<string, Handler[]>();
   const activeTools = new Set(options.activeTools ?? []);
   const registeredTools = new Map<string, unknown>();
+  const commandDefinitions = new Map<string, CommandDefinition>();
   const unexpectedExecs: string[] = [];
   const busHandlers = new Map<string, Array<(payload: unknown) => void>>();
 
@@ -112,8 +116,9 @@ export function createRuntimeRecorder(options: RecorderOptions = {}) {
       handlers.set(name, [...(handlers.get(name) ?? []), handler]);
       return () => undefined;
     },
-    registerCommand(name: string) {
+    registerCommand(name: string, definition: CommandDefinition = {}) {
       commands.push(name.startsWith("/") ? name : `/${name}`);
+      commandDefinitions.set(name.replace(/^\//, ""), definition);
     },
     registerProvider(provider: { id?: string } | string) {
       const id = typeof provider === "string" ? provider : provider?.id;
@@ -167,6 +172,7 @@ export function createRuntimeRecorder(options: RecorderOptions = {}) {
   return {
     pi,
     handlers,
+    commandDefinitions,
     unexpectedExecs,
     capture(): CapturedRuntimeSurface {
       return {

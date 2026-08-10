@@ -48,18 +48,17 @@ ADR 0005 didn't pin filenames; three names emerged. We now reserve:
 | `lib/config-panel.ts`      | The `ConfigPanelFactory` invoked by sf-pi-manager when `manifest.configurable === true`. Required for that surface.  |
 | `lib/preferences-panel.ts` | A separate mutable user-preferences UI when distinct from `config-panel.ts` (e.g. opened by `/sf-<id> settings`).    |
 
-The deprecated names `lib/panel.ts` and `lib/settings-panel.ts` are rejected
-by `npm run check:panels`. Most extensions never need a separate file at all
-— inline the panel inside `index.ts` until it grows past ~50 lines.
+The deprecated names `lib/panel.ts` and `lib/settings-panel.ts` are rejected by
+`npm run check:commands`. Most extensions never need an explicit panel; keep one
+local only for a specialized workflow that the Manager detail route cannot
+express cleanly.
 
-### 4. Manifest `docs.summary` + `docs.primaryFiles` are required
+### 4. Manifest documentation routing is required
 
-The `docs` block on the manifest already flowed into
-[`docs/agent-orientation.md`](../agent-orientation.md), but only two
-extensions populated it — agents landing in the other 11 were stuck with the
-one-line `description`. The catalog generator (`scripts/generate-catalog.mjs`)
-now refuses to run if a manifest omits a non-empty `docs.summary` and a
-non-empty `docs.primaryFiles`.
+The catalog generator requires `docs.intentGroup`, a factual `docs.summary`,
+and non-empty `docs.primaryFiles`. The intent group drives generated user
+discovery, the summary supplies longer generated context, and primary files
+route agents without duplicating a recursive inventory.
 
 ### 5. Manifest `maturity` field
 
@@ -100,44 +99,37 @@ backfill the rest.
 
 ### 8. Tool registration convention
 
-Extensions that contribute LLM tools follow this layout:
+Prefer one registration file per independently defined tool. Family registries
+may keep tools together when they share one schema and dispatcher. Registration
+helpers export stable tool-name constants when other modules need those names.
 
-1. One file per tool, named `lib/<tool-name>-tool.ts`.
-2. The file exports a `register<PascalCase>Tool(pi)` function.
-3. The file declares `export const <NAME>_TOOL_NAME = "<tool>";` so panels
-   and config UIs reference the name without a magic string.
-
-The `npm run docs:health:check` lint now verifies that every entry in
-`manifest.tools` resolves to a `pi.registerTool(...)` call **and** an exact
-string-literal match somewhere in the extension. Catches manifest typos and
-tools registered with the wrong name.
+`npm run test:runtime-surface` executes real extension factories in controlled
+scenarios and compares commands, providers, tools, and events with manifests in
+both directions. Conditional tool availability requires extension-local
+positive and negative scenarios rather than source-string matching.
 
 ### 9. Scaffold contract
 
 `scripts/scaffold.mjs` must reflect every rule above. The executable-standards
 program closes the current template drift with this contract:
 
-- generate a Manager-first slash command by default and support an explicit
-  `--no-command` option for passive extensions; do not infer command presence
-  from category
-- wrap generated command handlers with the shared safe-command handler and
-  route interactive no-args behavior to the matching Manager detail page
-- accept the six current categories
-- write `manifest.maturity: "experimental"` and
-  `docs.{summary,primaryFiles}` so the generator accepts the new extension on
-  first run
-- generate the agent-tool example as `lib/<tool-name>-tool.ts`, with the
-  canonical exported tool-name constant and registration function
-- generate behavior tests for command and no-command scaffolds, then verify the
-  isolated output with catalog generation, panel checks, typecheck, and smoke
-  tests
+- require an explicit id, category, and user intent group
+- generate a Manager-first slash command wrapped by the shared safe command
+  handler
+- accept the six current categories and eight browse-page intent groups
+- write `manifest.maturity: "experimental"` plus
+  `docs.{intentGroup,summary,primaryFiles}`
+- generate an agent-tool starter file with the canonical exported tool-name
+  constant and registration function
+- generate a lean human README and a smoke-test starting point
 - print next-step instructions that match the generated conventions
 
 ## Consequences
 
-- Three lints now block drift: `check-panel-consistency.mjs` (filenames +
-  panel imports), `generate-catalog.mjs` (categories, maturity, docs block),
-  and `docs-health.mjs` (tool-registration shape).
+- `check-command-contracts.mjs` protects safe command wrapping and reserved
+  filenames; the Manager-first Behavior Proof invokes real primary command
+  handlers; catalog generation validates manifest documentation routing; and
+  runtime-surface attestation protects registration parity.
 - `lib/common/extension-toggle.ts` and friends are stable and explicitly
   documented in [`lib/common/README.md`](../../lib/common/README.md).
 - The agent-orientation table now has a `Maturity` column and richer

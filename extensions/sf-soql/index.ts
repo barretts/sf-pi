@@ -8,19 +8,11 @@
  */
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
-  type CommandPanelAction,
-  type CommandPanelState,
-  openCommandPanel,
-} from "../../lib/common/command-panel.ts";
-import { getFirstTokenCompletionsFromActions } from "../../lib/common/command-actions.ts";
-import { openInfoPanel, type InfoPanelSeverity } from "../../lib/common/info-panel.ts";
-import {
-  buildToggleExtensionAction,
-  isLifecycleToggleAction,
-  LIFECYCLE_GROUP,
-  performToggleExtension,
-  type LifecycleActionId,
-} from "../../lib/common/extension-toggle.ts";
+  getFirstTokenCompletionsFromActions,
+  type SfPiCommandAction,
+} from "../../lib/common/command-actions.ts";
+import type { InfoPanelSeverity } from "../../lib/common/info-panel.ts";
+import { openExtensionInManager } from "../../lib/common/manager-deep-link.ts";
 import { requirePiVersion } from "../../lib/common/pi-compat.ts";
 import { beginSalesforceConnectionSession } from "../../lib/common/sf-conn/index.ts";
 import { withSafeCommandHandler } from "../../lib/common/safe-command-handler.ts";
@@ -28,9 +20,9 @@ import { registerSfSoqlTool } from "./lib/sf-soql-tool.ts";
 
 const COMMAND_NAME = "sf-soql";
 
-type SfSoqlAction = "status" | "help" | "close" | LifecycleActionId;
+type SfSoqlAction = "status" | "help";
 
-const SF_SOQL_ACTIONS: CommandPanelAction<SfSoqlAction>[] = [
+const SF_SOQL_ACTIONS: SfPiCommandAction<SfSoqlAction>[] = [
   {
     value: "status",
     label: "Show status",
@@ -43,7 +35,6 @@ const SF_SOQL_ACTIONS: CommandPanelAction<SfSoqlAction>[] = [
     description: "Print command and tool usage.",
     group: "Reference",
   },
-  { value: "close", label: "Close", description: "Dismiss this panel.", group: LIFECYCLE_GROUP },
 ];
 
 export default function (pi: ExtensionAPI) {
@@ -57,85 +48,54 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand(COMMAND_NAME, {
     description: "SF SOQL — query lifecycle status & controls",
     getArgumentCompletions: (prefix: string) =>
-      getFirstTokenCompletionsFromActions(SF_SOQL_ACTIONS, prefix, {
-        excludeValues: ["close", "lifecycle.toggle"],
-      }),
+      getFirstTokenCompletionsFromActions(SF_SOQL_ACTIONS, prefix),
     handler: async (args, ctx) => {
       await withSafeCommandHandler(ctx, COMMAND_NAME, async () => {
         const sub = (args ?? "").trim().toLowerCase();
         if (sub === "" && ctx.hasUI) {
-          await handlePanel(ctx);
+          await openInManager(pi, ctx);
           return;
         }
-        await handleAction(ctx, sub === "" ? "status" : sub, false);
+        await handleAction(ctx, sub === "" ? "status" : sub);
       });
     },
   });
 }
 
-async function handlePanel(ctx: ExtensionCommandContext): Promise<void> {
-  const state: CommandPanelState<SfSoqlAction> = {};
-  await openCommandPanel(ctx, {
-    title: "🔎 SF SOQL — query lifecycle",
-    subtitle: "API-native schema-aware SOQL validation, query plans, bounded runs, and artifacts.",
-    statusLines: () => [
-      "• Tool: sf_soql",
-      "• Hot path: API-native REST/Tooling, no sf data query subprocess fallback",
-      "• Safety: sample/count before broad runs; queryAll is explicit",
-      "• Evidence: raw and flattened results stored as SOQL Artifacts",
-    ],
-    actions: () => buildActions(ctx.cwd),
-    closeValue: "close",
-    state,
-    closeBeforeAction: isLifecycleToggleAction,
-    onAction: (action) => handleAction(ctx, action, true),
+async function openInManager(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<void> {
+  const opened = await openExtensionInManager(pi, ctx, {
+    extensionId: COMMAND_NAME,
+    view: "detail",
   });
-}
-
-function buildActions(cwd: string): CommandPanelAction<SfSoqlAction>[] {
-  const toggle = buildToggleExtensionAction({ extensionId: "sf-soql", cwd });
-  return toggle ? [...SF_SOQL_ACTIONS, toggle] : SF_SOQL_ACTIONS;
-}
-
-async function handleAction(
-  ctx: ExtensionCommandContext,
-  action: string,
-  fromPanel: boolean,
-): Promise<void> {
-  if (action === "close") return;
-  if (action === "lifecycle.toggle") {
-    await performToggleExtension(ctx, "sf-soql");
-    return;
+  if (!opened) {
+    ctx.ui.notify("SF Pi Manager is unavailable. Try /sf-pi open sf-soql.", "warning");
   }
+}
+
+async function handleAction(ctx: ExtensionCommandContext, action: string): Promise<void> {
   if (action === "status") {
-    await emitOutput(ctx, "SF SOQL status", statusText(), "info", fromPanel);
+    await emitOutput(ctx, statusText(), "info");
     return;
   }
   if (action === "help") {
-    await emitOutput(ctx, "SF SOQL help", helpText(), "info", fromPanel);
+    await emitOutput(ctx, helpText(), "info");
     return;
   }
-  await emitOutput(
-    ctx,
-    "SF SOQL — unknown subcommand",
-    `Unknown /${COMMAND_NAME} subcommand: ${action}`,
-    "warning",
-    fromPanel,
-  );
+  await emitOutput(ctx, `Unknown /${COMMAND_NAME} subcommand: ${action}`, "warning");
 }
 
 function statusText(): string {
   return [
     "SF SOQL is installed.",
     "Use the sf_soql tool for API-native SOQL lifecycle workflows.",
-    "Use /sf-soql with no args for the interactive panel.",
+    "Use /sf-soql with no args to open its SF Pi Manager detail page.",
   ].join("\n");
 }
 
 function helpText(): string {
   return [
     "Commands:",
-    "  /sf-soql          Open the SF SOQL panel",
+    "  /sf-soql          Open SF SOQL in the SF Pi Manager",
     "  /sf-soql status   Print extension status",
     "  /sf-soql help     Print this help",
     "",
@@ -151,15 +111,9 @@ function helpText(): string {
 
 async function emitOutput(
   ctx: ExtensionCommandContext,
-  title: string,
   body: string,
   severity: InfoPanelSeverity,
-  fromPanel: boolean,
 ): Promise<void> {
-  if (fromPanel && ctx.hasUI) {
-    await openInfoPanel(ctx, { title, body, severity });
-    return;
-  }
   if (ctx.hasUI) {
     ctx.ui.notify(body, severity === "success" ? "info" : severity);
     return;

@@ -6,15 +6,14 @@ date: 2026-06-18
 
 # Manager detail and settings save contract
 
-> **Implementation status:** Manager-first no-args navigation remains the target
-> contract. `sf-apex`, `sf-lwc`, and `sf-soql` are current local-panel
-> exceptions until their migration lands.
+> **Implementation status:** The package-wide Manager-first no-args cutover is
+> complete and protected by a real-factory command-handler Behavior Proof.
 
 SF Pi Manager extension detail pages are user control pages, not developer metadata inspectors: they should show purpose, state, settings/actions, and enablement controls while leaving bundle paths and raw runtime-surface inventories to generated docs, catalog files, and READMEs. Configurable extension settings use a save-in-place contract: edits show explicit dirty state, `S`/`Enter` persists without navigating away, `Esc`/Back navigates away and discards unsaved drafts, and reload is required only when the saved value changes Pi runtime registration or session-start state. Extension actions that need user input drill into an extension action page instead of stacking `ctx.ui.input()` / `select()` prompts above the Manager detail page.
 
 **Consequences**
 
-- Manager-first `/sf-*` no-args commands act as shortcuts into the Manager Surface. Apex, LWC, and SOQL remain local-panel exceptions until the package-wide migration lands. Every bundled extension must also be listed in `package.json.pi.extensions`; manifest/catalog presence alone does not make Pi load the command.
+- Primary interactive `/sf-*` no-args commands act as shortcuts into the Manager Surface. Every bundled extension must also be listed in `package.json.pi.extensions`; manifest/catalog presence alone does not make Pi load the command.
 - Settings panels should call their `done()` callback only when the user leaves the settings page or when the Manager must apply a runtime reload. A normal in-place save updates the persisted setting and the panel's saved baseline, then stays open.
 - Manager actions that collect more information should expose a drill-down action page. Related short fields should appear together in a form overview when they fit; editing a field opens a focused native Pi input/editor page with a real cursor. Longer or conditional flows may use focused steps inside the same drill-down. Preview, confirmation, and result states stay in the action page so the user never sees a floating prompt over the Manager overlay. Read-only help, status, and diagnostic output may use the standard info popup because it does not create an input flow.
 - Long Manager action lists should preserve the extension's action groups in the detail page rather than flattening unrelated actions into one list. Actions that support global/project scope should render once with `acceptsScope: true`; the Manager owns the `S` scope toggle and passes the selected scope to the action instead of duplicating separate global/project rows. Manager detail headers and action groups use shared semantic icons from `lib/common/ui-glyphs.ts` so rich terminals get polished icons and constrained terminals get ASCII-safe fallbacks.

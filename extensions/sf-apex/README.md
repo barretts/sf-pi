@@ -84,7 +84,7 @@ pending until the Flow-generation MCP pipeline is available.
 ## Commands
 
 ```text
-/sf-apex          Open SF Apex panel
+/sf-apex          Open SF Apex in the SF Pi Manager
 /sf-apex status   Print extension status
 /sf-apex help     Print command and tool usage
 ```

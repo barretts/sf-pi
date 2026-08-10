@@ -174,6 +174,8 @@ The most common entry points, grouped by purpose:
 | Docs site                | `npm run docs:dev` / `npm run docs:preview`                                  | `npm run docs:build`                    |
 | ESLint                   | `npm run eslint:fix`                                                         | `npm run eslint`                        |
 | Type check               | —                                                                            | `npm run check`                         |
+| Command contracts        | —                                                                            | `npm run check:commands`                |
+| Manager-first navigation | —                                                                            | `npm run check:manager-first`           |
 | Run tests                | `npm test`                                                                   | —                                       |
 | Runtime surface contract | `npm run test:runtime-surface`                                               | —                                       |
 | Tests + coverage         | `npm run test:coverage`                                                      | —                                       |

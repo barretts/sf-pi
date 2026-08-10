@@ -51,7 +51,7 @@ the LLM and renders as human-friendly **LWC Result Cards** in the TUI.
 ## Commands
 
 ```text
-/sf-lwc          Open SF LWC panel
+/sf-lwc          Open SF LWC in the SF Pi Manager
 /sf-lwc status   Print extension status
 /sf-lwc help     Print command and tool usage
 ```

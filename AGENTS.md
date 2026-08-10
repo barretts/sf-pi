@@ -89,11 +89,9 @@ and dispatcher.
 
 ### Slash-command navigation
 
-Manager-first no-args navigation is the target contract. Apex, LWC, and SOQL are
-the three current exceptions: `/sf-apex`, `/sf-lwc`, and `/sf-soql` still open
-local panels and remain migration targets.
+Manager-first no-args navigation is the package-wide contract.
 
-For Manager-first commands:
+For bundled commands:
 
 - interactive no-args opens the extension detail page through
   `openExtensionInManager`;

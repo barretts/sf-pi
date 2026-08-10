@@ -39,7 +39,7 @@ product, report builder, or CLI wrapper. Broad human exploration remains with
 ## Commands
 
 ```text
-/sf-soql          Open SF SOQL panel
+/sf-soql          Open SF SOQL in the SF Pi Manager
 /sf-soql status   Print extension status
 /sf-soql help     Print command and tool usage
 ```
