@@ -15,8 +15,6 @@ accepted ADR.
   SF DevBar, with focused rendering proofs for each surface.
 - Align the Data 360 live capability sweep with the public `data360_*` v2 family
   interface; see [`extensions/sf-data360/ROADMAP.md`](./extensions/sf-data360/ROADMAP.md).
-- Close the remaining Code Analyzer deferred auto-scan orchestration proof gaps;
-  see [`extensions/sf-code-analyzer/ROADMAP.md`](./extensions/sf-code-analyzer/ROADMAP.md).
 
 ## Non-goals
 

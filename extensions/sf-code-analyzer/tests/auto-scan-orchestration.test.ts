@@ -203,4 +203,200 @@ describe("deferred Code Analyzer auto-scan orchestration", () => {
     });
     expect(pi.sendMessage).not.toHaveBeenCalled();
   });
+
+  it("preserves successful group findings and report paths when another group fails", async () => {
+    const { pi, handlers } = harness();
+    const runCodeAnalyzer = vi.fn().mockImplementation(async (_exec, _ctx, input) => {
+      const selector = input.rule_selector[0];
+      if (selector === "eslint:Recommended") throw new Error("eslint unavailable");
+      return scanSummary("/tmp/pmd-partial.json", "ApexCRUDViolation");
+    });
+
+    registerDeferredCodeAnalyzerAutoScan(
+      pi as never,
+      vi.fn() as never,
+      readyDeps({
+        runCodeAnalyzer,
+        buildScanRecipeGuidance: emptyGuidance,
+      }),
+    );
+
+    await handlers.get("tool_result")?.[0]?.(writeResult("src/foo.ts"), ctx());
+    await handlers.get("tool_result")?.[0]?.(writeResult("classes/Foo.cls"), ctx());
+    await handlers.get("agent_settled")?.[0]?.({}, ctx());
+
+    expect(runCodeAnalyzer).toHaveBeenCalledTimes(2);
+    expect(pi.appendEntry).toHaveBeenCalledWith(
+      "sf-code-analyzer",
+      expect.objectContaining({ content: expect.stringContaining("eslint unavailable") }),
+    );
+    const followUp = String(pi.sendUserMessage.mock.calls[0]?.[0]);
+    expect(followUp).toContain("ApexCRUDViolation");
+    expect(followUp).toContain("/tmp/pmd-partial.json");
+  });
+
+  it("runs ApexGuru after local groups when readiness is enabled", async () => {
+    const { pi, handlers } = harness();
+    const order: string[] = [];
+    const runCodeAnalyzer = vi.fn().mockImplementation(async () => {
+      order.push("local");
+      return cleanSummary("/tmp/pmd-clean.json");
+    });
+    const runApexGuru = vi.fn().mockImplementation(async () => {
+      order.push("apexguru");
+      return scanSummary("/tmp/apexguru.json", "AvoidExpensiveApex");
+    });
+
+    registerDeferredCodeAnalyzerAutoScan(
+      pi as never,
+      vi.fn() as never,
+      readyDeps({
+        readSettings: () => ({
+          autoScan: true,
+          apexGuruAuto: true,
+          sources: { autoScan: "default", apexGuruAuto: "default" },
+        }),
+        runCodeAnalyzer,
+        isApexGuruReadyForAutoInsight: () => true,
+        runApexGuru,
+        nextReportPath: () => "/tmp/apexguru.json",
+        buildScanRecipeGuidance: emptyGuidance,
+      }),
+    );
+
+    await handlers.get("tool_result")?.[0]?.(writeResult("classes/Foo.cls"), ctx());
+    await handlers.get("agent_settled")?.[0]?.({}, ctx());
+
+    expect(order).toEqual(["local", "apexguru"]);
+    expect(pi.sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("AvoidExpensiveApex"), {
+      deliverAs: "followUp",
+    });
+  });
+
+  it("records an explicit ApexGuru skip when readiness is stale", async () => {
+    const { pi, handlers } = harness();
+    const runApexGuru = vi.fn();
+
+    registerDeferredCodeAnalyzerAutoScan(
+      pi as never,
+      vi.fn() as never,
+      readyDeps({
+        readSettings: () => ({
+          autoScan: true,
+          apexGuruAuto: true,
+          sources: { autoScan: "default", apexGuruAuto: "default" },
+        }),
+        runCodeAnalyzer: vi.fn().mockResolvedValue(cleanSummary("/tmp/pmd-clean.json")),
+        isApexGuruReadyForAutoInsight: () => false,
+        readApexGuruReadiness: () => ({
+          access: "enabled",
+          checkedAt: "2020-01-01T00:00:00.000Z",
+          message: "Cached readiness is stale.",
+        }),
+        runApexGuru,
+        buildScanRecipeGuidance: emptyGuidance,
+      }),
+    );
+
+    await handlers.get("tool_result")?.[0]?.(writeResult("classes/Foo.cls"), ctx());
+    await handlers.get("agent_settled")?.[0]?.({}, ctx());
+
+    expect(runApexGuru).not.toHaveBeenCalled();
+    expect(pi.appendEntry).toHaveBeenCalledWith(
+      "sf-code-analyzer",
+      expect.objectContaining({
+        content: expect.stringMatching(
+          /ApexGuru auto insight skipped[\s\S]*Cached readiness is stale/,
+        ),
+      }),
+    );
+  });
+
+  it("stops the repair loop when the violation signature is unchanged", async () => {
+    const { pi, handlers } = harness();
+    const runCodeAnalyzer = vi
+      .fn()
+      .mockResolvedValue(scanSummary("/tmp/repeated.json", "RepeatedViolation"));
+
+    registerDeferredCodeAnalyzerAutoScan(
+      pi as never,
+      vi.fn() as never,
+      readyDeps({ runCodeAnalyzer, buildScanRecipeGuidance: emptyGuidance }),
+    );
+
+    await handlers.get("tool_result")?.[0]?.(writeResult("src/foo.ts"), ctx());
+    await handlers.get("agent_settled")?.[0]?.({}, ctx());
+    await handlers.get("tool_result")?.[0]?.(writeResult("src/foo.ts"), ctx());
+    await handlers.get("agent_settled")?.[0]?.({}, ctx());
+
+    expect(runCodeAnalyzer).toHaveBeenCalledTimes(2);
+    expect(pi.sendUserMessage).toHaveBeenCalledOnce();
+    expect(pi.appendEntry).toHaveBeenCalledWith(
+      "sf-code-analyzer",
+      expect.objectContaining({ content: expect.stringContaining("repair loop stopped") }),
+    );
+  });
+
+  it("propagates broader validation guidance from group execution into the follow-up", async () => {
+    const { pi, handlers } = harness();
+    const guidance = "Broader scan suggestions (not run automatically): security";
+
+    registerDeferredCodeAnalyzerAutoScan(
+      pi as never,
+      vi.fn() as never,
+      readyDeps({
+        runCodeAnalyzer: vi
+          .fn()
+          .mockResolvedValue(scanSummary("/tmp/guidance.json", "GuidedViolation")),
+        buildScanRecipeGuidance: () => ({
+          recipes: [],
+          suggestions: ["security"],
+          herdrHandoffs: [],
+          text: guidance,
+        }),
+      }),
+    );
+
+    await handlers.get("tool_result")?.[0]?.(writeResult("src/foo.ts"), ctx());
+    await handlers.get("agent_settled")?.[0]?.({}, ctx());
+
+    const followUp = String(pi.sendUserMessage.mock.calls[0]?.[0]);
+    expect(followUp).toContain("Optional broader validation:");
+    expect(followUp).toContain(guidance);
+  });
 });
+
+function cleanSummary(reportFile: string) {
+  return {
+    kind: "run",
+    ok: true,
+    source: "code-analyzer-cli",
+    command: "sf code-analyzer run",
+    durationMs: 12,
+    reportFile,
+    exitCode: 0,
+    run: { violations: [] },
+  };
+}
+
+function scanSummary(reportFile: string, rule: string) {
+  return {
+    ...cleanSummary(reportFile),
+    run: {
+      violations: [
+        {
+          engine: rule.includes("Apex") ? "apexguru" : "pmd",
+          rule,
+          severity: 2,
+          primaryLocationIndex: 0,
+          locations: [{ file: "classes/Foo.cls", startLine: 1, startColumn: 1 }],
+          message: `Finding for ${rule}`,
+        },
+      ],
+    },
+  };
+}
+
+function emptyGuidance() {
+  return { recipes: [], suggestions: [], herdrHandoffs: [], text: "" };
+}
