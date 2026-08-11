@@ -191,6 +191,12 @@ Quality controls are global-only; project settings cannot weaken or strengthen t
 /sf-agentscript help              Show command usage
 ```
 
+## References
+
+Use [`docs/README.md`](./docs/README.md) to choose the focused transition,
+Service Agent user, or diagnostic-parity reference. Tool ordering and release
+recovery remain in [`AGENT_GUIDE.md`](./AGENT_GUIDE.md).
+
 ## File Structure
 
 <!-- GENERATED:file-structure:start -->

@@ -506,8 +506,8 @@ async function execForSweep(
   });
 }
 
-function parseArgs(argv: string[]): V2SweepOptions {
-  const options: V2SweepOptions = { targetOrg: "AgentforceSTDM" };
+export function parseV2SweepArgs(argv: string[]): V2SweepOptions {
+  const options: V2SweepOptions = { targetOrg: "" };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--target-org") options.targetOrg = argv[++i] ?? options.targetOrg;
@@ -522,7 +522,13 @@ function parseArgs(argv: string[]): V2SweepOptions {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const options = parseArgs(process.argv.slice(2));
+  const options = parseV2SweepArgs(process.argv.slice(2));
+  if (!options.targetOrg) {
+    console.error(
+      "Usage: node --experimental-strip-types scripts/e2e/data360-v2-action-sweep.ts --target-org <alias>",
+    );
+    process.exit(2);
+  }
   const env = await detectEnvironment(execForSweep, process.cwd());
   const records = await runV2Sweep(getData360Actions(), env, options);
   const outputDir = resolveOutputDir(options.outputDir);

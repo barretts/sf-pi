@@ -63,6 +63,7 @@ Open its Manager detail or change its package state with:
 - [Source folder](https://github.com/salesforce/sf-pi/tree/main/extensions/sf-tldraw)
 - [Agent editing rules](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-tldraw/AGENTS.md)
 - [Agent operating guide](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-tldraw/AGENT_GUIDE.md)
+- [Reference index](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-tldraw/docs/README.md)
 
 ## Troubleshooting
 

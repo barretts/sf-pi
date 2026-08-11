@@ -57,6 +57,7 @@ Open its Manager detail or change its package state with:
 - [Full extension README](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-browser/README.md)
 - [Source folder](https://github.com/salesforce/sf-pi/tree/main/extensions/sf-browser)
 - [Agent operating guide](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-browser/AGENT_GUIDE.md)
+- [Reference index](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-browser/docs/README.md)
 
 ## Troubleshooting
 

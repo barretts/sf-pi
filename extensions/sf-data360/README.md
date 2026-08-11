@@ -120,9 +120,10 @@ surfaced alongside `/sf-guardrail audit` output for review.
 The v2 action registry is generated from the existing operation registry plus
 curated ownership and rename overlays under `registry/v2/`. Every operation must
 resolve to exactly one primary `data360_*` tool/action unless an explicit tested
-exception exists. The current coverage matrix, confirmed-capability workflow,
-and per-family "what to run first" checklist live in
-`references/facade-coverage.md` while the v2 action map stabilizes.
+exception exists. Current recursive validation and per-family proof guidance live
+in [`references/action-coverage.md`](./references/action-coverage.md). Retained
+facade parity is isolated under `references/compatibility/` and is not public
+operating guidance.
 
 ## References
 

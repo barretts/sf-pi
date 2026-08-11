@@ -196,8 +196,11 @@ npm run scaffold -- --id sf-my-extension --category ui --intent "Personalize pi"
 The manifest's `description` is its concise factual catalog description.
 `docs.summary` is the longer factual explanation, and `docs.intentGroup` is
 one of the generated browse-page outcomes defined in `catalog/types.ts`.
-Do not create a second copy registry or repeat marketing lists in generated
-metadata.
+`docs.primaryFiles` is a read-first route capped at eight entries, not a recursive
+inventory. Markdown under an extension's `docs/` or `references/` directory must
+be covered by `docs.referenceRoots` and a routed index; generated-current roots
+also name their repository generator. Do not create a second copy registry or
+repeat marketing lists in generated metadata.
 
 The `--category` must be one of the six values defined by
 `catalog/types.ts`:
@@ -218,7 +221,8 @@ An extension README is the human behavior and usage page. Keep it focused:
 - Explain how a human starts the extension and document real commands,
   settings, credentials, safety boundaries, and recovery steps when relevant.
 - The generated **File Structure** block gives only directory roles and root
-  contract files. Exact agent entrypoints live in `docs.primaryFiles`.
+  contract files. A small read-first set lives in `docs.primaryFiles`; deeper
+  material is routed through `docs.referenceRoots` indexes.
 - Put editing invariants in `AGENTS.md`, tool ordering/recovery in
   `AGENT_GUIDE.md`, rationale in ADRs, and test commands in this guide unless an
   extension has a genuine exception.

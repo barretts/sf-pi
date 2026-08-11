@@ -202,9 +202,9 @@ function manifestJson(id, name, category, intent) {
         // exports `createConfigPanel: ConfigPanelFactory`. Until then,
         // /sf-pi will skip the drill-down panel for this extension.
         commands: [`/${id}`],
-        // docs.intentGroup, docs.summary, and docs.primaryFiles are required
-        // by scripts/generate-catalog.mjs. Replace the TODO descriptions before
-        // opening a PR.
+        // docs.intentGroup, docs.summary, and a bounded docs.primaryFiles
+        // read-first route are required by scripts/generate-catalog.mjs. Add a
+        // docs.referenceRoots index before creating docs/ or references/.
         docs: {
           intentGroup: intent,
           summary: `TODO: Describe ${name} for generated orientation docs`,

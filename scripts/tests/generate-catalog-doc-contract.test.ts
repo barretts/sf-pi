@@ -59,6 +59,12 @@ type Manifest = {
     editingRules?: string;
     agentGuide?: string;
     contextGlossary?: string;
+    referenceRoots?: Array<{
+      path: string;
+      index: string;
+      role: "current" | "generated-current" | "compatibility";
+      generatedBy?: string;
+    }>;
   };
 };
 
@@ -82,6 +88,7 @@ function currentCopySurfaces(): string[] {
     "CONTEXT.md",
     "catalog/index.json",
     "lib/common/README.md",
+    "scripts/e2e/README.md",
     "scripts/scaffold.mjs",
   ]);
 
@@ -105,6 +112,35 @@ function currentCopySurfaces(): string[] {
     for (const role of ["editingRules", "agentGuide", "contextGlossary"] as const) {
       const relativePath = manifest.docs[role];
       if (relativePath) surfaces.add(`${base}/${relativePath}`);
+    }
+
+    const roots = [...(manifest.docs.referenceRoots ?? [])].sort(
+      (left, right) => right.path.length - left.path.length,
+    );
+    const referenceFiles = new Set<string>();
+    for (const root of roots) {
+      const absoluteRoot = path.join(EXTENSIONS_DIR, manifest.id, root.path);
+      if (!existsSync(absoluteRoot)) continue;
+      const walk = (directory: string): void => {
+        for (const entry of readdirSync(directory, { withFileTypes: true })) {
+          const absolute = path.join(directory, entry.name);
+          if (entry.isDirectory()) walk(absolute);
+          else if (entry.isFile() && entry.name.endsWith(".md")) {
+            referenceFiles.add(
+              path
+                .relative(path.join(EXTENSIONS_DIR, manifest.id), absolute)
+                .replaceAll(path.sep, "/"),
+            );
+          }
+        }
+      };
+      walk(absoluteRoot);
+    }
+    for (const referenceFile of referenceFiles) {
+      const owner = roots.find(
+        (root) => referenceFile === root.path || referenceFile.startsWith(`${root.path}/`),
+      );
+      if (owner?.role !== "compatibility") surfaces.add(`${base}/${referenceFile}`);
     }
   }
 
@@ -196,13 +232,19 @@ describe("generated extension documentation contract", () => {
     }
   });
 
-  it("resolves unique extension-relative primaryFiles within the repository root", () => {
+  it("keeps primaryFiles as a bounded read-first route", () => {
     for (const manifest of readManifests()) {
       const extensionRoot = path.join(EXTENSIONS_DIR, manifest.id);
       const resolvedPaths = new Set<string>();
       const primaryFiles = manifest.docs?.primaryFiles;
       expect(Array.isArray(primaryFiles), `${manifest.id}: docs.primaryFiles`).toBe(true);
       expect(primaryFiles?.length ?? 0, `${manifest.id}: docs.primaryFiles`).toBeGreaterThan(0);
+      expect(primaryFiles?.length ?? 0, `${manifest.id}: docs.primaryFiles`).toBeLessThanOrEqual(8);
+      expect(primaryFiles?.[0], `${manifest.id}: first entrypoint`).toBe("index.ts");
+      expect(
+        primaryFiles?.every((primaryFile) => !primaryFile.endsWith(".md")),
+        `${manifest.id}: role/reference docs stay outside primaryFiles`,
+      ).toBe(true);
 
       for (const primaryFile of primaryFiles ?? []) {
         expect(path.isAbsolute(primaryFile), `${manifest.id}: ${primaryFile}`).toBe(false);
@@ -217,6 +259,69 @@ describe("generated extension documentation contract", () => {
         expect(existsSync(resolved), `${manifest.id}: ${primaryFile}`).toBe(true);
         expect(resolvedPaths.has(resolved), `${manifest.id}: duplicate ${primaryFile}`).toBe(false);
         resolvedPaths.add(resolved);
+      }
+    }
+  });
+
+  it("declares every extension reference directory through a routed root", () => {
+    for (const manifest of readManifests()) {
+      const extensionRoot = path.join(EXTENSIONS_DIR, manifest.id);
+      const referenceFiles: string[] = [];
+      for (const directory of ["docs", "references"]) {
+        const root = path.join(extensionRoot, directory);
+        if (!existsSync(root)) continue;
+        const walk = (current: string): void => {
+          for (const entry of readdirSync(current, { withFileTypes: true })) {
+            const absolute = path.join(current, entry.name);
+            if (entry.isDirectory()) walk(absolute);
+            else if (entry.isFile() && entry.name.endsWith(".md")) {
+              referenceFiles.push(path.relative(extensionRoot, absolute).replaceAll(path.sep, "/"));
+            }
+          }
+        };
+        walk(root);
+      }
+
+      const roots = manifest.docs.referenceRoots ?? [];
+      for (const referenceFile of referenceFiles) {
+        expect(
+          roots.some(
+            (root) => referenceFile === root.path || referenceFile.startsWith(`${root.path}/`),
+          ),
+          `${manifest.id}: undeclared reference ${referenceFile}`,
+        ).toBe(true);
+      }
+      const detail = readFileSync(path.join(EXTENSION_DETAIL_DIR, `${manifest.id}.md`), "utf8");
+      for (const root of roots) {
+        expect(
+          existsSync(path.join(extensionRoot, root.index)),
+          `${manifest.id}: ${root.index}`,
+        ).toBe(true);
+        expect(detail, `${manifest.id}: routed reference index ${root.index}`).toContain(
+          `/extensions/${manifest.id}/${root.index}`,
+        );
+
+        const indexSource = readFileSync(path.join(extensionRoot, root.index), "utf8");
+        if (root.role === "generated-current") {
+          expect(indexSource, `${manifest.id}: generated root ${root.path}`).toContain(
+            `${path.basename(root.path)}/`,
+          );
+          continue;
+        }
+        const directReferences = readdirSync(path.join(extensionRoot, root.path), {
+          withFileTypes: true,
+        })
+          .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+          .map((entry) => path.posix.join(root.path, entry.name))
+          .filter((relativePath) => relativePath !== root.index);
+        for (const directReference of directReferences) {
+          const relativeLink = path
+            .relative(path.dirname(root.index), directReference)
+            .replaceAll(path.sep, "/");
+          expect(indexSource, `${manifest.id}: orphan reference ${directReference}`).toContain(
+            relativeLink,
+          );
+        }
       }
     }
   });

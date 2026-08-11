@@ -8,6 +8,7 @@ import {
   classifyUsefulMissingParamResult,
   paramsForDryRun,
   paramsForLiveRead,
+  parseV2SweepArgs,
 } from "../../../scripts/e2e/data360-v2-action-sweep.ts";
 import type { Data360V2ActionDefinition } from "../lib/v2/action-types.ts";
 
@@ -37,6 +38,11 @@ const journeyAction: Data360V2ActionDefinition = {
 };
 
 describe("Data 360 v2 action sweep", () => {
+  it("requires callers to select the target org explicitly", () => {
+    expect(parseV2SweepArgs([]).targetOrg).toBe("");
+    expect(parseV2SweepArgs(["--target-org", "example-data360"]).targetOrg).toBe("example-data360");
+  });
+
   it("plans describe, metadata, dry-run, missing-param, and live-read checks", () => {
     const plan = buildV2SweepPlan([restAction, journeyAction], { liveRead: true });
 

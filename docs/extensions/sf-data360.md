@@ -58,6 +58,8 @@ Open its Manager detail or change its package state with:
 - [Source folder](https://github.com/salesforce/sf-pi/tree/main/extensions/sf-data360)
 - [Agent editing rules](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-data360/AGENTS.md)
 - [Agent operating guide](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-data360/AGENT_GUIDE.md)
+- [Reference index](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-data360/references/README.md)
+- [Compatibility evidence index](https://github.com/salesforce/sf-pi/blob/main/extensions/sf-data360/references/compatibility/README.md)
 
 ## Troubleshooting
 

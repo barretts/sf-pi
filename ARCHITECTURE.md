@@ -107,6 +107,7 @@ When an agent (or human) needs to change something, start here:
 | Extension-specific agent rules                  | Manifest `docs.editingRules` → `extensions/<id>/AGENTS.md`                      |
 | Extension agent operating guide                 | Manifest `docs.agentGuide` → `extensions/<id>/AGENT_GUIDE.md`                   |
 | Extension domain glossary                       | Manifest `docs.contextGlossary` → `extensions/<id>/CONTEXT.md`                  |
+| Extension reference index                       | Manifest `docs.referenceRoots[].index` for `docs/` or `references/`             |
 | Extension-specific roadmap                      | `extensions/<id>/ROADMAP.md` (optional, see below)                              |
 | Slash command handlers                          | `extensions/<id>/index.ts` — most handle their own commands                     |
 | Shared Pi-runtime shims                         | `lib/common/pi-compat.ts`, `lib/common/pi-paths.ts`                             |
@@ -200,9 +201,12 @@ manifest before writing output, including:
 
 - identity, display name, description, category, maturity, and default state;
 - declared commands, providers, tools, events, and configurability;
-- required `docs.intentGroup`, `docs.summary`, and `docs.primaryFiles`;
+- required `docs.intentGroup`, `docs.summary`, and a maximum of eight
+  `docs.primaryFiles` read-first entrypoints;
 - explicit editing-rules, operating-guide, and context-glossary roles when the
   corresponding files exist;
+- routed `docs.referenceRoots` coverage for Markdown under extension `docs/` or
+  `references/`, including generator provenance for generated-current roots;
 - an operating guide for every tool-owning extension.
 
 Do not maintain a second field-by-field schema table in prose. Update the type,

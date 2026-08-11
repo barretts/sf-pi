@@ -8,7 +8,7 @@
  * credential material.
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const PUBLIC_TEXT_EXTENSIONS = new Set([
@@ -97,10 +97,12 @@ export function listTrackedPublicTextFiles(root) {
 
 export function scanTrackedPublicArtifacts(root) {
   return scanPublicArtifactTexts(
-    listTrackedPublicTextFiles(root).map((file) => ({
-      file,
-      source: readFileSync(path.join(root, file), "utf8"),
-    })),
+    listTrackedPublicTextFiles(root)
+      .filter((file) => existsSync(path.join(root, file)))
+      .map((file) => ({
+        file,
+        source: readFileSync(path.join(root, file), "utf8"),
+      })),
   );
 }
 

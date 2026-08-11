@@ -273,6 +273,80 @@ describe("generate-catalog CLI", () => {
     expectFailure(fragment);
   });
 
+  it("rejects more than eight docs.primaryFiles entries", () => {
+    const primaryFiles = ["index.ts"];
+    for (let index = 1; index <= 8; index++) {
+      const relativePath = `lib/entry-${index}.ts`;
+      writeText(`extensions/alpha/${relativePath}`, `export const entry${index} = true;\n`);
+      primaryFiles.push(relativePath);
+    }
+    writeJson("extensions/alpha/manifest.json", {
+      ...BASE_MANIFEST,
+      docs: { ...BASE_MANIFEST.docs, primaryFiles },
+    });
+    expectFailure("docs.primaryFiles must contain at most 8 entries");
+  });
+
+  it("requires index.ts to be the first primary entrypoint", () => {
+    writeText("extensions/alpha/lib/entry.ts", "export const entry = true;\n");
+    writeJson("extensions/alpha/manifest.json", {
+      ...BASE_MANIFEST,
+      docs: { ...BASE_MANIFEST.docs, primaryFiles: ["lib/entry.ts", "index.ts"] },
+    });
+    expectFailure("docs.primaryFiles must start with index.ts");
+  });
+
+  it("keeps Markdown role and reference files out of primaryFiles", () => {
+    writeText("extensions/alpha/README.md", "# Alpha\n");
+    writeJson("extensions/alpha/manifest.json", {
+      ...BASE_MANIFEST,
+      docs: { ...BASE_MANIFEST.docs, primaryFiles: ["index.ts", "README.md"] },
+    });
+    expectFailure("implementation entrypoints, not Markdown role/reference files");
+  });
+
+  it("requires a reference root for extension docs", () => {
+    writeText("extensions/alpha/docs/guide.md", "# Guide\n");
+    expectFailure("docs/guide.md is not covered by docs.referenceRoots");
+  });
+
+  it("requires a current reference index to link each direct document", () => {
+    writeText("extensions/alpha/docs/README.md", "# References\n");
+    writeText("extensions/alpha/docs/guide.md", "# Guide\n");
+    writeJson("extensions/alpha/manifest.json", {
+      ...BASE_MANIFEST,
+      docs: {
+        ...BASE_MANIFEST.docs,
+        referenceRoots: [{ path: "docs", index: "docs/README.md", role: "current" }],
+      },
+    });
+    expectFailure("docs/README.md must link direct reference guide.md");
+  });
+
+  it("rejects an invalid reference root role", () => {
+    writeText("extensions/alpha/docs/README.md", "# References\n");
+    writeJson("extensions/alpha/manifest.json", {
+      ...BASE_MANIFEST,
+      docs: {
+        ...BASE_MANIFEST.docs,
+        referenceRoots: [{ path: "docs", index: "docs/README.md", role: "historical" }],
+      },
+    });
+    expectFailure('docs.referenceRoots role "historical" is invalid');
+  });
+
+  it("requires generated reference roots to name their generator", () => {
+    writeText("extensions/alpha/docs/README.md", "# References\n");
+    writeJson("extensions/alpha/manifest.json", {
+      ...BASE_MANIFEST,
+      docs: {
+        ...BASE_MANIFEST.docs,
+        referenceRoots: [{ path: "docs", index: "docs/README.md", role: "generated-current" }],
+      },
+    });
+    expectFailure("generated-current reference root must declare generatedBy");
+  });
+
   it("requires a role declaration for an existing extension AGENTS file", () => {
     writeText("extensions/alpha/AGENTS.md", "# Alpha editing rules\n");
     expectFailure('docs.editingRules must be "AGENTS.md"');

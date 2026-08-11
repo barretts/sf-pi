@@ -17,6 +17,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -78,6 +79,8 @@ const EXT_FILE_STRUCTURE_END_MARKER = "<!-- GENERATED:file-structure:end -->";
 const README_CATEGORY_ORDER = ["manager", "provider", "agent-tool", "safety", "assistive", "ui"];
 const VALID_CATEGORIES = new Set(README_CATEGORY_ORDER);
 const VALID_MATURITIES = new Set(["stable", "beta", "experimental"]);
+const VALID_REFERENCE_ROLES = new Set(["current", "generated-current", "compatibility"]);
+const MAX_PRIMARY_FILES = 8;
 const EXTENSION_INTENT_ORDER = [
   "Build agents",
   "Build apps",
@@ -200,6 +203,7 @@ function discoverManifests() {
       }
       validatePrimaryFiles(entry.name, docs.primaryFiles);
       validateManifestDocRoles(entry.name, manifest);
+      validateManifestReferenceRoots(entry.name, docs.referenceRoots);
     }
 
     results.push({ dir: entry.name, manifest });
@@ -300,6 +304,11 @@ function validatePrimaryFiles(extensionDir, primaryFiles) {
   const extensionRoot = path.join(EXTENSIONS_DIR, extensionDir);
   const resolvedPaths = new Set();
 
+  if (primaryFiles.length > MAX_PRIMARY_FILES) {
+    fail(
+      `extensions/${extensionDir}/manifest.json docs.primaryFiles must contain at most ${MAX_PRIMARY_FILES} entries`,
+    );
+  }
   for (const primaryFile of primaryFiles) {
     if (typeof primaryFile !== "string" || primaryFile.length === 0) {
       console.error(
@@ -340,6 +349,159 @@ function validatePrimaryFiles(extensionDir, primaryFiles) {
     }
     resolvedPaths.add(resolved);
   }
+
+  if (primaryFiles[0] !== "index.ts") {
+    fail(`extensions/${extensionDir}/manifest.json docs.primaryFiles must start with index.ts`);
+  }
+  if (primaryFiles.some((primaryFile) => primaryFile.endsWith(".md"))) {
+    fail(
+      `extensions/${extensionDir}/manifest.json docs.primaryFiles must contain implementation entrypoints, not Markdown role/reference files`,
+    );
+  }
+}
+
+function validateManifestReferenceRoots(extensionDir, referenceRoots) {
+  const extensionRoot = path.join(EXTENSIONS_DIR, extensionDir);
+  const roots = referenceRoots ?? [];
+  if (!Array.isArray(roots)) {
+    fail(`extensions/${extensionDir}/manifest.json docs.referenceRoots must be an array`);
+  }
+
+  const normalizedRoots = [];
+  const seenRoots = new Set();
+  for (const root of roots) {
+    if (!root || typeof root !== "object" || Array.isArray(root)) {
+      fail(`extensions/${extensionDir}/manifest.json docs.referenceRoots entries must be objects`);
+    }
+    for (const field of ["path", "index", "role"]) {
+      if (typeof root[field] !== "string" || root[field].length === 0) {
+        fail(
+          `extensions/${extensionDir}/manifest.json docs.referenceRoots ${field} must be a non-empty string`,
+        );
+      }
+    }
+    if (!VALID_REFERENCE_ROLES.has(root.role)) {
+      fail(
+        `extensions/${extensionDir}/manifest.json docs.referenceRoots role "${root.role}" is invalid`,
+      );
+    }
+    if (root.role === "generated-current" && !root.generatedBy) {
+      fail(
+        `extensions/${extensionDir}/manifest.json generated-current reference root must declare generatedBy`,
+      );
+    }
+
+    const resolvedRoot = resolveContainedPath(extensionRoot, root.path, `${root.path}`);
+    if (!existsSync(resolvedRoot) || !statSync(resolvedRoot).isDirectory()) {
+      fail(
+        `extensions/${extensionDir}/manifest.json docs.referenceRoots path "${root.path}" must resolve to a directory`,
+      );
+    }
+    const normalizedRoot = path.relative(extensionRoot, resolvedRoot).replaceAll(path.sep, "/");
+    if (seenRoots.has(normalizedRoot)) {
+      fail(
+        `extensions/${extensionDir}/manifest.json docs.referenceRoots contains duplicate path "${root.path}"`,
+      );
+    }
+    seenRoots.add(normalizedRoot);
+
+    const resolvedIndex = resolveContainedPath(extensionRoot, root.index, `${root.index}`);
+    if (!existsSync(resolvedIndex) || !statSync(resolvedIndex).isFile()) {
+      fail(
+        `extensions/${extensionDir}/manifest.json docs.referenceRoots index "${root.index}" does not exist`,
+      );
+    }
+    if (!root.index.endsWith(".md")) {
+      fail(
+        `extensions/${extensionDir}/manifest.json docs.referenceRoots index "${root.index}" must be Markdown`,
+      );
+    }
+    const indexSource = readFileSync(resolvedIndex, "utf8");
+    if (root.role === "generated-current") {
+      if (!indexSource.includes(`${path.basename(normalizedRoot)}/`)) {
+        fail(
+          `extensions/${extensionDir}/${root.index} must link generated reference root ${root.path}/`,
+        );
+      }
+    } else {
+      for (const entry of readdirSync(resolvedRoot, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+        const reference = path.join(resolvedRoot, entry.name);
+        if (reference === resolvedIndex) continue;
+        const relativeLink = path
+          .relative(path.dirname(resolvedIndex), reference)
+          .replaceAll(path.sep, "/");
+        if (!indexSource.includes(relativeLink)) {
+          fail(
+            `extensions/${extensionDir}/${root.index} must link direct reference ${relativeLink}`,
+          );
+        }
+      }
+    }
+
+    if (root.generatedBy !== undefined) {
+      if (typeof root.generatedBy !== "string" || root.generatedBy.length === 0) {
+        fail(
+          `extensions/${extensionDir}/manifest.json docs.referenceRoots generatedBy must be a non-empty repository-relative path`,
+        );
+      }
+      const generator = path.resolve(ROOT, root.generatedBy);
+      const relativeGenerator = path.relative(ROOT, generator);
+      if (
+        relativeGenerator === "" ||
+        relativeGenerator === ".." ||
+        relativeGenerator.startsWith(`..${path.sep}`) ||
+        !existsSync(generator) ||
+        !statSync(generator).isFile()
+      ) {
+        fail(
+          `extensions/${extensionDir}/manifest.json docs.referenceRoots generatedBy "${root.generatedBy}" does not resolve to a repository file`,
+        );
+      }
+    }
+
+    normalizedRoots.push(normalizedRoot);
+  }
+
+  for (const referenceFile of extensionReferenceMarkdown(extensionRoot)) {
+    if (
+      !normalizedRoots.some(
+        (root) => referenceFile === root || referenceFile.startsWith(`${root}/`),
+      )
+    ) {
+      fail(`extensions/${extensionDir}/${referenceFile} is not covered by docs.referenceRoots`);
+    }
+  }
+}
+
+function resolveContainedPath(extensionRoot, relativePath, label) {
+  if (path.isAbsolute(relativePath)) {
+    fail(`docs.referenceRoots path "${label}" must be extension-relative`);
+  }
+  const resolved = path.resolve(extensionRoot, relativePath);
+  const relative = path.relative(extensionRoot, resolved);
+  if (relative === "" || relative === ".." || relative.startsWith(`..${path.sep}`)) {
+    fail(`docs.referenceRoots path "${label}" escapes its extension directory`);
+  }
+  return resolved;
+}
+
+function extensionReferenceMarkdown(extensionRoot) {
+  const files = [];
+  const walk = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(absolute);
+      else if (entry.isFile() && entry.name.endsWith(".md")) {
+        files.push(path.relative(extensionRoot, absolute).replaceAll(path.sep, "/"));
+      }
+    }
+  };
+  for (const directoryName of ["docs", "references"]) {
+    const directory = path.join(extensionRoot, directoryName);
+    if (existsSync(directory)) walk(directory);
+  }
+  return files.sort();
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -508,6 +670,24 @@ function sourceFileLink(dir, file) {
 
 function extensionDocLink(dir) {
   return `./extensions/${dir}`;
+}
+
+function referenceIndexes(dir, manifest) {
+  const byIndex = new Map();
+  for (const root of manifest.docs?.referenceRoots ?? []) {
+    const roles = byIndex.get(root.index) ?? new Set();
+    roles.add(root.role);
+    byIndex.set(root.index, roles);
+  }
+  return [...byIndex.entries()].map(([index, roles]) => ({
+    link: sourceFileLink(dir, index),
+    label:
+      roles.size === 1 && roles.has("compatibility")
+        ? "Compatibility evidence index"
+        : roles.size === 1 && roles.has("generated-current")
+          ? "Generated reference index"
+          : "Reference index",
+  }));
 }
 
 function extensionReadmeHasSection(dir, section) {
@@ -805,6 +985,9 @@ function generateExtensionDetailDoc(dir, manifest) {
     ...(manifest.docs?.contextGlossary
       ? [`- [Domain glossary](${sourceFileLink(dir, manifest.docs.contextGlossary)})`]
       : []),
+    ...referenceIndexes(dir, manifest).map(
+      (reference) => `- [${reference.label}](${reference.link})`,
+    ),
   );
 
   if (extensionReadmeHasSection(dir, "Troubleshooting")) {
@@ -1065,8 +1248,8 @@ function generateAgentOrientationDoc(manifests) {
     "",
     "Use this table to locate the owner. Exact summaries, maturity, defaults, providers, tool names, events, safety notes, state paths, and environment variables remain in `catalog/index.json`.",
     "",
-    "| Extension | Category | Commands | Tools | Editing rules | Operating guide | Entry point |",
-    "| --------- | -------- | -------- | ----: | ------------- | --------------- | ----------- |",
+    "| Extension | Category | Commands | Tools | Editing rules | Operating guide | References | Entry point |",
+    "| --------- | -------- | -------- | ----: | ------------- | --------------- | ---------- | ----------- |",
   ];
 
   for (const { dir, manifest } of sorted) {
@@ -1076,8 +1259,13 @@ function generateAgentOrientationDoc(manifests) {
     const agentGuide = manifest.docs?.agentGuide
       ? `[guide](${sourceFileLink(dir, manifest.docs.agentGuide)})`
       : "_none_";
+    const references = referenceIndexes(dir, manifest);
+    const referenceLinks =
+      references.length > 0
+        ? references.map((reference) => `[index](${reference.link})`).join(", ")
+        : "_none_";
     lines.push(
-      `| [${manifest.name}](${sourceTreeLink(`extensions/${dir}`)}) | ${manifest.category} | ${generatedList(manifest.commands ?? [])} | ${(manifest.tools ?? []).length} | ${editingRules} | ${agentGuide} | \`extensions/${dir}/index.ts\` |`,
+      `| [${manifest.name}](${sourceTreeLink(`extensions/${dir}`)}) | ${manifest.category} | ${generatedList(manifest.commands ?? [])} | ${(manifest.tools ?? []).length} | ${editingRules} | ${agentGuide} | ${referenceLinks} | \`extensions/${dir}/index.ts\` |`,
     );
   }
 
@@ -1085,9 +1273,9 @@ function generateAgentOrientationDoc(manifests) {
     "",
     "## Manifest doc metadata",
     "",
-    "Every extension manifest must provide non-empty `docs.summary` and `docs.primaryFiles` fields. Extension-local `AGENTS.md`, `AGENT_GUIDE.md`, and `CONTEXT.md` files are declared explicitly as `docs.editingRules`, `docs.agentGuide`, and `docs.contextGlossary`. Tool-owning extensions require an agent guide. `docs.stateFiles`, `docs.env`, and `docs.safety` remain optional.",
+    "Every extension manifest must provide non-empty `docs.summary` and `docs.primaryFiles` fields. Extension-local `AGENTS.md`, `AGENT_GUIDE.md`, and `CONTEXT.md` files are declared explicitly as `docs.editingRules`, `docs.agentGuide`, and `docs.contextGlossary`. Tool-owning extensions require an agent guide. `docs.referenceRoots` routes every Markdown file under extension `docs/` and `references/` as current, generated-current, or compatibility material. `docs.stateFiles`, `docs.env`, and `docs.safety` remain optional.",
     "",
-    "Each `docs.primaryFiles` entry is extension-relative. It may use `..` traversal only when the normalized path remains inside the repository root, and it must resolve to an existing unique path.",
+    `Each \`docs.primaryFiles\` entry is extension-relative, resolves to an existing unique path, and the read-first set is capped at ${MAX_PRIMARY_FILES}. Reference-root indexes are also extension-relative; generated-current roots name their repository generator.`,
     "",
     "## Runtime surfaces",
     "",
