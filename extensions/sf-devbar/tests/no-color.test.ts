@@ -9,7 +9,8 @@ import { renderBottomBarParts } from "../lib/bottom-bar.ts";
 import { createConfigPanel } from "../lib/config-panel.ts";
 import { renderTopBar } from "../lib/top-bar.ts";
 
-const ANSI_SGR = /\x1b\[[0-9;]*m/;
+const ANSI_ESCAPE = String.fromCharCode(27);
+const ANSI_SGR = new RegExp(`${ANSI_ESCAPE}\\[[0-9;]*m`);
 const ansiTheme = {
   fg: (_color: string, text: string) => `\x1b[31m${text}\x1b[0m`,
   bold: (text: string) => `\x1b[1m${text}\x1b[0m`,

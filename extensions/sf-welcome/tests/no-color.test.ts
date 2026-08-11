@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 import { SfWelcomeHeader, SfWelcomeOverlay } from "../lib/splash-component.ts";
 import { collectInitialSplashData } from "../lib/splash-data.ts";
 
-const ANSI_SGR = /\x1b\[[0-9;]*m/;
+const ANSI_ESCAPE = String.fromCharCode(27);
+const ANSI_SGR = new RegExp(`${ANSI_ESCAPE}\\[[0-9;]*m`);
 
 describe("SF Welcome NO_COLOR behavior", () => {
   it("renders the overlay and persistent header without ANSI color escapes", () => {

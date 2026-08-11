@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Shared presence-based NO_COLOR policy for SF Pi-owned ANSI rendering. */
 
-const ANSI_SGR_PATTERN = /\x1b\[[0-9;]*m/g;
+const ANSI_ESCAPE = String.fromCharCode(27);
+const ANSI_SGR_PATTERN = new RegExp(`${ANSI_ESCAPE}\\[[0-9;]*m`, "g");
 
 export function colorsEnabled(
   environment: Readonly<Record<string, string | undefined>> = process.env,

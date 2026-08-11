@@ -4,11 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { stripAnsiSgr } from "../../../lib/common/color-policy.ts";
 import sfOhanaSpinner from "../index.ts";
 import { messages } from "../lib/messages.ts";
 import { writeScopedOhanaSpinnerSettings } from "../lib/settings.ts";
 
 const tempDirs = new Set<string>();
+const ANSI_TRUE_COLOR_PREFIX = `${String.fromCharCode(27)}[38;2;`;
 
 function tempCwd(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "sf-pi-ohana-spinner-lifecycle-"));
@@ -77,7 +79,7 @@ function latestIndicatorFrames(ctx: ReturnType<typeof createCtx>): string[] {
 }
 
 function stripAnsi(value: string): string {
-  return value.replace(/\x1b\[[0-9;]*m/g, "");
+  return stripAnsiSgr(value);
 }
 
 describe("sf-ohana-spinner waiting-state outcome", () => {
@@ -93,7 +95,7 @@ describe("sf-ohana-spinner waiting-state outcome", () => {
     const frames = latestIndicatorFrames(ctx);
     expect(frames.length).toBeGreaterThan(1);
     expect(frames.every((frame) => frame.includes("Thinking…"))).toBe(true);
-    expect(frames.some((frame) => /\x1b\[38;2;\d+;\d+;\d+m/.test(frame))).toBe(true);
+    expect(frames.some((frame) => frame.includes(ANSI_TRUE_COLOR_PREFIX))).toBe(true);
     expect(
       frames.some((frame) => /opp|pipeline|SOQL|Apex|Flow|Agentforce/i.test(stripAnsi(frame))),
     ).toBe(true);
@@ -114,7 +116,7 @@ describe("sf-ohana-spinner waiting-state outcome", () => {
 
       const frames = latestIndicatorFrames(ctx);
       expect(frames.every((frame) => frame.includes("Thinking…"))).toBe(true);
-      expect(frames.every((frame) => !/\x1b\[[0-9;]*m/.test(frame))).toBe(true);
+      expect(frames.every((frame) => stripAnsiSgr(frame) === frame)).toBe(true);
     } finally {
       if (previous === undefined) delete process.env.NO_COLOR;
       else process.env.NO_COLOR = previous;
@@ -132,7 +134,7 @@ describe("sf-ohana-spinner waiting-state outcome", () => {
     const frames = latestIndicatorFrames(ctx);
     expect(frames.length).toBeGreaterThan(1);
     expect(frames.every((frame) => frame.includes("Thinking…"))).toBe(true);
-    expect(frames.every((frame) => !/\x1b\[38;2;\d+;\d+;\d+m/.test(frame))).toBe(true);
+    expect(frames.every((frame) => !frame.includes(ANSI_TRUE_COLOR_PREFIX))).toBe(true);
     expect(frames.every((frame) => !frame.includes(" · "))).toBe(true);
     expect(ctx.ui.setWorkingMessage).toHaveBeenLastCalledWith("");
   });
