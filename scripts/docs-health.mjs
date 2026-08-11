@@ -11,6 +11,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { scanTrackedManualEvidence } from "./lib/manual-evidence.mjs";
 import { scanTrackedPublicArtifacts } from "./lib/public-artifact-safety.mjs";
 import { validateExtensionReadmeContract } from "./lib/readme-contract.mjs";
 
@@ -125,6 +126,12 @@ function checkChangelog() {
   }
 }
 
+function checkManualEvidence() {
+  for (const finding of scanTrackedManualEvidence(ROOT)) {
+    fail(finding.file, finding.message);
+  }
+}
+
 function checkPublicSafety() {
   for (const finding of scanTrackedPublicArtifacts(ROOT)) {
     fail(finding.file, finding.message, finding.detail);
@@ -140,6 +147,7 @@ function run() {
   checkGeneratedFilesExist();
   checkExtensionReadmes();
   checkChangelog();
+  checkManualEvidence();
   checkPublicSafety();
 
   const errors = findings.filter((finding) => finding.level === "error");

@@ -1,8 +1,20 @@
+---
+evidence: manual-live-verification
+as_of: 2026-07-12
+owner: sf-data360
+revalidate_after: 2026-10-12
+revalidation_trigger: Public upstream parity, v2 action routing, or dispatcher behavior changes
+---
+
 # SF Data 360 Live Verification
 
-This public-safe summary records the latest manual live verification pass for the
+This public-safe summary records a dated manual live-verification pass for the
 Data 360 upstream-parity refresh. Raw responses, org aliases, record IDs, and
 instance URLs were kept in private local artifacts and are not committed.
+
+Revalidate on or before `2026-10-12`, or earlier when the public upstream parity
+source, v2 action routing, or dispatcher behavior changes. Replace this summary
+rather than presenting an older pass as current evidence.
 
 ## 2026-07-12 upstream-parity refresh
 

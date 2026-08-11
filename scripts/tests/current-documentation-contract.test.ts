@@ -21,18 +21,23 @@ describe("current documentation authority", () => {
     );
   });
 
-  it("requires temporary bundled announcements to expire or target a bounded version range", () => {
+  it("requires non-release announcements to expire, target a version, or be evergreen", () => {
     const manifest = JSON.parse(read("catalog/announcements.json")) as {
       feedUrl?: string;
-      announcements: Array<{ id: string; expiresAt?: string; maxVersion?: string }>;
+      announcements: Array<{
+        id: string;
+        expiresAt?: string;
+        maxVersion?: string;
+        evergreen?: boolean;
+      }>;
     };
 
     expect(manifest.feedUrl).toBeUndefined();
     for (const announcement of manifest.announcements) {
       if (announcement.id.startsWith("release-")) continue;
       expect(
-        Boolean(announcement.expiresAt || announcement.maxVersion),
-        `${announcement.id} must expire or declare maxVersion`,
+        Boolean(announcement.expiresAt || announcement.maxVersion || announcement.evergreen),
+        `${announcement.id} must expire, declare maxVersion, or set evergreen=true`,
       ).toBe(true);
     }
   });
@@ -76,6 +81,23 @@ describe("current documentation authority", () => {
 
     expect(readme).not.toContain("SF_D360_ALLOW_HEADLESS_WRITE");
     expect(readme).toContain("SF_GUARDRAIL_ALLOW_HEADLESS");
+  });
+
+  it("grounds npm and operating-system support claims in maintained proof", () => {
+    const pkg = JSON.parse(read("package.json")) as {
+      engines?: { node?: string };
+      peerDependencies?: Record<string, string>;
+    };
+    const install = read("docs/install.md");
+
+    expect(install).toContain(`Node.js \`${pkg.engines?.node}\``);
+    expect(install).toContain(
+      `pi coding agent \`${pkg.peerDependencies?.["@earendil-works/pi-coding-agent"]}\``,
+    );
+    expect(install).toContain("SF Pi declares\n  no separate npm floor");
+    expect(install).toContain("Required CI continuously proves Ubuntu with Node 22");
+    expect(install).not.toContain("- npm 11");
+    expect(install).not.toContain("Native Windows is supported");
   });
 
   it("lists every configurable extension exactly once in the settings audit", () => {

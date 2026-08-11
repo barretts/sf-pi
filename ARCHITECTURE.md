@@ -77,7 +77,8 @@ ones agents and maintainers most often need:
 | `scripts/generate-catalog.mjs`            | Regenerates catalog/docs pages, routed indexes, contributor inventories, and declared marker blocks.                 |
 | `scripts/check-staged-catalog.mjs`        | Exports the Git index to a temporary root and checks its generated catalog without mutating local state.             |
 | `scripts/check-command-contracts.mjs`     | Checks safe slash-command wrapping and reserved command-panel filenames.                                             |
-| `scripts/docs-health.mjs`                 | Checks factual doc drift contracts and the tracked public-text corpus.                                               |
+| `scripts/docs-health.mjs`                 | Checks factual doc drift, manual-evidence freshness, and the tracked public-text corpus.                             |
+| `scripts/check-external-links.mjs`        | Generates the scheduled report-only external-link artifact; never runs in normal PR validation.                      |
 | `scripts/check-architecture.mjs`          | Checks source-size advisories and shared state-store placement separately from docs health.                          |
 | `scripts/instruction-surface-report.mjs`  | Writes sanitized SF Pi instruction-size JSON and Markdown through the exact Pi runtime.                              |
 | `scripts/e2e/instruction-behavior/run.ts` | Runs the opt-in model routing regression with local reads allowed and every non-local tool blocked before execution. |

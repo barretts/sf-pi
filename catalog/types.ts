@@ -279,6 +279,8 @@ export interface AnnouncementItem {
   minVersion?: string;
   /** Only show to installs <= this version (e.g. deprecation notices). */
   maxVersion?: string;
+  /** Explicitly long-lived maintainer guidance. Mutually exclusive with expiry/max-version gates. */
+  evergreen?: boolean;
 }
 
 /**

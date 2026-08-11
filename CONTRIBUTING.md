@@ -94,6 +94,9 @@ full diff, and stage only intended outputs.
 
 The opt-in live harnesses, target requirements, mutation posture, and artifact
 locations are documented in [`scripts/e2e/README.md`](./scripts/e2e/README.md).
+`npm run docs:links:report` is the same report-only network check used by the
+weekly workflow; external reachability intentionally stays outside normal PR
+validation.
 
 ### Complete package script inventory
 
@@ -102,7 +105,7 @@ locations are documented in [`scripts/e2e/README.md`](./scripts/e2e/README.md).
 This complete inventory is generated from `package.json`; edit that file and run `npm run generate-catalog`.
 
 <details>
-<summary>Show all 55 package scripts</summary>
+<summary>Show all 56 package scripts</summary>
 
 **Generated sources**
 
@@ -128,6 +131,7 @@ This complete inventory is generated from `package.json`; edit that file and run
 - `npm run docs:dev`
 - `npm run docs:health`
 - `npm run docs:health:check`
+- `npm run docs:links:report`
 - `npm run docs:preview`
 
 **Static checks**
@@ -326,6 +330,23 @@ The generated File Structure block gives directory roles and root contract
 files. `docs.primaryFiles` owns the small implementation-first route; deeper
 material is routed through `docs.referenceRoots` indexes. Troubleshooting entries
 shaped like `**Symptom:**` or `**Question?**` also feed the generated site index.
+
+### Manual live evidence
+
+Current manual live-verification pages use flat frontmatter:
+
+```yaml
+evidence: manual-live-verification
+as_of: YYYY-MM-DD
+owner: sf-extension-id
+revalidate_after: YYYY-MM-DD
+revalidation_trigger: Public API, registry, or owning behavior changes
+```
+
+`docs:health` fails when required metadata is absent, the revalidation date
+precedes `as_of`, or current evidence passes its revalidation date. Replace the
+public-safe summary after a bounded recheck; never commit org aliases, ids,
+instance URLs, raw responses, or private artifact paths.
 
 ## Proposing a recommended extension
 

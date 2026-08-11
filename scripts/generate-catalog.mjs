@@ -1881,6 +1881,9 @@ function validateAnnouncements(filePath, quiet = false) {
           `${label}.severity must be one of ${[...ANNOUNCEMENT_SEVERITIES].join(", ")} when set`,
         );
       }
+      if (item.evergreen !== undefined && typeof item.evergreen !== "boolean") {
+        errors.push(`${label}.evergreen must be a boolean when set`);
+      }
       for (const optional of [
         "body",
         "link",
@@ -1896,6 +1899,14 @@ function validateAnnouncements(filePath, quiet = false) {
       for (const dateField of ["publishedAt", "expiresAt"]) {
         if (typeof item[dateField] === "string" && Number.isNaN(Date.parse(item[dateField]))) {
           errors.push(`${label}.${dateField} must be an ISO-8601 date string`);
+        }
+      }
+      if (!isGeneratedReleaseEntry(item)) {
+        if (!item.expiresAt && !item.maxVersion && item.evergreen !== true) {
+          errors.push(`${label} must declare expiresAt, maxVersion, or evergreen=true`);
+        }
+        if (item.evergreen === true && (item.expiresAt || item.maxVersion)) {
+          errors.push(`${label}.evergreen=true cannot be combined with expiresAt or maxVersion`);
         }
       }
     }

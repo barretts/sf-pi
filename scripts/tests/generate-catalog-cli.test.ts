@@ -437,6 +437,45 @@ describe("generate-catalog CLI", () => {
     expectFailure(`${relativePath} is invalid`);
   });
 
+  it("rejects a transient announcement without a lifecycle bound", () => {
+    writeJson("catalog/announcements.json", {
+      schemaVersion: 1,
+      revision: "fixture",
+      announcements: [{ id: "temporary", kind: "note", title: "Temporary notice" }],
+    });
+    expectFailure("must declare expiresAt, maxVersion, or evergreen=true");
+  });
+
+  it("accepts an explicitly evergreen maintainer announcement", () => {
+    writeJson("catalog/announcements.json", {
+      schemaVersion: 1,
+      revision: "fixture",
+      announcements: [
+        { id: "evergreen", kind: "note", title: "Evergreen guidance", evergreen: true },
+      ],
+    });
+
+    const result = runGenerator();
+    expect(result.status, output(result)).toBe(0);
+  });
+
+  it("rejects contradictory evergreen and expiry metadata", () => {
+    writeJson("catalog/announcements.json", {
+      schemaVersion: 1,
+      revision: "fixture",
+      announcements: [
+        {
+          id: "contradictory",
+          kind: "note",
+          title: "Contradictory notice",
+          evergreen: true,
+          expiresAt: "2026-09-01T00:00:00Z",
+        },
+      ],
+    });
+    expectFailure("evergreen=true cannot be combined with expiresAt or maxVersion");
+  });
+
   it("preflights all required marker pairs before changing outputs", () => {
     writeText(
       "ARCHITECTURE.md",
