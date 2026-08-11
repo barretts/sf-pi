@@ -224,15 +224,11 @@ function readmeMd(id, name) {
 
 TODO: Describe the current user-visible behavior, how it starts, and when it stays silent.
 
-## Start
+## Commands
 
 \`\`\`text
 /${id}
 \`\`\`
-
-## Settings and Safety
-
-TODO: Keep only real settings, credentials, safety boundaries, or recovery guidance. Remove this section if none apply.
 
 ## File Structure
 
@@ -417,9 +413,7 @@ execFileSync(process.execPath, [path.join(__dirname, "generate-catalog.mjs")], {
 console.log("");
 console.log("Next steps:");
 console.log(`  1. Edit extensions/${id}/manifest.json — update the description and docs summary`);
-console.log(
-  `  2. Edit extensions/${id}/README.md and comments — explain the behavior for agents and reviewers`,
-);
+console.log(`  2. Edit extensions/${id}/README.md — explain current human behavior and usage`);
 console.log(`  3. Edit extensions/${id}/index.ts — implement your extension`);
 console.log(`  4. Run: npm run format:check — verify formatting`);
 console.log(`  5. Run: npm test — your smoke test should pass`);

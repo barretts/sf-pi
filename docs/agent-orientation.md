@@ -76,7 +76,7 @@ Do not edit these by hand; edit the source manifest/docs and run `npm run genera
 - `docs/commands.md`
 - `docs/agent-orientation.md`
 - `docs/adr/README.md`
-- generated marker blocks in `README.md` and `ARCHITECTURE.md`
+- generated marker blocks in `ARCHITECTURE.md`, `CONTRIBUTING.md`, `lib/common/README.md`, `scripts/e2e/README.md`, and `docs/troubleshooting.md`
 - generated file-structure marker blocks in `extensions/*/README.md`
 - normalized `catalog/announcements.json` release entry
 

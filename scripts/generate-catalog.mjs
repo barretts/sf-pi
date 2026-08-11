@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 // Generate catalog/registry.ts, catalog/index.json, docs inventory pages, the
-// ADR lifecycle index, and root documentation blocks from validated sources.
+// ADR lifecycle index, and contributor-facing structural inventories from
+// validated sources.
 //
 // Run:
 //   node scripts/generate-catalog.mjs
@@ -10,7 +11,8 @@
 //   node scripts/generate-catalog.mjs --check
 //   npm run generate-catalog:check
 //
-// The manifest.json in each extension folder is the source of truth.
+// Extension manifests own catalog facts; package scripts, the E2E harness
+// manifest, and source trees own their corresponding structural inventories.
 
 import {
   existsSync,
@@ -25,6 +27,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import prettier from "prettier";
 import { loadAdrRecords, renderAdrIndex } from "./lib/adr-lifecycle.mjs";
+import {
+  COMMON_MODULES_END_MARKER,
+  COMMON_MODULES_START_MARKER,
+  CONTRIBUTOR_SCRIPTS_END_MARKER,
+  CONTRIBUTOR_SCRIPTS_START_MARKER,
+  E2E_HARNESSES_END_MARKER,
+  E2E_HARNESSES_START_MARKER,
+  loadDocumentationInventories,
+  renderCommonModuleInventory,
+  renderContributorScriptInventory,
+  renderE2EHarnessInventory,
+} from "./lib/documentation-inventories.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,8 +52,10 @@ const ROOT =
 const EXTENSIONS_DIR = path.join(ROOT, "extensions");
 const CATALOG_DIR = path.join(ROOT, "catalog");
 const DOCS_DIR = path.join(ROOT, "docs");
-const README_PATH = path.join(ROOT, "README.md");
 const ARCHITECTURE_PATH = path.join(ROOT, "ARCHITECTURE.md");
+const CONTRIBUTING_PATH = path.join(ROOT, "CONTRIBUTING.md");
+const COMMON_README_PATH = path.join(ROOT, "lib", "common", "README.md");
+const E2E_README_PATH = path.join(ROOT, "scripts", "e2e", "README.md");
 const COMMANDS_DOC_PATH = path.join(DOCS_DIR, "commands.md");
 const EXTENSIONS_DOC_PATH = path.join(DOCS_DIR, "extensions.md");
 const TROUBLESHOOTING_DOC_PATH = path.join(DOCS_DIR, "troubleshooting.md");
@@ -65,10 +81,6 @@ const ALLOWED_RECOMMENDED_LICENSES = new Set([
   "0BSD",
 ]);
 
-const README_START_MARKER = "<!-- GENERATED:bundled-extensions:start -->";
-const README_END_MARKER = "<!-- GENERATED:bundled-extensions:end -->";
-const README_COMMANDS_START_MARKER = "<!-- GENERATED:command-reference:start -->";
-const README_COMMANDS_END_MARKER = "<!-- GENERATED:command-reference:end -->";
 const ARCH_FOLDER_START_MARKER = "<!-- GENERATED:folder-layout:start -->";
 const ARCH_FOLDER_END_MARKER = "<!-- GENERATED:folder-layout:end -->";
 const TROUBLESHOOTING_INDEX_START_MARKER =
@@ -697,60 +709,9 @@ function extensionReadmeHasSection(dir, section) {
   return new RegExp(`^##\\s+${section}\\s*$`, "im").test(readme);
 }
 
-function generateReadmeBundledExtensions(manifests) {
-  const sorted = sortByCategoryThenName(manifests);
-
-  const lines = [
-    README_START_MARKER,
-    "For the canonical machine-readable bundle list, see [`catalog/index.json`](./catalog/index.json).",
-    "",
-    "**Default** column: `on` = enabled on install, `opt-in` = disabled on install (enable with `/sf-pi enable <id>`), `always-on` = cannot be disabled.",
-    "",
-    "| Extension | Category | Default | Description |",
-    "|-----------|----------|---------|-------------|",
-  ];
-
-  for (const { dir, manifest } of sorted) {
-    const description = manifest.alwaysActive
-      ? `${manifest.description} (always active)`
-      : manifest.description;
-    lines.push(
-      `| [${manifest.name}](./extensions/${dir}/) | ${manifest.category} | ${defaultLabel(manifest)} | ${description} |`,
-    );
-  }
-
-  lines.push(README_END_MARKER);
-  return lines.join("\n");
-}
-
 // -------------------------------------------------------------------------------------------------
-// Command reference (root README block + docs/commands.md)
+// Command reference (docs/commands.md)
 // -------------------------------------------------------------------------------------------------
-
-function generateCommandReferenceBlock(manifests) {
-  const sorted = sortByCategoryThenName(manifests).filter(
-    ({ manifest }) => Array.isArray(manifest.commands) && manifest.commands.length > 0,
-  );
-
-  const lines = [
-    README_COMMANDS_START_MARKER,
-    "Every slash command exposed by a bundled extension. See each extension README for subcommands and flags.",
-    "",
-    "| Command | Extension | Category |",
-    "|---------|-----------|----------|",
-  ];
-
-  for (const { dir, manifest } of sorted) {
-    for (const command of manifest.commands) {
-      lines.push(
-        `| \`${command}\` | [${manifest.name}](./extensions/${dir}/) | ${manifest.category} |`,
-      );
-    }
-  }
-
-  lines.push(README_COMMANDS_END_MARKER);
-  return lines.join("\n");
-}
 
 function generateCommandsDoc(manifests) {
   const sorted = sortByCategoryThenName(manifests);
@@ -1343,7 +1304,7 @@ function generateAgentOrientationDoc(manifests) {
     "- `docs/commands.md`",
     "- `docs/agent-orientation.md`",
     "- `docs/adr/README.md`",
-    "- generated marker blocks in `README.md` and `ARCHITECTURE.md`",
+    "- generated marker blocks in `ARCHITECTURE.md`, `CONTRIBUTING.md`, `lib/common/README.md`, `scripts/e2e/README.md`, and `docs/troubleshooting.md`",
     "- generated file-structure marker blocks in `extensions/*/README.md`",
     "- normalized `catalog/announcements.json` release entry",
     "",
@@ -1416,9 +1377,14 @@ function readMarkedFile(filePath, startMarker, endMarker) {
 }
 
 function preflightRequiredMarkers(manifests) {
-  readMarkedFile(README_PATH, README_START_MARKER, README_END_MARKER);
-  readMarkedFile(README_PATH, README_COMMANDS_START_MARKER, README_COMMANDS_END_MARKER);
   readMarkedFile(ARCHITECTURE_PATH, ARCH_FOLDER_START_MARKER, ARCH_FOLDER_END_MARKER);
+  readMarkedFile(
+    CONTRIBUTING_PATH,
+    CONTRIBUTOR_SCRIPTS_START_MARKER,
+    CONTRIBUTOR_SCRIPTS_END_MARKER,
+  );
+  readMarkedFile(COMMON_README_PATH, COMMON_MODULES_START_MARKER, COMMON_MODULES_END_MARKER);
+  readMarkedFile(E2E_README_PATH, E2E_HARNESSES_START_MARKER, E2E_HARNESSES_END_MARKER);
   readMarkedFile(
     TROUBLESHOOTING_DOC_PATH,
     TROUBLESHOOTING_INDEX_START_MARKER,
@@ -1438,34 +1404,41 @@ async function replaceMarkedBlock(filePath, label, startMarker, endMarker, rawBl
 
   const before = current.slice(0, startIndex).replace(/\s*$/, "");
   const after = current.slice(endIndex + endMarker.length).replace(/^\s*/, "");
-  const next = `${before}\n\n${generatedBlock}\n\n${after}`;
+  const next = after
+    ? `${before}\n\n${generatedBlock}\n\n${after}`
+    : `${before}\n\n${generatedBlock}\n`;
 
   writeOrCheck(filePath, next, label);
 }
 
-async function writeOrCheckGeneratedMarkdownBlocks(manifests) {
-  await replaceMarkedBlock(
-    README_PATH,
-    "README.md bundled extensions section",
-    README_START_MARKER,
-    README_END_MARKER,
-    generateReadmeBundledExtensions(manifests),
-  );
-
-  await replaceMarkedBlock(
-    README_PATH,
-    "README.md command reference section",
-    README_COMMANDS_START_MARKER,
-    README_COMMANDS_END_MARKER,
-    generateCommandReferenceBlock(manifests),
-  );
-
+async function writeOrCheckGeneratedMarkdownBlocks(manifests, inventories) {
   await replaceMarkedBlock(
     TROUBLESHOOTING_DOC_PATH,
     "docs/troubleshooting.md extension troubleshooting index",
     TROUBLESHOOTING_INDEX_START_MARKER,
     TROUBLESHOOTING_INDEX_END_MARKER,
     generateTroubleshootingIndex(manifests),
+  );
+  await replaceMarkedBlock(
+    CONTRIBUTING_PATH,
+    "CONTRIBUTING.md package script inventory",
+    CONTRIBUTOR_SCRIPTS_START_MARKER,
+    CONTRIBUTOR_SCRIPTS_END_MARKER,
+    renderContributorScriptInventory(inventories.scripts),
+  );
+  await replaceMarkedBlock(
+    COMMON_README_PATH,
+    "lib/common/README.md module inventory",
+    COMMON_MODULES_START_MARKER,
+    COMMON_MODULES_END_MARKER,
+    renderCommonModuleInventory(ROOT),
+  );
+  await replaceMarkedBlock(
+    E2E_README_PATH,
+    "scripts/e2e/README.md harness inventory",
+    E2E_HARNESSES_START_MARKER,
+    E2E_HARNESSES_END_MARKER,
+    renderE2EHarnessInventory(inventories.harnesses),
   );
 }
 
@@ -1540,8 +1513,10 @@ async function writeOrCheckExtensionSidebar(manifests) {
 const manifests = discoverManifests();
 validatePackageExtensions(manifests);
 let adrRecords;
+let documentationInventories;
 try {
   adrRecords = loadAdrRecords(ADR_DIR);
+  documentationInventories = loadDocumentationInventories(ROOT);
 } catch (error) {
   fail(error.message);
 }
@@ -1566,7 +1541,7 @@ writeOrCheck(
   `catalog/index.json — ${manifests.length} extension(s)`,
 );
 
-await writeOrCheckGeneratedMarkdownBlocks(manifests);
+await writeOrCheckGeneratedMarkdownBlocks(manifests, documentationInventories);
 
 await writeOrCheckArchitecture(manifests);
 

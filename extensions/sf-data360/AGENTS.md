@@ -4,14 +4,14 @@ Agent rules for editing this extension. Repo-level rules still apply.
 
 ## Read first
 
-1. `extensions/sf-data360/README.md` — current behavior and safety model
-2. `extensions/sf-data360/index.ts` — extension wiring and Manager-first command routing
-3. `extensions/sf-data360/lib/v2/tools.ts` — public `data360_*` tool registration
-4. `extensions/sf-data360/lib/v2/dispatcher.ts` — current action dispatch and execution
-5. `extensions/sf-data360/lib/v2/action-registry.ts` — generated action-registry reader
-6. `extensions/sf-data360/registry/v2/action-overrides.json` and
+1. `extensions/sf-data360/index.ts` — extension wiring and Manager-first command routing
+2. `extensions/sf-data360/lib/v2/tools.ts` — public `data360_*` tool registration
+3. `extensions/sf-data360/lib/v2/dispatcher.ts` — current action dispatch and execution
+4. `extensions/sf-data360/lib/v2/action-registry.ts` — generated action-registry reader
+5. `extensions/sf-data360/registry/v2/action-overrides.json` and
    `action-rules.json` — curated v2 action ownership and names
-7. `extensions/sf-data360/references/README.md` — progressive reference index
+6. The matching focused Behavior Proof; open `references/README.md` only for
+   task-specific reference depth.
 
 ## File map
 

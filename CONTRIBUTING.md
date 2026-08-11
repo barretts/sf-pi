@@ -78,47 +78,117 @@ pi install .
 
 ## Scripts reference
 
-The most common entry points, grouped by purpose:
+Use focused checks while iterating:
 
-| Purpose                  | Command                                                                      | Check-only variant                      |
-| ------------------------ | ---------------------------------------------------------------------------- | --------------------------------------- |
-| Regenerate catalog       | `npm run generate-catalog`                                                   | `npm run generate-catalog:check`        |
-| Check staged catalog     | —                                                                            | `npm run generate-catalog:check-staged` |
-| Format                   | `npm run format`                                                             | `npm run format:check`                  |
-| SPDX headers             | `npm run spdx`                                                               | `npm run spdx:check`                    |
-| Docs health              | `npm run docs:health`                                                        | `npm run docs:health:check`             |
-| Source architecture      | —                                                                            | `npm run check:architecture`            |
-| Docs site                | `npm run docs:dev` / `npm run docs:preview`                                  | `npm run docs:build`                    |
-| ESLint                   | `npm run eslint:fix`                                                         | `npm run eslint`                        |
-| Type check               | —                                                                            | `npm run check`                         |
-| Command contracts        | —                                                                            | `npm run check:commands`                |
-| Manager-first navigation | —                                                                            | `npm run check:manager-first`           |
-| Run tests                | `npm test`                                                                   | —                                       |
-| Runtime surface contract | `npm run test:runtime-surface`                                               | —                                       |
-| Tests + coverage         | `npm run test:coverage`                                                      | —                                       |
-| Watch tests              | `npm run test:watch`                                                         | —                                       |
-| Lint bundle              | —                                                                            | `npm run lint`                          |
-| Full local validation    | —                                                                            | `npm run validate`                      |
-| CI-like local validation | —                                                                            | `npm run validate:ci`                   |
-| CI artifact guard        | —                                                                            | `bash scripts/check-llm-artifacts.sh`   |
-| Instruction surface      | `npm run instruction-surface:report`                                         | —                                       |
-| Instruction behavior     | `npm run e2e:instruction-behavior -- --model ...`                            | —                                       |
-| Scaffold a new extension | `npm run scaffold -- --id sf-my-ext --category ui --intent "Personalize pi"` | —                                       |
+```bash
+npm run generate-catalog:check
+npm run format:check
+npm run check
+npx vitest run <focused-test-files>
+```
 
-`npm run lint` covers formatting, generated Data 360/catalog drift, docs,
-source-architecture and SPDX policy, shared connection/lifecycle policy, and
-ESLint. `npm run validate` covers the broader local lane: generated checks,
-docs and source-architecture health, site build, formatting and types,
-structural/runtime import checks, and the full test suite. Both validate
-generated artifacts without regenerating them.
-`npm run validate:ci` wraps that lane with the remaining CI-facing lint and
-artifact checks and reasserts docs health.
+Before finishing a normal change, run `npm run lint` and `npm run validate`.
+Use `npm run validate:ci` for the complete local CI-like lane. Generated drift
+is never repaired by a check: run the owning generator explicitly, review its
+full diff, and stage only intended outputs.
 
-If generated drift is reported, run `npm run generate-catalog` explicitly,
-review the complete diff, and stage the intended outputs. The pre-commit check
-uses only the Git index, so coherent partial commits are allowed even when
-unrelated changes remain unstaged. The lint-staged SPDX, Prettier, and ESLint
-fixes remain intentionally mutating for staged files.
+The opt-in live harnesses, target requirements, mutation posture, and artifact
+locations are documented in [`scripts/e2e/README.md`](./scripts/e2e/README.md).
+
+### Complete package script inventory
+
+<!-- GENERATED:contributor-scripts:start -->
+
+This complete inventory is generated from `package.json`; edit that file and run `npm run generate-catalog`.
+
+<details>
+<summary>Show all 55 package scripts</summary>
+
+**Generated sources**
+
+- `npm run generate-catalog`
+- `npm run generate-catalog:check`
+- `npm run generate-catalog:check-staged`
+- `npm run generate-d360-parity`
+- `npm run generate-d360-parity:check`
+- `npm run generate-d360-payload-examples`
+- `npm run generate-d360-payload-examples:check`
+- `npm run generate-d360-references`
+- `npm run generate-d360-references:check`
+- `npm run generate-d360-registry`
+- `npm run generate-d360-registry:check`
+- `npm run generate-d360-v2-actions`
+- `npm run generate-d360-v2-actions:check`
+- `npm run import-d360-upstream`
+- `npm run import-d360-upstream:check`
+
+**Documentation**
+
+- `npm run docs:build`
+- `npm run docs:dev`
+- `npm run docs:health`
+- `npm run docs:health:check`
+- `npm run docs:preview`
+
+**Static checks**
+
+- `npm run check`
+- `npm run check:architecture`
+- `npm run check:boot-path`
+- `npm run check:commands`
+- `npm run check:lifecycle-scripts`
+- `npm run check:manager-first`
+- `npm run check:salesforce-connection`
+- `npm run spdx`
+- `npm run spdx:check`
+
+**Formatting and linting**
+
+- `npm run eslint`
+- `npm run eslint:fix`
+- `npm run format`
+- `npm run format:check`
+- `npm run lint`
+
+**Tests**
+
+- `npm run test`
+- `npm run test:coverage`
+- `npm run test:runtime-surface`
+- `npm run test:watch`
+
+**Validation**
+
+- `npm run validate`
+- `npm run validate:ci`
+
+**E2E and live proofs**
+
+- `npm run e2e:d360-stdm`
+- `npm run e2e:d360-sweep`
+- `npm run e2e:d360-tracing`
+- `npm run e2e:data360-v2`
+- `npm run e2e:instruction-behavior`
+- `npm run e2e:sf-apex-harness`
+- `npm run e2e:sf-browser-harden`
+- `npm run e2e:sf-herdr`
+- `npm run e2e:sf-lwc`
+- `npm run e2e:sf-soql`
+
+**Development utilities**
+
+- `npm run agentscript:versions`
+- `npm run instruction-surface:report`
+- `npm run scaffold`
+
+**Lifecycle hooks**
+
+- `npm run preinstall`
+- `npm run prepare`
+
+</details>
+
+<!-- GENERATED:contributor-scripts:end -->
 
 ## Source of truth
 
@@ -139,9 +209,11 @@ Do not edit these manually:
 - `docs/commands.md`
 - `docs/agent-orientation.md`
 - `docs/adr/README.md`
-- generated sections in `README.md`: bundled extensions and command reference
 - generated troubleshooting index in `docs/troubleshooting.md`
 - generated folder layout in `ARCHITECTURE.md`
+- generated package-script inventory in this guide
+- generated shared-module inventory in `lib/common/README.md`
+- generated E2E harness inventory in `scripts/e2e/README.md`
 - generated file-structure blocks in `extensions/*/README.md`
 - normalized `catalog/announcements.json`
 - validated / normalized `catalog/recommendations.json`
@@ -167,6 +239,23 @@ Avoid:
 - clever abstractions
 - hidden behavior
 - broad utility layers that mix unrelated concerns
+
+## Product and documentation style
+
+Use these names consistently:
+
+- **SF Pi** for the product/bundle; **`sf-pi`** for the package, repository,
+  command namespace, or extension-id prefix.
+- **Pi Runtime** only when naming the defined runtime architecture boundary.
+- **Data 360** for the current product; use “Data Cloud” only when matching an
+  official endpoint, metadata name, or historical compatibility surface.
+- the exact extension display name from its manifest.
+- code formatting for commands, settings keys, action names, and file paths.
+- **Behavior Proof** only for evidence observed through a public seam.
+
+Deliberate public maintainer and third-party attribution is allowed; incidental
+private employee, customer, org, workspace, and internal-source identifiers are
+not. Follow [`docs/public-sanitization.md`](./docs/public-sanitization.md).
 
 ## Adding or changing an extension
 
@@ -215,24 +304,28 @@ The `--category` must be one of the six values defined by
 
 ### Extension README conventions
 
-An extension README is the human behavior and usage page. Keep it focused:
+An extension README is the human behavior and usage page. Use only the
+conditional sections the extension needs, in this order:
 
-- **What It Does** is required and describes current user-visible behavior.
-- Explain how a human starts the extension and document real commands,
-  settings, credentials, safety boundaries, and recovery steps when relevant.
-- The generated **File Structure** block gives only directory roles and root
-  contract files. A small read-first set lives in `docs.primaryFiles`; deeper
-  material is routed through `docs.referenceRoots` indexes.
-- Put editing invariants in `AGENTS.md`, tool ordering/recovery in
-  `AGENT_GUIDE.md`, rationale in ADRs, and test commands in this guide unless an
-  extension has a genuine exception.
-- Do not add event-by-event Runtime Flow, Behavior Matrix, or generic Testing
-  Strategy sections merely to satisfy a template.
+1. **What It Does** — required current user-visible behavior.
+2. **Commands** — required only when the manifest declares commands.
+3. **Configuration** — required only when configurable or credentialed.
+4. **Safety and Data Boundaries** — required when the manifest declares safety boundaries.
+5. **References** — required when the manifest routes deeper references.
+6. **Troubleshooting** — only real symptoms and recovery.
+7. generated **File Structure** — required and final.
 
-When real extension-specific recovery guidance exists, use a
-`## Troubleshooting` section with entries shaped like `**Symptom:**` or
-`**Question?**`. The catalog generator includes those entries in the generated
-troubleshooting index. Omit the section rather than adding placeholders.
+Feature-specific human sections may appear between those anchors. Do not add
+empty placeholders. Put editing invariants in `AGENTS.md`, tool ordering and
+recovery in `AGENT_GUIDE.md`, durable rationale in ADRs, and test commands in
+this guide unless an extension has a genuine exception. Do not add architecture,
+Runtime Flow, Behavior Matrix, Release Checks, or generic Testing Strategy
+sections merely to narrate source structure.
+
+The generated File Structure block gives directory roles and root contract
+files. `docs.primaryFiles` owns the small implementation-first route; deeper
+material is routed through `docs.referenceRoots` indexes. Troubleshooting entries
+shaped like `**Symptom:**` or `**Question?**` also feed the generated site index.
 
 ## Proposing a recommended extension
 

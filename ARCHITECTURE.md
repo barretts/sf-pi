@@ -74,7 +74,7 @@ ones agents and maintainers most often need:
 
 | Script                                    | Purpose                                                                                                              |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `scripts/generate-catalog.mjs`            | Regenerates catalog files, generated docs, and generated README marker blocks.                                       |
+| `scripts/generate-catalog.mjs`            | Regenerates catalog/docs pages, routed indexes, contributor inventories, and declared marker blocks.                 |
 | `scripts/check-staged-catalog.mjs`        | Exports the Git index to a temporary root and checks its generated catalog without mutating local state.             |
 | `scripts/check-command-contracts.mjs`     | Checks safe slash-command wrapping and reserved command-panel filenames.                                             |
 | `scripts/docs-health.mjs`                 | Checks factual doc drift contracts and the tracked public-text corpus.                                               |
@@ -124,9 +124,10 @@ When an agent (or human) needs to change something, start here:
 | Generated ADR lifecycle index                   | `docs/adr/README.md` — **generated, do not edit**                               |
 | VitePress documentation site                    | `docs/.vitepress/`, `docs/index.md`, and curated docs pages                     |
 | Contributor site entry point                    | `docs/contributing.md`                                                          |
-| Generated bundled-extension table               | Inside `README.md` between `GENERATED:bundled-extensions` markers               |
-| Generated command-reference block               | Inside `README.md` between `GENERATED:command-reference` markers                |
 | Generated folder layout                         | Inside `ARCHITECTURE.md` between `GENERATED:folder-layout` markers              |
+| Generated contributor script inventory          | Inside `CONTRIBUTING.md` from `package.json`                                    |
+| Generated shared-module inventory               | Inside `lib/common/README.md` from `lib/common/`                                |
+| Generated E2E harness inventory                 | Inside `scripts/e2e/README.md` from package scripts and its harness manifest    |
 | Generated troubleshooting index                 | Inside `docs/troubleshooting.md` generated marker block                         |
 | Generated extension file maps                   | Inside `extensions/*/README.md` between `GENERATED:file-structure` markers      |
 | Hand-maintained registry types                  | `catalog/types.ts`                                                              |
@@ -188,8 +189,9 @@ Each extension declares its identity in `manifest.json`:
 The catalog generator reads these files and produces:
 
 - `catalog/registry.ts` — TypeScript registry used at runtime
-- `catalog/index.json` — Machine-readable index for agents and search
-- the bundled-extension table in `README.md`
+- `catalog/index.json` — machine-readable index for agents and search
+- generated extension browse/detail pages, command and agent-orientation pages,
+  sidebars, routed indexes, and contributor-facing structural inventories
 
 **Never edit generated files manually.** Run `npm run generate-catalog`.
 
@@ -278,7 +280,7 @@ agents and humans can follow the behavior without reading every file.
 - [ ] `npm run generate-catalog` succeeds
 - [ ] `npm run check` passes
 - [ ] `npm test` passes
-- [ ] `README.md` generated bundled-extension section still looks correct after `npm run generate-catalog`
+- [ ] generated extension detail page looks correct after `npm run generate-catalog`
 - [ ] `AGENTS.md` / `CONTRIBUTING.md` guidance still matches the repo if structure or workflow changed
 
 ## Conventions

@@ -5,12 +5,14 @@
  * This script intentionally checks factual, easy-to-drift documentation
  * contracts instead of trying to judge prose quality. It is a guardrail for
  * agents and humans: generated blocks stay generated, extension READMEs retain
- * a purpose statement, and tracked public text avoids obvious private artifacts.
+ * their conditional human-facing sections, and tracked public text avoids
+ * obvious private artifacts.
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanTrackedPublicArtifacts } from "./lib/public-artifact-safety.mjs";
+import { validateExtensionReadmeContract } from "./lib/readme-contract.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,8 +20,6 @@ const ROOT = path.resolve(__dirname, "..");
 const EXTENSIONS_DIR = path.join(ROOT, "extensions");
 const CHECK_ONLY = process.argv.includes("--check");
 const JSON_MODE = process.argv.includes("--json");
-
-const REQUIRED_README_SECTIONS = ["What It Does"];
 
 const GENERATED_FILES = [
   "catalog/index.json",
@@ -70,41 +70,6 @@ function checkReadmePiVersion() {
   }
 }
 
-function checkRecommendationTable() {
-  const recommendations = readJson("catalog/recommendations.json");
-  const defaultBundle = recommendations.bundles.find((bundle) => bundle.id === "default");
-  if (!defaultBundle) return fail("catalog/recommendations.json", "Missing default bundle.");
-  const readme = readText("README.md");
-  const word = numberWord(defaultBundle.items.length);
-  if (!readme.includes(`All ${word} packages`)) {
-    fail("README.md", `Default bundle prose should say "All ${word} packages".`);
-  }
-  for (const itemId of defaultBundle.items) {
-    if (!readme.includes(`\`${itemId}\``) && !readme.includes(`**[\`${itemId}\``)) {
-      fail("README.md", `Recommended bundle item ${itemId} is missing from the table.`);
-    }
-  }
-}
-
-function numberWord(value) {
-  const words = [
-    "zero",
-    "one",
-    "two",
-    "three",
-    "four",
-    "five",
-    "six",
-    "seven",
-    "eight",
-    "nine",
-    "ten",
-    "eleven",
-    "twelve",
-  ];
-  return words[value] ?? String(value);
-}
-
 function checkGeneratedFilesExist() {
   for (const file of GENERATED_FILES) {
     if (!existsSync(path.join(ROOT, file))) fail(file, "Generated file is missing.");
@@ -120,10 +85,9 @@ function checkExtensionReadmes() {
       continue;
     }
     const readme = readText(readmePath);
-    for (const section of REQUIRED_README_SECTIONS) {
-      if (!new RegExp(`^##\\s+${escapeRegex(section)}\\s*$`, "m").test(readme)) {
-        fail(readmePath, `Missing required section: ## ${section}`);
-      }
+    const manifest = readJson(`${base}/manifest.json`);
+    for (const message of validateExtensionReadmeContract(readme, manifest)) {
+      fail(readmePath, message);
     }
     if (!readme.includes("<!-- GENERATED:file-structure:start -->")) {
       fail(readmePath, "Missing generated file-structure start marker.");
@@ -132,7 +96,6 @@ function checkExtensionReadmes() {
       fail(readmePath, "Missing generated file-structure end marker.");
     }
 
-    const manifest = readJson(`${base}/manifest.json`);
     if (!new RegExp(`^#\\s+${escapeRegex(manifest.name)}\\s*$`, "m").test(readme)) {
       fail(readmePath, `H1 must match manifest name: # ${manifest.name}`);
     }
@@ -174,7 +137,6 @@ function escapeRegex(value) {
 
 function run() {
   checkReadmePiVersion();
-  checkRecommendationTable();
   checkGeneratedFilesExist();
   checkExtensionReadmes();
   checkChangelog();

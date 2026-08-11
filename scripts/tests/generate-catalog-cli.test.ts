@@ -55,27 +55,26 @@ function createExtension(directory: string, manifest: Manifest): void {
 }
 
 function writePackage(entries: unknown = ["./extensions/alpha/index.ts"]): void {
-  writeJson("package.json", { pi: { extensions: entries } });
+  writeJson("package.json", { scripts: {}, pi: { extensions: entries } });
 }
 
 function createFixture(): void {
   writePackage();
   createExtension("alpha", { ...BASE_MANIFEST });
+  writeText("README.md", "# Fixture\n");
   writeText(
-    "README.md",
-    [
-      "# Fixture",
-      "",
-      "<!-- GENERATED:bundled-extensions:start -->",
-      "stale",
-      "<!-- GENERATED:bundled-extensions:end -->",
-      "",
-      "<!-- GENERATED:command-reference:start -->",
-      "stale",
-      "<!-- GENERATED:command-reference:end -->",
-      "",
-    ].join("\n"),
+    "CONTRIBUTING.md",
+    "# Contributing\n\n<!-- GENERATED:contributor-scripts:start -->\nstale\n<!-- GENERATED:contributor-scripts:end -->\n",
   );
+  writeText(
+    "lib/common/README.md",
+    "# Common\n\n<!-- GENERATED:common-modules:start -->\nstale\n<!-- GENERATED:common-modules:end -->\n",
+  );
+  writeText(
+    "scripts/e2e/README.md",
+    "# E2E\n\n<!-- GENERATED:e2e-harnesses:start -->\nstale\n<!-- GENERATED:e2e-harnesses:end -->\n",
+  );
+  writeJson("scripts/e2e/harnesses.json", { schemaVersion: 1, harnesses: [] });
   writeText(
     "ARCHITECTURE.md",
     [
@@ -189,6 +188,27 @@ describe("generate-catalog CLI", () => {
     const detailPath = path.join(root, "docs/extensions/alpha.md");
     expect(existsSync(detailPath)).toBe(true);
     expect(readFileSync(detailPath, "utf8")).not.toContain("## Troubleshooting");
+    expect(readFileSync(path.join(root, "CONTRIBUTING.md"), "utf8")).toContain(
+      "Show all 0 package scripts",
+    );
+    expect(readFileSync(path.join(root, "lib/common/README.md"), "utf8")).toContain(
+      "This complete top-level inventory",
+    );
+    expect(readFileSync(path.join(root, "scripts/e2e/README.md"), "utf8")).toContain(
+      "scripts/e2e/harnesses.json",
+    );
+
+    const check = runGenerator(["--check"]);
+    expect(check.status, output(check)).toBe(0);
+  });
+
+  it("fails closed when an E2E package script lacks declared safety metadata", () => {
+    writeText("scripts/e2e/missing.ts", "export {};\n");
+    writeJson("package.json", {
+      scripts: { "e2e:missing": "node scripts/e2e/missing.ts" },
+      pi: { extensions: ["./extensions/alpha/index.ts"] },
+    });
+    expectFailure("package.json e2e:* scripts must equal scripts/e2e/harnesses.json scripts");
   });
 
   it("fails closed when an extension manifest is missing", () => {

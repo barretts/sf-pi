@@ -22,14 +22,22 @@ Do not commit or publish:
   identifiers, or customer-specific aliases
 - Slack workspace, channel, user, file, canvas, or permalink identifiers from a
   real workspace
-- customer names, employee names, account names, project codenames, or other
-  identifying details
+- customer names, incidental/private employee identities, account names, project
+  codenames, or other identifying details
 - private/internal hostnames, unpublished service details, private repository
   URLs, internal ticket/case IDs, or internal documentation links
 - screenshots or browser evidence that contains customer, employee, org, Slack,
   or internal service data
 - internal-only examples copied from Slack, customer engagements, support cases,
   or private docs
+
+## Deliberate public attribution
+
+Consented, already-public maintainer attribution, repository governance contacts,
+CODEOWNERS entries, and third-party credits are allowed when they serve a clear
+project purpose. Do not infer consent from a private source or reuse names from
+customer/internal material. Keep incidental identities out of examples,
+diagnostics, screenshots, test data, and copied discussion text.
 
 ## Prefer generic examples
 
