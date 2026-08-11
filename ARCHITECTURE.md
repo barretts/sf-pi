@@ -155,27 +155,21 @@ extension without navigating multiple top-level directories.
 
 ### Per-extension `AGENTS.md` and `ROADMAP.md`
 
-A few extensions carry their own `AGENTS.md` with editing rules specific
-to that extension, and/or a `ROADMAP.md` for phased work. These are
-**optional** and only worth adding when the extension has non-obvious
-rules or multi-phase plans.
+Extension `AGENTS.md` files contain non-obvious editing invariants. An extension
+`ROADMAP.md` is rarer: it exists only while concrete unresolved outcomes have a
+current owner and observable completion condition. It contains no shipped
+ledger or speculative feature inventory and is deleted when its active backlog
+is empty.
 
-Current examples:
+Read `AGENTS.md` before editing its extension. Read a roadmap only when the task
+concerns one of its active outcomes.
 
-- `extensions/sf-slack/AGENTS.md` — HITL rules, file map for 9 tools
-- `extensions/sf-llm-gateway/AGENTS.md` — unified-provider + two-transport rules
-- `extensions/sf-skills/ROADMAP.md` — Phase 2 work
+### Behavior and manifest authority
 
-When editing an extension that has one, read it **before** `index.ts`.
-
-### manifest.json is the source of truth
-
-Repo-level source-of-truth order:
-
-1. `extensions/<id>/manifest.json`
-2. generated `catalog/index.json` and `catalog/registry.ts`
-3. per-extension `README.md`
-4. root `README.md` summary
+Runtime code and Behavior Proofs define implemented behavior. The extension
+manifest declares the attested public routing and documentation contract;
+generated catalogs project that contract. The extension README owns human
+behavior and usage guidance.
 
 Each extension declares its identity in `manifest.json`:
 

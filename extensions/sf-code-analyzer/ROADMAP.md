@@ -1,42 +1,31 @@
 # SF Code Analyzer Roadmap
 
-## Shipped
+Only one concrete hardening gap remains. The implementation already supports
+grouped local scans, optional ApexGuru execution, repeated-finding loop stops,
+broader recipe guidance, transcript rows, and report artifacts. Pure helper
+coverage exists; the remaining gap is proof through the deferred orchestration
+interface itself.
 
-- CLI-first `code_analyzer` tool and `/sf-code-analyzer` command panel.
-- Explicit `doctor`, `run`, `rules`, `config`, `last_report`, `apexguru`, `apexguru_setup_help`, and `recipes` actions.
-- Deferred post-agent auto-scan for changed Apex, JavaScript/TypeScript, and Flow metadata files.
-- Grouped local auto-scans by selector profile with friendly transcript rows.
-- Broader scan suggestions and scan recipes, including Herdr handoff metadata.
-- ApexGuru readiness cache, explicit ApexGuru action, setup guidance, and SF Browser handoff runbook.
-- Project/global/default automation settings.
-- Output modes and report artifact filtering.
-- TDD seams for recipes, auto-scan planning, auto-scan follow-up, transcript formatting, settings, report filters, ApexGuru readiness, and basic orchestration.
+## Now — deferred auto-scan orchestration proofs
 
-## Pending hardening
+Add focused tests through `registerDeferredCodeAnalyzerAutoScan` that prove:
 
-### Auto-scan orchestration tests
+- one local scan group can fail without discarding successful groups, findings,
+  or report paths;
+- ApexGuru runs after local groups only when enabled and ready, and stale or
+  unavailable readiness produces an explicit skip;
+- an unchanged violation signature stops the automatic repair loop without
+  queuing another follow-up;
+- broader validation guidance produced by real group execution reaches the
+  queued follow-up.
 
-Add focused tests for the remaining orchestration edge cases:
-
-- One local scan group fails while another succeeds; successful findings and report paths are preserved.
-- ApexGuru runs after local groups when readiness is enabled.
-- ApexGuru is skipped when readiness is unavailable or stale.
-- Repeated violation signatures stop the automatic repair loop.
-- Broader validation guidance appears in the LLM follow-up when findings exist.
-
-### User documentation polish
-
-Keep the README and generated docs clear about:
-
-- automatic vs explicit scans;
-- `Recommended` vs `all` rules;
-- scan recipes and Herdr handoff;
-- ApexGuru availability and setup limitations;
-- output modes and report artifacts;
-- project/global automation settings.
+Completion requires behavior assertions in
+`tests/auto-scan-orchestration.test.ts`; source-string checks or isolated
+formatter tests do not satisfy this item.
 
 ## Non-goals
 
-- Shipping Code Analyzer rules or engine packages inside SF Pi.
-- Automatically running broad or noisy recipes such as `all`, `AppExchange`, `cpd`, or `sfge` from the deferred auto-scan path.
-- Hiding browser automation inside `sf-code-analyzer`; SF Browser work must remain visible and user-approved.
+- Bundling Code Analyzer engines or rules inside SF Pi.
+- Automatically running broad/noisy recipes such as `all`, `AppExchange`,
+  `cpd`, or `sfge` from deferred auto-scan.
+- Hiding SF Browser setup work inside Code Analyzer.

@@ -5,12 +5,12 @@ Repo-level rules still apply; see root `AGENTS.md`.
 
 ## Read first
 
-1. `extensions/sf-guardrail/README.md` — feature list and flow diagram
+1. `extensions/sf-guardrail/README.md` — current human behavior and usage
 2. `extensions/sf-guardrail/CONTEXT.md` — canonical safety language
-3. `extensions/sf-guardrail/ROADMAP.md` — unresolved work and non-goals
-4. `extensions/sf-guardrail/index.ts` — event wiring
-5. `extensions/sf-guardrail/lib/types.ts` — schema boundary
-6. The specific `lib/*.ts` module you're editing
+3. `extensions/sf-guardrail/index.ts` — event wiring
+4. `extensions/sf-guardrail/lib/types.ts` — schema boundary
+5. The specific `lib/*.ts` module you're editing
+6. The matching focused test
 
 ## File map (what lives where)
 
@@ -99,11 +99,11 @@ One-file-per-concern split:
 
 - Not a code reviewer — sf-lsp covers diagnostics.
 - Not a secret scanner — gitleaks handles that in CI.
-- No path-access gate (allow/ask/block outside cwd). sfdx projects touch
-  `~/.sf/`, `~/.sfdx/`, and shared libs routinely; a blanket path gate
-  would be hostile. Revisit as opt-in later.
-- No opt-in LLM command explainer in MVP. It is a legitimate follow-up
-  once we have telemetry on how often users accept without context.
+- No path-access gate (allow/ask/block outside cwd). Salesforce projects touch
+  `~/.sf/`, `~/.sfdx/`, and shared libraries routinely; changing this requires
+  a separate trust-aware design and ADR.
+- No LLM command explainer. Guardrail decisions and approval copy remain
+  deterministic and do not depend on another model call or telemetry.
 - No project-local guardrail preference layer in MVP. Routine preferences
   are global Pi settings under `sfPi.guardrail`; project-local weakening is
   deferred with project-local rule overrides. Adding either means plumbing

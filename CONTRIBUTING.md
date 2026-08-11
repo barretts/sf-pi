@@ -265,8 +265,9 @@ conventions) should also add an `AGENTS.md` at `extensions/<id>/AGENTS.md`
 with a short file map and any editing rules. See
 [`extensions/sf-slack/AGENTS.md`](./extensions/sf-slack/AGENTS.md) and
 [`extensions/sf-llm-gateway/AGENTS.md`](./extensions/sf-llm-gateway/AGENTS.md)
-for examples. Phased roadmaps live in the extension's own `ROADMAP.md`
-(see [`extensions/sf-skills/ROADMAP.md`](./extensions/sf-skills/ROADMAP.md)).
+for examples. Add an extension `ROADMAP.md` only for concrete unresolved
+outcomes with observable completion conditions. Remove shipped history and
+delete the roadmap when no active outcome remains.
 
 Scaffold a new extension with:
 

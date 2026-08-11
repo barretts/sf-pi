@@ -11,8 +11,8 @@
  * id "sf-deploy-prod" replaces the bundled one wholesale. Routine bundled-rule
  * behavior is overlaid from Pi settings so the manager surface reflects runtime.
  *
- * Project-level overrides / project-local guardrail preferences are deferred.
- * See ROADMAP.md.
+ * Project-level overrides / project-local Guardrail weakening remain deferred
+ * by ADR 0041 and ADR 0049.
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";

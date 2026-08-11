@@ -12,8 +12,7 @@ compile errors immediately — before moving on to the next task — and can
 self-correct in the same turn.
 
 The UI layer is pure presentation: **nothing extra is sent to the LLM** beyond
-the existing `LSP feedback: …` text block. See [`ROADMAP.md`](./ROADMAP.md)
-for shipped phases and future work.
+the existing `LSP feedback: …` text block.
 
 **Why no in-card panel on the edit/write tool itself?** Pi refuses to load any
 extension that re-registers a tool name already claimed by another extension
@@ -105,7 +104,6 @@ extensions/sf-lsp/
   index.ts                    ← Pi extension entry point
   manifest.json               ← source-of-truth extension metadata
   README.md                   ← human behavior and usage
-  ROADMAP.md                  ← unresolved extension work
 ```
 
 <!-- GENERATED:file-structure:end -->

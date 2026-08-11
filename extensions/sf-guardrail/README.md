@@ -97,8 +97,8 @@ Advanced rule overrides remain in `<globalAgentDir>/sf-guardrail/rules.json`
 custom patterns or full bundled-rule replacement by stable rule `id`.
 
 Effective config is resolved in this order: bundled defaults, advanced override
-JSON, then Pi settings for routine preferences. Project-local guardrail
-weakening remains deferred — see `ROADMAP.md`.
+JSON, then Pi settings for routine preferences. Project-local Guardrail
+weakening remains deferred by ADR 0041 and ADR 0049.
 
 ## Commands
 
@@ -156,7 +156,6 @@ extensions/sf-guardrail/
   index.ts                    ← Pi extension entry point
   manifest.json               ← source-of-truth extension metadata
   README.md                   ← human behavior and usage
-  ROADMAP.md                  ← unresolved extension work
   SF_GUARDRAIL_DEFAULTS.json  ← bundled Guardrail rule defaults
 ```
 
