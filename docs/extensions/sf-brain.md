@@ -15,10 +15,10 @@ Injects the Salesforce Engineering Constitution and tiny disabled-capability rou
 
 This extension is enabled by default and works automatically.
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-brain
+/sf-pi open sf-brain
 /sf-pi enable sf-brain
 /sf-pi disable sf-brain
 ```

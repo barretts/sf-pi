@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-herdr
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-herdr
+/sf-pi open sf-herdr
 /sf-pi enable sf-herdr
 /sf-pi disable sf-herdr
 ```

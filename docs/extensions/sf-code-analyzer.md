@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-code-analyzer
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-code-analyzer
+/sf-pi open sf-code-analyzer
 /sf-pi enable sf-code-analyzer
 /sf-pi disable sf-code-analyzer
 ```

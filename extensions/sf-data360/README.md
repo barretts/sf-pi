@@ -204,7 +204,9 @@ the matching `data360_harmonize` / `data360_prepare` get action.
 **`data360_*` tools are missing:** `sf-data360` is enabled by default, so first check whether it was explicitly disabled in `/sf-pi`, then run `/reload`. The extension registers tools directly and does not contribute Agent Skills.
 
 **A mutating call is blocked in headless mode:** Re-run with `dry_run: true` and
-review the resolved request. If automation should be allowed, set
-`SF_D360_ALLOW_HEADLESS_WRITE=1` for that process.
+review the resolved request. If unattended automation deliberately accepts
+Guardrail-gated calls, configure that process outside the tool call with
+`SF_GUARDRAIL_ALLOW_HEADLESS=1` and review the resulting Guardrail audit entries.
+Hard blocks still apply.
 
 **A versioned path is rejected:** Pass only a versionless resource such as `/ssot/data-model-objects`. The shared Salesforce Connection Module uses the target org's highest advertised version by default. If discovery fails, it uses explicit `org-api-version`; with neither available, it fails before the business request rather than using API 50.

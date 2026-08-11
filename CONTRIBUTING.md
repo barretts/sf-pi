@@ -1,142 +1,58 @@
-# Contributing Guide For sf-pi
+# Contributing to SF Pi
 
-This page lists the operational governance model of this project, as well as
-the recommendations and requirements for how to best contribute to `sf-pi`.
-We strive to obey these as best as possible. As always, thanks for
-contributing – we hope these guidelines make it easier and shed some light on
-our approach and processes.
+Thanks for contributing to `sf-pi`. This guide owns local setup, validation,
+extension changes, pull requests, and releases. Project roles and decisions live
+in [`GOVERNANCE.md`](./GOVERNANCE.md); vulnerability reporting lives in
+[`SECURITY.md`](./SECURITY.md). Please also follow the
+[Code of Conduct](./CODE_OF_CONDUCT.md) and
+[public-sanitization policy](./docs/public-sanitization.md).
 
-# Governance Model
+## Before starting
 
-## Community Based
+Search existing [Issues](https://github.com/salesforce/sf-pi/issues) and
+[Discussions](https://github.com/salesforce/sf-pi/discussions). Open an issue for
+a substantial bug or feature before investing in a broad implementation. Small
+documentation corrections, focused tests, and obvious fixes can go directly to
+a pull request.
 
-The intent and goal of open sourcing this project is to increase the
-contributor and user base. The governance model is one where new project
-leads (`admins`) will be added to the project based on their contributions
-and efforts, a so-called "do-acracy" or "meritocracy" similar to that used
-by all Apache Software Foundation projects.
+The active [roadmap](./ROADMAP.md) contains only unresolved repository outcomes.
+Runtime code and Behavior Proofs remain authoritative for implemented behavior.
 
-# Getting started
+## Contribution expectations
 
-Project discussion happens in [GitHub
-Issues](https://github.com/salesforce/sf-pi/issues) and
-[Discussions](https://github.com/salesforce/sf-pi/discussions). Please also
-take a look at the project [roadmap](ROADMAP.md) to see where we are headed.
+- Keep changes small, focused, and consistent with existing style.
+- Use atomic Conventional Commits and reference related issues when useful.
+- Comment non-obvious contracts and rationale, not obvious syntax.
+- Add or update Behavior Proofs for behavioral changes and run the relevant
+  focused checks.
+- Minimize dependencies and justify any new one.
+- Keep public code, docs, examples, tests, and diagnostics source-agnostic and
+  free of secrets or private identifiers.
+- Use a pull request unless the documented maintainer fast path applies.
 
-# Issues, requests & ideas
+## Creating a pull request
 
-Use GitHub Issues to submit issues, enhancement requests, and discuss ideas.
+1. Fork and clone the repository, then create a focused branch.
+2. Make the smallest change that solves the documented problem.
+3. Run focused checks while iterating and the broad validation appropriate to
+   the change.
+4. Push the branch and open a pull request against `main`.
+5. Complete the pull request template with tests, generated artifacts, security
+   impact, and residual risks.
+6. Sign the Salesforce CLA when prompted.
 
-### Bug Reports and Fixes
+Sync the fork before opening or updating the pull request. Avoid unrelated
+formatting or refactors.
 
-- If you find a bug, please search for it in the
-  [Issues](https://github.com/salesforce/sf-pi/issues), and if it isn't
-  already tracked,
-  [create a new issue](https://github.com/salesforce/sf-pi/issues/new).
-  Fill out the "Bug Report" section of the issue template. Even if an Issue
-  is closed, feel free to comment and add details, it will still be
-  reviewed.
-- Issues that have already been identified as a bug (note: able to
-  reproduce) will be labelled `bug`.
-- If you'd like to submit a fix for a bug, [send a Pull
-  Request](#creating-a-pull-request) and mention the Issue number.
-  - Include tests that isolate the bug and verify that it was fixed.
+## CLA and license
 
-### New Features
+Contributions require the one-time
+[Salesforce CLA](https://cla.salesforce.com/sign-cla) and are accepted under the
+project's [Apache License 2.0](./LICENSE.txt).
 
-- If you'd like to add new functionality to this project, describe the
-  problem you want to solve in a [new
-  Issue](https://github.com/salesforce/sf-pi/issues/new).
-- Issues that have been identified as a feature request will be labelled
-  `enhancement`.
-- If you'd like to implement the new feature, please wait for feedback from
-  the project maintainers before spending too much time writing the code.
-  In some cases, `enhancement`s may not align well with the project
-  objectives at the time.
+## Development setup
 
-### Tests, Documentation, Miscellaneous
-
-- If you'd like to improve the tests, make the documentation clearer, have
-  an alternative implementation of something that may have advantages over
-  the way it's currently done, or you have any other change, we would be
-  happy to hear about it!
-  - If it's a trivial change, go ahead and [send a Pull
-    Request](#creating-a-pull-request) with the changes you have in mind.
-  - If not, [open an Issue](https://github.com/salesforce/sf-pi/issues/new)
-    to discuss the idea first.
-
-If you're new to our project and looking for some way to make your first
-contribution, look for Issues labelled `good first contribution`.
-
-# Contribution Checklist
-
-- [x] Clean, simple, well-styled code
-- [x] Commits should be atomic and messages must be descriptive. Related
-      issues should be mentioned by Issue number.
-- [x] Comments
-  - Module-level & function-level comments.
-  - Comments on complex blocks of code or algorithms (include references
-    to sources).
-- [x] Tests
-  - The test suite must pass.
-  - Increase code coverage, not the reverse.
-- [x] Dependencies
-  - Minimize number of dependencies.
-  - Prefer Apache 2.0, BSD3, MIT, ISC, and MPL licenses.
-- [x] Reviews
-  - Changes must be approved via peer code review.
-
-# Creating a Pull Request
-
-1. **Ensure the bug/feature was not already reported** by searching on
-   GitHub under Issues. If none exists, create a new issue so that other
-   contributors can keep track of what you are trying to add/fix and offer
-   suggestions (or let you know if there is already an effort in
-   progress).
-2. **Clone** the forked repo to your machine.
-3. **Create** a new branch to contain your work (e.g. `git checkout -b
-fix-issue-11`).
-4. **Commit** changes to your own branch.
-5. **Push** your work back up to your fork.
-6. **Submit** a Pull Request against the `main` branch and refer to the
-   issue(s) you are fixing. Try not to pollute your pull request with
-   unintended changes. Keep it simple and small.
-7. **Sign** the Salesforce CLA (you will be prompted to do so when
-   submitting the Pull Request).
-
-> **NOTE**: Be sure to [sync your
-> fork](https://help.github.com/articles/syncing-a-fork/) before making a
-> pull request.
-
-# Contributor License Agreement ("CLA")
-
-In order to accept your pull request, we need you to submit a CLA. You only
-need to do this once to work on any of Salesforce's open source projects.
-
-Complete your CLA here: <https://cla.salesforce.com/sign-cla>
-
-# Issues
-
-We use GitHub issues to track public bugs. Please ensure your description
-is clear and has sufficient instructions to be able to reproduce the issue.
-
-# Code of Conduct
-
-Please follow our [Code of Conduct](CODE_OF_CONDUCT.md).
-
-# License
-
-By contributing your code, you agree to license your contribution under the
-terms of our project [LICENSE](LICENSE.txt) and to sign the [Salesforce
-CLA](https://cla.salesforce.com/sign-cla).
-
----
-
-# Development setup
-
-Everything below is specific to working on `sf-pi` locally.
-
-## Clone and install
+### Clone and install
 
 ```bash
 git clone https://github.com/salesforce/sf-pi.git

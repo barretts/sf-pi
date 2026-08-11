@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-skills
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-skills
+/sf-pi open sf-skills
 /sf-pi enable sf-skills
 /sf-pi disable sf-skills
 ```

@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-tldraw
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-tldraw
+/sf-pi open sf-tldraw
 /sf-pi enable sf-tldraw
 /sf-pi disable sf-tldraw
 ```

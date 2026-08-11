@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-data360
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-data360
+/sf-pi open sf-data360
 /sf-pi enable sf-data360
 /sf-pi disable sf-data360
 ```

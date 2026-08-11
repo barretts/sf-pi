@@ -146,6 +146,18 @@ describe("generated extension documentation contract", () => {
     }
   });
 
+  it("routes package-state inspection through the supported Manager deep link", () => {
+    for (const manifest of readManifests().filter(
+      (candidate) => candidate.id !== "sf-pi-manager",
+    )) {
+      const detail = readFileSync(path.join(EXTENSION_DETAIL_DIR, `${manifest.id}.md`), "utf8");
+      expect(detail, `${manifest.id}: Manager deep link`).toContain(`/sf-pi open ${manifest.id}`);
+      expect(detail, `${manifest.id}: unsupported scoped status`).not.toContain(
+        `/sf-pi status ${manifest.id}`,
+      );
+    }
+  });
+
   it("resolves unique extension-relative primaryFiles within the repository root", () => {
     for (const manifest of readManifests()) {
       const extensionRoot = path.join(EXTENSIONS_DIR, manifest.id);

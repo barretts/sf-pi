@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-apex
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-apex
+/sf-pi open sf-apex
 /sf-pi enable sf-apex
 /sf-pi disable sf-apex
 ```

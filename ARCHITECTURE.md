@@ -146,7 +146,7 @@ Each extension lives in `extensions/<id>/` with everything co-located:
 
 - `index.ts` — Pi entry point (exports `default function(pi: ExtensionAPI)`)
 - `manifest.json` — Metadata that drives the catalog generator
-- `README.md` — Architecture and usage documentation
+- `README.md` — current human behavior and usage documentation
 - `lib/` — Implementation modules (imported by index.ts)
 - `tests/` — Co-located tests (vitest)
 
@@ -191,21 +191,21 @@ The catalog generator reads these files and produces:
 
 **Never edit generated files manually.** Run `npm run generate-catalog`.
 
-### Manifest schema
+### Manifest contract
 
-| Field            | Type                                                                                   | Required | Description                                                                       |
-| ---------------- | -------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------- |
-| `id`             | string                                                                                 | ✅       | Unique slug, must match directory name                                            |
-| `name`           | string                                                                                 | ✅       | Human-readable display name                                                       |
-| `description`    | string                                                                                 | ✅       | One-line description                                                              |
-| `category`       | `"manager"` \| `"provider"` \| `"agent-tool"` \| `"safety"` \| `"assistive"` \| `"ui"` | ✅       | Category for grouping                                                             |
-| `defaultEnabled` | boolean                                                                                | ✅       | Enabled on first install?                                                         |
-| `alwaysActive`   | boolean                                                                                |          | Cannot be disabled                                                                |
-| `configurable`   | boolean                                                                                |          | Has a config panel (requires `lib/config-panel.ts` exporting `createConfigPanel`) |
-| `commands`       | string[]                                                                               |          | Slash commands shown in the manager detail page                                   |
-| `providers`      | string[]                                                                               |          | Providers/auth integrations shown in manager details                              |
-| `tools`          | string[]                                                                               |          | Tool names shown in the manager detail page                                       |
-| `events`         | string[]                                                                               |          | Pi runtime hooks shown in the manager detail page                                 |
+The hand-maintained `ExtensionManifest` type in [`catalog/types.ts`](./catalog/types.ts)
+defines the complete schema. The catalog generator validates every discovered
+manifest before writing output, including:
+
+- identity, display name, description, category, maturity, and default state;
+- declared commands, providers, tools, events, and configurability;
+- required `docs.intentGroup`, `docs.summary`, and `docs.primaryFiles`;
+- explicit editing-rules, operating-guide, and context-glossary roles when the
+  corresponding files exist;
+- an operating guide for every tool-owning extension.
+
+Do not maintain a second field-by-field schema table in prose. Update the type,
+generator validation, fixtures, and affected manifests together.
 
 ### Enable/disable mechanism
 
@@ -268,7 +268,7 @@ agents and humans can follow the behavior without reading every file.
 - [ ] `manifest.json` has all required fields
 - [ ] `manifest.json` `id` matches the directory name
 - [ ] `index.ts` exports a default function accepting `ExtensionAPI`
-- [ ] `README.md` exists with behavior matrix and file structure
+- [ ] `README.md` explains current human behavior and contains the generated file structure
 - [ ] `tests/` has at least a smoke test (module export check)
 - [ ] `npm run generate-catalog` succeeds
 - [ ] `npm run check` passes
@@ -286,11 +286,11 @@ agents and humans can follow the behavior without reading every file.
 
 ### Behavior contracts
 
-Every `index.ts` starts with a block comment documenting:
-
-- What the extension does
-- When it activates / stays silent
-- A behavior matrix (event → result table)
+Keep public registration and lifecycle behavior easy to locate from `index.ts`.
+Document non-obvious activation, silence, ordering, and recovery contracts in
+focused comments, role-specific docs, and Behavior Proofs. Do not require a
+repeated event-by-event matrix when the public seam and tests already make the
+behavior clear.
 
 ### Split by responsibility
 
@@ -358,7 +358,7 @@ agent-facing tools.
 
 - Every extension has at least a smoke test in `tests/`
 - Pure helpers should have thorough unit tests
-- Event handlers and TUI components are tested via manual QA
+- Event handlers and TUI paths use public-seam Behavior Proofs where feasible; manual visual QA is final evidence only for visible behavior
 - Tests co-locate with their extension (`extensions/<id>/tests/`)
 - Run all tests: `npm test`
 - Run specific tests: `npx vitest run extensions/sf-ohana-spinner/tests/`

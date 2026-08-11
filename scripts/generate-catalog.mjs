@@ -749,10 +749,10 @@ function generateExtensionDetailDoc(dir, manifest) {
 
   if (!manifest.alwaysActive) {
     lines.push(
-      "Manage its package state with:",
+      "Open its Manager detail or change its package state with:",
       "",
       "```text",
-      `/sf-pi status ${manifest.id}`,
+      `/sf-pi open ${manifest.id}`,
       `/sf-pi enable ${manifest.id}`,
       `/sf-pi disable ${manifest.id}`,
       "```",

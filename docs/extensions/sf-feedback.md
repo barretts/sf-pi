@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-feedback
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-feedback
+/sf-pi open sf-feedback
 /sf-pi enable sf-feedback
 /sf-pi disable sf-feedback
 ```

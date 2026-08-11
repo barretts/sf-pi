@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-docs
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-docs
+/sf-pi open sf-docs
 /sf-pi enable sf-docs
 /sf-pi disable sf-docs
 ```

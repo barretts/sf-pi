@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-guardrail
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-guardrail
+/sf-pi open sf-guardrail
 /sf-pi enable sf-guardrail
 /sf-pi disable sf-guardrail
 ```

@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-browser
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-browser
+/sf-pi open sf-browser
 /sf-pi enable sf-browser
 /sf-pi disable sf-browser
 ```

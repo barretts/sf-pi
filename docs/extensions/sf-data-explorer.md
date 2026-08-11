@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-data-explorer
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-data-explorer
+/sf-pi open sf-data-explorer
 /sf-pi enable sf-data-explorer
 /sf-pi disable sf-data-explorer
 ```

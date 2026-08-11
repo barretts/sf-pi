@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-soql
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-soql
+/sf-pi open sf-soql
 /sf-pi enable sf-soql
 /sf-pi disable sf-soql
 ```

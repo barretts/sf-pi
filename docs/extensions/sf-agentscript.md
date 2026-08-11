@@ -19,10 +19,10 @@ Open the extension from its primary command:
 /sf-agentscript
 ```
 
-Manage its package state with:
+Open its Manager detail or change its package state with:
 
 ```text
-/sf-pi status sf-agentscript
+/sf-pi open sf-agentscript
 /sf-pi enable sf-agentscript
 /sf-pi disable sf-agentscript
 ```
