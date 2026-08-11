@@ -20,6 +20,7 @@
  */
 import type { Component } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { stripAnsiIfNoColor } from "../../../lib/common/color-policy.ts";
 import { glyph, resolveGlyphMode, type GlyphMode } from "../../../lib/common/glyph-policy.ts";
 import {
   languageFullName,
@@ -1423,7 +1424,9 @@ export class SfWelcomeOverlay implements Component {
       footerStyled +
       MUTED(hChar.repeat(Math.max(0, rightPad)));
 
-    return renderSplashBox(this.data, termWidth, bottomLine, this.headerOffset);
+    return renderSplashBox(this.data, termWidth, bottomLine, this.headerOffset).map((line) =>
+      stripAnsiIfNoColor(line),
+    );
   }
 }
 
@@ -1464,6 +1467,8 @@ export class SfWelcomeHeader implements Component {
       footerStyled +
       MUTED(hChar.repeat(Math.max(0, rightPad)));
 
-    return renderSplashBox(this.data, termWidth, bottomLine, this.headerOffset);
+    return renderSplashBox(this.data, termWidth, bottomLine, this.headerOffset).map((line) =>
+      stripAnsiIfNoColor(line),
+    );
   }
 }

@@ -3,6 +3,7 @@
 import { type Focusable, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { ConfigPanelFactory, ConfigPanelResult } from "../../../catalog/registry.ts";
+import { stripAnsiIfNoColor } from "../../../lib/common/color-policy.ts";
 import {
   DEVBAR_COLOR_DESCRIPTORS,
   DEFAULT_DEVBAR_COLORS,
@@ -129,8 +130,8 @@ class SfDevbarConfigPanel implements Focusable {
   }
 
   renderContent(width: number): string[] {
-    if (this.editingKey) return this.renderEditContent(width);
-    return this.renderListContent(width);
+    const lines = this.editingKey ? this.renderEditContent(width) : this.renderListContent(width);
+    return lines.map((line) => stripAnsiIfNoColor(line));
   }
 
   private renderListContent(width: number): string[] {

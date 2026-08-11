@@ -494,7 +494,7 @@
     "entry": "extensions/sf-devbar/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 2383
+    "srcLoc": 2386
   },
   {
     "id": "sf-docs",
@@ -915,7 +915,7 @@
     "entry": "extensions/sf-ohana-spinner/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 459
+    "srcLoc": 460
   },
   {
     "id": "sf-pi-manager",
@@ -1286,6 +1286,6 @@
     "entry": "extensions/sf-welcome/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 6639
+    "srcLoc": 6644
   }
 ]

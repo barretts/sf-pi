@@ -15,6 +15,7 @@
  */
 
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import { stripAnsiIfNoColor } from "../../../lib/common/color-policy.ts";
 import { formatGitChanges, type GitChanges } from "./git-changes.ts";
 import { DEFAULT_DEVBAR_COLORS, type DevbarColors } from "./colors.ts";
 import { resolveGlyphMode, type GlyphMode } from "../../../lib/common/glyph-policy.ts";
@@ -131,7 +132,7 @@ function renderTopBarContent(state: TopBarState, theme: BarTheme): string {
   const sessionSeg = formatSessionSegment(state.sessionName, theme);
   if (sessionSeg) segments.push(sessionSeg);
 
-  return segments.join(sep);
+  return stripAnsiIfNoColor(segments.join(sep));
 }
 
 // -------------------------------------------------------------------------------------------------

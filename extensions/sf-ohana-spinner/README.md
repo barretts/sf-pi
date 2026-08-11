@@ -70,6 +70,5 @@ default spinner takes over.
 **No spinner appears during LLM thinking:**
 Pi only shows the working indicator while a turn is streaming. If the
 turn never reaches the streaming phase (auth failure, model not
-resolved, etc.), the spinner stays silent by design. `NO_COLOR=1`
-support is on the roadmap; in the meantime, a plain terminal without
-color falls back gracefully.
+resolved, etc.), the spinner stays silent by design. When `NO_COLOR` is set,
+Ohana keeps the same animated glyphs and messages without ANSI colors.

@@ -76,7 +76,11 @@ override)`). Driven by `lib/common/privacy/state.ts` — see
    instead of a false update warning. Update hints render only when a newer
    installable version is known.
 
-7. **Optional integration rows stay quiet** — Slack and LLM Gateway rows are
+7. **`NO_COLOR` is presence-based** — when `NO_COLOR` is set, both the
+   persistent header and full overlay preserve the same text/layout while
+   removing SF Welcome-owned ANSI styling.
+
+8. **Optional integration rows stay quiet** — Slack and LLM Gateway rows are
    hidden unless their bundled extensions are enabled and have meaningful live
    status. SF tldraw uses a **Layered Extension Readiness Row**: disabled renders
    as muted `Disabled`; enabled with no active Canvas observation renders as
@@ -88,7 +92,7 @@ override)`). Driven by `lib/common/privacy/state.ts` — see
    when an enabled or installed setup is degraded. This keeps installs from
    seeing unavailable or unconfigured integrations as startup noise.
 
-8. **Background loading** — CLI status, release freshness, font readiness,
+9. **Background loading** — CLI status, release freshness, font readiness,
    Hunk code-review readiness, Homebrew status, SF Browser `agent-browser`
    runtime status, Native Auto Update status, Node CA certificate status,
    gateway usage, and remote announcements refresh asynchronously after the splash appears, so startup
@@ -114,10 +118,10 @@ override)`). Driven by `lib/common/privacy/state.ts` — see
    and bounded known PEM candidates without network calls, subprocesses, or
    recursive filesystem scans.
 
-9. **Salesforce brand gradient** — Uses actual Salesforce brand colors (#0070D2 blue,
-   #01C3E2 Astro cyan, #9061F9 purple) for the Pi logo gradient.
+10. **Salesforce brand gradient** — Uses actual Salesforce brand colors (#0070D2 blue,
+    #01C3E2 Astro cyan, #9061F9 purple) for the Pi logo gradient.
 
-10. **Terminal-aware glyph policy** — Every emoji/box icon on the splash
+11. **Terminal-aware glyph policy** — Every emoji/box icon on the splash
     (and in the sf-devbar bottom bar) routes through
     `lib/common/glyph-policy.ts`. On terminals known to lack emoji font
     fallback (notably macOS Terminal.app, detected via
@@ -127,24 +131,24 @@ override)`). Driven by `lib/common/privacy/state.ts` — see
     `SF_PI_ASCII_ICONS=1`/`0` or `sfPi.asciiIcons: true|false` in
     `settings.json`.
 
-11. **Narrow-terminal single-column fallback** — Below ~100 columns the
+12. **Narrow-terminal single-column fallback** — Below ~100 columns the
     splash stacks its two columns vertically so no content is truncated.
     Above that threshold the two-column layout grows up to 220 columns
     wide, filling wide terminals instead of leaving an ellipsised island.
 
-12. **Top-left anchored overlay** — The splash hugs the top-left corner
+13. **Top-left anchored overlay** — The splash hugs the top-left corner
     of the terminal with a 1-col left margin so it sits flush with pi's
     own prompt and bottom bar instead of floating center-screen on
     wide terminals.
 
-13. **Bundled Nerd Font installer** — Four MesloLGM Nerd Font Mono TTFs
+14. **Bundled Nerd Font installer** — Four MesloLGM Nerd Font Mono TTFs
     ship under `assets/fonts/`. `/sf-setup-fonts` copies them into
     `~/Library/Fonts` (macOS) or `~/.local/share/fonts` (Linux) with
     SHA-256 verification, idempotent on repeat runs, and best-effort
     cache refresh via `atsutil` / `fc-cache`. Windows users get manual
     install instructions.
 
-14. **One-time install prompt** — When the splash detects ASCII-fallback
+15. **One-time install prompt** — When the splash detects ASCII-fallback
     glyphs _and_ the font isn't installed _and_ the user hasn't been
     asked before, `sf-welcome` shows a single `ctx.ui.confirm()` dialog:
     "Install bundled Nerd Font?" The decision (yes or no) is persisted

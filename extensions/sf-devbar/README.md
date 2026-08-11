@@ -15,7 +15,9 @@ A bespoke Salesforce developer status bar that renders two persistent UI surface
   is enabled and ready/warning-worthy.
 
 Every data source is async and non-blocking. The bars render immediately with
-cached/partial data and fill in as results arrive.
+cached/partial data and fill in as results arrive. When `NO_COLOR` is set, both
+bars preserve text and layout while stripping theme, raw true-color, and
+upstream status ANSI styling.
 
 ## How It Differs from the Default Pi Footer
 

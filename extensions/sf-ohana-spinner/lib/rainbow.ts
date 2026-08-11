@@ -6,6 +6,8 @@
  * Extracted from index.ts so the rainbow rendering logic is independently testable.
  */
 
+import { stripAnsiIfNoColor } from "../../../lib/common/color-policy.ts";
+
 // Soft pastel rainbow — muted tones that work on dark backgrounds
 export const RAINBOW_COLORS = [
   [200, 120, 130], // Dusty rose
@@ -42,7 +44,7 @@ export function rainbow(text: string, offset: number): string {
     }
   }
   result += "\x1b[0m";
-  return result;
+  return stripAnsiIfNoColor(result);
 }
 
 export const WORKING_STATE_TEXT = "Thinking…";
@@ -63,7 +65,7 @@ export function buildRainbowFrames(text: string): string[] {
     const spinnerChar = SPINNER_FRAMES[offset % SPINNER_FRAMES.length];
     const [r, g, b] = RAINBOW_COLORS[offset % RAINBOW_COLORS.length];
     const spinner = `\x1b[38;2;${r};${g};${b}m${spinnerChar}\x1b[0m`;
-    return `${spinner} ${WORKING_STATE_TEXT} · ${rainbow(text, offset)}`;
+    return stripAnsiIfNoColor(`${spinner} ${WORKING_STATE_TEXT} · ${rainbow(text, offset)}`);
   });
 }
 

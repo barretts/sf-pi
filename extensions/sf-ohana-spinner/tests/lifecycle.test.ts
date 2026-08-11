@@ -100,6 +100,27 @@ describe("sf-ohana-spinner waiting-state outcome", () => {
     expect(ctx.ui.setWorkingMessage).toHaveBeenLastCalledWith("");
   });
 
+  it("removes ANSI color escapes from Ohana frames when NO_COLOR is set", async () => {
+    const previous = process.env.NO_COLOR;
+    process.env.NO_COLOR = "1";
+    try {
+      const cwd = tempCwd();
+      writeScopedOhanaSpinnerSettings(cwd, "project", { mode: "ohana" });
+      vi.spyOn(Math, "random").mockReturnValue(0);
+
+      const handlers = registerExtension();
+      const ctx = createCtx(cwd);
+      await runSessionStart(handlers, ctx);
+
+      const frames = latestIndicatorFrames(ctx);
+      expect(frames.every((frame) => frame.includes("Thinking…"))).toBe(true);
+      expect(frames.every((frame) => !/\x1b\[[0-9;]*m/.test(frame))).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env.NO_COLOR;
+      else process.env.NO_COLOR = previous;
+    }
+  });
+
   it("shows a quiet waiting indicator in Calm mode", async () => {
     const cwd = tempCwd();
     writeScopedOhanaSpinnerSettings(cwd, "project", { mode: "calm" });

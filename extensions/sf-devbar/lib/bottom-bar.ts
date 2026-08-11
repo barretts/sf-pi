@@ -20,6 +20,7 @@
  * Pure function: takes state, returns themed string (one line).
  */
 
+import { stripAnsiIfNoColor } from "../../../lib/common/color-policy.ts";
 import type { OrgType } from "../../../lib/common/sf-environment/types.ts";
 import { glyph, resolveGlyphMode, type GlyphMode } from "../../../lib/common/glyph-policy.ts";
 import { DEFAULT_DEVBAR_COLORS, type DevbarColors } from "./colors.ts";
@@ -128,8 +129,8 @@ export function renderBottomBarParts(
   }
 
   return {
-    left: leftSegments.join(sep),
-    right: rightSegments.join(sep),
+    left: stripAnsiIfNoColor(leftSegments.join(sep)),
+    right: stripAnsiIfNoColor(rightSegments.join(sep)),
   };
 }
 

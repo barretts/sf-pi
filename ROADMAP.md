@@ -11,8 +11,6 @@ accepted ADR.
   and 30% branches only when an observed full-suite baseline supports the increase.
 - Promote useful warn-level ESLint rules to errors one at a time after the
   repository passes the stricter rule without broad suppression.
-- Add consistent `NO_COLOR=1` behavior across SF Welcome, SF Ohana Spinner, and
-  SF DevBar, with focused rendering proofs for each surface.
 - Align the Data 360 live capability sweep with the public `data360_*` v2 family
   interface; see [`extensions/sf-data360/ROADMAP.md`](./extensions/sf-data360/ROADMAP.md).
 
