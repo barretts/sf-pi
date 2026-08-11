@@ -19,11 +19,16 @@ The retained facade classifies operations as `read`, `safe_post`, `confirmed`, o
 - Confirmed and destructive execution requires reviewed dry-run intent.
 - Destructive compatibility paths retain an additional dedicated non-production test-org restriction in code.
 - SF Guardrail remains the approval authority for high-value native tool mutations.
-- Headless execution fails closed unless the operator configures the Guardrail process outside the model call.
+- Ordinary headless destructive execution fails closed.
 - Tests and examples use generic placeholders; this document does not publish an environment-specific alias.
 
 Do not copy the facade’s dedicated test restriction into new v2 actions. New public behavior must use target-org facts, current safety classification, and Guardrail mediation through the v2 dispatcher.
 
-## Retirement condition
+## Retained consumer
 
-The active [`../../ROADMAP.md`](../../ROADMAP.md) requires the live capability sweep to exercise the public v2 family interface. After equivalent plan, execution, cleanup, and artifact evidence exists, retain the facade only for a named compatibility consumer or delete it with its aliases and this directory.
+The v2 dispatcher still delegates selected capability-backed actions to this
+implementation for request resolution, preflight, transport, and bounded result
+handling. Focused compatibility tests cover that internal adapter. The v2 action
+sweep—not the facade registry or a facade-first harness—owns live-interface
+proof. Delete the facade and this compatibility reference when the remaining v2
+adapters no longer import it.

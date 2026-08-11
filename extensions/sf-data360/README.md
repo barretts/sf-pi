@@ -113,7 +113,6 @@ extensions/sf-data360/
   index.ts                    ← Pi extension entry point
   manifest.json               ← source-of-truth extension metadata
   README.md                   ← human behavior and usage
-  ROADMAP.md                  ← unresolved extension work
 ```
 
 <!-- GENERATED:file-structure:end -->

@@ -5,21 +5,11 @@
       "script": "e2e:data360-v2",
       "entry": "scripts/e2e/data360-v2-action-sweep.ts",
       "title": "Data 360 v2 action sweep",
-      "summary": "Exercises every current data360_* family through the real registry and dispatcher.",
+      "summary": "Exercises every current data360_* family and the sweep-owned DLO lifecycle through the real v2 registry and dispatcher.",
       "target": "Explicit non-production org",
-      "posture": "read-only",
-      "artifacts": "JSON and Markdown reports in a temporary or caller-selected directory",
-      "arguments": "--target-org <alias> [--live-read --max-live-read 5]"
-    },
-    {
-      "script": "e2e:d360-sweep",
-      "entry": "scripts/e2e/d360-capability-sweep.ts",
-      "title": "Legacy Data 360 capability sweep",
-      "summary": "Retained facade compatibility proof with dry-run defaults and optional owned-resource lifecycles.",
-      "target": "Explicit isolated non-production org",
       "posture": "bounded-mutation",
       "artifacts": "JSON and Markdown reports in a temporary or caller-selected directory",
-      "arguments": "--target-org <alias>"
+      "arguments": "--target-org <alias> [--live-read --max-live-read 5] [--mutation-lifecycle dlo --mutate --run-id <id>]"
     },
     {
       "script": "e2e:d360-stdm",

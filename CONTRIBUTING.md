@@ -105,7 +105,7 @@ validation.
 This complete inventory is generated from `package.json`; edit that file and run `npm run generate-catalog`.
 
 <details>
-<summary>Show all 56 package scripts</summary>
+<summary>Show all 55 package scripts</summary>
 
 **Generated sources**
 
@@ -169,7 +169,6 @@ This complete inventory is generated from `package.json`; edit that file and run
 **E2E and live proofs**
 
 - `npm run e2e:d360-stdm`
-- `npm run e2e:d360-sweep`
 - `npm run e2e:d360-tracing`
 - `npm run e2e:data360-v2`
 - `npm run e2e:instruction-behavior`

@@ -24,6 +24,7 @@ Agent rules for editing this extension. Repo-level rules still apply.
 | Curated v2 action ownership and naming                    | `registry/v2/action-overrides.json`, `registry/v2/action-rules.json`                                |
 | Generated v2 action catalog                               | `registry/v2/actions.json`                                                                          |
 | Method/path safety classification                         | `lib/safety.ts`                                                                                     |
+| Facade-backed destructive execution gates                 | `lib/facade/destructive-guard.ts`                                                                   |
 | Manager settings                                          | `lib/config-panel.ts`, `lib/settings.ts`                                                            |
 | Shared connection, API version, auth, and timeouts        | `../../lib/common/sf-conn/`                                                                         |
 | Progressive-disclosure guidance                           | `references/*.md`                                                                                   |
@@ -34,9 +35,8 @@ Agent rules for editing this extension. Repo-level rules still apply.
 - Extend the public `data360_*` surface through the v2 tools, dispatcher, and
   action registry. Do not add public guidance for legacy `d360*` tools.
 - Treat legacy infrastructure as compatibility-only for the public surface. It
-  still supports the facade-first E2E sweep and selected v2 adapters/tests, so
-  do not remove or bypass it without matching behavior proof. Do not make it
-  the primary editing path.
+  remains behind selected v2 adapters and focused compatibility tests, but it
+  must not own public guidance or live-parity proof.
 - Do not add upstream server/runtime support or hundreds of always-on
   endpoint-specific tools.
 - Do not add extension-owned Agent Skills for Data 360. Put deeper guidance in

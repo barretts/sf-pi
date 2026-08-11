@@ -52,4 +52,11 @@ A valid sweep proves:
 
 ## Current live-proof boundary
 
-The active [`../ROADMAP.md`](../ROADMAP.md) tracks migration of the capability sweep from legacy facade calls to this v2 interface. Until that migration is complete, facade sweep results are compatibility evidence and cannot claim complete public-interface coverage.
+[`../../../scripts/e2e/data360-v2-action-sweep.ts`](../../../scripts/e2e/data360-v2-action-sweep.ts)
+is the authoritative action sweep. Its default path is non-mutating; optional
+live reads are bounded with `--max-live-read`. The confirmed DLO lifecycle
+requires `--mutation-lifecycle dlo`, `--mutate`, a stable run ID, a verified
+non-production target, and both exact target environment gates defined by
+[ADR 0106](../../../docs/adr/0106-data-360-live-proof-uses-the-v2-dispatcher.md).
+Facade-only results remain compatibility evidence and do not establish
+public-interface coverage.
