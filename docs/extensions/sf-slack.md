@@ -1,6 +1,7 @@
 ---
 title: "SF Slack"
 description: "Slack integration — search messages, read threads, browse channel history"
+editLink: false
 ---
 
 # SF Slack

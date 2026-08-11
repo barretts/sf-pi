@@ -1,6 +1,7 @@
 ---
 title: "SF Feedback"
 description: "Guided feedback and bug-report flow that collects sanitized SF Pi diagnostics and opens a GitHub issue"
+editLink: false
 ---
 
 # SF Feedback

@@ -1,6 +1,7 @@
 ---
 title: "SF LLM Gateway"
 description: "Salesforce LLM Gateway provider with model discovery"
+editLink: false
 ---
 
 # SF LLM Gateway

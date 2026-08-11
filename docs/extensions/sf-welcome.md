@@ -1,6 +1,7 @@
 ---
 title: "SF Welcome"
 description: "Salesforce-branded splash screen with environment status, release freshness, and community info"
+editLink: false
 ---
 
 # SF Welcome

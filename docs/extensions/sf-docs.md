@@ -1,6 +1,7 @@
 ---
 title: "SF Docs"
 description: "Salesforce documentation lookup for agents and humans, with Pi-owned auth-store credentials, cited results, and a Manager settings surface."
+editLink: false
 ---
 
 # SF Docs

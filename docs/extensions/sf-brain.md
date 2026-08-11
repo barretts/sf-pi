@@ -1,6 +1,7 @@
 ---
 title: "SF Brain"
 description: "Salesforce Engineering Constitution, compact SF Pi routing summary, and advisory Instruction Surface diagnostics"
+editLink: false
 ---
 
 # SF Brain

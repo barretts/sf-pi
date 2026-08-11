@@ -1,6 +1,7 @@
 ---
 title: "SF Data Explorer"
 description: "Read-only interactive TUI explorer for SOQL, SOSL, and Data 360 SQL using sf-pi Salesforce transport plumbing."
+editLink: false
 ---
 
 # SF Data Explorer

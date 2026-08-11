@@ -1,6 +1,7 @@
 ---
 title: "SF Apex"
 description: "API-native Apex lifecycle workflows for pi: authoring guidance, diagnostics, trace/log/watch, Anonymous Apex, and targeted tests."
+editLink: false
 ---
 
 # SF Apex

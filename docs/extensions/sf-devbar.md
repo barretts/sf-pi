@@ -1,6 +1,7 @@
 ---
 title: "SF DevBar"
 description: "Bespoke Salesforce developer status bar with org context, model info, git, and context window progress"
+editLink: false
 ---
 
 # SF DevBar

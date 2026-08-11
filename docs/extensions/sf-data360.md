@@ -1,6 +1,7 @@
 ---
 title: "SF Data 360"
 description: "Data Cloud/Data 360 v2 family tools — discover, connect, prepare, harmonize, segment, activate, query, semantic, observe, orchestrate, and raw API escape hatch"
+editLink: false
 ---
 
 # SF Data 360

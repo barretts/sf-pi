@@ -1,6 +1,7 @@
 ---
 title: "SF tldraw"
 description: "Deterministic, editable Salesforce diagrams rendered through the local tldraw offline Canvas API."
+editLink: false
 ---
 
 # SF tldraw

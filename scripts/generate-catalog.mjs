@@ -576,6 +576,12 @@ function generateCommandsDoc(manifests) {
   const sorted = sortByCategoryThenName(manifests);
 
   const lines = [
+    "---",
+    "title: sf-pi Command Reference",
+    "description: Generated top-level slash-command inventory for bundled SF Pi extensions.",
+    "editLink: false",
+    "---",
+    "",
     "# sf-pi Command Reference",
     "",
     "> **Auto-generated from `extensions/*/manifest.json`.**",
@@ -644,6 +650,7 @@ function generateExtensionsDoc(manifests) {
     "---",
     "title: Browse SF Pi Extensions",
     "description: Pick the SF Pi extension that matches what you want to do next.",
+    "editLink: false",
     "---",
     "",
     "# Browse SF Pi extensions",
@@ -709,6 +716,7 @@ function generateExtensionDetailDoc(dir, manifest) {
     "---",
     `title: ${JSON.stringify(manifest.name)}`,
     `description: ${JSON.stringify(manifest.description)}`,
+    "editLink: false",
     "---",
     "",
     `# ${manifest.name}`,
@@ -1033,6 +1041,12 @@ async function writeOrCheckExtensionReadmes(manifests) {
 function generateAgentOrientationDoc(manifests) {
   const sorted = sortByCategoryThenName(manifests);
   const lines = [
+    "---",
+    "title: sf-pi Agent Orientation",
+    "description: Generated owner and role-specific document map for SF Pi agents and contributors.",
+    "editLink: false",
+    "---",
+    "",
     "# sf-pi Agent Orientation",
     "",
     "> **Auto-generated from manifests and repo layout.**",
@@ -1147,7 +1161,8 @@ function generateAgentOrientationDoc(manifests) {
     "",
     "## Automation shortcuts",
     "",
-    "- `npm run docs:health:check` — documentation drift and public-safety lint.",
+    "- `npm run docs:health:check` — documentation drift and tracked public-artifact lint.",
+    "- `npm run check:architecture` — source-size advisories and shared state-placement policy.",
     "- `npm run check:manager-first` — real-factory no-args Manager routing proof.",
     "- `npm run test:runtime-surface` — real-factory manifest registration attestation.",
     "- `npm run validate:ci` — local approximation of CI's validation lane.",

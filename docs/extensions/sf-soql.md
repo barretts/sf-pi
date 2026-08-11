@@ -1,6 +1,7 @@
 ---
 title: "SF SOQL"
 description: "API-native SOQL lifecycle workflows for pi: schema search/describe, relationship discovery, query drafting, validation, query plans, bounded query/SOSL execution, exports, file diagnostics, and artifacts."
+editLink: false
 ---
 
 # SF SOQL

@@ -87,6 +87,7 @@ The most common entry points, grouped by purpose:
 | Format                   | `npm run format`                                                             | `npm run format:check`                  |
 | SPDX headers             | `npm run spdx`                                                               | `npm run spdx:check`                    |
 | Docs health              | `npm run docs:health`                                                        | `npm run docs:health:check`             |
+| Source architecture      | —                                                                            | `npm run check:architecture`            |
 | Docs site                | `npm run docs:dev` / `npm run docs:preview`                                  | `npm run docs:build`                    |
 | ESLint                   | `npm run eslint:fix`                                                         | `npm run eslint`                        |
 | Type check               | —                                                                            | `npm run check`                         |
@@ -104,11 +105,12 @@ The most common entry points, grouped by purpose:
 | Instruction behavior     | `npm run e2e:instruction-behavior -- --model ...`                            | —                                       |
 | Scaffold a new extension | `npm run scaffold -- --id sf-my-ext --category ui --intent "Personalize pi"` | —                                       |
 
-`npm run lint` covers formatting, generated Data 360/catalog drift, docs and
-SPDX policy, shared connection/lifecycle policy, and ESLint. `npm run validate`
-covers the broader local lane: generated checks, docs health and site build,
-formatting and types, structural/runtime import checks, and the full test
-suite. Both validate generated artifacts without regenerating them.
+`npm run lint` covers formatting, generated Data 360/catalog drift, docs,
+source-architecture and SPDX policy, shared connection/lifecycle policy, and
+ESLint. `npm run validate` covers the broader local lane: generated checks,
+docs and source-architecture health, site build, formatting and types,
+structural/runtime import checks, and the full test suite. Both validate
+generated artifacts without regenerating them.
 `npm run validate:ci` wraps that lane with the remaining CI-facing lint and
 artifact checks and reasserts docs health.
 

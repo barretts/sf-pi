@@ -1,3 +1,9 @@
+---
+title: sf-pi Agent Orientation
+description: Generated owner and role-specific document map for SF Pi agents and contributors.
+editLink: false
+---
+
 # sf-pi Agent Orientation
 
 > **Auto-generated from manifests and repo layout.**
@@ -76,7 +82,8 @@ Do not edit these by hand; edit the source manifest/docs and run `npm run genera
 
 ## Automation shortcuts
 
-- `npm run docs:health:check` — documentation drift and public-safety lint.
+- `npm run docs:health:check` — documentation drift and tracked public-artifact lint.
+- `npm run check:architecture` — source-size advisories and shared state-placement policy.
 - `npm run check:manager-first` — real-factory no-args Manager routing proof.
 - `npm run test:runtime-surface` — real-factory manifest registration attestation.
 - `npm run validate:ci` — local approximation of CI's validation lane.

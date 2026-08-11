@@ -1,6 +1,7 @@
 ---
 title: "SF Guardrail"
 description: "Salesforce-aware safety hooks — file protection policies, dangerous-command gating, org-aware confirmation, and native high-value mutation mediation"
+editLink: false
 ---
 
 # SF Guardrail

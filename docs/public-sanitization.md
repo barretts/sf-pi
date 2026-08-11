@@ -82,9 +82,14 @@ body.
 The repository has automated checks for common public-safety mistakes:
 
 - Gitleaks and TruffleHog secret scanning
-- docs-health public-safety patterns
+- docs-health scanning of tracked Markdown, JSON, YAML, source, scripts, and fixtures for private-shaped org and collaboration identifiers
 - LLM artifact checks
 - dependency and license checks
+
+The tracked-file boundary is deliberate: ignored local notes, reports, and
+session artifacts are private working state rather than public repository
+content. Clearly generic fixture shapes remain allowed so behavior tests can
+exercise identifier parsing without preserving real values.
 
 These checks are a backstop, not a substitute for review. If a public/private
 classification is unclear, omit, generalize, or ask before publishing.

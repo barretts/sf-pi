@@ -1,6 +1,7 @@
 ---
 title: "SF Agent Script"
 description: "Single-plugin lifecycle for `.agent` files: compile diagnostics, native quality, preview, local-first Eval Studio, exact-version release eval, inactive publication, and gated activation."
+editLink: false
 ---
 
 # SF Agent Script

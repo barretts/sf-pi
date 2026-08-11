@@ -1,6 +1,7 @@
 ---
 title: "SF Ohana Spinner"
 description: "Salesforce-themed rainbow spinner during LLM thinking"
+editLink: false
 ---
 
 # SF Ohana Spinner

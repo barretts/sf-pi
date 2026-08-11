@@ -1,6 +1,7 @@
 ---
 title: "SF Herdr"
 description: "Non-mutating Salesforce workflow plans for the current split Herdr tools."
+editLink: false
 ---
 
 # SF Herdr

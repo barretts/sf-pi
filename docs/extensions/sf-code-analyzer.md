@@ -1,6 +1,7 @@
 ---
 title: "SF Code Analyzer"
 description: "Salesforce Code Analyzer workflows for pi: setup readiness, explicit scans, rule discovery, config generation, report artifacts, deferred agent quality passes, and ApexGuru analysis."
+editLink: false
 ---
 
 # SF Code Analyzer

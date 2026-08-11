@@ -77,4 +77,21 @@ describe("current documentation authority", () => {
     expect(readme).not.toContain("SF_D360_ALLOW_HEADLESS_WRITE");
     expect(readme).toContain("SF_GUARDRAIL_ALLOW_HEADLESS");
   });
+
+  it("lists every configurable extension exactly once in the settings audit", () => {
+    const catalog = JSON.parse(read("catalog/index.json")) as Array<{
+      id: string;
+      configurable: boolean;
+    }>;
+    const expected = catalog
+      .filter((extension) => extension.configurable)
+      .map((extension) => extension.id)
+      .sort();
+    const documented = [...read("docs/settings-surfaces.md").matchAll(/^\| `(sf-[^`]+)`\s+\|/gm)]
+      .map((match) => match[1]!)
+      .sort();
+
+    expect(documented).toEqual(expected);
+    expect(new Set(documented).size).toBe(documented.length);
+  });
 });

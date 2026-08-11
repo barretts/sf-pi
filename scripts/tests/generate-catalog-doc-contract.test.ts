@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { parseCommandArgs } from "../../extensions/sf-pi-manager/index.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const EXTENSIONS_DIR = path.join(ROOT, "extensions");
@@ -26,32 +27,6 @@ const VALID_INTENT_GROUPS = new Set([
   "Collaborate and improve",
   "Personalize pi",
 ]);
-
-// Deliberately limited to living user/operator surfaces. Historical ADRs,
-// changelogs, completed plans/audits, and compatibility source stay out of this
-// current-copy contract.
-const CURRENT_COPY_SURFACES = [
-  "README.md",
-  "AGENTS.md",
-  "ARCHITECTURE.md",
-  "CONTRIBUTING.md",
-  "catalog/index.json",
-  "docs/agent-orientation.md",
-  "docs/commands.md",
-  "docs/extensions.md",
-  "docs/extensions/sf-brain.md",
-  "docs/extensions/sf-docs.md",
-  "docs/extensions/sf-herdr.md",
-  "docs/contributing.md",
-  "extensions/sf-brain/manifest.json",
-  "extensions/sf-brain/README.md",
-  "extensions/sf-docs/manifest.json",
-  "extensions/sf-docs/README.md",
-  "extensions/sf-herdr/manifest.json",
-  "extensions/sf-herdr/README.md",
-  "extensions/sf-data360/README.md",
-  "scripts/scaffold.mjs",
-] as const;
 
 const RETIRED_CURRENT_COPY = [
   /operator kernel/i,
@@ -93,6 +68,47 @@ function readManifests(): Manifest[] {
     .map((entry) =>
       JSON.parse(readFileSync(path.join(EXTENSIONS_DIR, entry.name, "manifest.json"), "utf8")),
     );
+}
+
+function currentCopySurfaces(): string[] {
+  const surfaces = new Set([
+    "README.md",
+    "AGENTS.md",
+    "ARCHITECTURE.md",
+    "CONTRIBUTING.md",
+    "GOVERNANCE.md",
+    "SECURITY.md",
+    "ROADMAP.md",
+    "CONTEXT.md",
+    "catalog/index.json",
+    "lib/common/README.md",
+    "scripts/scaffold.mjs",
+  ]);
+
+  const docsRoot = path.join(ROOT, "docs");
+  const walkDocs = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.name === "adr") continue;
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) walkDocs(absolute);
+      else if (entry.isFile() && entry.name.endsWith(".md")) {
+        surfaces.add(path.relative(ROOT, absolute).replaceAll(path.sep, "/"));
+      }
+    }
+  };
+  walkDocs(docsRoot);
+
+  for (const manifest of readManifests()) {
+    const base = `extensions/${manifest.id}`;
+    surfaces.add(`${base}/manifest.json`);
+    surfaces.add(`${base}/README.md`);
+    for (const role of ["editingRules", "agentGuide", "contextGlossary"] as const) {
+      const relativePath = manifest.docs[role];
+      if (relativePath) surfaces.add(`${base}/${relativePath}`);
+    }
+  }
+
+  return [...surfaces].sort((left, right) => left.localeCompare(right));
 }
 
 describe("generated extension documentation contract", () => {
@@ -151,9 +167,31 @@ describe("generated extension documentation contract", () => {
       (candidate) => candidate.id !== "sf-pi-manager",
     )) {
       const detail = readFileSync(path.join(EXTENSION_DETAIL_DIR, `${manifest.id}.md`), "utf8");
-      expect(detail, `${manifest.id}: Manager deep link`).toContain(`/sf-pi open ${manifest.id}`);
+      const command = `open ${manifest.id}`;
+      expect(detail, `${manifest.id}: Manager deep link`).toContain(`/sf-pi ${command}`);
       expect(detail, `${manifest.id}: unsupported scoped status`).not.toContain(
         `/sf-pi status ${manifest.id}`,
+      );
+      expect(parseCommandArgs(command).route).toEqual({
+        extensionId: manifest.id,
+        view: "detail",
+      });
+    }
+  });
+
+  it("disables direct edit links on generated site pages", () => {
+    const generatedPages = [
+      EXTENSIONS_DOC_PATH,
+      path.join(ROOT, "docs", "commands.md"),
+      path.join(ROOT, "docs", "agent-orientation.md"),
+      ...readdirSync(EXTENSION_DETAIL_DIR)
+        .filter((file) => file.endsWith(".md"))
+        .map((file) => path.join(EXTENSION_DETAIL_DIR, file)),
+    ];
+
+    for (const generatedPage of generatedPages) {
+      expect(readFileSync(generatedPage, "utf8"), path.relative(ROOT, generatedPage)).toMatch(
+        /^---\n[\s\S]*?^editLink: false$/m,
       );
     }
   });
@@ -207,7 +245,7 @@ describe("generated extension documentation contract", () => {
   });
 
   it("rejects retired descriptions on current user and operator surfaces", () => {
-    for (const relativePath of CURRENT_COPY_SURFACES) {
+    for (const relativePath of currentCopySurfaces()) {
       const source = readFileSync(path.join(ROOT, relativePath), "utf8");
       for (const retiredPhrase of RETIRED_CURRENT_COPY) {
         expect(retiredPhrase.test(source), `${relativePath}: ${retiredPhrase}`).toBe(false);

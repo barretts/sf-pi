@@ -42,6 +42,7 @@ The Manager settings page stores only non-secret preferences:
 - default fetch format
 - default search page size
 - include citations
+- human-visible display density
 - cache catalog
 
 Preferences are scoped as project > global > extension default. The token is not a setting. Use `/login sf-docs` for interactive fixed-mask setup; `SF_DOCS_MCP_TOKEN` remains the non-persisted automation fallback. Existing Pi API-key and OAuth-compatible credentials remain readable.

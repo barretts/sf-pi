@@ -1,6 +1,7 @@
 ---
 title: "SF LWC"
 description: "Local-native Lightning Web Component lifecycle workflows for pi: project scan, component inspection, focused diagnostics, targeted Jest tests, and artifacts."
+editLink: false
 ---
 
 # SF LWC

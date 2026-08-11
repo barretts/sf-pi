@@ -1,6 +1,7 @@
 ---
 title: "SF Browser"
 description: "Salesforce-aware browser automation for last-mile UI work using agent-browser."
+editLink: false
 ---
 
 # SF Browser

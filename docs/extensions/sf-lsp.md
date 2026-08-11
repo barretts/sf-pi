@@ -1,6 +1,7 @@
 ---
 title: "SF LSP"
 description: "Real-time Salesforce LSP diagnostics on write/edit with a working indicator, transcript rows, and one-line startup readiness in SF Welcome"
+editLink: false
 ---
 
 # SF LSP

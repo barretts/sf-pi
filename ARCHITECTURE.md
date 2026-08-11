@@ -77,7 +77,8 @@ ones agents and maintainers most often need:
 | `scripts/generate-catalog.mjs`            | Regenerates catalog files, generated docs, and generated README marker blocks.                                       |
 | `scripts/check-staged-catalog.mjs`        | Exports the Git index to a temporary root and checks its generated catalog without mutating local state.             |
 | `scripts/check-command-contracts.mjs`     | Checks safe slash-command wrapping and reserved command-panel filenames.                                             |
-| `scripts/docs-health.mjs`                 | Checks factual doc drift contracts and public-safe examples.                                                         |
+| `scripts/docs-health.mjs`                 | Checks factual doc drift contracts and the tracked public-text corpus.                                               |
+| `scripts/check-architecture.mjs`          | Checks source-size advisories and shared state-store placement separately from docs health.                          |
 | `scripts/instruction-surface-report.mjs`  | Writes sanitized SF Pi instruction-size JSON and Markdown through the exact Pi runtime.                              |
 | `scripts/e2e/instruction-behavior/run.ts` | Runs the opt-in model routing regression with local reads allowed and every non-local tool blocked before execution. |
 | `scripts/add-spdx-headers.mjs`            | Adds or checks SPDX headers for source scripts. Pre-commit auto-adds missing headers; CI uses the check path.        |
@@ -88,7 +89,7 @@ ones agents and maintainers most often need:
 | `scripts/preview-sf-logo.mjs`             | Local visual preview for the compact Salesforce wordmark.                                                            |
 | `scripts/render-splash-header.mjs`        | Renders splash-header frames for review / screenshots.                                                               |
 
-`npm run lint` covers formatting, generated-data/catalog drift, docs/SPDX and shared-policy checks, plus ESLint. `npm run validate` already covers generated checks, docs health and the VitePress build, formatting/types, structural checks, and tests without rewriting generated artifacts. `npm run validate:ci` adds the remaining CI-facing lint/artifact guard and reasserts docs health.
+`npm run lint` covers formatting, generated-data/catalog drift, docs, source-architecture, SPDX, and shared-policy checks, plus ESLint. `npm run validate` covers generated checks, docs and source-architecture health, the VitePress build, formatting/types, structural checks, and tests without rewriting generated artifacts. `npm run validate:ci` adds the remaining CI-facing lint/artifact guard and reasserts docs health.
 
 ## Where does X live? (agent quick-reference)
 

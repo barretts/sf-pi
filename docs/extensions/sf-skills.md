@@ -1,6 +1,7 @@
 ---
 title: "SF Skills"
 description: "Manage skills through one Skill Funnel: catalog every source (Claude/Codex/Cursor/custom/managed) → gate sources → toggle skills per scope (global/project) → resolve name conflicts, all compiled to native settings.skills[]. Plus a passive live-context HUD, forcedotcom/afv-library install, per-skill usage counters, and prune."
+editLink: false
 ---
 
 # SF Skills
