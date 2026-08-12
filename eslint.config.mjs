@@ -4,7 +4,7 @@
  *
  * Rule posture: pragmatic, not strict.
  * - Runs alongside Prettier (no stylistic rules that fight formatter).
- * - Warns on `any`. Does not fail CI on `any` — yet.
+ * - Errors on explicit `any` in production code; tests retain a narrow exemption.
  * - Errors on unused vars/imports/params (underscore-prefix to escape hatch).
  * - CI also runs eslint with --max-warnings=0 so the remaining `warn`
  *   categories cannot accumulate drift silently.
@@ -56,7 +56,7 @@ export default tseslint.config(
       "@typescript-eslint/no-require-imports": "error",
 
       // Type hygiene
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-non-null-assertion": "warn",
       "@typescript-eslint/ban-ts-comment": [
         "error",
