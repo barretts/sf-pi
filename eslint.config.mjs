@@ -57,7 +57,7 @@ export default tseslint.config(
 
       // Type hygiene
       "@typescript-eslint/no-explicit-any": "error",
-      "@typescript-eslint/no-non-null-assertion": "warn",
+      "@typescript-eslint/no-non-null-assertion": "error",
       "@typescript-eslint/ban-ts-comment": [
         "error",
         { "ts-expect-error": "allow-with-description", minimumDescriptionLength: 5 },

@@ -43,4 +43,13 @@ describe("ESLint rule promotions", () => {
 
     expect(config?.rules?.["@typescript-eslint/no-explicit-any"]?.[0]).toBe(2);
   });
+
+  it("treats non-null assertions in production code as errors", async () => {
+    const eslint = new ESLint({ cwd: ROOT });
+    const config = await eslint.calculateConfigForFile(
+      path.join(ROOT, "extensions/sf-data360/lib/v2/dispatcher.ts"),
+    );
+
+    expect(config?.rules?.["@typescript-eslint/no-non-null-assertion"]?.[0]).toBe(2);
+  });
 });
