@@ -65,4 +65,16 @@ describe("ESLint rule promotions", () => {
     expect(productionConfig?.rules?.["no-console"]?.[0]).toBe(2);
     expect(scriptConfig?.rules?.["no-console"]?.[0]).toBe(0);
   });
+
+  it("has no warning-severity rules in the effective production config", async () => {
+    const eslint = new ESLint({ cwd: ROOT });
+    const config = await eslint.calculateConfigForFile(
+      path.join(ROOT, "extensions/sf-data360/lib/v2/dispatcher.ts"),
+    );
+    const warningRules = Object.entries(config?.rules ?? {})
+      .filter(([, setting]) => setting[0] === 1)
+      .map(([rule]) => rule);
+
+    expect(warningRules).toEqual([]);
+  });
 });

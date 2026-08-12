@@ -6,8 +6,8 @@
  * - Runs alongside Prettier (no stylistic rules that fight formatter).
  * - Errors on explicit `any` in production code; tests retain a narrow exemption.
  * - Errors on unused vars/imports/params (underscore-prefix to escape hatch).
- * - CI also runs eslint with --max-warnings=0 so the remaining `warn`
- *   categories cannot accumulate drift silently.
+ * - All enabled project policy rules are errors. CI retains --max-warnings=0
+ *   so inherited warning-level drift also fails closed.
  */
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";

@@ -10,8 +10,6 @@ accepted ADR.
 - Raise branch coverage enough to sustain a 55% threshold. Current blocking
   floors are 62% lines, 60% statements, 66% functions, and 49% branches; future
   ratchets require another observed full-suite baseline.
-- Promote useful warn-level ESLint rules to errors one at a time after the
-  repository passes the stricter rule without broad suppression.
 
 ## Non-goals
 
