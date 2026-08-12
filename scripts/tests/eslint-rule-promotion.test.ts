@@ -16,4 +16,13 @@ describe("ESLint rule promotions", () => {
 
     expect(config?.rules?.["no-useless-assignment"]?.[0]).toBe(2);
   });
+
+  it("treats CommonJS require imports as errors", async () => {
+    const eslint = new ESLint({ cwd: ROOT });
+    const config = await eslint.calculateConfigForFile(
+      path.join(ROOT, "extensions/sf-data360/lib/v2/dispatcher.ts"),
+    );
+
+    expect(config?.rules?.["@typescript-eslint/no-require-imports"]?.[0]).toBe(2);
+  });
 });

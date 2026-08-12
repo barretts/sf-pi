@@ -53,7 +53,7 @@ export default tseslint.config(
       "no-console": ["warn", { allow: ["warn", "error", "info"] }],
       "no-control-regex": "off", // many extensions use ANSI escape matchers intentionally
       "no-useless-assignment": "error",
-      "@typescript-eslint/no-require-imports": "warn",
+      "@typescript-eslint/no-require-imports": "error",
 
       // Type hygiene
       "@typescript-eslint/no-explicit-any": "warn",
