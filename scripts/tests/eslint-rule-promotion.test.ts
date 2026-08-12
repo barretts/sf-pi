@@ -52,4 +52,17 @@ describe("ESLint rule promotions", () => {
 
     expect(config?.rules?.["@typescript-eslint/no-non-null-assertion"]?.[0]).toBe(2);
   });
+
+  it("treats unexpected console output as an error outside CLI scripts", async () => {
+    const eslint = new ESLint({ cwd: ROOT });
+    const productionConfig = await eslint.calculateConfigForFile(
+      path.join(ROOT, "extensions/sf-data360/lib/v2/dispatcher.ts"),
+    );
+    const scriptConfig = await eslint.calculateConfigForFile(
+      path.join(ROOT, "scripts/generate-catalog.mjs"),
+    );
+
+    expect(productionConfig?.rules?.["no-console"]?.[0]).toBe(2);
+    expect(scriptConfig?.rules?.["no-console"]?.[0]).toBe(0);
+  });
 });

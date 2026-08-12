@@ -50,7 +50,7 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
       ],
       "no-unused-vars": "off", // handled by @typescript-eslint
-      "no-console": ["warn", { allow: ["warn", "error", "info"] }],
+      "no-console": ["error", { allow: ["warn", "error", "info"] }],
       "no-control-regex": "off", // many extensions use ANSI escape matchers intentionally
       "no-useless-assignment": "error",
       "@typescript-eslint/no-require-imports": "error",
