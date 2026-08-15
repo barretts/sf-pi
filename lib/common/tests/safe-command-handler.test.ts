@@ -39,6 +39,31 @@ function makeStubCtx(hasUI: boolean): StubCtx {
   };
 }
 
+function makeStaleCtx(): { ctx: StubCtx; ui: StubUi; invalidate: () => void } {
+  const base = makeStubCtx(true);
+  const staleError = new Error("This extension ctx is stale after reload");
+  let stale = false;
+  const ctx = {
+    mode: base.mode,
+    cwd: base.cwd,
+    get hasUI() {
+      if (stale) throw staleError;
+      return true;
+    },
+    get ui() {
+      if (stale) throw staleError;
+      return base.ui;
+    },
+  };
+  return {
+    ctx,
+    ui: base.ui,
+    invalidate: () => {
+      stale = true;
+    },
+  };
+}
+
 describe("withSafeCommandHandler", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -127,6 +152,52 @@ describe("withSafeCommandHandler", () => {
     expect(lastCall?.[1]).toBeUndefined();
   });
 
+  it("does not reject when status cleanup sees a stale ctx after reload", async () => {
+    const { ctx, ui, invalidate } = makeStaleCtx();
+    let resolveBody: () => void = () => {};
+
+    const promise = withSafeCommandHandler(
+      ctx as any,
+      "sf-skills",
+      () =>
+        new Promise<void>((resolve) => {
+          resolveBody = resolve;
+        }),
+    );
+    await vi.advanceTimersByTimeAsync(400);
+    expect(ui.setStatus).toHaveBeenCalledWith(
+      expect.stringContaining("sf-skills"),
+      expect.stringContaining("running"),
+    );
+
+    // ctx.reload() invalidates the command context before the command's
+    // promise unwinds through withSafeCommandHandler.
+    invalidate();
+    resolveBody();
+
+    await expect(promise).resolves.toBeUndefined();
+  });
+
+  it("does not reject when the running timer fires after ctx becomes stale", async () => {
+    const { ctx, ui, invalidate } = makeStaleCtx();
+    let resolveBody: () => void = () => {};
+    const promise = withSafeCommandHandler(
+      ctx as any,
+      "sf-skills",
+      () =>
+        new Promise<void>((resolve) => {
+          resolveBody = resolve;
+        }),
+    );
+
+    invalidate();
+    await vi.advanceTimersByTimeAsync(400);
+    resolveBody();
+
+    await expect(promise).resolves.toBeUndefined();
+    expect(ui.setStatus).not.toHaveBeenCalled();
+  });
+
   it("clears the running pill even when the body throws", async () => {
     const ctx = makeStubCtx(true);
     let rejectBody: (err: Error) => void = () => {};
@@ -160,6 +231,33 @@ describe("withSafeCommandHandler", () => {
     expect(ctx.ui.notify).toHaveBeenCalledTimes(1);
     expect(ctx.ui.notify.mock.calls[0]?.[0]).toContain("primary failure");
   });
+
+  it("rethrows the handler error when no interactive reporter remains", async () => {
+    const ctx = makeStubCtx(true);
+    ctx.ui.custom.mockRejectedValueOnce(new Error("panel unavailable"));
+    ctx.ui.notify.mockImplementationOnce(() => {
+      throw new Error("notification unavailable");
+    });
+
+    await expect(
+      withSafeCommandHandler(ctx as any, "sf-thing", async () => {
+        throw new Error("primary failure");
+      }),
+    ).rejects.toThrow("primary failure");
+  });
+
+  it("rethrows the handler error when the headless reporter fails", async () => {
+    const ctx = makeStubCtx(false);
+    ctx.ui.notify.mockImplementationOnce(() => {
+      throw new Error("notification unavailable");
+    });
+
+    await expect(
+      withSafeCommandHandler(ctx as any, "sf-thing", async () => {
+        throw new Error("primary failure");
+      }),
+    ).rejects.toThrow("primary failure");
+  });
 });
 
 describe("setSafeStatus", () => {
@@ -188,5 +286,25 @@ describe("setSafeStatus", () => {
 
     await setSafeStatus(ctx as any, "k", "loading…", async () => "ok");
     expect(ctx.ui.setStatus).not.toHaveBeenCalled();
+  });
+
+  it("does not reject when status cleanup sees a stale ctx", async () => {
+    const { ctx, ui, invalidate } = makeStaleCtx();
+    let resolveBody: () => void = () => {};
+    const promise = setSafeStatus(
+      ctx as any,
+      "k",
+      "loading…",
+      () =>
+        new Promise<void>((resolve) => {
+          resolveBody = resolve;
+        }),
+    );
+
+    invalidate();
+    resolveBody();
+
+    await expect(promise).resolves.toBeUndefined();
+    expect(ui.setStatus).toHaveBeenCalledTimes(1);
   });
 });
