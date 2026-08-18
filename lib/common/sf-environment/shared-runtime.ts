@@ -50,6 +50,7 @@ interface CacheEntry {
   inFlight?: Promise<SfEnvironment>;
   refreshInFlight?: Promise<SfEnvironment>;
   generation?: number;
+  refreshGeneration?: number;
 }
 
 const cache = new Map<string, CacheEntry>();
@@ -128,6 +129,9 @@ export async function refreshSharedSfEnvironment(
   const entry = getOrCreateEntry(cwd);
   if (entry.refreshInFlight) return entry.refreshInFlight;
 
+  const refreshGeneration = (entry.refreshGeneration ?? 0) + 1;
+  entry.refreshGeneration = refreshGeneration;
+
   const refresh = (async () => {
     const previousDetection = entry.inFlight;
     if (previousDetection) {
@@ -144,7 +148,9 @@ export async function refreshSharedSfEnvironment(
   try {
     return await refresh;
   } finally {
-    if (entry.refreshInFlight === refresh) entry.refreshInFlight = undefined;
+    if (entry.refreshGeneration === refreshGeneration) {
+      entry.refreshInFlight = undefined;
+    }
   }
 }
 

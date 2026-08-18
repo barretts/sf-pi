@@ -108,11 +108,9 @@ export function validateExtensionReadmeContract(source, manifest) {
   }
 
   for (const { heading, section } of presentStandardSections) {
-    const meaningful = section.body
-      .replace(/<!--[^]*?-->/g, "")
-      .replace(/```[^]*?```/g, (block) => block.replace(/```\w*/g, "").trim())
-      .trim();
-    if (meaningful.length === 0) findings.push(`Conditional section ## ${heading} is empty.`);
+    if (stripNonProseMarkup(section.body).length === 0) {
+      findings.push(`Conditional section ## ${heading} is empty.`);
+    }
   }
 
   const fileStructure = byName.get("file structure")?.[0];
@@ -125,6 +123,22 @@ export function validateExtensionReadmeContract(source, manifest) {
   }
 
   return findings;
+}
+
+function stripNonProseMarkup(body) {
+  let text = String(body);
+  let previous;
+  do {
+    previous = text;
+    text = text.replace(/<!--[\s\S]*?-->/g, "");
+  } while (text !== previous);
+  // Drop leftover comment delimiters so a trailing `<!--` cannot keep an
+  // otherwise empty section from being flagged, and cannot re-form.
+  do {
+    previous = text;
+    text = text.replace(/<!--|--!?>/g, "");
+  } while (text !== previous);
+  return text.replace(/```[\s\S]*?```/g, (block) => block.replace(/```\w*/g, "").trim()).trim();
 }
 
 function parseH2Sections(source) {
