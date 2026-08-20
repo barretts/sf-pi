@@ -21,6 +21,7 @@ describe("gateway model family inference", () => {
     ["openai/example-model", "openai"],
     ["example-codex-model", "codex"],
     ["example-deepseek-model", "deepseek"],
+    ["example-grok-model", "xai"],
     ["example-chat-model", "unknown"],
   ] as const)("classifies %s as %s", (id, family) => {
     expect(getModelFamily(id)).toBe(family);
@@ -28,7 +29,7 @@ describe("gateway model family inference", () => {
 });
 
 describe("conservative model inference", () => {
-  it("inherits portable metadata from Pi's public catalog by exact discovered ID", () => {
+  it("inherits portable metadata and transport from Pi's public catalog", () => {
     const reference = getBuiltinProviders()
       .flatMap((provider) => getBuiltinModels(provider))
       .find(
@@ -51,7 +52,7 @@ describe("conservative model inference", () => {
     expect(config.thinkingLevelMap).toBeDefined();
   });
 
-  it("inherits portable metadata from an injected Pi reference without copying compat", () => {
+  it("inherits portable metadata and transport from an injected Pi reference without copying compat", () => {
     const reference: PiModelReference = {
       id: "example-public-model",
       name: "Example Public Model",
@@ -82,6 +83,41 @@ describe("conservative model inference", () => {
       thinkingLevelMap: reference.thinkingLevelMap,
     });
     expect("supportsStrictMode" in (config.compat ?? {})).toBe(false);
+  });
+
+  it.each([
+    ["gpt-example-model", "Example GPT Model", "openai-responses"],
+    ["example-claude-model", "Example Claude Model", "anthropic-messages"],
+  ] as const)("preserves the public transport for %s", (id, name, api) => {
+    const reference: PiModelReference = {
+      id,
+      name,
+      api,
+      reasoning: true,
+      input: ["text"],
+      contextWindow: 200_000,
+      maxTokens: 64_000,
+    };
+
+    expect(toProviderModelConfig(id, undefined, [reference]).api).toBe(api);
+  });
+
+  it("uses Chat Completions for xAI models instead of inheriting Responses transport", () => {
+    const reference: PiModelReference = {
+      id: "example-grok-model",
+      name: "Example Grok Model",
+      api: "openai-responses",
+      reasoning: true,
+      input: ["text"],
+      contextWindow: 500_000,
+      maxTokens: 128_000,
+    };
+
+    const config = toProviderModelConfig(reference.id, undefined, [reference]);
+
+    expect(config.api).toBe("openai-completions");
+    expect(config.reasoning).toBe(true);
+    expect(config.compat).toMatchObject({ supportsReasoningEffort: false });
   });
 
   it("does not infer advanced capability from an unknown model ID", () => {
