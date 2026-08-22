@@ -66,7 +66,23 @@ import {
   type ManagerDetailAction,
 } from "../../lib/common/manager-actions.ts";
 import { handleDefaults, parseDefaultsArgs } from "./lib/skills-command.ts";
-import { detectLegacyDefaultLibrary, formatLegacyDefaultLibraryWarning } from "./lib/defaults.ts";
+import {
+  detectLegacyDefaultLibrary,
+  formatLegacyDefaultLibraryWarning,
+  inspectManagedClone,
+  rewireCloneToEffective,
+} from "./lib/defaults.ts";
+import { syncEffectiveSkills } from "./lib/invocation/effective-tree.ts";
+import {
+  buildToggleInventory,
+  scannedSkillsForToggle,
+  stampToggleSkills,
+} from "./lib/invocation/inventory.ts";
+import {
+  readGlobalInvocationPolicy,
+  writeGlobalInvocationPolicy,
+} from "./lib/invocation/policy.ts";
+import { SkillToggleViewComponent, type ToggleViewResult } from "./lib/toggle-view.ts";
 import { readEffectiveSfSkillsSettings } from "./lib/settings.ts";
 import { updateSkillSources } from "../../lib/common/skill-sources/skill-sources.ts";
 import { setSourceGate, upsertSource } from "../../lib/common/skill-sources/source-registry.ts";
@@ -101,7 +117,8 @@ const EMPTY_STATE: SkillsHudState = {
   usedCount: 0,
 };
 
-type SkillsAction = "summary" | "funnel" | "metrics" | "prune" | "help" | LifecycleActionId;
+type SkillsAction =
+  "summary" | "funnel" | "toggle" | "metrics" | "prune" | "help" | LifecycleActionId;
 
 const SKILLS_ACTIONS: CommandPanelAction<SkillsAction>[] = [
   {
@@ -115,6 +132,13 @@ const SKILLS_ACTIONS: CommandPanelAction<SkillsAction>[] = [
     label: "Open skill funnel",
     description:
       "Catalog → Sources → Global → Project → Conflicts. Gate sources, toggle skills per scope, resolve conflicts.",
+    group: "Status",
+  },
+  {
+    value: "toggle",
+    label: "Toggle invocation",
+    description:
+      "Hide or show managed Salesforce skills in the system prompt via disable-model-invocation stamps.",
     group: "Status",
   },
   {
@@ -240,10 +264,15 @@ function renderSkillsHelp(): string {
     "  • /sf-skills defaults link <path> [project|global]",
     "  • /sf-skills defaults unlink <path> [project|global] [--delete]",
     "",
+    "Invocation toggle (/sf-skills toggle):",
+    "  • Stamps disable-model-invocation on the global effective tree",
+    "  • Source clone stays pristine so /sf-skills defaults update still pulls",
+    "",
     "Commands:",
     "  /sf-skills           Open SF Skills in the SF Pi Manager",
     "  /sf-skills summary   HUD summary text",
     "  /sf-skills funnel    Open the skill funnel",
+    "  /sf-skills toggle    Toggle agent-invocable vs /skill:name-only",
     "  /sf-skills defaults  Manage forcedotcom/sf-skills installs (see above)",
     "  /sf-skills help      Show this help",
   ].join("\n");
@@ -426,7 +455,7 @@ export default function sfSkills(pi: ExtensionAPI) {
       description: action.description,
       group: action.group,
       run: (ctx) => handleSkillsCommand(ctx, action.value, true),
-      ...(action.value === "funnel" ? { closeBeforeRun: true } : {}),
+      ...(action.value === "funnel" || action.value === "toggle" ? { closeBeforeRun: true } : {}),
     }));
   }
 
@@ -475,6 +504,11 @@ export default function sfSkills(pi: ExtensionAPI) {
       return;
     }
 
+    if (subcommand === "toggle") {
+      await openToggle(ctx);
+      return;
+    }
+
     if (subcommand === "metrics") {
       await emitSkillsOutput(
         ctx,
@@ -517,6 +551,60 @@ export default function sfSkills(pi: ExtensionAPI) {
       return;
     }
     ctx.ui.notify(body ? `${title}\n\n${body}` : title, level === "success" ? "info" : level);
+  }
+
+  async function openToggle(ctx: ExtensionCommandContext): Promise<void> {
+    if (ctx.mode !== "tui") {
+      const message =
+        "The invocation toggle needs an interactive Pi TUI. Use /sf-skills defaults install first, then rerun in the TUI.";
+      if (ctx.hasUI) ctx.ui.notify(message, "info");
+      else console.info(message);
+      return;
+    }
+    const clone = inspectManagedClone("global");
+    const policy = readGlobalInvocationPolicy();
+    const managed = clone.exists ? syncEffectiveSkills(clone.skillsPath, policy).skills : [];
+    const gathered = gatherCatalogInput({
+      cwd: ctx.cwd,
+      projectTrusted: ctx.isProjectTrusted(),
+      deps: { loadSkills, loadSkillsFromDir, getCommands: () => pi.getCommands() },
+    });
+    const skills = buildToggleInventory(managed, scannedSkillsForToggle(gathered.sources));
+    if (skills.length === 0) {
+      ctx.ui.notify(
+        "No skills found. Run /sf-skills defaults install for the Salesforce library, or add community skills.",
+        "warning",
+      );
+      return;
+    }
+    ctx.ui.setWorkingVisible(false);
+    let result: ToggleViewResult | undefined;
+    try {
+      result = await ctx.ui.custom<ToggleViewResult>(
+        (_tui, theme, _keybindings, done) =>
+          new SkillToggleViewComponent(theme, skills, policy, done),
+        {
+          overlay: true,
+          overlayOptions: () => ({
+            anchor: "center" as const,
+            width: "92%",
+            minWidth: 100,
+            maxHeight: "88%",
+          }),
+        },
+      );
+    } finally {
+      ctx.ui.setWorkingVisible(true);
+    }
+    if (!result || result.action !== "apply") return;
+    writeGlobalInvocationPolicy(result.policy);
+    if (clone.exists) {
+      syncEffectiveSkills(clone.skillsPath, result.policy);
+      rewireCloneToEffective(ctx.cwd);
+    }
+    stampToggleSkills(skills, result.policy);
+    ctx.ui.notify("Updated skill invocation stamps. Reloading…", "info");
+    await ctx.reload();
   }
 
   async function openFunnel(ctx: ExtensionCommandContext): Promise<void> {

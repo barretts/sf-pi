@@ -101,6 +101,7 @@ ADRs preserve durable architectural rationale. Runtime code and Behavior Proofs 
 - [0105: Extension References Are Role-Routed](./0105-extension-references-are-role-routed.md) — 2026-08-11
 - [0106: Data 360 live proof uses the v2 registry and dispatcher](./0106-data-360-live-proof-uses-the-v2-dispatcher.md) — 2026-08-11
 - [0107: SF tldraw validates Spec v2 at execute instead of advertising the union](./0107-tldraw-validates-spec-v2-at-execute.md) — 2026-08-19
+- [0108: Managed skill invocation stamps use an effective tree](./0108-managed-skill-invocation-stamps.md) — 2026-08-21
 
 ## Proposed
 

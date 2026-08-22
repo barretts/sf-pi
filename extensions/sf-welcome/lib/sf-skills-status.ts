@@ -34,7 +34,11 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
 import { createStateStore } from "../../../lib/common/state-store.ts";
-import { globalSettingsPath, projectSettingsPath } from "../../../lib/common/pi-paths.ts";
+import {
+  globalAgentPath,
+  globalSettingsPath,
+  projectSettingsPath,
+} from "../../../lib/common/pi-paths.ts";
 import { legacyManagedClonePath, managedClonePath } from "../../sf-skills/lib/defaults.ts";
 import type { SfSkillsStatusInfo } from "./types.ts";
 
@@ -310,6 +314,13 @@ function settingsIncludesSkillsPath(filePath: string, skillsPath: string, cwd: s
   );
 }
 
+function orWiring(
+  primary: { wired: boolean; scope?: "global" | "project" },
+  fallback: { wired: boolean; scope?: "global" | "project" },
+): { wired: boolean; scope?: "global" | "project" } {
+  return primary.wired ? primary : fallback;
+}
+
 function detectManagedWiring(
   skillsPath: string,
   cwd: string,
@@ -339,7 +350,14 @@ function managedCloneAvailability(
   if (!isDirectory(rootPath)) return null;
   if (!existsSync(path.join(rootPath, MANAGED_SENTINEL_FILE))) return null;
   const skillsPath = path.join(rootPath, SKILLS_SUBDIR);
-  const wiring = detectManagedWiring(skillsPath, cwd);
+  const effectiveSkillsPath = path.join(globalAgentPath("sf-skills", "effective"), SKILLS_SUBDIR);
+  const wiring =
+    kind === "current"
+      ? orWiring(
+          detectManagedWiring(effectiveSkillsPath, cwd),
+          detectManagedWiring(skillsPath, cwd),
+        )
+      : detectManagedWiring(skillsPath, cwd);
   return {
     rootPath,
     skillsPath,

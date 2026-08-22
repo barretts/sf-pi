@@ -12,8 +12,11 @@ Catalog → Sources → Global → Project → Effective
 The interactive view inventories every discovered copy, gates source roots,
 controls global/project wiring, identifies additive-scope limits, resolves
 eligible name conflicts, and reports auto-discovered copies it cannot override.
-Pi remains the only skill loader; SF Skills compiles decisions into native
-`settings.skills[]` entries and never renames or edits `SKILL.md` files.
+Pi remains the only skill loader for _wiring_. The Funnel still compiles load
+decisions into native `settings.skills[]` and does not rename user `SKILL.md`
+files. Managed-library _invocation_ is separate: `/sf-skills toggle` stamps
+`disable-model-invocation` on a global `effective/` copy so unused skills stay
+out of the system prompt while `/skill:name` keeps working.
 
 It also provides an optional active-context HUD, the managed public Salesforce
 skill-library installer (`forcedotcom/sf-skills`), explicit invocation counters,
@@ -27,9 +30,10 @@ library without deleting the old clone.
 | ----------------------------------------------- | ----------------------------------------------- |
 | `/sf-skills`                                    | Open SF Skills in the Manager                   |
 | `/sf-skills funnel`                             | Open the interactive Skill Funnel               |
+| `/sf-skills toggle`                             | Stamp packs or individual skills; Origin column |
 | `/sf-skills summary`                            | Print effective skill/source state              |
 | `/sf-skills defaults install [project\|global]` | Install and wire the managed default library    |
-| `/sf-skills defaults update`                    | Update a sentinel-managed library               |
+| `/sf-skills defaults update`                    | Pull the clone and restamp the effective tree   |
 | `/sf-skills metrics`                            | Show explicit skill invocation counts           |
 | `/sf-skills prune [--apply]`                    | Report or remove stale wiring and owned orphans |
 
@@ -43,6 +47,7 @@ report-only because SF Skills does not move user files.
 
 - `sfPi.skills.hudVisibility`: `auto` or `hidden`;
 - `sfPi.skills.defaultInstallScope`: `project` (default) or `global`.
+- `sfPi.skillInvocation`: global default/pack/skill visibility for the managed library.
 
 The full Skill Funnel remains an action surface because applying staged changes
 can update native settings and reload Pi. Catalog loading and disk scans happen
@@ -64,6 +69,10 @@ sources are remembered only after successful registration.
 
 **The funnel is slow to open:** Opening it intentionally runs skill loading and
 per-root scans; that work stays off the startup path.
+
+**Toggles vanished after update:** `/sf-skills defaults update` restamps the
+effective tree from `sfPi.skillInvocation`. The clone is never the preference
+store. If flags are missing, check that settings key and rerun `/sf-skills toggle`.
 
 ## File Structure
 

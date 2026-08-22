@@ -7,7 +7,7 @@
  * the post-install settings.skills[] wiring are exercised here.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -18,6 +18,7 @@ import {
   managedClonePath,
   unlinkCheckout,
   updateDefaults,
+  rewireCloneToEffective,
 } from "../lib/defaults.ts";
 import { parseDefaultsArgs } from "../lib/skills-command.ts";
 
@@ -154,7 +155,8 @@ describe("installDefaults (with fake git)", () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require("node:fs").readFileSync(path.join(home, ".pi", "agent", "settings.json"), "utf8"),
     );
-    expect(settings.skills).toContain("~/.pi/agent/sf-skills/forcedotcom/skills");
+    expect(settings.skills).toContain("~/.pi/agent/sf-skills/effective/skills");
+    expect(settings.skills).not.toContain("~/.pi/agent/sf-skills/forcedotcom/skills");
   });
 
   it("is idempotent on second invocation", async () => {
@@ -164,6 +166,36 @@ describe("installDefaults (with fake git)", () => {
     const second = await installDefaults({ scope: "global", spawn: fakeGit });
     expect(second.ok).toBe(true);
     expect(second.message).toMatch(/Already cloned/);
+  });
+
+  it("stamps the effective tree and leaves the clone SKILL.md clean", async () => {
+    const home = makeHome();
+    process.env.HOME = home;
+    await installDefaults({ scope: "global", spawn: fakeGit });
+    const cloneFile = path.join(
+      home,
+      ".pi",
+      "agent",
+      "sf-skills",
+      "forcedotcom",
+      "skills",
+      "demo-skill",
+      "SKILL.md",
+    );
+    const effectiveFile = path.join(
+      home,
+      ".pi",
+      "agent",
+      "sf-skills",
+      "effective",
+      "skills",
+      "demo-skill",
+      "SKILL.md",
+    );
+    const cloneRaw = readFileSync(cloneFile, "utf8");
+    const effectiveRaw = readFileSync(effectiveFile, "utf8");
+    expect(cloneRaw).not.toMatch(/disable-model-invocation/);
+    expect(effectiveRaw).toMatch(/disable-model-invocation: true/);
   });
 
   it("scope='project' clones ONCE globally and wires the global path into project settings", async () => {
@@ -181,11 +213,29 @@ describe("installDefaults (with fake git)", () => {
     const fs = require("node:fs");
     // Project settings reference the GLOBAL clone path (local-first enablement).
     const settings = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "settings.json"), "utf8"));
-    expect(settings.skills).toContain("~/.pi/agent/sf-skills/forcedotcom/skills");
+    expect(settings.skills).toContain("~/.pi/agent/sf-skills/effective/skills");
+    expect(settings.skills).not.toContain("~/.pi/agent/sf-skills/forcedotcom/skills");
     // No per-project clone was created.
     expect(fs.existsSync(path.join(cwd, ".pi", "sf-skills", "forcedotcom"))).toBe(false);
     // Global settings were not written (only project scope was wired).
     expect(fs.existsSync(path.join(home, ".pi", "agent", "settings.json"))).toBe(false);
+  });
+});
+
+describe("rewireCloneToEffective", () => {
+  it("replaces a project clone wire with the effective tree", () => {
+    const home = makeHome();
+    process.env.HOME = home;
+    const cwd = makeCwd();
+    mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+    writeFileSync(
+      path.join(cwd, ".pi", "settings.json"),
+      `${JSON.stringify({ skills: ["~/.pi/agent/sf-skills/forcedotcom/skills"] })}\n`,
+    );
+    rewireCloneToEffective(cwd);
+    const settings = JSON.parse(readFileSync(path.join(cwd, ".pi", "settings.json"), "utf8"));
+    expect(settings.skills).toContain("~/.pi/agent/sf-skills/effective/skills");
+    expect(settings.skills).not.toContain("~/.pi/agent/sf-skills/forcedotcom/skills");
   });
 });
 
@@ -225,7 +275,7 @@ describe("unlinkCheckout", () => {
     await installDefaults({ scope: "global", spawn: fakeGit });
 
     const result = unlinkCheckout({
-      target: "~/.pi/agent/sf-skills/forcedotcom/skills",
+      target: "~/.pi/agent/sf-skills/effective/skills",
       scope: "global",
     });
     expect(result.ok).toBe(true);
@@ -235,7 +285,7 @@ describe("unlinkCheckout", () => {
     const settings = JSON.parse(
       fs.readFileSync(path.join(home, ".pi", "agent", "settings.json"), "utf8"),
     );
-    expect(settings.skills).not.toContain("~/.pi/agent/sf-skills/forcedotcom/skills");
+    expect(settings.skills).not.toContain("~/.pi/agent/sf-skills/effective/skills");
   });
 
   it("refuses to delete a path missing the sentinel", () => {
@@ -297,7 +347,7 @@ describe("legacy afv-library detection", () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require("node:fs").readFileSync(path.join(home, ".pi", "agent", "settings.json"), "utf8"),
     );
-    expect(settings.skills).toContain("~/.pi/agent/sf-skills/forcedotcom/skills");
+    expect(settings.skills).toContain("~/.pi/agent/sf-skills/effective/skills");
     expect(settings.skills).not.toContain("~/.pi/agent/sf-skills/afv-library/skills");
     expect(result.message).toMatch(
       /\/sf-skills defaults unlink ~\/\.pi\/agent\/sf-skills\/afv-library --delete/,

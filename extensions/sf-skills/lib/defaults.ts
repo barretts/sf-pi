@@ -15,12 +15,12 @@
  *   unlink  : remove a wired entry; --delete only valid on managed dirs
  *   status  : report every known managed/linked checkout
  *
- * Native settings, no shadow state
- * --------------------------------
+ * Native settings, stamped effective tree
+ * ---------------------------------------
  * The clone target is intentionally OUTSIDE pi's auto-discovery roots
- * (`~/.pi/agent/skills/` etc.) so that pi only loads what we explicitly
- * write into `settings.skills[]`. That keeps enable/disable a single
- * native knob: a path is in settings, or it isn't.
+ * (`~/.pi/agent/skills/` etc.). Pi is wired to a sibling `effective/skills`
+ * copy so `/sf-skills toggle` can stamp `disable-model-invocation` without
+ * dirtying the git checkout used by `/sf-skills defaults update`.
  *
  * Sentinel file (.sf-skills-managed) marks dirs we own. Auto-update
  * never touches a checkout without one — we refuse to mutate a tree
@@ -35,6 +35,11 @@ import {
   updateSkillSources,
   type SkillSourceScope,
 } from "../../../lib/common/skill-sources/skill-sources.ts";
+import {
+  managedEffectiveSettingsValue,
+  managedEffectiveSkillsPath,
+  syncEffectiveSkills,
+} from "./invocation/effective-tree.ts";
 
 // -------------------------------------------------------------------------------------------------
 // Constants
@@ -104,14 +109,9 @@ export function managedClonePath(scope: SkillSourceScope, cwd?: string): string 
   return globalAgentPath("sf-skills", REPO_DIR_NAME);
 }
 
-/** Settings value (portable form) we write for the managed clone's skills/ dir. */
-export function managedSettingsValue(scope: SkillSourceScope): string {
-  // Global lives under ~/.pi/agent/, so the canonical value uses "~/" so the
-  // settings file stays portable across machines. Project paths are
-  // relative to cwd and pi resolves them per project settings.
-  return scope === "project"
-    ? `./.pi/sf-skills/${REPO_DIR_NAME}/${SKILLS_SUBDIR}`
-    : `~/.pi/agent/sf-skills/${REPO_DIR_NAME}/${SKILLS_SUBDIR}`;
+/** Settings value (portable form) we write for the managed effective skills dir. */
+export function managedSettingsValue(_scope: SkillSourceScope): string {
+  return managedEffectiveSettingsValue();
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -129,13 +129,9 @@ export function inspectManagedClone(scope: SkillSourceScope, cwd?: string): Mana
 
   let wired = false;
   if (exists) {
-    const detection = detectSkillSources({ cwd, includeProject: scope === "project" });
-    const settingsPath =
-      scope === "project" ? detection.projectSettingsPath : detection.settingsPath;
-    if (settingsPath) {
-      const skills = readSkillsArray(settingsPath);
-      wired = skills.some((value) => resolvesToSamePath(value, skillsPath, cwd));
-    }
+    wired =
+      isManagedWired(scope, cwd, managedEffectiveSkillsPath()) ||
+      isManagedWired(scope, cwd, skillsPath);
   }
 
   return { rootPath, skillsPath, settingsValue, scope, exists, managed, wired };
@@ -267,16 +263,16 @@ export async function installDefaults(options: InstallOptions): Promise<InstallR
     );
   }
 
-  const alreadyWired = isManagedWired(wireScope, options.cwd, content.skillsPath);
+  const refreshed = inspectManagedClone("global");
+  syncEffectiveSkills(refreshed.skillsPath);
+  const alreadyWired = isManagedWired(wireScope, options.cwd, managedEffectiveSkillsPath());
   const legacyRemoved = unwireLegacyDefaultLibrary(wireScope, options.cwd);
-  if (!alreadyWired) {
-    updateSkillSources({
-      add: [settingsValue],
-      remove: [],
-      scope: wireScope,
-      cwd: options.cwd,
-    });
-  }
+  updateSkillSources({
+    add: alreadyWired ? [] : [settingsValue],
+    remove: [cloneSkillsSettingsValue()],
+    scope: wireScope,
+    cwd: options.cwd,
+  });
 
   // Report state: global content clone, wired-status reflecting the wire scope.
   const next = inspectManagedClone("global");
@@ -284,7 +280,7 @@ export async function installDefaults(options: InstallOptions): Promise<InstallR
     ...next,
     scope: wireScope,
     settingsValue,
-    wired: isManagedWired(wireScope, options.cwd, content.skillsPath),
+    wired: isManagedWired(wireScope, options.cwd, managedEffectiveSkillsPath()),
   };
   const wiredVerb = alreadyWired ? "still wired" : "now wired";
   const installed = content.exists
@@ -301,6 +297,23 @@ export async function installDefaults(options: InstallOptions): Promise<InstallR
     clone,
     message: parts.join(" "),
   };
+}
+
+function cloneSkillsSettingsValue(): string {
+  return `~/.pi/agent/sf-skills/${REPO_DIR_NAME}/${SKILLS_SUBDIR}`;
+}
+
+/** Point Pi at the stamped effective tree instead of the pristine clone. */
+export function rewireCloneToEffective(cwd?: string): void {
+  for (const scope of ["global", "project"] as const) {
+    if (scope === "project" && !cwd) continue;
+    updateSkillSources({
+      add: [managedEffectiveSettingsValue()],
+      remove: [cloneSkillsSettingsValue()],
+      scope,
+      cwd,
+    });
+  }
 }
 
 /** Is the managed skills dir wired in the given scope's settings? */
@@ -384,11 +397,20 @@ export async function updateDefaults(options: UpdateOptions): Promise<UpdateResu
     cwd: clone.rootPath,
     spawn: options.spawn,
   });
+  if (result.success) {
+    syncEffectiveSkills(clone.skillsPath);
+    updateSkillSources({
+      add: [managedEffectiveSettingsValue()],
+      remove: [cloneSkillsSettingsValue()],
+      scope: options.scope,
+      cwd: options.cwd,
+    });
+  }
   return {
     ok: result.success,
-    clone,
+    clone: { ...inspectManagedClone("global"), scope: options.scope },
     message: result.success
-      ? "Pulled latest forcedotcom/sf-skills."
+      ? "Pulled latest forcedotcom/sf-skills and restamped the effective skill tree."
       : `git pull failed: ${result.stderr || result.stdout || "unknown error"}`,
     output: `${result.stdout}${result.stderr ? `\n${result.stderr}` : ""}`,
   };

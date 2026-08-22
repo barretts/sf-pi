@@ -363,7 +363,9 @@ function ensureCopy(
  */
 function fallbackSourceLabel(filePath: string): string {
   const norm = filePath.replace(/\\/g, "/");
-  if (norm.includes("/sf-skills/forcedotcom/")) return "sf-skills";
+  if (norm.includes("/sf-skills/forcedotcom/") || norm.includes("/sf-skills/effective/")) {
+    return "sf-skills";
+  }
   if (norm.includes("/afv-library/")) return "afv-library (legacy)";
   // …/<root>/<skill>/SKILL.md → name the <root> directory; for a loose
   // …/<root>/<name>.md → name the <root> directory too.
