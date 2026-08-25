@@ -87,12 +87,6 @@ const providerTelemetryMock = vi.hoisted(() => ({
 }));
 vi.mock("../lib/provider-telemetry.ts", () => providerTelemetryMock);
 
-const wireTraceMock = vi.hoisted(() => ({
-  installWireTrace: vi.fn(),
-  isWireTraceEnabled: vi.fn(() => false),
-}));
-vi.mock("../lib/wire-trace.ts", () => wireTraceMock);
-
 interface FakePi {
   events: EventEmitter;
   handlers: Record<string, Array<(event: unknown, ctx: ExtensionContext) => Promise<void> | void>>;

@@ -50,4 +50,11 @@ describe("Gateway thinking authority", () => {
   it("does not write Pi's defaultThinkingLevel setting", () => {
     expect(source("index.ts")).not.toMatch(/settings\.defaultThinkingLevel\s*=/u);
   });
+
+  it("does not install a process-global gateway wire trace", () => {
+    expect(source("index.ts")).not.toContain("installWireTrace");
+    expect(source("index.ts")).not.toContain("SF_LLM_GATEWAY_TRACE");
+    expect(source("lib/status.ts")).not.toContain("wire-trace");
+    expect(source("lib/status.ts")).not.toContain("SF_LLM_GATEWAY_TRACE");
+  });
 });

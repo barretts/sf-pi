@@ -37,7 +37,6 @@ export interface RuntimeSandbox {
 }
 
 const INTEGRATION_ENV_KEYS = [
-  "SF_LLM_GATEWAY_TRACE",
   "SLACK_USER_TOKEN",
   "SLACK_CLIENT_ID",
   "SLACK_CLIENT_SECRET",

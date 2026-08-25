@@ -213,7 +213,6 @@ import {
   createStaleUsageRefreshState,
   maybeAutoRefreshStaleUsage,
 } from "./lib/stale-usage-refresh.ts";
-import { installWireTrace, isWireTraceEnabled } from "./lib/wire-trace.ts";
 import { requirePiVersion } from "../../lib/common/pi-compat.ts";
 import { markBootStep } from "../../lib/common/boot-timing.ts";
 import { globalAgentPath } from "../../lib/common/pi-paths.ts";
@@ -295,14 +294,6 @@ export default function sfLlmGatewayInternalExtension(pi: ExtensionAPI) {
   // session_shutdown cleanup so same-directory session switches get a fresh
   // refresher without leaking stale callbacks across reloads/resumes.
   let unregisterMonthlyUsage: (() => void) | null = null;
-
-  // Opt-in wire-level trace. Activated by SF_LLM_GATEWAY_TRACE=1.
-  // Writes raw request/response bytes under Pi's global agent directory.
-  // Intended for debugging sessions where the gateway returns empty/odd responses;
-  // no-op otherwise. See lib/wire-trace.ts for details.
-  if (isWireTraceEnabled()) {
-    installWireTrace();
-  }
 
   // Register one complete Pi Provider. Pi owns auth application, provider-scoped
   // model persistence, refresh coordination, and API dispatch from this point on.
@@ -608,20 +599,7 @@ function bindGatewayProviderContext(ctx: ExtensionCommandContext): void {
   }
 }
 
-type GatewayModelRefreshResult = {
-  aborted: boolean;
-  errors: ReadonlyMap<string, Error>;
-};
-
-type GatewayRefreshCapableRegistry = {
-  refresh(options?: {
-    providers?: readonly string[];
-    force?: boolean;
-    signal?: AbortSignal;
-  }): Promise<GatewayModelRefreshResult | void>;
-};
-
-// Exported for cross-version ModelRegistry refresh behavior tests.
+// Exported for ModelRegistry refresh behavior tests.
 export async function refreshGatewayProvider(
   ctx: ExtensionCommandContext,
 ): Promise<ReturnType<typeof gatewayProviderRuntime.getLastDiscovery>> {
@@ -629,11 +607,9 @@ export async function refreshGatewayProvider(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   timeout.unref?.();
-  let result: GatewayModelRefreshResult | void;
+  let result: Awaited<ReturnType<typeof ctx.modelRegistry.refresh>>;
   try {
-    // Pi 0.84 scopes and cancels this refresh. Pi 0.82/0.83 safely ignore
-    // the extra argument and retain their existing broad-refresh behavior.
-    result = await (ctx.modelRegistry as unknown as GatewayRefreshCapableRegistry).refresh({
+    result = await ctx.modelRegistry.refresh({
       providers: [PROVIDER_NAME],
       force: true,
       signal: controller.signal,
@@ -643,14 +619,14 @@ export async function refreshGatewayProvider(
   }
 
   const state = gatewayProviderRuntime.getLastDiscovery();
-  if (result && result.aborted) {
+  if (result.aborted) {
     return {
       ...state,
       error:
         "Gateway model refresh timed out; last-known catalog state was retained. Run /sf-llm-gateway doctor.",
     };
   }
-  if (result && result.errors.has(PROVIDER_NAME) && !state.error) {
+  if (result.errors.has(PROVIDER_NAME) && !state.error) {
     return {
       ...state,
       error:

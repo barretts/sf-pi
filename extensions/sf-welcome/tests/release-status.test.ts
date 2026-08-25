@@ -71,11 +71,11 @@ describe("detectPiReleaseStatus", () => {
   it("still blocks Pi prereleases", async () => {
     const status = await detectPiReleaseStatus(async () => "0.85.0-rc.1", {} as NodeJS.ProcessEnv, {
       runNpm: noPolicyRunner,
-      installedVersion: "0.84.2",
+      installedVersion: "0.84.3",
     });
 
     expect(status.freshness).toBe("latest");
-    expect(status.latestVersion).toBe("0.84.2");
+    expect(status.latestVersion).toBe("0.84.3");
     expect(status.absoluteLatestVersion).toBe("0.85.0-rc.1");
     expect(status.supportWindowLimited).toBe(true);
     expect(status.updateCommand).toBe("/sf-pi doctor runtime");
@@ -84,24 +84,24 @@ describe("detectPiReleaseStatus", () => {
   it("still blocks Pi 1.x pending a major-version audit", async () => {
     const status = await detectPiReleaseStatus(async () => "1.0.0", {} as NodeJS.ProcessEnv, {
       runNpm: noPolicyRunner,
-      installedVersion: "0.84.2",
+      installedVersion: "0.84.3",
     });
 
     expect(status.freshness).toBe("latest");
-    expect(status.latestVersion).toBe("0.84.2");
+    expect(status.latestVersion).toBe("0.84.3");
     expect(status.absoluteLatestVersion).toBe("1.0.0");
     expect(status.supportWindowLimited).toBe(true);
     expect(status.updateCommand).toBe("/sf-pi doctor runtime");
   });
 
   it("reports update availability for the latest audited Pi release", async () => {
-    const status = await detectPiReleaseStatus(async () => "0.84.2", {} as NodeJS.ProcessEnv, {
+    const status = await detectPiReleaseStatus(async () => "0.84.3", {} as NodeJS.ProcessEnv, {
       runNpm: noPolicyRunner,
       installedVersion: "0.83.0",
     });
 
     expect(status.freshness).toBe("update-available");
-    expect(status.latestVersion).toBe("0.84.2");
+    expect(status.latestVersion).toBe("0.84.3");
     expect(status.updateCommand).toBe("pi update --self");
   });
 
@@ -110,7 +110,7 @@ describe("detectPiReleaseStatus", () => {
     const status = await detectPiReleaseStatus(
       async () => {
         fetchCalls += 1;
-        return "0.82.0";
+        return "0.84.0";
       },
       { PI_OFFLINE: "1" } as NodeJS.ProcessEnv,
       { runNpm: noPolicyRunner },
@@ -123,7 +123,7 @@ describe("detectPiReleaseStatus", () => {
   });
 
   it("treats the policy-visible latest as current when npm cooldown filters an in-window release", async () => {
-    const installed = "0.82.0";
+    const installed = "0.84.0";
     const cutoff = "2026-05-19T00:00:00.000Z";
     const runNpm: NpmPolicyCommandFn = async (args) => {
       if (args.join(" ") === "config get before") return cutoff;
@@ -131,26 +131,26 @@ describe("detectPiReleaseStatus", () => {
       if (args.join(" ") === "view @earendil-works/pi-coding-agent time --json") {
         return JSON.stringify({
           [installed]: "2026-05-18T00:00:00.000Z",
-          "0.82.1": "2026-05-20T00:00:00.000Z",
+          "0.84.1": "2026-05-20T00:00:00.000Z",
         });
       }
       return undefined;
     };
 
-    const status = await detectPiReleaseStatus(async () => "0.82.1", {} as NodeJS.ProcessEnv, {
+    const status = await detectPiReleaseStatus(async () => "0.84.1", {} as NodeJS.ProcessEnv, {
       runNpm,
       installedVersion: installed,
     });
 
     expect(status.freshness).toBe("latest");
     expect(status.latestVersion).toBe(installed);
-    expect(status.absoluteLatestVersion).toBe("0.82.1");
+    expect(status.absoluteLatestVersion).toBe("0.84.1");
     expect(status.policyVisibleLatestVersion).toBe(installed);
     expect(status.cooldownActive).toBe(true);
   });
 
   it("reports an update when npm cooldown allows a newer in-window version", async () => {
-    const installed = "0.82.0";
+    const installed = "0.84.0";
     const cutoff = "2026-05-21T00:00:00.000Z";
     const runNpm: NpmPolicyCommandFn = async (args) => {
       if (args.join(" ") === "config get before") return cutoff;
@@ -158,19 +158,19 @@ describe("detectPiReleaseStatus", () => {
       if (args.join(" ") === "view @earendil-works/pi-coding-agent time --json") {
         return JSON.stringify({
           [installed]: "2026-05-18T00:00:00.000Z",
-          "0.82.1": "2026-05-20T00:00:00.000Z",
+          "0.84.1": "2026-05-20T00:00:00.000Z",
         });
       }
       return undefined;
     };
 
-    const status = await detectPiReleaseStatus(async () => "0.82.1", {} as NodeJS.ProcessEnv, {
+    const status = await detectPiReleaseStatus(async () => "0.84.1", {} as NodeJS.ProcessEnv, {
       runNpm,
       installedVersion: installed,
     });
 
     expect(status.freshness).toBe("update-available");
-    expect(status.latestVersion).toBe("0.82.1");
+    expect(status.latestVersion).toBe("0.84.1");
     expect(status.cooldownActive).toBe(false);
   });
 
@@ -181,14 +181,14 @@ describe("detectPiReleaseStatus", () => {
       return undefined;
     };
 
-    const status = await detectPiReleaseStatus(async () => "0.82.1", {} as NodeJS.ProcessEnv, {
+    const status = await detectPiReleaseStatus(async () => "0.84.1", {} as NodeJS.ProcessEnv, {
       runNpm,
-      installedVersion: "0.82.0",
+      installedVersion: "0.84.0",
     });
 
     expect(status.freshness).toBe("unknown");
     expect(status.latestVersion).toBeUndefined();
-    expect(status.absoluteLatestVersion).toBe("0.82.1");
+    expect(status.absoluteLatestVersion).toBe("0.84.1");
     expect(status.cooldownActive).toBeUndefined();
   });
 });

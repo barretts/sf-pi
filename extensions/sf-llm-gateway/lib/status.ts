@@ -29,7 +29,6 @@ import type {
   GatewayMonthlyUsage,
 } from "./monthly-usage.ts";
 import { formatProviderSignalBadge, getActiveProviderSignal } from "./provider-telemetry.ts";
-import { getWireTraceFile, isWireTraceEnabled } from "./wire-trace.ts";
 import { glyph, resolveGlyphMode } from "../../../lib/common/glyph-policy.ts";
 
 // Re-exported so callers outside the gateway extension (and tests) can import
@@ -141,7 +140,6 @@ export function buildStatusReport(
       : []),
     "",
     ...buildProviderTelemetryReport(),
-    ...buildWireTraceReport(),
   ].join("\n");
 }
 
@@ -172,17 +170,6 @@ function buildProviderTelemetryReport(): string[] {
     details.push(`resets=${signal.resetAt}`);
   }
   return [`Provider health: ⚠ ${signal.kind} (${ageSec}s ago)`, `  ${details.join(", ")}`, ""];
-}
-
-/**
- * Surface whether the opt-in wire trace is active. The trace captures raw
- * request/response bytes under Pi's global agent directory when
- * `SF_LLM_GATEWAY_TRACE=1`. When inactive we stay silent to keep the
- * report tidy.
- */
-function buildWireTraceReport(): string[] {
-  if (!isWireTraceEnabled()) return [];
-  return [`Wire trace: ON → ${getWireTraceFile()}`, ""];
 }
 
 function formatMonthlyUsagePart(

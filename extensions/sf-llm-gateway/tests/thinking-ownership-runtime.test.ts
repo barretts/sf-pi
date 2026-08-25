@@ -250,7 +250,9 @@ describe("Gateway thinking ownership through real Pi", () => {
       const offState = await client.getState();
       expect(offState.model).toMatchObject({ provider: "openai", id: "gpt-5" });
       expect(offState.thinkingLevel).toBe("high");
-      expect(readSettings(settingsPath).defaultThinkingLevel).toBe("high");
+      // Pi 0.84.3 keeps thinking session-scoped unless saved; the user-owned
+      // settings value stays `max` even when gpt-5 resolves the session to `high`.
+      expect(readSettings(settingsPath).defaultThinkingLevel).toBe("max");
     } finally {
       await runtime.stop();
     }
