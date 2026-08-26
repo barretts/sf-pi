@@ -69,8 +69,12 @@ export function buildFeatureProfile(inspect: InspectResult, source?: string): Ag
   const utilityRefs = unique(
     [
       ...(components?.start_agents ?? []),
+      ...(components?.orchestrators ?? []),
       ...(components?.topics ?? []),
       ...(components?.subagents ?? []),
+      ...(components?.workflows ?? []),
+      ...(components?.triggers ?? []),
+      ...(components?.bundles ?? []),
       ...(components?.actions ?? []),
       ...(components?.connections ?? []),
     ].flatMap((component) => component.utility_refs ?? []),

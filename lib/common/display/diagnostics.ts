@@ -20,6 +20,9 @@ export interface SfPiDiagnosticRange {
 
 export interface SfPiDiagnosticFixMetadata {
   title: string;
+  actionId?: string;
+  diagnosticId?: string;
+  sourceVersion?: string;
   preferred?: boolean;
   diagnosticLine?: number;
   diagnosticCode?: string;
@@ -32,6 +35,7 @@ export interface SfPiDiagnosticFixMetadata {
 
 export interface SfPiDiagnosticMetadataItem {
   severity: SfPiDiagnosticSeverity;
+  diagnosticId?: string;
   message: string;
   line: number;
   character: number;

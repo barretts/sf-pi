@@ -94,6 +94,15 @@ describe("checkAgentScriptFile (integration)", () => {
     const unusedFix = result.quickFixes.find((f) => f.diagnosticCode === "unused-variable");
     expect(unusedFix, "expected unused-variable fix").toBeDefined();
     expect(unusedFix?.edits[0].newText).toBe("");
+    expect(result.sourceVersion).toMatch(/^sv1:/);
+    expect(unused?.diagnosticId).toMatch(/^diag1:/);
+    expect(unusedFix?.sourceVersion).toBe(result.sourceVersion);
+    expect(unusedFix?.diagnosticId).toBe(unused?.diagnosticId);
+    expect(unusedFix?.actionId).toMatch(/^act1:/);
+    expect(result.codeActionProvider).toMatchObject({
+      status: "available",
+      provider: "@sf-agentscript/lsp",
+    });
   });
 
   it("allows target-backed actions that omit optional outputs", async () => {
@@ -156,6 +165,36 @@ describe("checkAgentScriptFile (integration)", () => {
     const refs = result.diagnostics.filter((d) => d.code === "apex-target-method-suffix");
     expect(refs).toHaveLength(1);
     expect(refs[0].severity).toBe(2);
+  });
+
+  it("applies target hardening to GoalBasedAgent orchestrator actions", async () => {
+    const file = writeTempAgent(
+      [
+        "system:",
+        '    instructions: "Coordinate work."',
+        "",
+        "config:",
+        '    agent_name: "GoalTargetBot"',
+        '    agent_type: "GoalBasedAgent"',
+        "",
+        "orchestrator agent:",
+        "    actions:",
+        "        update_order:",
+        '            description: "Update order."',
+        '            target: "apex://OrderController.updateOrder"',
+        "    reasoning:",
+        "        actions:",
+        "            update: @actions.update_order",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await checkAgentScriptFile(file);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "apex-target-method-suffix", severity: 2 }),
+      ]),
+    );
   });
 
   it("does not flag 15-character action target names that are not Salesforce ids", async () => {
@@ -441,6 +480,45 @@ describe("checkAgentScriptFile (integration)", () => {
     expect(result.diagnostics.some((d) => d.code === "inputs-out-of-scope")).toBe(false);
   });
 
+  it("allows @inputs in official connection instruction templates", async () => {
+    const file = writeTempAgent(
+      [
+        "system:",
+        '    instructions: "You are helpful."',
+        "",
+        "config:",
+        '    agent_name: "ConnectionInputScopeBot"',
+        '    agent_type: "AgentforceServiceAgent"',
+        "",
+        "access:",
+        '    default_agent_user: "service@example.com"',
+        "",
+        "connection messaging:",
+        "    inputs:",
+        '        UserName: string = "Customer"',
+        '            description: "User display name."',
+        "    reasoning:",
+        "        instructions: |",
+        "            Greet {!@inputs.UserName}.",
+        "    additional_system_instructions: |",
+        "        Address the user as {!@inputs.UserName}.",
+        '    escalation_message: "Escalating for {!@inputs.UserName}."',
+        "    adaptive_response_allowed: True",
+        "",
+        "start_agent hello_world:",
+        '    description: "Entry topic."',
+        "    reasoning:",
+        "        instructions: ->",
+        "            | Respond helpfully.",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await checkAgentScriptFile(file);
+    expect(result.diagnostics.some((d) => d.code === "inputs-out-of-scope")).toBe(false);
+    expect(result.diagnostics.some((d) => d.severity === 1)).toBe(false);
+  });
+
   it("flags @outputs references outside set/if post-action statements", async () => {
     const file = writeTempAgent(
       [
@@ -611,7 +689,7 @@ describe("checkAgentScriptFile (integration)", () => {
     expect(codes.has("connection-messaging-route-name-prefix")).toBe(false);
   });
 
-  it("flags Employee Agent config that uses Service-Agent-only wiring", async () => {
+  it("allows documented escalation for Employee Agents with an Omni-Channel connection", async () => {
     const file = writeTempAgent(
       [
         "system:",
@@ -621,32 +699,28 @@ describe("checkAgentScriptFile (integration)", () => {
         '    agent_name: "EmployeeBot"',
         '    agent_type: "AgentforceEmployeeAgent"',
         "",
-        "access:",
-        '    default_agent_user: "service@example.com"',
-        "",
         "connection messaging:",
+        '    outbound_route_type: "OmniChannelFlow"',
+        '    outbound_route_name: "Route_To_Rep"',
         "    adaptive_response_allowed: True",
         "",
         "start_agent hello_world:",
         '    description: "Entry topic."',
         "    reasoning:",
         "        actions:",
-        "            escalate: @utils.escalate",
+        "            escalate_to_human: @utils.escalate",
+        '                description: "Escalate to a human rep."',
+        "    after_reasoning:",
+        "        if True:",
+        "            escalate",
         "",
       ].join("\n"),
     );
 
     const result = await checkAgentScriptFile(file);
     const codes = new Set(result.diagnostics.map((d) => d.code));
-    expect(codes.has("deprecated-field")).toBe(false);
-    expect(codes.has("employee-agent-connection-messaging")).toBe(true);
-    expect(codes.has("employee-agent-escalate")).toBe(true);
-
-    expect(
-      result.quickFixes.some((f) => f.diagnosticCode === "employee-agent-connection-messaging"),
-    ).toBe(false);
-    expect(result.quickFixes.some((f) => f.diagnosticCode === "employee-agent-escalate")).toBe(
-      false,
-    );
+    expect(codes.has("employee-agent-connection-messaging")).toBe(false);
+    expect(codes.has("employee-agent-escalate")).toBe(false);
+    expect(result.diagnostics.some((diagnostic) => diagnostic.severity === 1)).toBe(false);
   });
 });

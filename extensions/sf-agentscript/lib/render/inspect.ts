@@ -72,9 +72,13 @@ export interface InspectStructureDetails {
     config?: Record<string, unknown>;
     system?: { instructions?: string; recommended_prompts?: Record<string, unknown> };
     start_agents?: ComponentSummary[];
+    orchestrators?: ComponentSummary[];
     topics: ComponentSummary[];
     subagents: ComponentSummary[];
     connected_subagents?: ConnectedSubagentSummary[];
+    workflows?: ComponentSummary[];
+    triggers?: ComponentSummary[];
+    bundles?: ComponentSummary[];
     skill_definitions?: ComponentSummary[];
     variables: VariableSummary[];
     actions: ComponentSummary[];
@@ -86,9 +90,13 @@ export interface InspectStructureDetails {
   };
   stats?: {
     start_agents?: number;
+    orchestrators?: number;
     topics?: number;
     subagents?: number;
     connected_subagents?: number;
+    workflows?: number;
+    triggers?: number;
+    bundles?: number;
     skill_definitions?: number;
     variables?: number;
     actions?: number;
@@ -220,6 +228,21 @@ function formatStructureBody(
     }
   }
 
+  // Goal-based entry point
+  if (components.orchestrators && components.orchestrators.length > 0) {
+    lines.push(`  ${heading("🧭")} ${bold(`orchestrators (${components.orchestrators.length})`)}`);
+    for (const orchestrator of components.orchestrators) {
+      const ln =
+        orchestrator.line !== undefined
+          ? dim(padRightVisible(`L${orchestrator.line}`, 5))
+          : dim("     ");
+      const connected = orchestrator.connected_subagent_refs?.length
+        ? dim(` · connects ${orchestrator.connected_subagent_refs.map(code).join(", ")}`)
+        : "";
+      lines.push(`     ${ln} ${code(orchestrator.name)}${connected}`);
+    }
+  }
+
   // Topics
   if ((stats.topics ?? components.topics?.length ?? 0) > 0) {
     lines.push(`  ${heading("🗂 ")} ${bold(`topics (${components.topics.length})`)}`);
@@ -277,6 +300,21 @@ function formatStructureBody(
     }
   }
 
+  for (const [icon, label, entries] of [
+    ["🧩", "workflows", components.workflows],
+    ["⏰", "triggers", components.triggers],
+    ["📦", "bundles", components.bundles],
+  ] as const) {
+    if (!entries || entries.length === 0) continue;
+    lines.push(`  ${heading(icon)} ${bold(`${label} (${entries.length})`)}`);
+    for (const entry of entries) {
+      const ln =
+        entry.line !== undefined ? dim(padRightVisible(`L${entry.line}`, 5)) : dim("     ");
+      const target = entry.target ? dim(` → ${entry.target}`) : "";
+      lines.push(`     ${ln} ${code(entry.name)}${target}`);
+    }
+  }
+
   // Actions
   if (components.actions.length > 0) {
     lines.push(`  ${heading("🔧")} ${bold(`actions (${components.actions.length})`)}`);
@@ -329,9 +367,21 @@ function formatStructureBody(
   const refTotals = totalRefs(components.topics);
   const footerBits = [
     `${stats.start_agents ?? components.start_agents?.length ?? 0} start`,
+    (stats.orchestrators ?? components.orchestrators?.length ?? 0) > 0
+      ? `${stats.orchestrators ?? components.orchestrators?.length ?? 0} orchestrators`
+      : null,
     `${stats.topics ?? 0} topics`,
     `${stats.subagents ?? 0} subagents`,
     `${stats.connected_subagents ?? components.connected_subagents?.length ?? 0} connected`,
+    (stats.workflows ?? components.workflows?.length ?? 0) > 0
+      ? `${stats.workflows ?? components.workflows?.length ?? 0} workflows`
+      : null,
+    (stats.triggers ?? components.triggers?.length ?? 0) > 0
+      ? `${stats.triggers ?? components.triggers?.length ?? 0} triggers`
+      : null,
+    (stats.bundles ?? components.bundles?.length ?? 0) > 0
+      ? `${stats.bundles ?? components.bundles?.length ?? 0} bundles`
+      : null,
     `${stats.skill_definitions ?? components.skill_definitions?.length ?? 0} skills`,
     `${stats.actions ?? 0} actions`,
     `${stats.variables ?? 0} variables`,

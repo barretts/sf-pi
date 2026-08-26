@@ -121,7 +121,13 @@ export function buildQualityFacts(root: unknown): QualityFacts {
 
 function collectComponents(root: QualityAstNode): QualityComponent[] {
   const result: QualityComponent[] = [];
-  for (const kind of ["start_agent", "subagent", "topic", "connected_subagent"] as const) {
+  for (const kind of [
+    "start_agent",
+    "orchestrator",
+    "subagent",
+    "topic",
+    "connected_subagent",
+  ] as const) {
     for (const [name, rawNode] of namedEntries(root[kind])) {
       const node = asNode(rawNode);
       result.push({
@@ -129,7 +135,7 @@ function collectComponents(root: QualityAstNode): QualityComponent[] {
         kind,
         name,
         node,
-        isStart: kind === "start_agent",
+        isStart: kind === "start_agent" || kind === "orchestrator",
         unknownRouting: scalarValue(node.schema) !== undefined,
       });
     }
@@ -378,9 +384,11 @@ export function resolveComponentId(
   const order =
     namespace === "connected_subagent"
       ? ["connected_subagent"]
-      : namespace === "topic"
-        ? ["topic", "start_agent", "subagent"]
-        : ["subagent", "topic", "start_agent"];
+      : namespace === "orchestrator"
+        ? ["orchestrator"]
+        : namespace === "topic"
+          ? ["topic", "start_agent", "subagent", "orchestrator"]
+          : ["subagent", "topic", "start_agent", "orchestrator"];
   for (const kind of order) {
     const found = components.find(
       (component) => component.kind === kind && component.name === name,

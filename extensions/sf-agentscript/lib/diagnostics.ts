@@ -12,9 +12,15 @@
 import fs from "node:fs/promises";
 import {
   analyzeAgentScriptSource,
+  combineAgentScriptDiagnostics,
   type AgentforceSourceAnalysisResult,
 } from "./agentforce-document.ts";
-import { buildQuickFixes } from "./code-actions.ts";
+import { buildQuickFixesResult } from "./code-actions.ts";
+import {
+  identifyDiagnostics,
+  identifyQuickFixes,
+  sourceVersionFor,
+} from "./diagnostic-identity.ts";
 import { buildAstHardeningDiagnosticsFromAst } from "./ast-hardening.ts";
 import { runAgentScriptQuality } from "./quality/engine.ts";
 import type { AgentScriptCheckResult, AgentScriptDiagnostic } from "./types.ts";
@@ -61,9 +67,11 @@ export async function checkAgentScriptSource(
     analysis = existingAnalysis;
   }
   analysis ??= await analyzeAgentScriptSource(source);
+  const sourceVersion = sourceVersionFor(source);
   if (analysis.ok === false) {
     return {
       ok: false,
+      sourceVersion,
       diagnostics: [],
       quickFixes: [],
       dialect: analysis.dialect,
@@ -92,17 +100,27 @@ export async function checkAgentScriptSource(
         ...(finding.suggestion ? { suggestion: finding.suggestion } : {}),
       },
     }));
-  const diagnostics = [
-    ...analysis.analysis.compileDiagnostics,
-    ...localDiagnostics,
-    ...qualityDiagnostics,
-  ];
-  const quickFixes = await buildQuickFixes(source, diagnostics, analysis.analysis.documentState);
+  const diagnostics = identifyDiagnostics(
+    sourceVersion,
+    combineAgentScriptDiagnostics(
+      analysis.analysis.compileDiagnostics,
+      localDiagnostics,
+      qualityDiagnostics,
+    ),
+  );
+  const codeActions = await buildQuickFixesResult(
+    source,
+    diagnostics,
+    analysis.analysis.documentState,
+  );
+  const quickFixes = identifyQuickFixes(sourceVersion, codeActions.quickFixes);
 
   return {
     ok: true,
+    sourceVersion,
     diagnostics,
     dialect: analysis.analysis.dialect,
     quickFixes,
+    codeActionProvider: codeActions.codeActionProvider,
   };
 }

@@ -31,6 +31,9 @@ interface QuickFixView extends AgentScriptQuickFix {
       diagnostic_code: string;
       line: number;
       fix_index: number;
+      source_version?: string;
+      diagnostic_id?: string;
+      action_id?: string;
     };
   };
 }
@@ -130,6 +133,7 @@ async function actionCheck(
             agent_file: agentFile,
             path: agentFile,
             clean: true,
+            source_version: result.sourceVersion,
             diagnostic_count: 0,
             quick_fix_count: 0,
             dialect: result.dialect ?? null,
@@ -152,13 +156,13 @@ async function actionCheck(
 
   const fixesByKey = new Map<string, AgentScriptQuickFix[]>();
   for (const f of result.quickFixes) {
-    const key = `${f.diagnosticLine}::${f.diagnosticCode ?? ""}`;
+    const key = f.diagnosticId ?? `${f.diagnosticLine}::${f.diagnosticCode ?? ""}`;
     const arr = fixesByKey.get(key);
     if (arr) arr.push(f);
     else fixesByKey.set(key, [f]);
   }
   const quickFixesView: QuickFixView[] = result.quickFixes.map((f) => {
-    const key = `${f.diagnosticLine}::${f.diagnosticCode ?? ""}`;
+    const key = f.diagnosticId ?? `${f.diagnosticLine}::${f.diagnosticCode ?? ""}`;
     const arr = fixesByKey.get(key) ?? [f];
     const fixIndex = arr.indexOf(f);
     return {
@@ -172,6 +176,9 @@ async function actionCheck(
           diagnostic_code: f.diagnosticCode ?? "",
           line: f.diagnosticLine + 1,
           fix_index: fixIndex,
+          source_version: f.sourceVersion,
+          diagnostic_id: f.diagnosticId,
+          action_id: f.actionId,
         },
       },
     };
@@ -185,8 +192,10 @@ async function actionCheck(
       agent_file: agentFile,
       path: agentFile,
       clean,
+      source_version: result.sourceVersion,
       diagnostic_count: result.diagnostics.length,
       quick_fix_count: quickFixesView.length,
+      code_action_provider: result.codeActionProvider,
       dialect: result.dialect ?? null,
       compiled_via: "local" as const,
       diagnostics: result.diagnostics,
@@ -203,7 +212,13 @@ async function actionCheck(
 
   return toolOk(
     details,
-    renderCheckSummary(agentFile, result.diagnostics, quickFixesView.length, result.dialect?.name),
+    renderCheckSummary(
+      agentFile,
+      result.diagnostics,
+      quickFixesView.length,
+      result.dialect?.name,
+      result.codeActionProvider,
+    ),
   );
 }
 
@@ -326,6 +341,7 @@ export function renderCheckSummary(
   }>,
   quickFixCount: number,
   dialectName?: string,
+  codeActionProvider?: { status: string; reason?: string },
 ): string {
   if (diagnostics.length === 0) {
     return `✓ ${agentFile} compiles clean (${dialectName ?? "unknown dialect"})`;
@@ -352,15 +368,24 @@ export function renderCheckSummary(
   const hasWarnings = sev2 > 0;
   const icon = hasBlocking ? "❌" : hasWarnings ? "⚠️" : "✅";
   const issueWord = diagnostics.length === 1 ? "diagnostic" : "diagnostics";
+  const fixSummary =
+    codeActionProvider?.status === "unavailable"
+      ? `${quickFixCount} local fix(es); official provider unavailable`
+      : `${quickFixCount} fix(es) ready`;
   const head =
     hasBlocking || hasWarnings
-      ? `${icon} ${agentFile} — ${diagnostics.length} issue(s) (${severitySummary}), ${quickFixCount} fix(es) ready`
-      : `${icon} ${agentFile} compiles (${severitySummary}) — ${diagnostics.length} ${issueWord}, ${quickFixCount} fix(es) ready`;
+      ? `${icon} ${agentFile} — ${diagnostics.length} issue(s) (${severitySummary}), ${fixSummary}`
+      : `${icon} ${agentFile} compiles (${severitySummary}) — ${diagnostics.length} ${issueWord}, ${fixSummary}`;
   const lines = [head];
   if (!hasBlocking && !hasWarnings) {
     lines.push("  ⚠ Non-blocking diagnostics present; compile is valid.");
   }
   lines.push(...sampleLines);
   if (overflow > 0) lines.push(`  …and ${overflow} more in details.diagnostics`);
+  if (codeActionProvider?.status === "unavailable") {
+    lines.push(
+      `  ⚠ Quick-fix provider unavailable${codeActionProvider.reason ? `: ${codeActionProvider.reason}` : "."}`,
+    );
+  }
   return lines.join("\n");
 }

@@ -99,6 +99,38 @@ describe("renderErrorFeedback", () => {
     expect(rendered).toContain("L14:0-5");
   });
 
+  it("associates same-line same-code fixes by diagnostic identity", () => {
+    const diagnostics = [
+      makeDiagnostic({ diagnosticId: "diag1:first", code: "same", message: "First" }),
+      makeDiagnostic({ diagnosticId: "diag1:second", code: "same", message: "Second" }),
+    ];
+    const rendered = renderErrorFeedback("/file.agent", null, diagnostics, [
+      {
+        actionId: "act1:first",
+        diagnosticId: "diag1:first",
+        sourceVersion: "sv1:source",
+        title: "Fix first",
+        preferred: true,
+        diagnosticLine: 0,
+        diagnosticCode: "same",
+        edits: [{ range: diagnostics[0].range, newText: "first" }],
+      },
+      {
+        actionId: "act1:second",
+        diagnosticId: "diag1:second",
+        sourceVersion: "sv1:source",
+        title: "Fix second",
+        preferred: true,
+        diagnosticLine: 0,
+        diagnosticCode: "same",
+        edits: [{ range: diagnostics[1].range, newText: "second" }],
+      },
+    ]);
+
+    expect(rendered.match(/Fix first/g)).toHaveLength(1);
+    expect(rendered.match(/Fix second/g)).toHaveLength(1);
+  });
+
   it("renders '(+N more)' when the overall byte limit is exceeded", () => {
     // Each diagnostic message is truncated to 240 bytes. With 240-byte
     // messages the 8KB rendered cap lets roughly ~30 diagnostics through

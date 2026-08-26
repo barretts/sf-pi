@@ -9,7 +9,12 @@
 
 import { AGENTFORCE_DOCUMENT_URI, processAgentforceDocument } from "./agentforce-document.ts";
 import type { DocumentState } from "@sf-agentscript/lsp";
-import type { AgentScriptDiagnostic, AgentScriptQuickFix, AgentScriptRange } from "./types.ts";
+import type {
+  AgentScriptCodeActionProviderStatus,
+  AgentScriptDiagnostic,
+  AgentScriptQuickFix,
+  AgentScriptRange,
+} from "./types.ts";
 
 // -------------------------------------------------------------------------------------------------
 // Shape of diagnostic data we trust for local hardening fixes
@@ -40,29 +45,52 @@ function codeOf(diagnostic: unknown): string | undefined {
   return typeof code === "string" ? code : undefined;
 }
 
+interface OfficialCodeAction {
+  title: string;
+  isPreferred?: boolean;
+  diagnostics?: AgentScriptDiagnostic[];
+  edit?: { changes?: Record<string, Array<{ range: AgentScriptRange; newText: string }>> };
+}
+
+type ProvideCodeActions = (
+  state: DocumentState,
+  range: AgentScriptRange,
+  diagnostics: AgentScriptDiagnostic[],
+) => OfficialCodeAction[];
+
+export interface BuildQuickFixesOptions {
+  /** Test seam; production resolves the official provider lazily. */
+  provideCodeActions?: ProvideCodeActions;
+}
+
+export interface AgentScriptCodeActionBuildResult {
+  quickFixes: AgentScriptQuickFix[];
+  codeActionProvider: AgentScriptCodeActionProviderStatus;
+}
+
 async function officialQuickFixes(
   source: string,
   diagnostics: AgentScriptDiagnostic[],
   state?: DocumentState,
-): Promise<AgentScriptQuickFix[]> {
-  let actions: Array<{
-    title: string;
-    isPreferred?: boolean;
-    diagnostics?: AgentScriptDiagnostic[];
-    edit?: { changes?: Record<string, Array<{ range: AgentScriptRange; newText: string }>> };
-  }>;
+  options: BuildQuickFixesOptions = {},
+): Promise<AgentScriptCodeActionBuildResult> {
+  let actions: OfficialCodeAction[];
   try {
-    const [documentState, { provideCodeActions }] = await Promise.all([
-      state ?? processAgentforceDocument(source, AGENTFORCE_DOCUMENT_URI),
-      import("@sf-agentscript/lsp"),
-    ]);
-    actions = provideCodeActions(
-      documentState,
-      fullDocumentRange(source),
-      diagnostics as Parameters<typeof provideCodeActions>[2],
-    ) as typeof actions;
-  } catch {
-    return [];
+    const documentState =
+      state ?? (await processAgentforceDocument(source, AGENTFORCE_DOCUMENT_URI));
+    const provideCodeActions =
+      options.provideCodeActions ??
+      ((await import("@sf-agentscript/lsp")).provideCodeActions as ProvideCodeActions);
+    actions = provideCodeActions(documentState, fullDocumentRange(source), diagnostics);
+  } catch (error) {
+    return {
+      quickFixes: [],
+      codeActionProvider: {
+        status: "unavailable",
+        provider: "@sf-agentscript/lsp",
+        reason: boundedError(error),
+      },
+    };
   }
 
   const fixes: AgentScriptQuickFix[] = [];
@@ -71,18 +99,44 @@ async function officialQuickFixes(
     if (!edits || edits.length === 0) continue;
 
     const firstDiagnostic = action.diagnostics?.[0];
+    const canonicalDiagnostic = firstDiagnostic
+      ? diagnostics.find((diagnostic) => sameDiagnostic(diagnostic, firstDiagnostic))
+      : undefined;
     fixes.push({
       title: action.title,
       preferred: action.isPreferred === true,
-      diagnosticLine: firstDiagnostic?.range.start.line ?? edits[0].range.start.line,
-      diagnosticCode: codeOf(firstDiagnostic),
+      diagnosticLine:
+        canonicalDiagnostic?.range.start.line ??
+        firstDiagnostic?.range.start.line ??
+        edits[0].range.start.line,
+      diagnosticCode: codeOf(canonicalDiagnostic ?? firstDiagnostic),
+      diagnosticId: canonicalDiagnostic?.diagnosticId,
       edits: edits.map((edit) => ({
         range: edit.range,
         newText: edit.newText,
       })),
     });
   }
-  return fixes;
+  return {
+    quickFixes: fixes,
+    codeActionProvider: { status: "available", provider: "@sf-agentscript/lsp" },
+  };
+}
+
+function sameDiagnostic(left: AgentScriptDiagnostic, right: AgentScriptDiagnostic): boolean {
+  return (
+    left.code === right.code &&
+    left.message === right.message &&
+    left.range.start.line === right.range.start.line &&
+    left.range.start.character === right.range.start.character &&
+    left.range.end.line === right.range.end.line &&
+    left.range.end.character === right.range.end.character
+  );
+}
+
+function boundedError(error: unknown): string {
+  const value = error instanceof Error ? error.message : String(error);
+  return value.replace(/\s+/g, " ").trim().slice(0, 300) || "Unknown provider failure";
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -114,6 +168,7 @@ function buildRemovalRangeFix(
     preferred: true,
     diagnosticLine: diagnostic.range.start.line,
     diagnosticCode: diagnostic.code,
+    diagnosticId: diagnostic.diagnosticId,
     edits: [
       {
         range: {
@@ -155,6 +210,7 @@ function buildDefaultUserLineRemovalFix(
     preferred: true,
     diagnosticLine,
     diagnosticCode: diagnostic.code,
+    diagnosticId: diagnostic.diagnosticId,
     edits: [
       {
         range: {
@@ -190,6 +246,7 @@ function buildMissingTokenTransitionFix(
     preferred: true,
     diagnosticLine: diagnostic.range.start.line,
     diagnosticCode: diagnostic.code,
+    diagnosticId: diagnostic.diagnosticId,
     edits: [
       {
         range: {
@@ -239,14 +296,40 @@ function localHardeningQuickFixes(
  * can't accidentally surface fixes for diagnostics the rest of the system chose
  * to hide.
  */
+export async function buildQuickFixesResult(
+  source: string,
+  diagnostics: AgentScriptDiagnostic[],
+  state?: DocumentState,
+  options: BuildQuickFixesOptions = {},
+): Promise<AgentScriptCodeActionBuildResult> {
+  if (diagnostics.length === 0) {
+    return {
+      quickFixes: [],
+      codeActionProvider: {
+        status: "not_run",
+        provider: "@sf-agentscript/lsp",
+        reason: "No diagnostics required code actions.",
+      },
+    };
+  }
+
+  const official = await officialQuickFixes(source, diagnostics, state, options);
+  const all = [...official.quickFixes, ...localHardeningQuickFixes(source, diagnostics)];
+  const unique = new Map<string, AgentScriptQuickFix>();
+  for (const fix of all) {
+    const key = JSON.stringify([
+      fix.diagnosticId ?? `${fix.diagnosticLine}:${fix.diagnosticCode ?? ""}`,
+      fix.edits.map((edit) => [edit.range, edit.newText]),
+    ]);
+    if (!unique.has(key)) unique.set(key, fix);
+  }
+  return { quickFixes: [...unique.values()], codeActionProvider: official.codeActionProvider };
+}
+
 export async function buildQuickFixes(
   source: string,
   diagnostics: AgentScriptDiagnostic[],
   state?: DocumentState,
 ): Promise<AgentScriptQuickFix[]> {
-  if (diagnostics.length === 0) return [];
-  return [
-    ...(await officialQuickFixes(source, diagnostics, state)),
-    ...localHardeningQuickFixes(source, diagnostics),
-  ];
+  return (await buildQuickFixesResult(source, diagnostics, state)).quickFixes;
 }

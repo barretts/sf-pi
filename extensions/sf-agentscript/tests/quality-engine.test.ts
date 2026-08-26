@@ -51,6 +51,44 @@ describe("Agent Script quality engine", () => {
     );
   });
 
+  it("analyzes GoalBasedAgent orchestrator procedures and actions", async () => {
+    const result = await runAgentScriptQuality(`system:
+    instructions: "Coordinate work."
+    messages:
+        welcome: "Hello"
+        error: "Error"
+
+config:
+    agent_name: "Goal_Quality_Test"
+    agent_type: "GoalBasedAgent"
+
+orchestrator agent:
+    actions:
+        lookup:
+            description: "Lookup"
+            inputs:
+                query: string
+            outputs:
+                result: string
+            target: "flow://Lookup"
+    reasoning:
+        instructions: ->
+            run @actions.lookup
+                with query = ...
+`);
+
+    expect(result.status).toBe("findings");
+    expect(codes(result)).toContain("slot-filling-in-deterministic-action");
+    expect(result.metrics.cyclomatic_complexity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          component: "orchestrator.agent",
+          procedure: "orchestrator.agent.reasoning.instructions",
+        }),
+      ]),
+    );
+  });
+
   it("detects deterministic slot filling", async () => {
     const result = await runAgentScriptQuality(
       source(`start_agent main:

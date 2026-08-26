@@ -80,6 +80,28 @@ describe("upstream Agent Script capability contracts", () => {
     });
   });
 
+  test("collapses identical coded and uncoded diagnostics while preserving the code", () => {
+    const range = { start: { line: 2, character: 4 }, end: { line: 2, character: 8 } };
+    const result = combineAgentScriptDiagnostics(
+      [{ severity: 1, message: "Same diagnostic", range, source: "compiler" }],
+      [
+        {
+          code: "same-diagnostic",
+          severity: 1,
+          message: "Same diagnostic",
+          range,
+          source: "agentscript-lint",
+        },
+      ],
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      code: "same-diagnostic",
+      source: "agentscript-lint",
+    });
+  });
+
   test("uses complete diagnostic identity and severity/code ordering ties", () => {
     const range = { start: { line: 4, character: 2 }, end: { line: 4, character: 6 } };
     const widerRange = { start: range.start, end: { line: 4, character: 7 } };

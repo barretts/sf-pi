@@ -40,15 +40,23 @@ export async function runMutateAction(
 
   const result = await applyMutation(built);
   if (!result.ok) {
-    const recover =
-      result.reason === "has_parse_errors"
-        ? {
-            tool: "agentscript_authoring",
-            params: { verb: "compile", mode: "check", agent_file: agentFile },
-          }
-        : result.reason === "sdk_unavailable"
-          ? { tool: "sf-agentscript", params: { action: "doctor" } }
-          : undefined;
+    const recompileReasons = new Set([
+      "has_parse_errors",
+      "stale_source",
+      "ambiguous_diagnostic",
+      "ambiguous_quick_fix",
+      "no_matching_diagnostic",
+      "no_matching_quick_fix",
+      "code_action_provider_unavailable",
+    ]);
+    const recover = recompileReasons.has(result.reason ?? "")
+      ? {
+          tool: "agentscript_authoring",
+          params: { verb: "compile", mode: "check", agent_file: agentFile },
+        }
+      : result.reason === "sdk_unavailable"
+        ? { tool: "sf-agentscript", params: { action: "doctor" } }
+        : undefined;
     return toolError(
       `Mutate failed (${result.reason ?? "unknown"})`,
       result.reason_detail ?? "See the sf-agentscript skill for supported mutate modes.",
@@ -94,12 +102,23 @@ function toMutateOp(p: AuthoringParams): MutateOp | { ok: false; missing: string
     rename: ["from", "to"],
     insert: ["parent", "child"],
     delete: ["target"],
-    apply_quick_fix: ["diagnostic_code", "line"],
+    apply_quick_fix: [],
   };
   const mode = p.mode as string;
   const bag = p as unknown as Record<string, unknown>;
   const missing = (required[mode] ?? []).filter((k) => bag[k] === undefined);
   if (missing.length > 0) return { ok: false, missing };
+  if (
+    mode === "apply_quick_fix" &&
+    !p.action_id &&
+    !p.diagnostic_id &&
+    !(p.diagnostic_code && p.line !== undefined)
+  ) {
+    return {
+      ok: false,
+      missing: ["source_version/diagnostic_id/action_id or diagnostic_code/line"],
+    };
+  }
   const path = p.agent_file as string;
   switch (mode) {
     case "set_field":
@@ -121,9 +140,12 @@ function toMutateOp(p: AuthoringParams): MutateOp | { ok: false; missing: string
       return {
         op: "apply_quick_fix",
         path,
-        diagnostic_code: p.diagnostic_code as string,
-        line: p.line as number,
+        diagnostic_code: p.diagnostic_code,
+        line: p.line,
         fix_index: p.fix_index,
+        source_version: p.source_version,
+        diagnostic_id: p.diagnostic_id,
+        action_id: p.action_id,
         dry_run: p.dry_run,
       };
     default:

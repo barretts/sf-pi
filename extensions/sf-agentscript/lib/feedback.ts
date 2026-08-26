@@ -132,9 +132,14 @@ function fixesForDiagnostic(
   diagnostic: AgentScriptDiagnostic,
   quickFixes: AgentScriptQuickFix[],
 ): AgentScriptQuickFix[] {
+  if (diagnostic.diagnosticId) {
+    return quickFixes.filter((fix) => fix.diagnosticId === diagnostic.diagnosticId);
+  }
   return quickFixes.filter(
     (fix) =>
-      fix.diagnosticLine === diagnostic.range.start.line && fix.diagnosticCode === diagnostic.code,
+      !fix.diagnosticId &&
+      fix.diagnosticLine === diagnostic.range.start.line &&
+      fix.diagnosticCode === diagnostic.code,
   );
 }
 
@@ -285,11 +290,16 @@ export function buildToolResultUpdate(
   // compile/check: preserve errors and warnings, but leave information/hints
   // available on demand so they do not repeat after every file edit.
   const diagnostics = checkResult.diagnostics.filter((diagnostic) => diagnostic.severity <= 2);
+  const diagnosticIds = new Set(
+    diagnostics.flatMap((diagnostic) => (diagnostic.diagnosticId ? [diagnostic.diagnosticId] : [])),
+  );
   const diagnosticKeys = new Set(
     diagnostics.map((diagnostic) => `${diagnostic.range.start.line}::${diagnostic.code ?? ""}`),
   );
   const quickFixes = checkResult.quickFixes.filter((fix) =>
-    diagnosticKeys.has(`${fix.diagnosticLine}::${fix.diagnosticCode ?? ""}`),
+    fix.diagnosticId
+      ? diagnosticIds.has(fix.diagnosticId)
+      : diagnosticKeys.has(`${fix.diagnosticLine}::${fix.diagnosticCode ?? ""}`),
   );
 
   // Decide whether to include a dialect header this turn. Only include it the
@@ -361,6 +371,9 @@ function toFixMetadata(fix: AgentScriptQuickFix): SfPiDiagnosticFixMetadata {
   const firstEdit = fix.edits[0];
   return {
     title: fix.title,
+    actionId: fix.actionId,
+    diagnosticId: fix.diagnosticId,
+    sourceVersion: fix.sourceVersion,
     preferred: fix.preferred,
     diagnosticLine: fix.diagnosticLine + 1,
     diagnosticCode: fix.diagnosticCode,
@@ -383,6 +396,7 @@ function toDiagnosticItem(
   const fixes = fixesForDiagnostic(diagnostic, quickFixes).map(toFixMetadata);
   return {
     severity: severityFromLsp(diagnostic.severity),
+    diagnosticId: diagnostic.diagnosticId,
     message: normalizeWhitespace(diagnostic.message),
     line: diagnostic.range.start.line + 1,
     character: diagnostic.range.start.character,

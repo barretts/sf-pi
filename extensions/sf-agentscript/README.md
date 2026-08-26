@@ -26,13 +26,21 @@ Salesforce libraries and APIs rather than `sf` subprocesses on the hot path.
 - `inspect` projects structure, context, references, definitions, target
   readiness, quality findings, or a deterministic review;
 - `mutate` performs supported AST-safe scalar updates, symbol rename, insertion,
-  deletion guidance, and quick fixes.
+  deletion guidance, and source-bound quick fixes.
 
 Compile validity means no severity-1 diagnostic. Quality remains separate:
 `inspect/quality` applies the enabled High/Moderate/Low/Info rule catalog, while
 `inspect/review` combines compile, structural, target, and quality evidence into
 `ready`, `ready_with_warnings`, `blocked`, or `partial`—never a hidden numeric
-score.
+score. Structure and review are agent-type-aware: conversational agents use a
+`start_agent` entry point, while `GoalBasedAgent` projects and validates its
+`orchestrator`, workflows, triggers, bundles, and orchestrator-local actions.
+Official connection instruction templates retain their declared `@inputs` scope;
+SF Pi hardening remains focused on invalid deterministic action contexts.
+Diagnostics and code actions carry deterministic identities bound to the exact
+source bytes. Quick-fix application refuses stale or ambiguous identities, and
+compile results distinguish an unavailable official code-action provider from a
+successful provider with zero actions.
 
 High findings pause local-file publication unless the current session explicitly
 acknowledges the reviewed rule ids. Manager settings can enable/disable stable
@@ -96,6 +104,9 @@ dynamically; explicit tool arguments win for one call.
 
 - Local compile and review run before network-dependent preview, eval, or
   lifecycle work.
+- Escalation follows the official Agent Script prerequisite—an active
+  Omni-Channel connection—without imposing an additional Employee-versus-Service
+  Agent restriction.
 - Org calls reuse shared Salesforce authentication and bounded transports;
   tokens remain in process and are never logged or persisted by SF Agent Script.
 - Heavy prompts, traces, state, transcripts, eval payloads, and reports remain in

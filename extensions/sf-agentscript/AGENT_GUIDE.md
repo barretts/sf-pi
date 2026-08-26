@@ -47,6 +47,10 @@ It may let you omit:
 
 It will not guess when multiple candidates exist. Pass explicit ids when ambiguous.
 
+Structural inspection and review follow the source agent type: ordinary agents use `start_agent`, while `GoalBasedAgent` uses its orchestrator entry point and projects GBA workflows, triggers, bundles, and local actions.
+
+Compile/check returns source-bound diagnostic and action identities. Apply quick fixes with the returned `source_version`, `diagnostic_id`, and `action_id`; stale or ambiguous actions are refused. `code_action_provider.status="unavailable"` means diagnostics are valid but the official LSP repair provider did not complete.
+
 Heavy artifacts remain on disk:
 
 - preview sessions/traces under `.sfdx/agents/**`

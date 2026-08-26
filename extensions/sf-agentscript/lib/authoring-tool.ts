@@ -170,6 +170,17 @@ const Params = Type.Object({
     Type.Number({ description: "For mutate.apply_quick_fix. 1-based diagnostic line." }),
   ),
   fix_index: Type.Optional(Type.Number({ description: "For mutate.apply_quick_fix. Default 0." })),
+  source_version: Type.Optional(
+    Type.String({ description: "For mutate.apply_quick_fix. Source version from compile/check." }),
+  ),
+  diagnostic_id: Type.Optional(
+    Type.String({
+      description: "For mutate.apply_quick_fix. Diagnostic identity from compile/check.",
+    }),
+  ),
+  action_id: Type.Optional(
+    Type.String({ description: "For mutate.apply_quick_fix. Action identity from compile/check." }),
+  ),
   dry_run: Type.Optional(
     Type.Boolean({ description: "For mutate modes. Return diff/proposed source without writing." }),
   ),
@@ -180,7 +191,7 @@ export function registerAuthoringTool(pi: ExtensionAPI): void {
     name: AUTHORING_TOOL_NAME,
     label: "Agent Script authoring",
     description:
-      "Family tool for local Agent Script authoring: create bundles, compile/check or format, inspect structure/references/targets/review, and mutate `.agent` files. Uses verb + mode; live preview/eval/lifecycle are separate tools.",
+      "Family tool for local Agent Script authoring: create bundles, compile/check or format, inspect structure/references/targets/review, and mutate `.agent` files. Quick fixes use source-bound identities from compile/check. Uses verb + mode; live preview/eval/lifecycle are separate tools.",
     renderCall: (args, theme) => {
       const p = args as AuthoringParams;
       if (p.verb === "compile")

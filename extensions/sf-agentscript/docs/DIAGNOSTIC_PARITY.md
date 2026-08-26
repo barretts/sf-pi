@@ -9,7 +9,7 @@ quality catalog. Keep it synchronized with:
 
 ## Evidence baseline
 
-Fixture evidence was refreshed on 2026-08-25 against these exact installed
+Fixture evidence was refreshed on 2026-08-26 against these exact installed
 packages:
 
 | Package                               |   Version |
@@ -40,14 +40,12 @@ upgrade requires rerunning the fixtures before changing a decision.
 
 ## Current hardening diagnostics
 
-| SF Pi diagnostic                      | Official fixture evidence                                                                          | Tier          | Decision                                             |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------- |
-| `apex-target-method-suffix`           | none                                                                                               | SF Pi-owned   | Retain Salesforce target hygiene.                    |
-| `target-ref-looks-like-id`            | none                                                                                               | SF Pi-owned   | Retain stable API-name guidance.                     |
-| `employee-agent-connection-messaging` | none                                                                                               | SF Pi-owned   | Retain Employee-versus-Service Agent surface policy. |
-| `employee-agent-escalate`             | none                                                                                               | SF Pi-owned   | Retain Employee-versus-Service Agent utility policy. |
-| `inputs-out-of-scope`                 | `action-missing-input` plus an uncoded cascade on the fixture; neither identifies the scope misuse | Adjacent only | Retain exact `@inputs` scope diagnostic.             |
-| `outputs-out-of-scope`                | none                                                                                               | SF Pi-owned   | Retain exact `@outputs` callback-scope diagnostic.   |
+| SF Pi diagnostic            | Official fixture evidence                                                                          | Tier          | Decision                                                                                                  |
+| --------------------------- | -------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------- |
+| `apex-target-method-suffix` | none                                                                                               | SF Pi-owned   | Retain Salesforce target hygiene.                                                                         |
+| `target-ref-looks-like-id`  | none                                                                                               | SF Pi-owned   | Retain stable API-name guidance.                                                                          |
+| `inputs-out-of-scope`       | `action-missing-input` plus an uncoded cascade on the fixture; neither identifies the scope misuse | Adjacent only | Retain the exact deterministic-action misuse check; allow official connection instruction-template scope. |
+| `outputs-out-of-scope`      | none                                                                                               | SF Pi-owned   | Retain exact `@outputs` callback-scope diagnostic.                                                        |
 
 ## Current quality catalog
 
@@ -88,10 +86,19 @@ present, remains visible.
 Earlier work already removed duplicated evaluators where released official
 behavior became authoritative, including official unused-variable handling,
 object action I/O diagnostics, instruction-template syntax, and ignored Employee
-Agent default user configuration. Instruction-template syntax is now projected
-into quality from the official diagnostic rather than reimplemented. Those
-completed handoffs are not evidence for deleting any current local evaluator;
-their fixtures remain in `diagnostic-parity.test.ts` as regression coverage.
+Agent default user configuration. The former Employee-Agent messaging/escalation
+blocks were also removed: the official Agent Script Utils reference documents an
+active Omni-Channel connection as the escalation prerequisite and does not impose
+an agent-type restriction, while the installed compiler accepts both
+`@utils.escalate` and deterministic `escalate` for Employee Agents. Instruction-template
+syntax is now projected into quality from the official diagnostic rather than
+reimplemented. Those completed handoffs are not evidence for deleting any current
+local evaluator; applicable fixtures remain as regression coverage.
+
+Official escalation references:
+
+- https://developer.salesforce.com/docs/ai/agentforce/guide/ascript-ref-utils.html
+- https://developer.salesforce.com/docs/ai/agentforce/guide/ascript-blocks.html
 
 ## Deletion rule
 

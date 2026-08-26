@@ -45,7 +45,7 @@ export interface AgentScriptQualityResult {
 
 export interface QualityComponent {
   id: string;
-  kind: "start_agent" | "subagent" | "topic" | "connected_subagent";
+  kind: "start_agent" | "orchestrator" | "subagent" | "topic" | "connected_subagent";
   name: string;
   node: QualityAstNode;
   isStart: boolean;

@@ -24,6 +24,8 @@ export interface AgentScriptRange {
  * on. Kept minimal so we don't drag the full SDK type surface through our code.
  */
 export interface AgentScriptDiagnostic {
+  /** Deterministic identity bound to the exact analyzed source bytes. */
+  diagnosticId?: string;
   range: AgentScriptRange;
   message: string;
   severity: AgentScriptSeverity;
@@ -57,6 +59,12 @@ export interface AgentScriptDialectInfo {
  * to the source diagnostic, and the list of text edits.
  */
 export interface AgentScriptQuickFix {
+  /** Deterministic identity bound to this diagnostic and ordered edit set. */
+  actionId?: string;
+  /** Source-bound diagnostic identity this action repairs. */
+  diagnosticId?: string;
+  /** Exact source version that produced this action. */
+  sourceVersion?: string;
   /** Human-readable label, e.g. `"Convert to subagent"`. */
   title: string;
   /** True when upstream tagged the fix `isPreferred` — safe to prioritize. */
@@ -72,15 +80,25 @@ export interface AgentScriptQuickFix {
 /**
  * Result of one parse-plus-compile pass over a `.agent` file.
  */
+export interface AgentScriptCodeActionProviderStatus {
+  status: "available" | "unavailable" | "not_run";
+  provider: "@sf-agentscript/lsp";
+  reason?: string;
+}
+
 export interface AgentScriptCheckResult {
   /** True when the SDK was available and the file was diagnosed. */
   ok: boolean;
+  /** Digest of the exact source bytes used for this analysis. */
+  sourceVersion?: string;
   /** Diagnostics that passed our actionability filter. */
   diagnostics: AgentScriptDiagnostic[];
   /** Resolved dialect, when available. */
   dialect?: AgentScriptDialectInfo;
   /** Fixes we consider safe to surface to the agent. */
   quickFixes: AgentScriptQuickFix[];
+  /** Whether the official LSP code-action provider completed. */
+  codeActionProvider?: AgentScriptCodeActionProviderStatus;
   /** When the SDK couldn't load, this contains the reason. */
   unavailableReason?: string;
   /**

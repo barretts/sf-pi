@@ -131,6 +131,75 @@ describe("agentscript_authoring inspect/review", () => {
     );
   });
 
+  test("accepts a valid orchestrator-based GoalBasedAgent without start_agent", async () => {
+    const agentFile = path.join(workDir, "goal-based.agent");
+    await writeFile(
+      agentFile,
+      [
+        "config:",
+        '    agent_name: "GoalBased"',
+        '    agent_type: "GoalBasedAgent"',
+        "system:",
+        '    instructions: "Coordinate work."',
+        "    messages:",
+        '        welcome: "Hi"',
+        '        error: "Error"',
+        "orchestrator agent:",
+        "    reasoning:",
+        "        instructions: ->",
+        "            | Coordinate the goal.",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await captureAuthoringTool().execute(
+      "call-goal-based",
+      { verb: "inspect", mode: "review", agent_file: agentFile },
+      undefined,
+      undefined,
+      ctx(),
+    );
+    const details = result.details as {
+      readiness?: string;
+      findings?: Array<{ id: string }>;
+      quality?: { status: string; metrics?: { cyclomatic_complexity?: unknown[] } };
+    };
+    expect(details.readiness).toBe("ready");
+    expect(details.quality?.status).toBe("clean");
+    expect(details.findings?.map((finding) => finding.id)).not.toContain("missing-start-agent");
+  });
+
+  test("continues to block ordinary agents without start_agent", async () => {
+    const agentFile = path.join(workDir, "ordinary-no-start.agent");
+    await writeFile(
+      agentFile,
+      [
+        "config:",
+        '    agent_name: "Ordinary"',
+        '    agent_type: "AgentforceEmployeeAgent"',
+        "system:",
+        '    instructions: "Help."',
+        "    messages:",
+        '        welcome: "Hi"',
+        '        error: "Error"',
+        "subagent helper:",
+        '    description: "Helper"',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await captureAuthoringTool().execute(
+      "call-ordinary-no-start",
+      { verb: "inspect", mode: "review", agent_file: agentFile },
+      undefined,
+      undefined,
+      ctx(),
+    );
+    const details = result.details as { readiness?: string; findings?: Array<{ id: string }> };
+    expect(details.readiness).toBe("blocked");
+    expect(details.findings?.map((finding) => finding.id)).toContain("missing-start-agent");
+  });
+
   test("blocks files missing the system prompt block", async () => {
     const agentFile = path.join(workDir, "minimal.agent");
     await writeFile(

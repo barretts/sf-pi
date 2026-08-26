@@ -106,10 +106,91 @@ describe("compileResultMarkdown", () => {
           range: { start: { line: 5 } },
         },
       ],
+      quick_fixes: [
+        {
+          title: "Fix field",
+          apply_via: {
+            params: {
+              verb: "mutate",
+              mode: "apply_quick_fix",
+              diagnostic_code: "missing-required-field",
+              line: 6,
+            },
+          },
+        },
+      ],
     });
     expect(md).toMatch(/agentscript_authoring verb=mutate mode=apply_quick_fix/);
     expect(md).toMatch(/line=6/); // 5+1
     expect(md).toMatch(/code=missing-required-field/);
+  });
+
+  it("renders code-action provider unavailability distinctly", () => {
+    const md = compileResultMarkdown({
+      ok: true,
+      action: "check",
+      path: "/x.agent",
+      diagnostic_count: 1,
+      quick_fix_count: 0,
+      code_action_provider: {
+        status: "unavailable",
+        provider: "@sf-agentscript/lsp",
+        reason: "provider failed",
+      },
+      diagnostics: [
+        {
+          severity: 2,
+          code: "warning",
+          message: "Warning",
+          range: { start: { line: 1 } },
+        },
+      ],
+    });
+
+    expect(md).toMatch(/quick-fix provider unavailable/i);
+    expect(md).toContain("provider failed");
+  });
+
+  it("renders the first actual quick-fix action instead of guessing from diagnostics", () => {
+    const md = compileResultMarkdown({
+      ok: true,
+      action: "check",
+      path: "/x.agent",
+      diagnostic_count: 2,
+      quick_fix_count: 1,
+      diagnostics: [
+        {
+          severity: 1,
+          code: "no-fix",
+          message: "No fix",
+          range: { start: { line: 1 } },
+        },
+        {
+          severity: 2,
+          code: "has-fix",
+          message: "Has fix",
+          range: { start: { line: 4 } },
+        },
+      ],
+      quick_fixes: [
+        {
+          title: "Apply fix",
+          apply_via: {
+            tool: "agentscript_authoring",
+            params: {
+              verb: "mutate",
+              mode: "apply_quick_fix",
+              action_id: "act1:abc",
+              diagnostic_id: "diag1:def",
+              source_version: "sv1:ghi",
+            },
+          },
+        },
+      ],
+    });
+
+    expect(md).toContain("action_id=act1:abc");
+    expect(md).not.toContain("code=no-fix");
   });
 
   it("renders every diagnostic and its complete message", () => {

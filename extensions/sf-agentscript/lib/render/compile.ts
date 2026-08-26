@@ -29,6 +29,15 @@ export interface CompileResultDetails {
   clean?: boolean;
   diagnostic_count?: number;
   quick_fix_count?: number;
+  code_action_provider?: {
+    status: "available" | "unavailable" | "not_run";
+    provider: string;
+    reason?: string;
+  };
+  quick_fixes?: Array<{
+    title: string;
+    apply_via?: { tool?: string; params?: Record<string, unknown> };
+  }>;
   dialect?: { name?: string; version?: string } | null;
   compiled_via?: "local" | "server";
   diagnostics?: CompileDiagnostic[];
@@ -129,10 +138,20 @@ function formatCompileBody(details: CompileResultDetails, theme: Theme | undefin
   if (sev3 > 0) headerBits.push(dim(`ⓘ ${sev3} info`));
   if (sev4 > 0) headerBits.push(dim(`· ${sev4} hint${sev4 === 1 ? "" : "s"}`));
   if (fixCount > 0) headerBits.push(fg("accent", `🔧 ${fixCount} quick-fix ready`));
+  if (details.code_action_provider?.status === "unavailable") {
+    headerBits.push(warn("⚠ quick-fix provider unavailable"));
+  }
 
   const lines: string[] = [];
   lines.push(headerBits.join("  "));
   lines.push(dim(dialectName));
+  if (details.code_action_provider?.status === "unavailable") {
+    lines.push(
+      warn(
+        `Quick-fix provider unavailable${details.code_action_provider.reason ? `: ${details.code_action_provider.reason}` : "."}`,
+      ),
+    );
+  }
   if (sev1 === 0 && sev2 === 0 && (sev3 > 0 || sev4 > 0)) {
     lines.push(warn("⚠ Non-blocking diagnostics present; compile is valid."));
   }
@@ -159,15 +178,28 @@ function formatCompileBody(details: CompileResultDetails, theme: Theme | undefin
     lines.push(`  ${sev} ${codeStr} ${ln} ${d.message ?? ""}`);
   }
 
-  // Quick-fix recover_via hint
-  if (fixCount > 0) {
-    const first = ordered.find((d) => d.severity === 1) ?? ordered[0];
-    const codeArg = first?.code ?? "";
-    const lineArg = (first?.range?.start?.line ?? 0) + 1;
+  // Quick-fix recover_via hint. Render the actual action rather than
+  // reconstructing coordinates from a diagnostic that may not own a fix.
+  const firstFix = details.quick_fixes?.[0];
+  if (fixCount > 0 && firstFix?.apply_via?.params) {
+    const params = firstFix.apply_via.params;
+    const preferredOrder = [
+      "verb",
+      "mode",
+      "agent_file",
+      "source_version",
+      "diagnostic_id",
+      "action_id",
+      "diagnostic_code",
+      "line",
+      "fix_index",
+    ];
+    const rendered = preferredOrder
+      .filter((key) => params[key] !== undefined && params[key] !== "")
+      .map((key) => `${key}=${String(params[key])}`)
+      .join(" ");
     lines.push("");
-    lines.push(
-      `${fg("accent", "💡 Apply fix:")} ${code(`agentscript_authoring verb=mutate mode=apply_quick_fix line=${lineArg} code=${codeArg}`)}`,
-    );
+    lines.push(`${fg("accent", "💡 Apply fix:")} ${code(`agentscript_authoring ${rendered}`)}`);
   }
 
   return lines.join("\n");

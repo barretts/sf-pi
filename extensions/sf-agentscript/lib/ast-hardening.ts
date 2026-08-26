@@ -7,7 +7,6 @@ import {
   decomposeAtMemberExpression,
   isNamedMap,
   storeKey,
-  walkAstExpressions,
   type AstRoot,
   type LintPass,
   type SchemaContext,
@@ -31,32 +30,8 @@ class SfPiHardeningPass implements LintPass {
 
   run(_store: unknown, rawRoot: AstRoot): void {
     const root = asNode(rawRoot);
-    const employee = scalarString(asNode(root.config).agent_type) === "AgentforceEmployeeAgent";
 
-    if (employee) {
-      for (const [name, rawConnection] of namedEntries(root.connection)) {
-        if (name !== "messaging") continue;
-        addDiagnostic(
-          asNode(rawConnection),
-          "employee-agent-connection-messaging",
-          "Employee Agents must not include a connection messaging block.",
-          1,
-        );
-      }
-      walkAstExpressions(root, (expression) => {
-        const ref = decomposeAtMemberExpression(expression);
-        if (ref?.namespace === "utils" && ref.property === "escalate") {
-          addDiagnostic(
-            asNode(expression),
-            "employee-agent-escalate",
-            "@utils.escalate is Service-Agent-only. Employee Agents should use a help subagent or target-backed action.",
-            1,
-          );
-        }
-      });
-    }
-
-    walkAst(root, { employee: false, insideRun: false, allowInputs: false, allowOutputs: false });
+    walkAst(root, { insideRun: false, allowInputs: false, allowOutputs: false });
 
     for (const component of componentNodes(root)) {
       for (const [name, rawAction] of namedEntries(component.actions)) {
@@ -92,7 +67,6 @@ class SfPiHardeningPass implements LintPass {
 }
 
 interface WalkContext {
-  employee: boolean;
   insideRun: boolean;
   allowInputs: boolean;
   allowOutputs: boolean;
@@ -131,13 +105,29 @@ function walkAst(value: unknown, ctx: WalkContext, seen = new Set<object>()): vo
       1,
     );
   }
-  if (ctx.employee && ref?.namespace === "utils" && ref.property === "escalate") {
-    addDiagnostic(
-      node,
-      "employee-agent-escalate",
-      "@utils.escalate is Service-Agent-only. Employee Agents should use a help subagent or target-backed action.",
-      1,
-    );
+  // Connection-owned instruction templates have their own declared `inputs:`
+  // scope. Keep the local post-action misuse diagnostic, but do not override
+  // the official dialect's valid connection template semantics.
+  if (node.__kind === "ConnectionBlock") {
+    for (const [key, child] of Object.entries(node)) {
+      if (isAstMetadataKey(key)) continue;
+      walkAst(
+        child,
+        key === "additional_system_instructions" || key === "escalation_message"
+          ? { ...ctx, allowInputs: true }
+          : ctx,
+        seen,
+      );
+    }
+    return;
+  }
+
+  if (node.__kind === "ConnectionReasoningBlock") {
+    for (const [key, child] of Object.entries(node)) {
+      if (isAstMetadataKey(key)) continue;
+      walkAst(child, key === "instructions" ? { ...ctx, allowInputs: true } : ctx, seen);
+    }
+    return;
   }
 
   if (node.__kind === "ReasoningActionBlock") {
@@ -170,21 +160,26 @@ function walkAst(value: unknown, ctx: WalkContext, seen = new Set<object>()): vo
   }
 
   for (const [key, child] of Object.entries(node)) {
-    if (
-      key === "__cst" ||
-      key === "__diagnostics" ||
-      key === "__comments" ||
-      key === "__symbol" ||
-      key === "parent"
-    )
-      continue;
+    if (isAstMetadataKey(key)) continue;
     walkAst(child, ctx, seen);
   }
 }
 
+function isAstMetadataKey(key: string): boolean {
+  return (
+    key === "__kind" ||
+    key === "__cst" ||
+    key === "__children" ||
+    key === "__diagnostics" ||
+    key === "__comments" ||
+    key === "__symbol" ||
+    key === "parent"
+  );
+}
+
 function componentNodes(root: AstNode): AstNode[] {
   const output: AstNode[] = [];
-  for (const key of ["start_agent", "subagent", "topic"] as const) {
+  for (const key of ["start_agent", "orchestrator", "subagent", "topic"] as const) {
     for (const [, node] of namedEntries(root[key])) output.push(asNode(node));
   }
   return output;

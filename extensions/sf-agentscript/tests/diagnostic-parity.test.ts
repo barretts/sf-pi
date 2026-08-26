@@ -181,33 +181,6 @@ const cases: ParityCase[] = [
       "            | Done.",
     ]),
   },
-  {
-    name: "Employee Agent with Service-Agent-only wiring",
-    localCodes: ["employee-agent-connection-messaging", "employee-agent-escalate"],
-    upstreamCodes: [],
-    decision: "retain-local",
-    executionContext: "Employee Agent with messaging connection and escalation utility",
-    source: agent([
-      "system:",
-      '    instructions: "You are helpful."',
-      "",
-      "config:",
-      '    agent_name: "EmployeeBot"',
-      '    agent_type: "AgentforceEmployeeAgent"',
-      "",
-      "access:",
-      '    default_agent_user: "service@example.com"',
-      "",
-      "connection messaging:",
-      "    adaptive_response_allowed: True",
-      "",
-      "start_agent main:",
-      '    description: "Entry."',
-      "    reasoning:",
-      "        actions:",
-      "            escalate: @utils.escalate",
-    ]),
-  },
 ];
 
 describe("local hardening diagnostic parity", () => {
@@ -278,8 +251,6 @@ describe("local hardening diagnostic parity", () => {
     const covered = new Set(cases.flatMap((entry) => entry.localCodes));
     expect([...covered].sort()).toEqual([
       "apex-target-method-suffix",
-      "employee-agent-connection-messaging",
-      "employee-agent-escalate",
       "inputs-out-of-scope",
       "outputs-out-of-scope",
       "target-ref-looks-like-id",
