@@ -20,7 +20,7 @@ import {
   updateDefaults,
   rewireCloneToEffective,
 } from "../lib/defaults.ts";
-import { parseDefaultsArgs } from "../lib/skills-command.ts";
+import { handleDefaults, parseDefaultsArgs } from "../lib/skills-command.ts";
 
 const tempDirs: string[] = [];
 const originalHome = process.env.HOME;
@@ -279,6 +279,8 @@ describe("unlinkCheckout", () => {
       scope: "global",
     });
     expect(result.ok).toBe(true);
+    expect(result.settingsChanged).toBe(true);
+    expect(result.removedEntries).toBe(1);
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require("node:fs");
@@ -288,30 +290,110 @@ describe("unlinkCheckout", () => {
     expect(settings.skills).not.toContain("~/.pi/agent/sf-skills/effective/skills");
   });
 
-  it("refuses to delete a path missing the sentinel", () => {
+  it("removes descendant per-skill wiring under a checkout root", () => {
+    const home = makeHome();
+    process.env.HOME = home;
+    const root = path.join(home, ".pi", "agent", "sf-skills", "afv-library");
+    mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
+    writeFileSync(
+      path.join(home, ".pi", "agent", "settings.json"),
+      `${JSON.stringify({
+        skills: [
+          "~/.pi/agent/sf-skills/afv-library/skills/one/SKILL.md",
+          "~/.pi/agent/sf-skills/afv-library/skills/two/SKILL.md",
+        ],
+      })}\n`,
+    );
+
+    const result = unlinkCheckout({ target: root, scope: "global" });
+
+    expect(result.ok).toBe(true);
+    expect(result.settingsChanged).toBe(true);
+    expect(result.removedEntries).toBe(2);
+    const settings = JSON.parse(
+      readFileSync(path.join(home, ".pi", "agent", "settings.json"), "utf8"),
+    );
+    expect(settings.skills).toEqual([]);
+  });
+
+  it("treats an already-absent managed directory as an idempotent delete", () => {
+    const home = makeHome();
+    process.env.HOME = home;
+    const missing = path.join(home, "missing-checkout");
+
+    const result = unlinkCheckout({
+      target: missing,
+      scope: "global",
+      deleteOnDisk: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.settingsChanged).toBe(false);
+    expect(result.diskOutcome).toBe("absent");
+    expect(result.message).toMatch(/nothing to delete/i);
+  });
+
+  it("reports partial success when wiring is removed but an unmanaged directory is retained", () => {
     const home = makeHome();
     process.env.HOME = home;
     const fake = path.join(home, "fake-checkout");
-    mkdirSync(fake, { recursive: true });
+    mkdirSync(path.join(fake, "skills"), { recursive: true });
+    mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
+    writeFileSync(
+      path.join(home, ".pi", "agent", "settings.json"),
+      `${JSON.stringify({ skills: [path.join(fake, "skills")] })}\n`,
+    );
+
     const result = unlinkCheckout({
       target: fake,
       scope: "global",
       deleteOnDisk: true,
     });
+
     expect(result.ok).toBe(false);
-    // The defaults module names the sentinel file in the message rather than
-    // the literal word “sentinel” — match on the filename so the test stays
-    // honest about what the user actually sees.
+    expect(result.settingsChanged).toBe(true);
+    expect(result.removedEntries).toBe(1);
+    expect(result.diskOutcome).toBe("retained-unmanaged");
+    expect(result.message).toMatch(/Removed 1 matching settings entry/);
     expect(result.message).toMatch(/\.sf-skills-managed/);
   });
 });
 
-describe("legacy afv-library detection", () => {
-  it("warns when a retired clone exists or is wired", () => {
+describe("handleDefaults unlink", () => {
+  it("reloads when wiring changed even if unmanaged directory deletion is refused", async () => {
     const home = makeHome();
     process.env.HOME = home;
-    const root = path.join(home, ".pi", "agent", "sf-skills", "afv-library");
-    mkdirSync(path.join(root, "skills"), { recursive: true });
+    const cwd = makeCwd();
+    const fake = path.join(home, "fake-checkout");
+    mkdirSync(path.join(fake, "skills"), { recursive: true });
+    mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
+    writeFileSync(
+      path.join(home, ".pi", "agent", "settings.json"),
+      `${JSON.stringify({ skills: [path.join(fake, "skills")] })}\n`,
+    );
+    let reloads = 0;
+
+    await handleDefaults(
+      {
+        cwd,
+        isProjectTrusted: () => true,
+        ui: { notify: () => undefined },
+        reload: async () => {
+          reloads += 1;
+        },
+      } as never,
+      { action: "unlink", scope: "global", target: fake, deleteOnDisk: true },
+      async () => undefined,
+    );
+
+    expect(reloads).toBe(1);
+  });
+});
+
+describe("legacy afv-library detection", () => {
+  it("warns with explicit settings scope and does not recommend deleting an absent clone", () => {
+    const home = makeHome();
+    process.env.HOME = home;
     mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
     writeFileSync(
       path.join(home, ".pi", "agent", "settings.json"),
@@ -319,11 +401,68 @@ describe("legacy afv-library detection", () => {
     );
 
     const detection = detectLegacyDefaultLibrary();
+    const warning = formatLegacyDefaultLibraryWarning(detection);
     expect(detection.present).toBe(true);
     expect(detection.wired).toBe(true);
-    expect(formatLegacyDefaultLibraryWarning(detection)).toMatch(/still wired/);
-    expect(formatLegacyDefaultLibraryWarning(detection)).toMatch(
-      /\/sf-skills defaults unlink ~\/\.pi\/agent\/sf-skills\/afv-library --delete/,
+    expect(warning).toMatch(/still wired/);
+    expect(warning).toContain("/sf-skills defaults install global");
+    expect(warning).not.toContain("defaults unlink");
+  });
+
+  it("uses project settings scope for stale per-skill wiring instead of inventing a clone path", () => {
+    const home = makeHome();
+    process.env.HOME = home;
+    const cwd = makeCwd();
+    mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+    writeFileSync(
+      path.join(cwd, ".pi", "settings.json"),
+      `${JSON.stringify({
+        skills: ["~/.pi/agent/sf-skills/afv-library/skills/example/SKILL.md"],
+      })}\n`,
+    );
+
+    const warning = formatLegacyDefaultLibraryWarning(detectLegacyDefaultLibrary(cwd), {
+      sessionStart: true,
+    });
+
+    expect(warning).toContain("/sf-skills defaults install project");
+    expect(warning).not.toContain(path.join(cwd, ".pi", "sf-skills", "afv-library"));
+  });
+
+  it("clears stale per-skill project wiring with the recommended scoped install", async () => {
+    const home = makeHome();
+    process.env.HOME = home;
+    const cwd = makeCwd();
+    mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+    writeFileSync(
+      path.join(cwd, ".pi", "settings.json"),
+      `${JSON.stringify({
+        skills: ["~/.pi/agent/sf-skills/afv-library/skills/example/SKILL.md"],
+      })}\n`,
+    );
+
+    const result = await installDefaults({ scope: "project", cwd, spawn: fakeGit });
+
+    expect(result.ok).toBe(true);
+    expect(detectLegacyDefaultLibrary(cwd).wired).toBe(false);
+    const settings = JSON.parse(readFileSync(path.join(cwd, ".pi", "settings.json"), "utf8"));
+    expect(settings.skills).toContain("~/.pi/agent/sf-skills/effective/skills");
+    expect(settings.skills).not.toContain(
+      "~/.pi/agent/sf-skills/afv-library/skills/example/SKILL.md",
+    );
+  });
+
+  it("recommends deletion only for a sentinel-managed clone that exists", () => {
+    const home = makeHome();
+    process.env.HOME = home;
+    const root = path.join(home, ".pi", "agent", "sf-skills", "afv-library");
+    mkdirSync(path.join(root, "skills"), { recursive: true });
+    writeFileSync(path.join(root, ".sf-skills-managed"), "managed\n");
+
+    const warning = formatLegacyDefaultLibraryWarning(detectLegacyDefaultLibrary());
+
+    expect(warning).toContain(
+      "/sf-skills defaults unlink ~/.pi/agent/sf-skills/afv-library global --delete",
     );
   });
 
@@ -349,9 +488,8 @@ describe("legacy afv-library detection", () => {
     );
     expect(settings.skills).toContain("~/.pi/agent/sf-skills/effective/skills");
     expect(settings.skills).not.toContain("~/.pi/agent/sf-skills/afv-library/skills");
-    expect(result.message).toMatch(
-      /\/sf-skills defaults unlink ~\/\.pi\/agent\/sf-skills\/afv-library --delete/,
-    );
+    expect(result.message).toMatch(/will not be deleted automatically/);
+    expect(result.message).not.toContain("defaults unlink");
   });
 
   it("does not session-warn when the retired clone is only leftover on disk", () => {
@@ -366,7 +504,8 @@ describe("legacy afv-library detection", () => {
     expect(detection.wired).toBe(false);
     expect(formatLegacyDefaultLibraryWarning(detection, { sessionStart: true })).toBeUndefined();
     expect(formatLegacyDefaultLibraryWarning(detection)).toMatch(
-      /\/sf-skills defaults unlink ~\/\.pi\/agent\/sf-skills\/afv-library --delete/,
+      /will not be deleted automatically/,
     );
+    expect(formatLegacyDefaultLibraryWarning(detection)).not.toContain("defaults unlink");
   });
 });

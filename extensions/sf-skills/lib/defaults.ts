@@ -110,7 +110,8 @@ export function managedClonePath(scope: SkillSourceScope, cwd?: string): string 
 }
 
 /** Settings value (portable form) we write for the managed effective skills dir. */
-export function managedSettingsValue(_scope: SkillSourceScope): string {
+export function managedSettingsValue(scope: SkillSourceScope): string {
+  void scope; // Kept in the public signature for callers that select wiring scope.
   return managedEffectiveSettingsValue();
 }
 
@@ -150,7 +151,14 @@ export function legacyManagedSettingsValue(): string {
 }
 
 export interface LegacyDefaultLibraryDetection {
-  clones: Array<{ scope: SkillSourceScope; rootPath: string; exists: boolean; wired: boolean }>;
+  clones: Array<{
+    scope: SkillSourceScope;
+    rootPath: string;
+    exists: boolean;
+    managed: boolean;
+    wired: boolean;
+    wiredEntries: string[];
+  }>;
   present: boolean;
   wired: boolean;
 }
@@ -161,10 +169,17 @@ export function detectLegacyDefaultLibrary(cwd?: string): LegacyDefaultLibraryDe
   for (const scope of ["global", "project"] as const) {
     if (scope === "project" && !cwd) continue;
     const rootPath = legacyManagedClonePath(scope, cwd);
-    const skillsPath = path.join(rootPath, SKILLS_SUBDIR);
     const exists = isDirectory(rootPath);
-    const wired = settingsMentionLegacy(scope, cwd, skillsPath);
-    clones.push({ scope, rootPath, exists, wired });
+    const managed = exists && existsSync(path.join(rootPath, SENTINEL_FILE));
+    const wiredEntries = legacySettingsEntries(scope, cwd);
+    clones.push({
+      scope,
+      rootPath,
+      exists,
+      managed,
+      wired: wiredEntries.length > 0,
+      wiredEntries,
+    });
   }
   return {
     clones,
@@ -181,25 +196,43 @@ export function formatLegacyDefaultLibraryWarning(
   if (leftovers.length === 0) return undefined;
   if (options.sessionStart && !detection.wired) return undefined;
 
-  const unlinkCommands = leftovers
-    .filter((clone) => clone.exists || clone.wired)
-    .map((clone) => `/sf-skills defaults unlink ${legacyUnlinkTarget(clone.rootPath)} --delete`)
-    .join(" then ");
-
-  if (detection.wired) {
-    return [
+  const parts: string[] = [];
+  const wired = leftovers.filter((clone) => clone.wired);
+  if (wired.length > 0) {
+    const installCommands = wired
+      .map((clone) => `/sf-skills defaults install ${clone.scope}`)
+      .join(" then ");
+    parts.push(
       "Retired forcedotcom/afv-library is still wired.",
       "SF Pi now uses forcedotcom/sf-skills.",
-      "Run /sf-skills defaults install to switch, then remove the old clone with",
-      `${unlinkCommands}.`,
-    ].join(" ");
+      `Run ${installCommands} to switch and remove the retired wiring.`,
+    );
   }
 
-  return [
-    "A retired forcedotcom/afv-library clone is still on disk but not wired.",
-    "Remove it with",
-    `${unlinkCommands}.`,
-  ].join(" ");
+  const managedClones = leftovers.filter((clone) => clone.exists && clone.managed);
+  if (managedClones.length > 0) {
+    const unlinkCommands = managedClones
+      .map(
+        (clone) =>
+          `/sf-skills defaults unlink ${legacyUnlinkTarget(clone.rootPath)} ${clone.scope} --delete`,
+      )
+      .join(" then ");
+    parts.push(
+      detection.wired
+        ? `Then remove the old managed clone with ${unlinkCommands}.`
+        : `A retired forcedotcom/afv-library clone is still on disk but not wired. Remove it with ${unlinkCommands}.`,
+    );
+  }
+
+  const unmanagedClones = leftovers.filter((clone) => clone.exists && !clone.managed);
+  if (unmanagedClones.length > 0) {
+    const paths = unmanagedClones.map((clone) => clone.rootPath).join(", ");
+    parts.push(
+      `A retired checkout remains on disk without ${SENTINEL_FILE} and will not be deleted automatically: ${paths}.`,
+    );
+  }
+
+  return parts.join(" ");
 }
 
 function legacyUnlinkTarget(rootPath: string): string {
@@ -322,33 +355,27 @@ function isManagedWired(
   cwd: string | undefined,
   skillsPath: string,
 ): boolean {
-  const detection = detectSkillSources({ cwd, includeProject: scope === "project" });
-  const settingsPath = scope === "project" ? detection.projectSettingsPath : detection.settingsPath;
+  const settingsPath = skillSettingsPath(scope, cwd);
   if (!settingsPath) return false;
   return readSkillsArray(settingsPath).some((value) => resolvesToSamePath(value, skillsPath, cwd));
 }
 
-function settingsMentionLegacy(
-  scope: SkillSourceScope,
-  cwd: string | undefined,
-  skillsPath: string,
-): boolean {
+function skillSettingsPath(scope: SkillSourceScope, cwd?: string): string | undefined {
   const detection = detectSkillSources({ cwd, includeProject: scope === "project" });
-  const settingsPath = scope === "project" ? detection.projectSettingsPath : detection.settingsPath;
-  if (!settingsPath) return false;
-  return readSkillsArray(settingsPath).some(
-    (value) =>
-      value.includes(LEGACY_LIBRARY_DIR_NAME) || resolvesToSamePath(value, skillsPath, cwd),
-  );
+  return scope === "project" ? detection.projectSettingsPath : detection.settingsPath;
+}
+
+function legacySettingsEntries(scope: SkillSourceScope, cwd?: string): string[] {
+  const settingsPath = skillSettingsPath(scope, cwd);
+  if (!settingsPath) return [];
+  return readSkillsArray(settingsPath).filter((value) => {
+    const resolved = resolveConfiguredPath(value, cwd);
+    return path.normalize(resolved).split(path.sep).includes(LEGACY_LIBRARY_DIR_NAME);
+  });
 }
 
 function unwireLegacyDefaultLibrary(scope: SkillSourceScope, cwd?: string): boolean {
-  const detection = detectSkillSources({ cwd, includeProject: scope === "project" });
-  const settingsPath = scope === "project" ? detection.projectSettingsPath : detection.settingsPath;
-  if (!settingsPath) return false;
-  const toRemove = readSkillsArray(settingsPath).filter((value) =>
-    value.includes(LEGACY_LIBRARY_DIR_NAME),
-  );
+  const toRemove = legacySettingsEntries(scope, cwd);
   if (toRemove.length === 0) return false;
   updateSkillSources({ add: [], remove: toRemove, scope, cwd });
   return true;
@@ -464,35 +491,90 @@ export interface UnlinkOptions {
   deleteOnDisk?: boolean;
 }
 
-export function unlinkCheckout(options: UnlinkOptions): { ok: boolean; message: string } {
-  const expanded = expandPath(options.target);
-  updateSkillSources({
-    add: [],
-    remove: [options.target, expanded, `${expanded}/${SKILLS_SUBDIR}`],
-    scope: options.scope,
-    cwd: options.cwd,
-  });
+export type UnlinkDiskOutcome =
+  "not-requested" | "deleted" | "absent" | "retained-unmanaged" | "delete-failed";
 
-  if (options.deleteOnDisk) {
-    const sentinel = path.join(expanded, SENTINEL_FILE);
-    if (!existsSync(sentinel)) {
-      return {
-        ok: false,
-        message: `Refusing to delete ${expanded}: missing ${SENTINEL_FILE}. Settings entry was still removed.`,
-      };
-    }
-    try {
-      rmSync(expanded, { recursive: true, force: true });
-      return { ok: true, message: `Unlinked and deleted ${expanded}.` };
-    } catch (err) {
-      return {
-        ok: false,
-        message: `Settings entry removed, but rm failed: ${err instanceof Error ? err.message : String(err)}`,
-      };
-    }
+export interface UnlinkResult {
+  ok: boolean;
+  message: string;
+  settingsChanged: boolean;
+  removedEntries: number;
+  diskOutcome: UnlinkDiskOutcome;
+}
+
+export function unlinkCheckout(options: UnlinkOptions): UnlinkResult {
+  const expanded = expandPath(options.target);
+  const settingsPath = skillSettingsPath(options.scope, options.cwd);
+  const matchingEntries = settingsPath
+    ? readSkillsArray(settingsPath).filter((value) =>
+        isSameOrDescendant(resolveConfiguredPath(value, options.cwd), expanded),
+      )
+    : [];
+
+  if (matchingEntries.length > 0) {
+    updateSkillSources({
+      add: [],
+      remove: matchingEntries,
+      scope: options.scope,
+      cwd: options.cwd,
+    });
   }
 
-  return { ok: true, message: `Unlinked ${options.target} from ${options.scope} settings.` };
+  const removedEntries = matchingEntries.length;
+  const settingsChanged = removedEntries > 0;
+  const settingsOutcome = settingsChanged
+    ? `Removed ${removedEntries} matching settings ${removedEntries === 1 ? "entry" : "entries"} from ${options.scope} settings.`
+    : `No matching settings entry was present in ${options.scope} settings.`;
+
+  if (!options.deleteOnDisk) {
+    return {
+      ok: true,
+      message: settingsOutcome,
+      settingsChanged,
+      removedEntries,
+      diskOutcome: "not-requested",
+    };
+  }
+
+  if (!existsSync(expanded)) {
+    return {
+      ok: true,
+      message: `${settingsOutcome} No directory existed at ${expanded}; nothing to delete.`,
+      settingsChanged,
+      removedEntries,
+      diskOutcome: "absent",
+    };
+  }
+
+  const sentinel = path.join(expanded, SENTINEL_FILE);
+  if (!existsSync(sentinel)) {
+    return {
+      ok: false,
+      message: `${settingsOutcome} Refusing to delete existing directory ${expanded}: missing ${SENTINEL_FILE}.`,
+      settingsChanged,
+      removedEntries,
+      diskOutcome: "retained-unmanaged",
+    };
+  }
+
+  try {
+    rmSync(expanded, { recursive: true, force: true });
+    return {
+      ok: true,
+      message: `${settingsOutcome} Deleted managed directory ${expanded}.`,
+      settingsChanged,
+      removedEntries,
+      diskOutcome: "deleted",
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: `${settingsOutcome} Directory deletion failed: ${err instanceof Error ? err.message : String(err)}`,
+      settingsChanged,
+      removedEntries,
+      diskOutcome: "delete-failed",
+    };
+  }
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -575,13 +657,27 @@ function isDirectory(absolute: string): boolean {
   }
 }
 
+function resolveConfiguredPath(settingsValue: string, cwd?: string): string {
+  if (settingsValue.startsWith("~/")) {
+    return path.join(process.env.HOME ?? "", settingsValue.slice(2));
+  }
+  if (settingsValue === "~") return process.env.HOME ?? "";
+  if (settingsValue.startsWith("./") || !path.isAbsolute(settingsValue)) {
+    return path.resolve(cwd ?? process.env.HOME ?? "", settingsValue);
+  }
+  return settingsValue;
+}
+
 function resolvesToSamePath(settingsValue: string, target: string, cwd?: string): boolean {
-  const expanded = settingsValue.startsWith("~/")
-    ? path.join(process.env.HOME ?? "", settingsValue.slice(2))
-    : settingsValue.startsWith("./") || !path.isAbsolute(settingsValue)
-      ? path.resolve(cwd ?? process.env.HOME ?? "", settingsValue)
-      : settingsValue;
-  return path.normalize(expanded) === path.normalize(target);
+  return path.normalize(resolveConfiguredPath(settingsValue, cwd)) === path.normalize(target);
+}
+
+function isSameOrDescendant(candidate: string, root: string): boolean {
+  const relative = path.relative(path.normalize(root), path.normalize(candidate));
+  return (
+    relative === "" ||
+    (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
+  );
 }
 
 function portableLinkValue(input: string, scope: SkillSourceScope, cwd?: string): string {

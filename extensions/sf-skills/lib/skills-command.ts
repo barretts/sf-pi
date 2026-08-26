@@ -194,7 +194,7 @@ export async function handleDefaults(
         result.message,
         result.ok ? "info" : "warning",
       );
-      if (result.ok) await ctx.reload();
+      if (result.settingsChanged) await ctx.reload();
       return;
     }
   }
