@@ -124,9 +124,9 @@ describe("Docs Query Distillation", () => {
       releaseHint: { season: "winter", year: 2025, release: "252" },
       releaseNoteIntent: true,
       retrievalFilters: ["+release:252"],
-      retrievalBoosts: ["guides:sales"],
+      retrievalBoosts: ["guides:_sales"],
     });
-    expect(plan?.variants[0]).toBe("+release:252 guides:sales sales cloud release notes");
+    expect(plan?.variants[0]).toBe("+release:252 guides:_sales sales cloud release notes");
   });
 
   it("keeps plain product release-note queries on the normal search path", () => {

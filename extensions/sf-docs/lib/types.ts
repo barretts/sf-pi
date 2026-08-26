@@ -22,11 +22,18 @@ export interface TokenResolution {
   token: string;
 }
 
-export interface EndpointResolution {
-  source: EndpointSource;
-  endpoint: string;
-  warning?: string;
-}
+export type EndpointResolution =
+  | {
+      ok: true;
+      source: EndpointSource;
+      endpoint: string;
+      warning?: string;
+    }
+  | {
+      ok: false;
+      source: "env";
+      error: string;
+    };
 
 export interface SfDocsPreferences {
   defaultCollection: string;
@@ -48,15 +55,35 @@ export interface EffectiveSfDocsPreferences extends SfDocsPreferences {
   sources: Record<keyof SfDocsPreferences, SfDocsSettingsSource>;
 }
 
+export interface DocsLandmark {
+  slug?: string;
+  label?: string;
+  members?: string[];
+}
+
+export interface DocsLandmarkLocaleDiff {
+  locales?: string[];
+  added?: DocsLandmark[];
+  removed?: DocsLandmark[];
+}
+
+export interface DocsLandmarkSlice {
+  version?: string;
+  landmarks?: DocsLandmark[];
+  localeDiffs?: DocsLandmarkLocaleDiff[];
+}
+
 export interface DocsCollection {
   collection: string;
+  description?: string;
+  status?: string;
   versions?: string[];
   versionLabels?: Record<string, string>;
   locales?: string[];
   formats?: string[];
   retrievalHints?: string;
   fetchHints?: string;
-  landmarks?: Array<{ slug?: string; label?: string; members?: unknown[] }>;
+  landmarks?: DocsLandmarkSlice[];
   extraFields?: string[];
 }
 

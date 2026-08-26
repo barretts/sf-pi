@@ -376,12 +376,12 @@ function releaseFilter(
 function guideBoostsFor(original: string, semanticQuery: string): string[] {
   const normalized = `${semanticQuery} ${semanticize(original)}`;
   const boosts: string[] = [];
-  if (/\bsales(?:\s+cloud)?\b/iu.test(normalized)) boosts.push("guides:sales");
-  if (/\bservice(?:\s+cloud)?\b/iu.test(normalized)) boosts.push("guides:service");
-  if (/\bmarketing(?:\s+cloud)?\b/iu.test(normalized)) boosts.push("guides:marketing");
-  if (/\bcommerce(?:\s+cloud)?\b/iu.test(normalized)) boosts.push("guides:commerce");
-  if (/\bdata\s+(?:cloud|360)\b/iu.test(normalized)) boosts.push("guides:data_360");
-  if (/\bagentforce\b/iu.test(normalized)) boosts.push("guides:agentforce");
+  if (/\bsales(?:\s+cloud)?\b/iu.test(normalized)) boosts.push("guides:_sales");
+  if (/\bservice(?:\s+cloud)?\b/iu.test(normalized)) boosts.push("guides:_service");
+  if (/\bmarketing(?:\s+cloud)?\b/iu.test(normalized)) boosts.push("guides:_marketing");
+  if (/\bcommerce(?:\s+cloud)?\b/iu.test(normalized)) boosts.push("guides:_commerce");
+  if (/\bdata\s+(?:cloud|360)\b/iu.test(normalized)) boosts.push("guides:_data_360");
+  if (/\bagentforce\b/iu.test(normalized)) boosts.push("guides:_agentforce");
   return unique(boosts);
 }
 

@@ -14,7 +14,9 @@ Use `sf_docs` for official Salesforce-owned documentation and product/reference 
 
 - Cite returned Salesforce source URLs when the answer depends on documentation.
 - Preserve requested product, locale, release, and document-type constraints; report an evidence gap when results do not satisfy them.
-- Developer-reference queries can route to the legacy developer collection automatically.
+- Developer-reference queries use underscore-prefixed guide values and retry the peer `developer` or `legacydeveloper` collection when the preferred collection has no matches.
+- MuleSoft searches add `+latest:true` unless the query requests a specific component release.
+- Route explicit Well-Architected, decision-guide, and reference-diagram questions to `architect`; do not route on the generic word “architecture” alone.
 - Release-note requests require actual release-note evidence, not merely current-release metadata.
 - Fall back to broader web research only when official docs are missing, weak, or the user explicitly requests external sources.
 - Do not use SF Docs as a generic web search or as a substitute for current-org schema/runtime evidence.

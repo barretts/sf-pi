@@ -41,9 +41,13 @@ import { DocsClient } from "./lib/client.ts";
 import { formatCacheAge, readCatalogCache, writeCatalogCache } from "./lib/catalog-cache.ts";
 import { readEffectiveDocsPreferences } from "./lib/preferences.ts";
 import { formatCollections } from "./lib/render.ts";
-import { registerSfDocsTool } from "./lib/sf_docs-tool.ts";
+import { registerSfDocsTool, summarizeCollectionCapabilities } from "./lib/sf_docs-tool.ts";
+import {
+  docsCollectionProfilesFor,
+  summarizeDocsCollectionProfile,
+} from "./lib/collection-profiles.ts";
 import { buildStatus } from "./lib/status.ts";
-import { COMMAND_NAME, ENV_TOKEN, PROVIDER_NAME } from "./lib/types.ts";
+import { COMMAND_NAME, ENV_TOKEN, PROVIDER_NAME, type DocsCollection } from "./lib/types.ts";
 import { SF_DOCS_ACTIONS, renderHelp } from "./lib/command-surface.ts";
 import {
   createSfDocsConnectPanel,
@@ -225,20 +229,31 @@ async function listCollections(ctx: ExtensionCommandContext, refresh: boolean): 
   const prefs = readEffectiveDocsPreferences(ctx.cwd);
   const cache = readCatalogCache();
   if (prefs.cacheCatalog && !refresh && cache.hit && !cache.stale && cache.collections) {
-    return formatCollections({
-      collections: cache.collections,
-      cache: `hit · ${formatCacheAge(cache.fetchedAt)}`,
-    });
+    return formatCollectionCatalog(cache.collections, `hit · ${formatCacheAge(cache.fetchedAt)}`);
   }
 
   const auth = await getDocsToken(ctx);
   if (auth.ok === false) return auth.message;
   const endpoint = resolveEndpoint();
+  if (endpoint.ok === false) return endpoint.error;
   const client = new DocsClient({ endpoint: endpoint.endpoint, token: auth.token });
-  const response = (await client.callTool("list", {}, ctx.signal)) as { collections?: unknown[] };
+  const response = (await client.callTool("list", {}, ctx.signal)) as {
+    collections?: DocsCollection[];
+  };
   const collections = Array.isArray(response.collections) ? response.collections : [];
-  if (prefs.cacheCatalog) writeCatalogCache(collections as never[]);
-  return formatCollections({ collections, cache: refresh ? "refreshed" : "miss/refreshed" });
+  if (prefs.cacheCatalog) writeCatalogCache(collections);
+  return formatCollectionCatalog(collections, refresh ? "refreshed" : "miss/refreshed");
+}
+
+function formatCollectionCatalog(collections: DocsCollection[], cache: string): string {
+  return formatCollections({
+    collections,
+    capabilitySummaries: collections.map(summarizeCollectionCapabilities),
+    collectionProfiles: docsCollectionProfilesFor(
+      collections.map((collection) => collection.collection),
+    ).map(summarizeDocsCollectionProfile),
+    cache,
+  });
 }
 
 function readCheatsheet(): string {

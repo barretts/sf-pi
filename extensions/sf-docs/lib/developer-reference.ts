@@ -5,6 +5,7 @@ export interface DeveloperReferenceRoutingPlan {
   intent: "developer_reference";
   source: "atlas_url" | "reference_query";
   collection: string;
+  fallbackCollection?: string;
   compiledQuery?: string;
   reason: string;
   matchedSignals: string[];
@@ -25,12 +26,12 @@ interface ReferenceSignal {
 
 const DEVELOPER_COLLECTIONS = new Set(["developer", "legacydeveloper"]);
 const REFERENCE_GUIDES = new Set([
-  "apexref",
-  "api_meta",
-  "api_tooling",
-  "object_reference",
-  "pages",
-  "chatterapi",
+  "_apexref",
+  "_api_meta",
+  "_api_tooling",
+  "_object_reference",
+  "_pages",
+  "_chatterapi",
 ]);
 
 export function planDeveloperReferenceRouting(
@@ -45,6 +46,7 @@ export function planDeveloperReferenceRouting(
     return buildPlan({
       collection,
       targetCollection: "legacydeveloper",
+      fallbackCollection: "developer",
       source: "atlas_url",
       reason: "Atlas developer reference URLs belong to the legacydeveloper collection.",
       matchedSignals: ["atlas_url"],
@@ -61,10 +63,11 @@ export function planDeveloperReferenceRouting(
   if (!signal) return undefined;
   return buildPlan({
     collection,
-    targetCollection: "legacydeveloper",
+    targetCollection: collection,
+    fallbackCollection: collection === "developer" ? "legacydeveloper" : "developer",
     source: "reference_query",
     reason:
-      "Current Salesforce developer reference coverage is served from the legacydeveloper collection.",
+      "Developer reference content is migrating between developer and legacydeveloper; retry the peer collection when the preferred collection has no matches.",
     matchedSignals: [signal.signal],
     query,
     guide: signal.guide,
@@ -79,40 +82,40 @@ export function isAtlasDeveloperReferenceLocator(value: string): boolean {
     return comparable.includes("/docs/atlas") || comparable.includes("atlas.en-us");
   } catch {
     return (
-      /\batlas\.en-us\b/iu.test(value) ||
-      /\b(?:apexref|api_meta|api_tooling|object_reference)\b/iu.test(value)
+      /\batlas\.en-us\b/iu.test(value) || /developer\.salesforce\.com\/docs\/atlas/iu.test(value)
     );
   }
 }
 
 export function detectDeveloperReferenceSignal(query: string): ReferenceSignal | undefined {
   const normalized = query.toLowerCase();
-  const guide = normalized.match(/\bguides:([a-z0-9_]+)\b/u)?.[1];
+  const rawGuide = normalized.match(/\bguides:([a-z0-9_-]+)\b/u)?.[1];
+  const guide = rawGuide ? canonicalGuideSlug(rawGuide) : undefined;
   if (guide && REFERENCE_GUIDES.has(guide)) return { signal: `guides:${guide}`, guide };
   if (/\bmetadata\s+api\b/u.test(normalized) && /\breference\b/u.test(normalized)) {
-    return { signal: "metadata_api_reference", guide: "api_meta" };
+    return { signal: "metadata_api_reference", guide: "_api_meta" };
   }
   if (/\btooling\s+api\b/u.test(normalized) && /\b(?:object|reference)\b/u.test(normalized)) {
-    return { signal: "tooling_api_reference", guide: "api_tooling" };
+    return { signal: "tooling_api_reference", guide: "_api_tooling" };
   }
   if (/\bobject\s+reference\b/u.test(normalized)) {
-    return { signal: "object_reference", guide: "object_reference" };
+    return { signal: "object_reference", guide: "_object_reference" };
   }
   if (/\bapex\s+reference\b/u.test(normalized)) {
-    return { signal: "apex_reference", guide: "apexref" };
+    return { signal: "apex_reference", guide: "_apexref" };
   }
   if (
     /\bapex\b/u.test(normalized) &&
     /\bclass\b/u.test(normalized) &&
     /\breference\b/u.test(normalized)
   ) {
-    return { signal: "apex_class_reference", guide: "apexref" };
+    return { signal: "apex_class_reference", guide: "_apexref" };
   }
   if (/\bvisualforce\b/u.test(normalized) && /\breference\b/u.test(normalized)) {
-    return { signal: "visualforce_reference", guide: "pages" };
+    return { signal: "visualforce_reference", guide: "_pages" };
   }
   if (/\bchatter\s+rest\b/u.test(normalized) && /\breference\b/u.test(normalized)) {
-    return { signal: "chatter_rest_reference", guide: "chatterapi" };
+    return { signal: "chatter_rest_reference", guide: "_chatterapi" };
   }
   if (/\b(?:soap|rest|bulk)\s+api\b/u.test(normalized) && /\breference\b/u.test(normalized)) {
     return { signal: "platform_api_reference" };
@@ -129,6 +132,7 @@ export function detectDeveloperReferenceSignal(query: string): ReferenceSignal |
 function buildPlan(input: {
   collection: string;
   targetCollection: string;
+  fallbackCollection?: string;
   source: DeveloperReferenceRoutingPlan["source"];
   reason: string;
   matchedSignals: string[];
@@ -148,6 +152,7 @@ function buildPlan(input: {
     intent: "developer_reference",
     source: input.source,
     collection: input.targetCollection,
+    fallbackCollection: input.fallbackCollection,
     compiledQuery: input.preserveQuery
       ? input.query
       : compileReferenceQuery(input.query, input.guide),
@@ -162,17 +167,24 @@ function compileReferenceQuery(
   guide: string | undefined,
 ): string | undefined {
   if (!query?.trim()) return undefined;
-  if (!guide || /\bguides:/iu.test(query)) return query;
+  if (!guide) return query;
+  if (/\bguides:/iu.test(query)) {
+    return query.replace(/\bguides:[a-z0-9_-]+\b/iu, `guides:${guide}`);
+  }
   return `guides:${guide} ${query}`;
 }
 
 function guideFromAtlasLocator(value: string): string | undefined {
   const normalized = value.toLowerCase();
-  if (normalized.includes("apexref")) return "apexref";
-  if (normalized.includes("api_meta")) return "api_meta";
-  if (normalized.includes("api_tooling")) return "api_tooling";
-  if (normalized.includes("object_reference")) return "object_reference";
-  if (normalized.includes("chatterapi")) return "chatterapi";
-  if (normalized.includes("pages")) return "pages";
+  if (normalized.includes("apexref")) return "_apexref";
+  if (normalized.includes("api_meta")) return "_api_meta";
+  if (normalized.includes("api_tooling")) return "_api_tooling";
+  if (normalized.includes("object_reference")) return "_object_reference";
+  if (normalized.includes("chatterapi")) return "_chatterapi";
+  if (normalized.includes("pages")) return "_pages";
   return undefined;
+}
+
+function canonicalGuideSlug(value: string): string {
+  return value.startsWith("_") ? value : `_${value}`;
 }

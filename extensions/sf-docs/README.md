@@ -18,10 +18,12 @@ seasonal releases. Seasonal release-note filters belong in the query, for
 example `+release:260`.
 
 - `admin` covers Salesforce Help/Admin docs and a bounded release-note window.
-- `developer` covers current non-Atlas developer guides.
-- `legacydeveloper` covers Atlas-backed reference material such as Apex,
-  Metadata API, Tooling API, Object Reference, and Visualforce.
-- `architect`, `tableau`, and `mulesoft` cover their corresponding sites.
+- `developer` covers current developer guides and migrated reference material.
+- `legacydeveloper` is the deprecating Atlas-backed reference collection. Reference
+  searches retry the peer developer collection when the preferred collection has
+  no matches.
+- `architect`, `tableau`, and `mulesoft` cover their corresponding sites. MuleSoft
+  searches prefer `+latest:true` unless a component release is requested.
 
 Implementation-sensitive work should search, inspect the selected source, then
 answer from that evidence. Release-specific answers fail closed when matching

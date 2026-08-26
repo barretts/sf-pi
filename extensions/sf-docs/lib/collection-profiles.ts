@@ -41,12 +41,12 @@ const COLLECTION_PROFILES: Record<string, DocsCollectionProfile> = {
     releaseNotes:
       "Use admin for Salesforce Help release notes unless a developer guide specifically owns the topic.",
     references:
-      "Legacy Atlas/reference docs are not modeled as primary developer coverage here; use legacydeveloper for those lookups.",
+      "Current developer and reference coverage; retry legacydeveloper when migrating reference content is absent.",
     routing:
-      "Use for current developer guides, SDK docs, LWC guides, API guides, and modern developer content without atlas URLs.",
+      "Use for current developer guides, SDK docs, LWC guides, API guides, and modern developer content; peer fallback covers migrating reference material.",
     caveats: [
       "Do not treat collection version as a Salesforce seasonal release.",
-      "Use legacydeveloper when Atlas/reference coverage is needed.",
+      "Developer reference content is migrating; do not assume either developer collection owns every reference.",
     ],
   },
   legacydeveloper: {
@@ -54,16 +54,17 @@ const COLLECTION_PROFILES: Record<string, DocsCollectionProfile> = {
     label: "Legacy Developer and Atlas reference docs",
     hosts: ["developer.salesforce.com"],
     urlTraits: ["developer.salesforce.com/docs/atlas", "atlas.en-us URLs"],
-    coverage: "Current Atlas-backed developer reference and legacy developer documentation.",
+    coverage:
+      "Deprecating Atlas-backed developer reference and legacy documentation while content migrates to developer.",
     releaseNotes:
       "Use admin for Salesforce Help release notes; this collection is for developer/reference material.",
     references:
-      "Primary collection for Atlas-style references such as Apex Reference, Metadata API, Tooling API, Object Reference, Visualforce, and Chatter REST.",
+      "Atlas-style references such as Apex Reference, Metadata API, Tooling API, Object Reference, Visualforce, and Chatter REST; retry developer when migrated content is absent.",
     routing:
-      "Use for Atlas URLs and high-confidence developer reference queries until that content migrates to developer coverage.",
+      "Use first for Atlas URLs; use peer fallback for natural-language reference queries because ownership is migrating.",
     caveats: [
       "URLs usually contain atlas or Atlas book paths.",
-      "Prefer guide boosts such as guides:apexref, guides:api_meta, or guides:object_reference when known.",
+      "Prefer guide boosts such as guides:_apexref, guides:_api_meta, or guides:_object_reference when known.",
     ],
   },
   architect: {
@@ -106,7 +107,10 @@ const COLLECTION_PROFILES: Record<string, DocsCollectionProfile> = {
     references: "MuleSoft product, connector, runtime, and language reference material.",
     routing:
       "Use for MuleSoft, Anypoint, Mule runtime, DataWeave, connector, MUnit, and API Manager questions.",
-    caveats: ["MuleSoft versioning semantics differ from Salesforce seasonal releases."],
+    caveats: [
+      "MuleSoft versioning semantics differ from Salesforce seasonal releases.",
+      "Use +latest:true unless the query requests a specific component release.",
+    ],
   },
 };
 

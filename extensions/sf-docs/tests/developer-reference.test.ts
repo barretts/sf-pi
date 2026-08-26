@@ -10,11 +10,25 @@ describe("Developer reference routing", () => {
   it("detects strong developer reference signals", () => {
     expect(detectDeveloperReferenceSignal("Metadata API CustomObject reference")).toMatchObject({
       signal: "metadata_api_reference",
-      guide: "api_meta",
+      guide: "_api_meta",
     });
     expect(detectDeveloperReferenceSignal("Apex String class reference")).toMatchObject({
       signal: "apex_class_reference",
-      guide: "apexref",
+      guide: "_apexref",
+    });
+  });
+
+  it("normalizes legacy unprefixed guide filters without treating them as Atlas URLs", () => {
+    expect(
+      planDeveloperReferenceRouting({
+        collection: "developer",
+        query: "+guides:api_meta CustomObject",
+      }),
+    ).toMatchObject({
+      source: "reference_query",
+      collection: "developer",
+      fallbackCollection: "legacydeveloper",
+      compiledQuery: "+guides:_api_meta CustomObject",
     });
   });
 
@@ -23,20 +37,29 @@ describe("Developer reference routing", () => {
     expect(detectDeveloperReferenceSignal("Named Credentials Apex callout")).toBeUndefined();
   });
 
-  it("routes developer reference queries from developer to legacydeveloper", () => {
+  it("keeps the requested developer collection and plans a legacydeveloper fallback", () => {
     expect(
       planDeveloperReferenceRouting({
         collection: "developer",
         query: "Metadata API CustomObject reference",
       }),
     ).toMatchObject({
+      collection: "developer",
+      fallbackCollection: "legacydeveloper",
+      compiledQuery: "guides:_api_meta Metadata API CustomObject reference",
+      collectionOverride: undefined,
+    });
+  });
+
+  it("plans the reverse fallback while reference content is migrating", () => {
+    expect(
+      planDeveloperReferenceRouting({
+        collection: "legacydeveloper",
+        query: "Metadata API reference guide",
+      }),
+    ).toMatchObject({
       collection: "legacydeveloper",
-      compiledQuery: "guides:api_meta Metadata API CustomObject reference",
-      collectionOverride: {
-        from: "developer",
-        to: "legacydeveloper",
-        reason: "developer_reference_coverage",
-      },
+      fallbackCollection: "developer",
     });
   });
 
@@ -65,6 +88,7 @@ describe("Developer reference routing", () => {
     });
     expect(planDeveloperReferenceRouting({ collection: "developer", query: url })).toMatchObject({
       compiledQuery: url,
+      fallbackCollection: "developer",
     });
   });
 });

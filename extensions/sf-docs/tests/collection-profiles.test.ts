@@ -23,9 +23,10 @@ describe("Docs Collection Profiles", () => {
     const developer = summarizeDocsCollectionProfile(getDocsCollectionProfile("developer")!);
     const legacy = summarizeDocsCollectionProfile(getDocsCollectionProfile("legacydeveloper")!);
 
-    expect(developer.references).toContain("use legacydeveloper");
+    expect(developer.references).toContain("retry legacydeveloper");
     expect(legacy.references).toContain("Apex Reference");
     expect(legacy.references).toContain("Metadata API");
+    expect(legacy.references).toContain("retry developer");
   });
 
   it("returns only known profiles in requested order", () => {

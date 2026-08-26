@@ -119,9 +119,13 @@ class SfDocsConfigPanel implements Focusable {
       `   ${t.fg("muted", "Token source:")} ${t.fg("text", tokenSource)}`,
     ];
     lines.push(
-      `   ${t.fg("muted", "Endpoint:")} ${t.fg("dim", `${endpoint.endpoint} (${endpoint.source})`)}`,
+      `   ${t.fg("muted", "Endpoint:")} ${t.fg(
+        "dim",
+        endpoint.ok ? `${endpoint.endpoint} (${endpoint.source})` : `invalid (${endpoint.source})`,
+      )}`,
     );
-    if (endpoint.warning) lines.push(`   ${t.fg("warning", endpoint.warning)}`);
+    if (endpoint.ok && endpoint.warning) lines.push(`   ${t.fg("warning", endpoint.warning)}`);
+    if (endpoint.ok === false) lines.push(`   ${t.fg("warning", endpoint.error)}`);
     lines.push("", ` ${t.fg("muted", "Scope:")} ${t.fg("text", this.scope)}`);
     lines.push(` ${t.fg("muted", "Current source:")} ${t.fg("dim", this.sourceSummary)}`);
     lines.push(

@@ -14,10 +14,10 @@ These examples show the split between human-facing **Docs Result Cards** and mod
   🔎 Original     Metadata API CustomObject reference
   🧭 Intent       developer_reference
   ↪ Override      developer → legacydeveloper (developer_reference_coverage)
-  💬 Reason       Current Salesforce developer reference coverage is served from the legacydeveloper collection.
-  ⚙ Compiled     guides:api_meta Metadata API CustomObject reference
+  💬 Reason       Developer reference content is migrating between developer and legacydeveloper; retry the peer collection when the preferred collection has no matches.
+  ⚙ Compiled     guides:_api_meta Metadata API CustomObject reference
   🗂 Slice        legacydeveloper/current/en-us
-  🎚 Filters      guides:api_meta
+  🎚 Filters      guides:_api_meta
   🧪 Evidence     not_checked
 
 2. Results
@@ -100,9 +100,9 @@ Description: Explore what's new in Salesforce Suites for Summer '26...
 
 1. Lineage
   🔎 Original     Sales Cloud Summer '26 release notes
-  ⚙ Compiled     +release:262 guides:sales sales cloud release notes
+  ⚙ Compiled     +release:262 guides:_sales sales cloud release notes
   🗂 Slice        admin/current/en-us
-  🎚 Filters      +release:262 guides:sales
+  🎚 Filters      +release:262 guides:_sales
   ⛔ Evidence     not_release_note_evidence — Only 1 of the first 5 citations were release-note evidence for release 262.
 
 2. Evidence gate
@@ -118,9 +118,9 @@ Description: Explore what's new in Salesforce Suites for Summer '26...
 ```text
 Docs Query Plan:
 - original: Sales Cloud Summer '26 release notes
-- compiled: +release:262 guides:sales sales cloud release notes
+- compiled: +release:262 guides:_sales sales cloud release notes
 - slice: admin/current/en-us
-- filters/boosts: +release:262 guides:sales
+- filters/boosts: +release:262 guides:_sales
 - evidence: not_release_note_evidence — Only 1 of the first 5 citations were release-note evidence for release 262.
 
 SF Docs answer citations did not satisfy the release-specific evidence gate.

@@ -47,21 +47,21 @@ Collection versions such as `current` are docs-service slices, not Salesforce se
 Collection routing quick guide:
 
 - `admin` — Salesforce Help/Admin docs, latest product docs, and the latest three Salesforce release-note releases.
-- `developer` — current developer guides that do not use Atlas/reference URLs.
-- `legacydeveloper` — Atlas-backed developer references such as Apex Reference, Metadata API, Tooling API, Object Reference, Visualforce, and Chatter REST.
+- `developer` — current developer guides and migrated reference material.
+- `legacydeveloper` — deprecating Atlas-backed references such as Apex Reference, Metadata API, Tooling API, Object Reference, Visualforce, and Chatter REST. Reference searches retry the peer developer collection when the preferred collection has no matches.
 - `architect` — architecture guidance and reference diagrams.
 - `tableau` — Tableau product and API docs.
-- `mulesoft` — MuleSoft and Anypoint Platform docs.
+- `mulesoft` — MuleSoft and Anypoint Platform docs. Searches add `+latest:true` unless the query requests a component release.
 
 ## Search tips
 
 - Quote exact phrases: `"Named Credentials"`.
 - Include product names, API names, class names, error codes, and config keys verbatim.
-- Use collection hints from `collections` before guessing `+guides:` filters or `+release:<n>` release filters.
+- Use collection hints from `collections` before guessing `+guides:` filters or `+release:<n>` release filters. Current guide values are underscore-prefixed, for example `guides:_api_meta`.
 - Retry with fewer terms or a different phrase when top results are weak.
 - You can pass Salesforce-owned docs URLs directly to `search`; SF Docs distills supported docs locators into high-signal search terms before querying.
 - Seasonal release-note queries such as `Spring '26 release notes` are distilled toward the matching Salesforce Help release notes in the admin collection using MCP-native `+release:<n>` filters. If the docs service has no matching release slice, SF Docs reports the coverage gap instead of broadening to unrelated docs.
-- For product scoping, prefer bare `guides:<slug>` boosts unless you explicitly need to restrict to one product area. Hard `+guides:<slug>` can exclude broad release-note overview pages.
+- For product scoping, prefer bare `guides:_<slug>` boosts unless you explicitly need to restrict to one product area. Hard `+guides:_<slug>` can exclude broad release-note overview pages.
 
 ## Fetch tips
 

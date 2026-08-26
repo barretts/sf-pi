@@ -36,7 +36,8 @@ export class DocsClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     const abortListener = () => controller.abort();
-    signal?.addEventListener("abort", abortListener, { once: true });
+    if (signal?.aborted) controller.abort();
+    else signal?.addEventListener("abort", abortListener, { once: true });
     try {
       const response = await this.fetchImpl(this.options.endpoint, {
         method: "POST",
@@ -62,7 +63,10 @@ export class DocsClient {
           ),
         );
       }
-      const parsed = parseJsonRpcSseResponse(text) as JsonRpcEnvelope;
+      const parsed = parseJsonRpcResponse(
+        text,
+        response.headers.get("content-type"),
+      ) as JsonRpcEnvelope;
       if (parsed.error) {
         throw new Error(
           redactSecrets(
@@ -82,6 +86,29 @@ export class DocsClient {
       clearTimeout(timeout);
       signal?.removeEventListener("abort", abortListener);
     }
+  }
+}
+
+export function parseJsonRpcResponse(body: string, contentType?: string | null): unknown {
+  if (contentType?.toLowerCase().includes("text/event-stream")) {
+    return parseJsonRpcSseResponse(body);
+  }
+  if (contentType?.toLowerCase().includes("application/json")) {
+    return parseJsonBody(body);
+  }
+  try {
+    return parseJsonBody(body);
+  } catch {
+    return parseJsonRpcSseResponse(body);
+  }
+}
+
+function parseJsonBody(body: string): unknown {
+  try {
+    return JSON.parse(body);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Docs service returned invalid JSON: ${message}`, { cause: err });
   }
 }
 
