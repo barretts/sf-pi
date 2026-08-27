@@ -11,6 +11,7 @@
  *          because we cannot auto-install a JDK.
  */
 import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import type { ExecFn } from "../../../../lib/common/sf-environment/detect.ts";
 import { compareSemver, fetchLatestApex, fetchLatestLwc } from "./versioning.ts";
 import { apexJarPath, apexVersionPath, lwcPackageJsonPath } from "./paths.ts";
@@ -60,10 +61,54 @@ export function readInstalledLwcVersion(): string | undefined {
 // Java — detect only
 // -------------------------------------------------------------------------------------------------
 
-export async function detectJavaVersion(exec: ExecFn): Promise<string | undefined> {
+/**
+ * Resolve the java binary to probe WITHOUT executing the PATH `java`.
+ *
+ * On managed Salesforce Macs, `/usr/local/bin/java` is a placeholder script
+ * that self-destructs via `sudo /bin/rm` once a JDK is installed. Running it
+ * forks `sudo`, which reads pi's controlling tty directly and blocks on an
+ * invisible password prompt behind the TUI — hanging the session (issue #651).
+ *
+ *   1. JAVA_HOME set        → `${JAVA_HOME}/bin/java`.
+ *   2. macOS, no JAVA_HOME  → `/usr/libexec/java_home` (reads installed JDKs
+ *                             directly; never runs the placeholder or prompts),
+ *                             then `${home}/bin/java`. Empty/error ⇒ no JDK ⇒
+ *                             undefined — do NOT fall back to PATH, because on
+ *                             macOS PATH `java` IS the placeholder.
+ *   3. other platforms      → `"java"` (PATH is safe on Linux/WSL).
+ */
+async function resolveJavaCommand(
+  exec: ExecFn,
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+): Promise<string | undefined> {
+  const javaHome = env.JAVA_HOME?.trim();
+  if (javaHome) return path.join(javaHome, "bin", "java");
+
+  if (platform === "darwin") {
+    try {
+      const result = await exec("/usr/libexec/java_home", [], { timeout: 5_000 });
+      const home = result.code === 0 ? result.stdout.trim() : "";
+      return home ? path.join(home, "bin", "java") : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  return "java";
+}
+
+export async function detectJavaVersion(
+  exec: ExecFn,
+  options: { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv } = {},
+): Promise<string | undefined> {
   try {
+    const platform = options.platform ?? process.platform;
+    const env = options.env ?? process.env;
+    const javaCommand = await resolveJavaCommand(exec, platform, env);
+    if (!javaCommand) return undefined;
     // `java -version` writes to stderr by convention.
-    const result = await exec("java", ["-version"], { timeout: 5_000 });
+    const result = await exec(javaCommand, ["-version"], { timeout: 5_000 });
     const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
     const match = output.match(/version "?(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
     if (!match) return undefined;
@@ -104,6 +149,8 @@ export interface DetectOptions {
   skipRemote?: boolean;
   /** Override the current platform (tests). */
   platform?: NodeJS.Platform;
+  /** Override process env (tests / JAVA_HOME injection). */
+  env?: NodeJS.ProcessEnv;
   /** Override the local-install readers (tests). */
   readers?: {
     readInstalledApexVersion?: () => string | undefined;
@@ -200,7 +247,7 @@ export async function detectInstallReport(
   const [apexUpstream, lwcUpstream, javaVersion] = await Promise.all([
     options.skipRemote ? Promise.resolve(undefined) : fetchLatestApex(),
     options.skipRemote ? Promise.resolve(undefined) : fetchLatestLwc(),
-    detectJavaVersion(exec),
+    detectJavaVersion(exec, { platform, env: options.env }),
   ]);
 
   const installedApex = (options.readers?.readInstalledApexVersion ?? readInstalledApexVersion)();

@@ -5,7 +5,7 @@
  * a fake fetch.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { detectInstallReport } from "../lib/install/detect.ts";
+import { detectInstallReport, detectJavaVersion } from "../lib/install/detect.ts";
 
 const originalFetch = globalThis.fetch;
 
@@ -42,6 +42,36 @@ function marketplaceOk(version: string): Response {
     { status: 200 },
   );
 }
+
+/**
+ * Build a fake `ExecFn` keyed by command. A key matches when it equals the
+ * command exactly OR the command ends with it (so a resolved absolute
+ * `.../bin/java` matches a `"bin/java"` key). Unmatched commands return the
+ * fallback (default: not-found, code 127).
+ */
+function javaExec(
+  map: Record<string, { stdout?: string; stderr?: string; code?: number }>,
+  fallback: { stdout?: string; stderr?: string; code?: number } = {
+    stdout: "",
+    stderr: "command not found",
+    code: 127,
+  },
+) {
+  return vi.fn(async (command: string) => {
+    for (const [key, value] of Object.entries(map)) {
+      if (command === key || command.endsWith(key)) {
+        return { stdout: value.stdout ?? "", stderr: value.stderr ?? "", code: value.code ?? 0 };
+      }
+    }
+    return {
+      stdout: fallback.stdout ?? "",
+      stderr: fallback.stderr ?? "",
+      code: fallback.code ?? 127,
+    };
+  });
+}
+
+const OPENJDK17 = { stderr: 'openjdk version "17.0.1" 2021-10-19', code: 0 };
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -150,13 +180,18 @@ describe("detectInstallReport", () => {
   it("reports Java 17 as current", async () => {
     stubFetch(() => new Response("{}", { status: 500 }));
 
-    const exec = vi.fn().mockResolvedValue({
-      stdout: "",
-      stderr: 'openjdk version "17.0.1" 2021-10-19',
-      code: 0,
+    // On macOS the probe resolves the JDK via `/usr/libexec/java_home`, then
+    // runs the absolute `<home>/bin/java` — never the PATH placeholder.
+    const exec = javaExec({
+      "/usr/libexec/java_home": {
+        stdout: "/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home\n",
+        code: 0,
+      },
+      "bin/java": OPENJDK17,
     });
     const report = await detectInstallReport(exec, {
       platform: "darwin",
+      env: {},
       readers: {
         readInstalledApexVersion: () => "58.13.1",
         readInstalledLwcVersion: () => "4.12.3",
@@ -237,6 +272,7 @@ describe("detectInstallReport", () => {
     const exec = vi.fn().mockResolvedValue({ stdout: "", stderr: "", code: 127 });
     const report = await detectInstallReport(exec, {
       platform: "darwin",
+      env: {},
       readers: {
         readInstalledApexVersion: () => "58.13.1",
         readInstalledLwcVersion: () => "4.12.3",
@@ -245,5 +281,88 @@ describe("detectInstallReport", () => {
 
     const java = report.components.find((c) => c.id === "java");
     expect(java?.state).toBe("manual");
+  });
+});
+
+describe("detectJavaVersion", () => {
+  it("uses JAVA_HOME and never runs java_home or the PATH placeholder", async () => {
+    const exec = javaExec({ "/opt/jdk17/bin/java": OPENJDK17 });
+
+    const version = await detectJavaVersion(exec, {
+      platform: "darwin",
+      env: { JAVA_HOME: "/opt/jdk17" },
+    });
+
+    expect(version).toBe("17.0.1");
+    const commands = exec.mock.calls.map((call) => call[0]);
+    expect(commands).toContain("/opt/jdk17/bin/java");
+    expect(commands).not.toContain("/usr/libexec/java_home");
+    expect(commands).not.toContain("java");
+  });
+
+  it("resolves the JDK via /usr/libexec/java_home on macOS, never PATH java (#651)", async () => {
+    const exec = javaExec({
+      "/usr/libexec/java_home": {
+        stdout: "/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home\n",
+        code: 0,
+      },
+      "bin/java": OPENJDK17,
+    });
+
+    const version = await detectJavaVersion(exec, { platform: "darwin", env: {} });
+
+    expect(version).toBe("17.0.1");
+    const commands = exec.mock.calls.map((call) => call[0]);
+    expect(commands).toContain("/usr/libexec/java_home");
+    // The #651 regression guard: never invoke the bare PATH `java` placeholder.
+    expect(commands).not.toContain("java");
+  });
+
+  it("falls back to PATH java off macOS", async () => {
+    const exec = javaExec({ java: OPENJDK17 });
+
+    const version = await detectJavaVersion(exec, { platform: "linux", env: {} });
+
+    expect(version).toBe("17.0.1");
+    const commands = exec.mock.calls.map((call) => call[0]);
+    expect(commands).toContain("java");
+    expect(commands).not.toContain("/usr/libexec/java_home");
+  });
+
+  it("returns undefined when macOS java_home reports no JDK, without touching PATH java", async () => {
+    const exec = javaExec({ "/usr/libexec/java_home": { stdout: "", code: 0 } });
+
+    const version = await detectJavaVersion(exec, { platform: "darwin", env: {} });
+
+    expect(version).toBeUndefined();
+    expect(exec.mock.calls.map((call) => call[0])).toEqual(["/usr/libexec/java_home"]);
+  });
+
+  it("returns undefined when macOS java_home errors, without touching PATH java", async () => {
+    const exec = javaExec({ "/usr/libexec/java_home": { stdout: "/x/Home", code: 1 } });
+
+    const version = await detectJavaVersion(exec, { platform: "darwin", env: {} });
+
+    expect(version).toBeUndefined();
+    expect(exec.mock.calls.map((call) => call[0])).not.toContain("java");
+  });
+
+  it("returns undefined when the exec helper throws", async () => {
+    const exec = vi.fn(async () => {
+      throw new Error("spawn failed");
+    });
+
+    const version = await detectJavaVersion(exec, { platform: "darwin", env: {} });
+
+    expect(version).toBeUndefined();
+  });
+
+  it("never invokes the bare PATH java on macOS even when everything is missing", async () => {
+    const exec = javaExec({});
+
+    const version = await detectJavaVersion(exec, { platform: "darwin", env: {} });
+
+    expect(version).toBeUndefined();
+    expect(exec.mock.calls.map((call) => call[0])).not.toContain("java");
   });
 });
