@@ -44,10 +44,8 @@ function marketplaceOk(version: string): Response {
 }
 
 /**
- * Build a fake `ExecFn` keyed by command. A key matches when it equals the
- * command exactly OR the command ends with it (so a resolved absolute
- * `.../bin/java` matches a `"bin/java"` key). Unmatched commands return the
- * fallback (default: not-found, code 127).
+ * Build a fake `ExecFn` keyed by the exact command. Unmatched commands return
+ * the fallback (default: not-found, code 127).
  */
 function javaExec(
   map: Record<string, { stdout?: string; stderr?: string; code?: number }>,
@@ -59,7 +57,7 @@ function javaExec(
 ) {
   return vi.fn(async (command: string) => {
     for (const [key, value] of Object.entries(map)) {
-      if (command === key || command.endsWith(key)) {
+      if (command === key) {
         return { stdout: value.stdout ?? "", stderr: value.stderr ?? "", code: value.code ?? 0 };
       }
     }
@@ -72,6 +70,8 @@ function javaExec(
 }
 
 const OPENJDK17 = { stderr: 'openjdk version "17.0.1" 2021-10-19', code: 0 };
+const MAC_JAVA_HOME = "/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home";
+const MAC_JAVA = `${MAC_JAVA_HOME}/bin/java`;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -184,10 +184,10 @@ describe("detectInstallReport", () => {
     // runs the absolute `<home>/bin/java` — never the PATH placeholder.
     const exec = javaExec({
       "/usr/libexec/java_home": {
-        stdout: "/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home\n",
+        stdout: `${MAC_JAVA_HOME}\n`,
         code: 0,
       },
-      "bin/java": OPENJDK17,
+      [MAC_JAVA]: OPENJDK17,
     });
     const report = await detectInstallReport(exec, {
       platform: "darwin",
@@ -281,10 +281,28 @@ describe("detectInstallReport", () => {
 
     const java = report.components.find((c) => c.id === "java");
     expect(java?.state).toBe("manual");
+    expect(java?.detail).toBe(
+      "No Java 11+ JDK resolved. Set SF_LSP_JAVA or JAVA_HOME, or install OpenJDK.",
+    );
   });
 });
 
 describe("detectJavaVersion", () => {
+  it("prefers the explicit SF_LSP_JAVA override", async () => {
+    const exec = javaExec({
+      "/configured/java": OPENJDK17,
+      "/opt/jdk17/bin/java": { stderr: 'openjdk version "21.0.1"', code: 0 },
+    });
+
+    const version = await detectJavaVersion(exec, {
+      platform: "darwin",
+      env: { SF_LSP_JAVA: " /configured/java ", JAVA_HOME: "/opt/jdk17" },
+    });
+
+    expect(version).toBe("17.0.1");
+    expect(exec.mock.calls.map((call) => call[0])).toEqual(["/configured/java"]);
+  });
+
   it("uses JAVA_HOME and never runs java_home or the PATH placeholder", async () => {
     const exec = javaExec({ "/opt/jdk17/bin/java": OPENJDK17 });
 
@@ -300,13 +318,35 @@ describe("detectJavaVersion", () => {
     expect(commands).not.toContain("java");
   });
 
+  it("falls through to java_home when configured Java candidates are invalid", async () => {
+    const exec = javaExec({
+      "/configured/missing-java": { code: 127 },
+      "/stale/jdk/bin/java": { code: 127 },
+      "/usr/libexec/java_home": { stdout: `${MAC_JAVA_HOME}\n`, code: 0 },
+      [MAC_JAVA]: OPENJDK17,
+    });
+
+    const version = await detectJavaVersion(exec, {
+      platform: "darwin",
+      env: { SF_LSP_JAVA: "/configured/missing-java", JAVA_HOME: "/stale/jdk" },
+    });
+
+    expect(version).toBe("17.0.1");
+    expect(exec.mock.calls.map((call) => call[0])).toEqual([
+      "/configured/missing-java",
+      "/stale/jdk/bin/java",
+      "/usr/libexec/java_home",
+      MAC_JAVA,
+    ]);
+  });
+
   it("resolves the JDK via /usr/libexec/java_home on macOS, never PATH java (#651)", async () => {
     const exec = javaExec({
       "/usr/libexec/java_home": {
-        stdout: "/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home\n",
+        stdout: `${MAC_JAVA_HOME}\n`,
         code: 0,
       },
-      "bin/java": OPENJDK17,
+      [MAC_JAVA]: OPENJDK17,
     });
 
     const version = await detectJavaVersion(exec, { platform: "darwin", env: {} });

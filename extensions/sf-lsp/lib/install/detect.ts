@@ -62,51 +62,48 @@ export function readInstalledLwcVersion(): string | undefined {
 // -------------------------------------------------------------------------------------------------
 
 /**
- * Resolve the java binary to probe WITHOUT executing the PATH `java`.
- *
- * On managed Salesforce Macs, `/usr/local/bin/java` is a placeholder script
- * that self-destructs via `sudo /bin/rm` once a JDK is installed. Running it
- * forks `sudo`, which reads pi's controlling tty directly and blocks on an
- * invisible password prompt behind the TUI — hanging the session (issue #651).
- *
- *   1. JAVA_HOME set        → `${JAVA_HOME}/bin/java`.
- *   2. macOS, no JAVA_HOME  → `/usr/libexec/java_home` (reads installed JDKs
- *                             directly; never runs the placeholder or prompts),
- *                             then `${home}/bin/java`. Empty/error ⇒ no JDK ⇒
- *                             undefined — do NOT fall back to PATH, because on
- *                             macOS PATH `java` IS the placeholder.
- *   3. other platforms      → `"java"` (PATH is safe on Linux/WSL).
+ * Resolve Java without blindly executing bare PATH `java` on macOS. Some
+ * macOS shims can launch interactive setup or privilege prompts that compete
+ * with pi's terminal UI. Explicit user configuration is tried first; invalid
+ * candidates fall through to the next safe source.
  */
-async function resolveJavaCommand(
-  exec: ExecFn,
-  platform: NodeJS.Platform,
-  env: NodeJS.ProcessEnv,
-): Promise<string | undefined> {
-  const javaHome = env.JAVA_HOME?.trim();
-  if (javaHome) return path.join(javaHome, "bin", "java");
-
-  if (platform === "darwin") {
-    try {
-      const result = await exec("/usr/libexec/java_home", [], { timeout: 5_000 });
-      const home = result.code === 0 ? result.stdout.trim() : "";
-      return home ? path.join(home, "bin", "java") : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-
-  return "java";
-}
-
 export async function detectJavaVersion(
   exec: ExecFn,
   options: { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv } = {},
 ): Promise<string | undefined> {
+  const platform = options.platform ?? process.platform;
+  const env = options.env ?? process.env;
+  const javaHome = env.JAVA_HOME?.trim();
+  const configuredCandidates = [
+    env.SF_LSP_JAVA?.trim(),
+    javaHome ? path.join(javaHome, "bin", "java") : undefined,
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const javaCommand of new Set(configuredCandidates)) {
+    const version = await probeJavaVersion(exec, javaCommand);
+    if (version) return version;
+  }
+
+  if (platform === "darwin") {
+    const javaCommand = await resolveMacJavaCommand(exec);
+    return javaCommand ? probeJavaVersion(exec, javaCommand) : undefined;
+  }
+
+  return probeJavaVersion(exec, "java");
+}
+
+async function resolveMacJavaCommand(exec: ExecFn): Promise<string | undefined> {
   try {
-    const platform = options.platform ?? process.platform;
-    const env = options.env ?? process.env;
-    const javaCommand = await resolveJavaCommand(exec, platform, env);
-    if (!javaCommand) return undefined;
+    const result = await exec("/usr/libexec/java_home", [], { timeout: 5_000 });
+    const home = result.code === 0 ? result.stdout.trim() : "";
+    return home ? path.join(home, "bin", "java") : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function probeJavaVersion(exec: ExecFn, javaCommand: string): Promise<string | undefined> {
+  try {
     // `java -version` writes to stderr by convention.
     const result = await exec(javaCommand, ["-version"], { timeout: 5_000 });
     const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
@@ -149,7 +146,7 @@ export interface DetectOptions {
   skipRemote?: boolean;
   /** Override the current platform (tests). */
   platform?: NodeJS.Platform;
-  /** Override process env (tests / JAVA_HOME injection). */
+  /** Override process env (tests / Java configuration injection). */
   env?: NodeJS.ProcessEnv;
   /** Override the local-install readers (tests). */
   readers?: {
@@ -296,7 +293,7 @@ export async function detectInstallReport(
       ? isJavaAcceptable(javaVersion)
         ? undefined
         : "Apex LSP needs Java 11 or newer."
-      : "Not found on PATH / JAVA_HOME. Install OpenJDK 11+ to enable Apex diagnostics.",
+      : "No Java 11+ JDK resolved. Set SF_LSP_JAVA or JAVA_HOME, or install OpenJDK.",
   };
 
   // Java is detect-only — never blocks "actionable" because we can't
