@@ -560,7 +560,8 @@ export function parseCommandArgs(raw: string): CommandArgs {
   return { subcommand: "help", scope };
 }
 
-async function handleCommand(
+// Exported for command-routing Behavior Proofs.
+export async function handleCommand(
   pi: ExtensionAPI,
   raw: string,
   ctx: ExtensionCommandContext,
@@ -619,7 +620,10 @@ async function handleCommand(
     }
     case "doctor": {
       const doctorArgs = parseDoctorArgs(args.rest ?? "");
-      await handleDoctor(ctx, doctorArgs);
+      const reloaded = await handleDoctor(ctx, doctorArgs);
+      // ctx.reload() invalidates this command context. Treat it as terminal;
+      // the replacement runtime's session_start hook refreshes the nudge.
+      if (reloaded) return;
       updateDoctorNudge(ctx);
       break;
     }
