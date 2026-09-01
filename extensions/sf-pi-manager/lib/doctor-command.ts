@@ -41,16 +41,19 @@ export function parseDoctorArgs(raw: string): DoctorArgs {
   return { subcommand: "status" };
 }
 
-export async function handleDoctor(ctx: ExtensionCommandContext, args: DoctorArgs): Promise<void> {
+export async function handleDoctor(
+  ctx: ExtensionCommandContext,
+  args: DoctorArgs,
+): Promise<boolean> {
   if (args.subcommand === "fix") {
-    await handleFix(ctx, args.target ?? "all");
-    return;
+    return handleFix(ctx, args.target ?? "all");
   }
   if (args.subcommand === "runtime") {
     handleRuntime(ctx);
-    return;
+    return false;
   }
   await handleStatus(ctx);
+  return false;
 }
 
 function handleRuntime(ctx: ExtensionCommandContext): void {
@@ -81,7 +84,7 @@ async function handleStatus(ctx: ExtensionCommandContext): Promise<void> {
   ctx.ui.notify(lines.join("\n"), hasErrors ? "warning" : "info");
 }
 
-async function handleFix(ctx: ExtensionCommandContext, target: DoctorFixTarget): Promise<void> {
+async function handleFix(ctx: ExtensionCommandContext, target: DoctorFixTarget): Promise<boolean> {
   const report = runDoctorDiagnostics({ cwd: ctx.cwd });
   writeCachedRuntimeDiagnostics(report.runtime);
   const hasStartupFix = target === "all" || target === "startup";
@@ -103,7 +106,7 @@ async function handleFix(ctx: ExtensionCommandContext, target: DoctorFixTarget):
 
   if (planned.length === 0) {
     ctx.ui.notify("sf-pi doctor found no applicable fixes for this target.", "info");
-    return;
+    return false;
   }
 
   if (ctx.hasUI) {
@@ -120,7 +123,7 @@ async function handleFix(ctx: ExtensionCommandContext, target: DoctorFixTarget):
     );
     if (!ok) {
       ctx.ui.notify("Doctor fix cancelled.", "info");
-      return;
+      return false;
     }
   }
 
@@ -146,7 +149,11 @@ async function handleFix(ctx: ExtensionCommandContext, target: DoctorFixTarget):
 
   if (result.changed) lines.push("", "Reloading…");
   ctx.ui.notify(lines.join("\n"), "info");
-  if (result.changed) await ctx.reload();
+  if (result.changed) {
+    await ctx.reload();
+    return true;
+  }
+  return false;
 }
 
 function renderRuntimeReport(report: DoctorReport): string {

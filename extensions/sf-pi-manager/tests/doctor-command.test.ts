@@ -4,8 +4,8 @@
  * `/sf-pi doctor`. Pins the shape so future ADR-0006 follow-ups don't
  * accidentally drift the user-visible block.
  */
-import { describe, expect, it } from "vitest";
-import { renderExtensionOutcomes } from "../lib/doctor-command.ts";
+import { describe, expect, it, vi } from "vitest";
+import { handleDoctor, renderExtensionOutcomes } from "../lib/doctor-command.ts";
 import type { RegisteredDoctorOutcome } from "../../../lib/common/doctor/registry.ts";
 
 const SAMPLE_OUTCOMES: RegisteredDoctorOutcome[] = [
@@ -47,6 +47,42 @@ const SAMPLE_OUTCOMES: RegisteredDoctorOutcome[] = [
     durationMs: 5_001,
   },
 ];
+
+vi.mock("../../../lib/common/doctor/diagnostics.ts", () => ({
+  runDoctorDiagnostics: () => ({
+    runtime: {},
+    skillCollisions: [],
+    staleSkillPaths: [],
+    availableSkillRoots: [],
+  }),
+}));
+vi.mock("../../../lib/common/doctor/runtime-cache.ts", () => ({
+  writeCachedRuntimeDiagnostics: vi.fn(),
+}));
+vi.mock("../../../lib/common/doctor/fixes.ts", () => ({
+  applyDoctorFixes: () => ({
+    changed: true,
+    messages: ["Updated startup settings."],
+    quarantinedSkills: [],
+  }),
+}));
+
+describe("handleDoctor", () => {
+  it("reports that fix reloaded the runtime so callers do not reuse the stale ctx", async () => {
+    const reload = vi.fn().mockResolvedValue(undefined);
+    const ctx = {
+      cwd: "/tmp/sf-pi-doctor-test",
+      hasUI: false,
+      ui: { notify: vi.fn() },
+      reload,
+    };
+
+    await expect(handleDoctor(ctx as any, { subcommand: "fix", target: "startup" })).resolves.toBe(
+      true,
+    );
+    expect(reload).toHaveBeenCalledOnce();
+  });
+});
 
 describe("renderExtensionOutcomes", () => {
   it("renders OK outcomes with their per-check rows and summaries", () => {

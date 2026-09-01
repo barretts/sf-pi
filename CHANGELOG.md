@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## Unreleased
 
+## [0.275.3](https://github.com/salesforce/sf-pi/compare/v0.275.2...v0.275.3) (2026-09-01)
+
+
+### Bug Fixes
+
+* **sf-pi-manager:** avoid stale ctx after doctor reload ([#653](https://github.com/salesforce/sf-pi/issues/653)) ([868a211](https://github.com/salesforce/sf-pi/commit/868a211d22b5d758b7d18216abd71d300d4ef0d9))
+
+## [0.275.2](https://github.com/salesforce/sf-pi/compare/v0.275.1...v0.275.2) (2026-09-01)
+
+
+### Bug Fixes
+
+* **deps:** update browserslist past security advisories ([cb3cc7d](https://github.com/salesforce/sf-pi/commit/cb3cc7d5f2b4ea5ccac316025535fccd19d14f10))
+* **sf-llm-gateway:** refresh usage after completed turns ([6fe13c3](https://github.com/salesforce/sf-pi/commit/6fe13c3c5f2f2ef5f2220108cd46de36d6cc7f1f))
+
 ## [0.275.1](https://github.com/salesforce/sf-pi/compare/v0.275.0...v0.275.1) (2026-08-26)
 
 

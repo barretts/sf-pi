@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "revision": "release-0.275.1-2026-08-26",
-  "latestVersion": "0.275.1",
+  "revision": "release-0.275.3-2026-09-01",
+  "latestVersion": "0.275.3",
   "announcements": [
     {
-      "id": "release-0.275.1",
+      "id": "release-0.275.3",
       "kind": "update",
-      "title": "sf-pi v0.275.1 — sf-skills: make legacy cleanup idempotent",
-      "publishedAt": "2026-08-26T00:00:00Z",
-      "link": "https://github.com/salesforce/sf-pi/releases/tag/v0.275.1",
+      "title": "sf-pi v0.275.3 — sf-pi-manager: avoid stale ctx after doctor reload",
+      "publishedAt": "2026-09-01T00:00:00Z",
+      "link": "https://github.com/salesforce/sf-pi/releases/tag/v0.275.3",
       "severity": "info",
-      "body": "sf-skills: make legacy cleanup idempotent"
+      "body": "sf-pi-manager: avoid stale ctx after doctor reload"
     }
   ]
 }
