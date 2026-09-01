@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
@@ -69,6 +69,64 @@ describe("agentscript_authoring", () => {
         expect.objectContaining({ kind: "compile_result", agent_file: created.agent_path }),
       ]),
     );
+  });
+
+  test("compile/check exposes source-bound quick-fix identities", async () => {
+    const agentFile = path.join(workDir, "identity.agent");
+    await writeFile(
+      agentFile,
+      [
+        "config:",
+        '    agent_name: "Identity_Bot"',
+        "system:",
+        '    instructions: "Help"',
+        "variables:",
+        '    unused: mutable string = "x"',
+        '    used: mutable string = "y"',
+        "start_agent main:",
+        '    description: "Main"',
+        "    reasoning:",
+        "        instructions: |",
+        "            Use {!@variables.used}.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await captureAuthoringTool().execute(
+      "call-identities",
+      { verb: "compile", mode: "check", agent_file: agentFile },
+      undefined,
+      undefined,
+      ctxWithBranch(),
+    );
+    const details = result.details as {
+      source_version?: string;
+      diagnostics?: Array<{ diagnosticId?: string; code?: string }>;
+      quick_fixes?: Array<{
+        actionId?: string;
+        diagnosticId?: string;
+        sourceVersion?: string;
+        apply_via?: { params?: Record<string, unknown> };
+      }>;
+      code_action_provider?: { status?: string };
+    };
+    const diagnostic = details.diagnostics?.find((item) => item.code === "unused-variable");
+    const fix = details.quick_fixes?.[0];
+
+    expect(details.source_version).toMatch(/^sv1:/);
+    expect(diagnostic?.diagnosticId).toMatch(/^diag1:/);
+    expect(fix).toMatchObject({
+      actionId: expect.stringMatching(/^act1:/),
+      diagnosticId: diagnostic?.diagnosticId,
+      sourceVersion: details.source_version,
+    });
+    expect(fix?.apply_via?.params).toMatchObject({
+      source_version: details.source_version,
+      diagnostic_id: diagnostic?.diagnosticId,
+      action_id: fix?.actionId,
+    });
+    expect(details.code_action_provider?.status).toBe("available");
   });
 
   test("compile/check infers agent_file from exactly one branch-state candidate", async () => {

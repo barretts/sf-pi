@@ -18,6 +18,7 @@ import type { DocumentState } from "@sf-agentscript/lsp";
 import type { AgentforceSourceAnalysisResult } from "./agentforce-document.ts";
 import { loadAgentforceSDK, getSdkLoadError } from "./sdk.ts";
 import { getAgentScriptAnalysis, invalidateAgentScriptAnalysis } from "./analysis-snapshot.ts";
+import { selectCurrentQuickFix } from "./quick-fix-selection.ts";
 import {
   convertTopicToSubagent,
   findAgentforceDefinitions,
@@ -63,9 +64,13 @@ export type MutateOp =
   | ({
       op: "apply_quick_fix";
       path: string;
-      diagnostic_code: string;
-      line: number;
+      /** Legacy coordinates; authoritative compile-generated calls use the identities below. */
+      diagnostic_code?: string;
+      line?: number;
       fix_index?: number;
+      source_version?: string;
+      diagnostic_id?: string;
+      action_id?: string;
     } & CommonMutateFields);
 
 export interface MutateResult {
@@ -76,7 +81,16 @@ export interface MutateResult {
   diagnostics_after?: AgentScriptDiagnostic[];
   reason?: string;
   reason_detail?: string;
-  candidates?: Array<{ symbol: string; line: number; scope?: Record<string, string> }>;
+  candidates?: Array<{
+    symbol?: string;
+    line: number;
+    scope?: Record<string, string>;
+    diagnostic_id?: string;
+    action_id?: string;
+    code?: string;
+    message?: string;
+    title?: string;
+  }>;
   /** Set when dry_run=true. Unified-style diff of the proposed change. */
   diff?: string;
   /** Set when dry_run=true. The full source after the mutation. */
@@ -141,43 +155,10 @@ async function applyCoordFallback(
   op: Extract<MutateOp, { op: "apply_quick_fix" }>,
   sourceBefore: string,
 ): Promise<MutateResult> {
-  // Re-compile to get the live diagnostic + its TextEdits. We don't trust
-  // a stale fix passed in — line numbers may have shifted.
-  const compile = await (await getAgentScriptAnalysis(op.path)).getCompile();
-  if (!compile.ok) {
-    return {
-      ok: false,
-      reason: "compile_failed",
-      reason_detail: compile.unavailableReason,
-    };
-  }
+  const selected = await selectCurrentQuickFix(op.path, sourceBefore, op);
+  if (!selected.ok) return selected;
 
-  const lineZero = op.line - 1; // public API is 1-based
-  const candidates = compile.diagnostics.filter(
-    (d) => d.code === op.diagnostic_code && d.range.start.line === lineZero,
-  );
-  if (candidates.length === 0) {
-    return {
-      ok: false,
-      reason: "no_matching_diagnostic",
-      reason_detail: `No '${op.diagnostic_code}' diagnostic at line ${op.line}. Re-run agentscript_authoring compile/check to get current diagnostics.`,
-    };
-  }
-  const fixes = compile.quickFixes.filter(
-    (fix) => fix.diagnosticCode === op.diagnostic_code && fix.diagnosticLine === lineZero,
-  );
-  const fix = fixes[op.fix_index ?? 0];
-  if (!fix) {
-    return {
-      ok: false,
-      reason: "no_fix_available",
-      reason_detail:
-        `Diagnostic '${op.diagnostic_code}' has no machine-applyable fix at index ${op.fix_index ?? 0}. ` +
-        `Apply via the generic edit tool using the diagnostic message.`,
-    };
-  }
-
-  const after = applyTextEdits(sourceBefore, fix.edits);
+  const after = applyTextEdits(sourceBefore, selected.fix.edits);
   if (after === sourceBefore) {
     return {
       ok: false,
@@ -185,7 +166,7 @@ async function applyCoordFallback(
       reason_detail: "Quick fix produced identical source.",
     };
   }
-  return await commitOrPreview(op, sourceBefore, after, "coord_fallback", fix.title);
+  return await commitOrPreview(op, sourceBefore, after, "coord_fallback", selected.fix.title);
 }
 
 /**
@@ -243,6 +224,24 @@ async function commitOrPreview(
         `current file to confirm it is still clean, then either retry the same mutate ` +
         `(emit edge cases are non-deterministic across runs) or fall back to the ` +
         `generic edit tool for this change.`,
+    };
+  }
+
+  let currentSource: string;
+  try {
+    currentSource = await fs.readFile(op.path, "utf8");
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "read_failed",
+      reason_detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+  if (currentSource !== sourceBefore) {
+    return {
+      ok: false,
+      reason: "stale_source",
+      reason_detail: "The file changed while validating the mutation. No changes were written.",
     };
   }
 

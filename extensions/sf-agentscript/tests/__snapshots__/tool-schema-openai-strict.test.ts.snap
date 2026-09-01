@@ -3,7 +3,7 @@
 exports[`Every sf-agentscript tool emits an OpenAI-strict-compatible schema > pins the complete family-tool registration contracts 1`] = `
 [
   {
-    "description": "Family tool for local Agent Script authoring: create bundles, compile/check or format, inspect structure/references/targets/review, and mutate \`.agent\` files. Uses verb + mode; live preview/eval/lifecycle are separate tools.",
+    "description": "Family tool for local Agent Script authoring: create bundles, compile/check or format, inspect structure/references/targets/review, and mutate \`.agent\` files. Quick fixes use source-bound identities from compile/check. Uses verb + mode; live preview/eval/lifecycle are separate tools.",
     "hasRenderCall": true,
     "hasRenderResult": true,
     "label": "Agent Script authoring",
@@ -14,7 +14,7 @@ exports[`Every sf-agentscript tool emits an OpenAI-strict-compatible schema > pi
       "Read extensions/sf-agentscript/AGENT_GUIDE.md when lifecycle ordering, recovery, or advanced inspection guidance is useful.",
     ],
     "promptSnippet": "Create, compile, inspect, review, and structurally mutate Agent Script \`.agent\` files via one authoring family tool.",
-    "schemaHash": "26935913dc9935d09bbaf0b8b894096710c3bebb35b0d9671a9a6b925d9472ca",
+    "schemaHash": "0caccdc9497571dcc1105289bbbcaba10751b03aed27d6d006c32ca2dc769be1",
   },
   {
     "description": "Multi-action live-org preview: start a session for a \`.agent\` file, send messages, end, or fetch a trace. Sessions stored under .sfdx/agents/<id>/sessions/<sid>/. cleanup removes stale sessions.",

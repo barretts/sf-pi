@@ -86,4 +86,43 @@ Works automatically.
       validateExtensionReadmeContract(source, { commands: [], configurable: false, docs: {} }),
     ).toEqual([]);
   });
+
+  it("treats comment-only and leftover comment-opener sections as empty", () => {
+    const commentOnly = `# Passive Extension
+
+## What It Does
+
+<!-- only a comment -->
+
+## File Structure
+
+index.ts
+`;
+    const leftoverOpener = `# Passive Extension
+
+## What It Does
+
+<!-- comment --><!--
+
+## File Structure
+
+index.ts
+`;
+    const nestedComment = `# Passive Extension
+
+## What It Does
+
+<!--<!-- nested -->
+
+## File Structure
+
+index.ts
+`;
+    const emptyFinding = "Conditional section ## What It Does is empty.";
+    const manifest = { commands: [], configurable: false, docs: {} };
+
+    expect(validateExtensionReadmeContract(commentOnly, manifest)).toEqual([emptyFinding]);
+    expect(validateExtensionReadmeContract(leftoverOpener, manifest)).toEqual([emptyFinding]);
+    expect(validateExtensionReadmeContract(nestedComment, manifest)).toEqual([emptyFinding]);
+  });
 });

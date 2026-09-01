@@ -13,6 +13,11 @@ import {
   summarizeDocsCollectionProfile,
 } from "./collection-profiles.ts";
 import {
+  compileCollectionQuery,
+  runSearchWithDeveloperPeerFallback,
+  type CollectionQueryCompilation,
+} from "./collection-retrieval.ts";
+import {
   planDeveloperReferenceRouting,
   type DeveloperReferenceRoutingPlan,
 } from "./developer-reference.ts";
@@ -199,6 +204,12 @@ export function registerSfDocsTool(pi: ExtensionAPI): void {
         });
       }
       const endpoint = resolveEndpoint();
+      if (endpoint.ok === false) {
+        return fail(input.action, endpoint.error, {
+          reason: "invalid_endpoint",
+          recover_via: { env: "SF_DOCS_MCP_ENDPOINT" },
+        });
+      }
       const client = new DocsClient({
         endpoint: endpoint.endpoint,
         token: auth.token,
@@ -275,10 +286,16 @@ export function registerSfDocsTool(pi: ExtensionAPI): void {
             query: input.query,
           });
           const actionSlice = applyDeveloperReferenceRouting(slice, referencePlan);
-          const actionQuery = referencePlan?.compiledQuery ?? input.query;
-          const referenceQueryPlan = referencePlan
+          const compilation = compileCollectionQuery(
+            actionSlice.collection,
+            referencePlan?.compiledQuery ?? input.query,
+          );
+          const actionQuery = compilation.query;
+          const queryPlan = referencePlan
             ? buildDeveloperReferenceQueryPlan(input.query, actionQuery, actionSlice, referencePlan)
-            : undefined;
+            : compilation.changed
+              ? buildCollectionQueryPlan(input.query, actionQuery, actionSlice, compilation)
+              : undefined;
           const distilled = distillDocsQuery(actionQuery, {
             defaultCollection: actionSlice.collection,
             explicitCollection: input.collection ? actionSlice.collection : undefined,
@@ -300,13 +317,14 @@ export function registerSfDocsTool(pi: ExtensionAPI): void {
               results: distilledSearch.ranked.slice(0, pageSize),
               totalCount: distilledSearch.ranked.length,
             };
-            const queryPlan = buildQueryPlanSummary(distilled, distilledSearch, {
+            const distilledQueryPlan = buildQueryPlanSummary(distilled, distilledSearch, {
               version: actionSlice.version,
               locale: actionSlice.locale,
             });
-            if (referencePlan) applyDeveloperReferencePlanToQueryPlan(queryPlan, referencePlan);
+            if (referencePlan)
+              applyDeveloperReferencePlanToQueryPlan(distilledQueryPlan, referencePlan);
             const text = [
-              formatQueryPlanText(queryPlan),
+              formatQueryPlanText(distilledQueryPlan),
               "",
               formatSearchToolText(input.query, response),
             ].join("\n");
@@ -315,45 +333,59 @@ export function registerSfDocsTool(pi: ExtensionAPI): void {
               collection: distilled.collectionCandidates[0] ?? actionSlice.collection,
               query: input.query,
               ...response,
-              retrieval_status: queryPlan.evidenceStatus,
-              queryPlan,
+              retrieval_status: distilledQueryPlan.evidenceStatus,
+              queryPlan: distilledQueryPlan,
               collectionOverride: referencePlan?.collectionOverride,
               displayDensity: prefs.displayDensity,
               resolution: buildDistillationResolution(distilled, distilledSearch, {
-                evidenceStatus: queryPlan.evidenceStatus,
+                evidenceStatus: distilledQueryPlan.evidenceStatus,
               }),
             });
           }
 
-          const args: Record<string, unknown> = {
+          const searchArgs: Record<string, unknown> = {
             ...actionSlice,
             query: actionQuery,
             page: input.page ?? 1,
             pageSize,
           };
-          if (input.format) args.format = input.format;
-          const response = asSearchResponse(await client.callTool("search", args, signal));
+          if (input.format) searchArgs.format = input.format;
+          const searchRun = await runSearchWithDeveloperPeerFallback(
+            client,
+            searchArgs,
+            actionSlice,
+            referencePlan?.fallbackCollection,
+            signal,
+          );
+          const { response, slice: resultSlice } = searchRun;
+          const collectionOverride =
+            searchRun.collectionOverride ?? referencePlan?.collectionOverride;
+          if (searchRun.collectionOverride && queryPlan) {
+            queryPlan.collection = resultSlice.collection;
+            queryPlan.collectionOverride = searchRun.collectionOverride;
+          }
+
           const serviceError = docsServiceError(response);
           if (serviceError) {
             return fail("search", serviceError, {
-              ...actionSlice,
+              ...resultSlice,
               query: input.query,
               reason: "docs_service_error",
             });
           }
           const text = [
-            referenceQueryPlan ? formatQueryPlanText(referenceQueryPlan) : "",
+            queryPlan ? formatQueryPlanText(queryPlan) : "",
             formatSearchToolText(input.query, response),
           ]
             .filter(Boolean)
             .join("\n\n");
           return ok("search", text, {
-            ...actionSlice,
+            ...resultSlice,
             query: input.query,
             compiledQuery: actionQuery !== input.query ? actionQuery : undefined,
             ...response,
-            queryPlan: referenceQueryPlan,
-            collectionOverride: referencePlan?.collectionOverride,
+            queryPlan,
+            collectionOverride,
             displayDensity: prefs.displayDensity,
           });
         }
@@ -524,17 +556,48 @@ export function registerSfDocsTool(pi: ExtensionAPI): void {
             collection: slice.collection,
             query: input.query,
           });
-          const actionSlice = applyDeveloperReferenceRouting(slice, referencePlan);
-          const actionQuery = referencePlan?.compiledQuery ?? input.query;
-          const referenceQueryPlan = referencePlan
-            ? buildDeveloperReferenceQueryPlan(input.query, actionQuery, actionSlice, referencePlan)
-            : undefined;
+          const initialActionSlice = applyDeveloperReferenceRouting(slice, referencePlan);
+          const compilation = compileCollectionQuery(
+            initialActionSlice.collection,
+            referencePlan?.compiledQuery ?? input.query,
+          );
+          const actionQuery = compilation.query;
+          let actionSlice = initialActionSlice;
+          let collectionOverride = referencePlan?.collectionOverride;
+          let queryPlan = referencePlan
+            ? buildDeveloperReferenceQueryPlan(
+                input.query,
+                actionQuery,
+                initialActionSlice,
+                referencePlan,
+              )
+            : compilation.changed
+              ? buildCollectionQueryPlan(input.query, actionQuery, initialActionSlice, compilation)
+              : undefined;
+
+          if (referencePlan?.fallbackCollection) {
+            const preflight = await runSearchWithDeveloperPeerFallback(
+              client,
+              { query: actionQuery, page: 1, pageSize: 1 },
+              initialActionSlice,
+              referencePlan.fallbackCollection,
+              signal,
+            );
+            actionSlice = preflight.slice;
+            if (preflight.collectionOverride) {
+              collectionOverride = preflight.collectionOverride;
+              if (queryPlan) {
+                queryPlan.collection = actionSlice.collection;
+                queryPlan.collectionOverride = collectionOverride;
+              }
+            }
+          }
+
           const distilled = distillDocsQuery(actionQuery, {
             defaultCollection: actionSlice.collection,
             explicitCollection: input.collection ? actionSlice.collection : undefined,
           });
           const answerBias = distilled?.releaseHint && distilled.releaseNoteIntent;
-          let queryPlan: DocsQueryPlanSummary | undefined;
           if (answerBias) {
             const preflight = await runDistilledSearch(
               client,
@@ -571,7 +634,6 @@ export function registerSfDocsTool(pi: ExtensionAPI): void {
                 collection: distilled.collectionCandidates[0] ?? actionSlice.collection,
               }
             : actionSlice;
-          if (!queryPlan && referenceQueryPlan) queryPlan = referenceQueryPlan;
           const answerQuery = answerBias
             ? (queryPlan?.compiledQuery ?? uniqueAnswerQuery(actionQuery, distilled.variants))
             : actionQuery;
@@ -623,7 +685,7 @@ export function registerSfDocsTool(pi: ExtensionAPI): void {
               ...response,
               retrieval_status: queryPlan?.evidenceStatus,
               queryPlan,
-              collectionOverride: referencePlan?.collectionOverride,
+              collectionOverride,
               displayDensity: prefs.displayDensity,
               answerChars: answer.length,
               resolution: answerBias
@@ -710,6 +772,24 @@ function resolveCollectionName(collection: string): { collection: string; alias?
     return { collection: "admin", alias: `${collection} → admin` };
   }
   return { collection };
+}
+
+function buildCollectionQueryPlan(
+  original: string,
+  compiledQuery: string,
+  slice: { collection: string; version: string; locale: string },
+  compilation: CollectionQueryCompilation,
+): DocsQueryPlanSummary {
+  return {
+    original,
+    compiledQuery,
+    ...slice,
+    filters: compilation.changed ? ["+latest:true"] : [],
+    boosts: [],
+    evidenceStatus: "not_checked",
+    intent: compilation.intent,
+    reason: compilation.reason,
+  };
 }
 
 function applyDeveloperReferenceRouting(
@@ -1039,8 +1119,9 @@ function collectionsResult(
   if (collectionAlias) lines.push(`Collection alias: ${collectionAlias}`, "");
   for (const summary of summaries) {
     lines.push(
-      `${summary.collection}: versions=${summary.versions || "-"}; locales=${summary.locales || "-"}; formats=${summary.formats || "-"}`,
+      `${summary.collection}: versions=${summary.versions || "-"}; locales=${summary.locales || "-"}; formats=${summary.formats || "-"}${summary.status ? `; status=${summary.status}` : ""}`,
     );
+    if (summary.description) lines.push(`  description: ${summary.description}`);
     const profile = profileByCollection.get(summary.collection);
     if (profile?.coverage) lines.push(`  coverage: ${profile.coverage}`);
     if (profile?.releaseNotes) lines.push(`  release notes: ${profile.releaseNotes}`);
@@ -1060,25 +1141,38 @@ function collectionsResult(
   });
 }
 
-function summarizeCollectionCapabilities(collection: DocsCollection): Record<string, string> {
+export function summarizeCollectionCapabilities(
+  collection: DocsCollection,
+): Record<string, string> {
   const hints = collection.retrievalHints ?? "";
   const keyFilters = [
     hints.includes("+release:") ? "+release:<n>" : "",
-    hints.includes("guides:") ? "guides:<slug>" : "",
+    hints.includes("guides:") ? "guides:_<slug>" : "",
+    hints.includes("+latest:") ? "+latest:true" : "",
+    hints.includes("+pill:") ? "+pill:<value>" : "",
+    hints.includes("+updated:") ? "+updated:<date>" : "",
     hints.includes("+taxonomyIds:") ? "+taxonomyIds:<guid>" : "",
   ].filter(Boolean);
   return {
     collection: collection.collection,
+    description: collection.description ?? "",
+    status: collection.status ?? "",
     versions: (collection.versions ?? []).join(","),
     locales: (collection.locales ?? []).join(","),
     formats: (collection.formats ?? []).join(","),
     extraFields: (collection.extraFields ?? []).slice(0, 12).join(","),
     keyFilters: keyFilters.join(", "),
     landmarks: (collection.landmarks ?? [])
-      .slice(0, 12)
-      .map((landmark) => landmark.slug)
-      .filter((slug): slug is string => Boolean(slug))
-      .join(", "),
+      .slice(0, 4)
+      .map((slice) => {
+        const slugs = (slice.landmarks ?? [])
+          .slice(0, 12)
+          .map((landmark) => landmark.slug)
+          .filter((slug): slug is string => Boolean(slug));
+        return slugs.length ? `${slice.version ?? "all"}: ${slugs.join(", ")}` : "";
+      })
+      .filter(Boolean)
+      .join("; "),
     hintsPreview: previewPlainText(hints, collection.collection === "admin" ? 700 : 420),
   };
 }

@@ -29,7 +29,6 @@ import type {
   GatewayMonthlyUsage,
 } from "./monthly-usage.ts";
 import { formatProviderSignalBadge, getActiveProviderSignal } from "./provider-telemetry.ts";
-import { getWireTraceFile, isWireTraceEnabled } from "./wire-trace.ts";
 import { glyph, resolveGlyphMode } from "../../../lib/common/glyph-policy.ts";
 
 // Re-exported so callers outside the gateway extension (and tests) can import
@@ -141,7 +140,6 @@ export function buildStatusReport(
       : []),
     "",
     ...buildProviderTelemetryReport(),
-    ...buildWireTraceReport(),
   ].join("\n");
 }
 
@@ -174,17 +172,6 @@ function buildProviderTelemetryReport(): string[] {
   return [`Provider health: ⚠ ${signal.kind} (${ageSec}s ago)`, `  ${details.join(", ")}`, ""];
 }
 
-/**
- * Surface whether the opt-in wire trace is active. The trace captures raw
- * request/response bytes under Pi's global agent directory when
- * `SF_LLM_GATEWAY_TRACE=1`. When inactive we stay silent to keep the
- * report tidy.
- */
-function buildWireTraceReport(): string[] {
-  if (!isWireTraceEnabled()) return [];
-  return [`Wire trace: ON → ${getWireTraceFile()}`, ""];
-}
-
 function formatMonthlyUsagePart(
   monthlyUsage: GatewayMonthlyUsage | null,
   monthlyUsageError: string | null,
@@ -193,24 +180,27 @@ function formatMonthlyUsagePart(
   // Resolve glyph mode per call so a runtime settings flip is reflected on
   // the next status refresh without a restart. This value bubbles up into
   // the bottom bar via `ctx.ui.setStatus` so terminals without emoji
-  // fallback (notably Terminal.app) show a clean `$X/∞` pill instead of
-  // tofu or a duplicated dollar sign.
+  // fallback (notably Terminal.app) show a clean spend/budget pill instead
+  // of tofu or a duplicated dollar sign.
   const mode = resolveGlyphMode();
   const g = glyph("monthly", mode);
   const prefix = mode === "ascii" ? "" : `${g} `;
   if (monthlyUsage) {
-    // Show infinity for the budget ceiling — there is no fixed cap.
-    return `${prefix}${formatUsd(monthlyUsage.spend)}/∞`;
+    return `${prefix}${formatUsd(monthlyUsage.spend)}/${formatBudgetCeiling(monthlyUsage.maxBudget)}`;
   }
 
   if (monthlyUsageError) {
     if (lastKnownMonthlyUsage) {
-      return `${prefix}${formatUsd(lastKnownMonthlyUsage.spend)}/∞ ${glyph("lastKnown", mode)} last known`;
+      return `${prefix}${formatUsd(lastKnownMonthlyUsage.spend)}/${formatBudgetCeiling(lastKnownMonthlyUsage.maxBudget)} ${glyph("lastKnown", mode)} last known`;
     }
     return `${prefix}unavailable`;
   }
 
   return `${prefix}loading…`;
+}
+
+function formatBudgetCeiling(maxBudget: number): string {
+  return Number.isFinite(maxBudget) ? formatUsd(maxBudget) : "∞";
 }
 
 function formatMonthlyUsageReportLine(
@@ -219,10 +209,7 @@ function formatMonthlyUsageReportLine(
 ): string {
   if (monthlyUsage) {
     const resetPart = monthlyUsage.budgetResetAt ? `, resets ${monthlyUsage.budgetResetAt}` : "";
-    const budget = Number.isFinite(monthlyUsage.maxBudget)
-      ? formatUsd(monthlyUsage.maxBudget)
-      : "∞";
-    return `${formatUsd(monthlyUsage.spend)} spent of ${budget}${resetPart}`;
+    return `${formatUsd(monthlyUsage.spend)} spent of ${formatBudgetCeiling(monthlyUsage.maxBudget)}${resetPart}`;
   }
 
   return monthlyUsageError ?? "not loaded yet";

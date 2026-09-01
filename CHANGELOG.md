@@ -7,6 +7,120 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## Unreleased
 
+## [0.275.2](https://github.com/salesforce/sf-pi/compare/v0.275.1...v0.275.2) (2026-09-01)
+
+
+### Bug Fixes
+
+* **deps:** update browserslist past security advisories ([cb3cc7d](https://github.com/salesforce/sf-pi/commit/cb3cc7d5f2b4ea5ccac316025535fccd19d14f10))
+* **sf-llm-gateway:** refresh usage after completed turns ([6fe13c3](https://github.com/salesforce/sf-pi/commit/6fe13c3c5f2f2ef5f2220108cd46de36d6cc7f1f))
+
+## [0.275.1](https://github.com/salesforce/sf-pi/compare/v0.275.0...v0.275.1) (2026-08-26)
+
+
+### Bug Fixes
+
+* **sf-skills:** make legacy cleanup idempotent ([b47039c](https://github.com/salesforce/sf-pi/commit/b47039ccaa42b4b2c90a9080797309eb5c3ffe45))
+
+## [0.275.0](https://github.com/salesforce/sf-pi/compare/v0.274.1...v0.275.0) (2026-08-26)
+
+
+### Features
+
+* **agentscript:** adopt current language safeguards ([b363bc5](https://github.com/salesforce/sf-pi/commit/b363bc59384f60cbf58e4dd72490485172265e8c))
+
+## [0.274.1](https://github.com/salesforce/sf-pi/compare/v0.274.0...v0.274.1) (2026-08-26)
+
+
+### Bug Fixes
+
+* **sf-docs:** align retrieval with current docs service ([e4043e3](https://github.com/salesforce/sf-pi/commit/e4043e3554927b7a075a97a195920bdcc1d60af4))
+
+## [0.274.0](https://github.com/salesforce/sf-pi/compare/v0.273.0...v0.274.0) (2026-08-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* **agentscript:** nested component skills: moved to top-level
+
+### Features
+
+* **agentscript:** adopt Agent Script language 3.2.3 toolchain ([#645](https://github.com/salesforce/sf-pi/issues/645)) ([90b10b2](https://github.com/salesforce/sf-pi/commit/90b10b2309055468a7e5ddfe83af351d5711d15e))
+
+## [0.273.0](https://github.com/salesforce/sf-pi/compare/v0.272.0...v0.273.0) (2026-08-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* **runtime:** bundled extensions now require Pi 0.84.0 or newer.
+
+### Features
+
+* **runtime:** require Pi 0.84.0 and drop unused gateway wire-trace ([ad24974](https://github.com/salesforce/sf-pi/commit/ad249742b0665d5f9794871d95e4da2f5ec4da87))
+
+## [0.272.0](https://github.com/salesforce/sf-pi/compare/v0.271.1...v0.272.0) (2026-08-22)
+
+
+### Features
+
+* **sf-skills:** add invocation toggle with stamped effective tree ([fae2adb](https://github.com/salesforce/sf-pi/commit/fae2adb36cd32688eda63968ea23a604ca681031))
+
+## [0.271.1](https://github.com/salesforce/sf-pi/compare/v0.271.0...v0.271.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **sf-llm-gateway:** route xAI models through chat completions ([a16b449](https://github.com/salesforce/sf-pi/commit/a16b449c23c8d5a0a77cc5a39c68d126e25469b6))
+
+## [0.271.0](https://github.com/salesforce/sf-pi/compare/v0.270.0...v0.271.0) (2026-08-19)
+
+
+### Features
+
+* **sf-browser:** turn AGENT_GUIDE.md into a Pi-style index ([#634](https://github.com/salesforce/sf-pi/issues/634)) ([e5adb52](https://github.com/salesforce/sf-pi/commit/e5adb52622ce7337c2a88444f4664be040b1e955))
+
+## [0.270.0](https://github.com/salesforce/sf-pi/compare/v0.269.0...v0.270.0) (2026-08-19)
+
+
+### Features
+
+* **sf-agentscript:** turn AGENT_GUIDE.md into a Pi-style index ([#632](https://github.com/salesforce/sf-pi/issues/632)) ([32112f3](https://github.com/salesforce/sf-pi/commit/32112f3be65350961f64fbee25f3148c53da295b))
+
+## [0.269.0](https://github.com/salesforce/sf-pi/compare/v0.268.1...v0.269.0) (2026-08-19)
+
+
+### Features
+
+* **sf-tldraw:** validate Spec v2 at execute instead of advertising the union ([#630](https://github.com/salesforce/sf-pi/issues/630)) ([38cf2d5](https://github.com/salesforce/sf-pi/commit/38cf2d53edbbf128815449506c25459c431512cc))
+
+## [0.268.1](https://github.com/salesforce/sf-pi/compare/v0.268.0...v0.268.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* **sf-skills:** give an exact unlink command for retired afv-library ([#628](https://github.com/salesforce/sf-pi/issues/628)) ([faf6a59](https://github.com/salesforce/sf-pi/commit/faf6a599b5e4ff328724d972e0f68a64ef481b76))
+
+## [0.268.0](https://github.com/salesforce/sf-pi/compare/v0.267.3...v0.268.0) (2026-08-19)
+
+
+### Features
+
+* treat Salesforce skills as supplemental playbooks ([#626](https://github.com/salesforce/sf-pi/issues/626)) ([4a9719f](https://github.com/salesforce/sf-pi/commit/4a9719fbad432e4c1a4e3ae644576a3281d7b197))
+
+## [0.267.3](https://github.com/salesforce/sf-pi/compare/v0.267.2...v0.267.3) (2026-08-18)
+
+
+### Bug Fixes
+
+* **security:** resolve CodeQL sanitization and missing-await alerts ([0e3265d](https://github.com/salesforce/sf-pi/commit/0e3265d0db8564baef7d7f0708be73cfe98f81e7))
+
+## [0.267.2](https://github.com/salesforce/sf-pi/compare/v0.267.1...v0.267.2) (2026-08-18)
+
+
+### Bug Fixes
+
+* **runtime:** ship the Pi 0.84.2 audit edge ([bbd0685](https://github.com/salesforce/sf-pi/commit/bbd0685f6f32b500f8e5f3cbf78a7c57ee34f178))
+
 ## [0.267.1](https://github.com/salesforce/sf-pi/compare/v0.267.0...v0.267.1) (2026-08-17)
 
 

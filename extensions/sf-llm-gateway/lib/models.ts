@@ -46,7 +46,7 @@ const COMMON_OPENAI_COMPAT: ProviderModelConfig["compat"] = {
 // -------------------------------------------------------------------------------------------------
 
 export type GatewayModelFamily =
-  "anthropic" | "google" | "openai" | "codex" | "deepseek" | "unknown";
+  "anthropic" | "google" | "openai" | "codex" | "deepseek" | "xai" | "unknown";
 
 export type GatewayModelDefinition = {
   id: string;
@@ -182,11 +182,13 @@ export function toProviderModelConfig(
   const api =
     info?.mode === "responses"
       ? "openai-responses"
-      : apiReference && isGatewayApi(apiReference.api)
-        ? apiReference.api
-        : def.family === "anthropic"
-          ? "anthropic-messages"
-          : "openai-completions";
+      : def.family === "xai"
+        ? "openai-completions"
+        : apiReference && isGatewayApi(apiReference.api)
+          ? apiReference.api
+          : def.family === "anthropic"
+            ? "anthropic-messages"
+            : "openai-completions";
 
   const thinkingLevelMap = def.reasoning ? reference?.thinkingLevelMap : undefined;
 
@@ -242,6 +244,7 @@ export function getModelFamily(id: string): GatewayModelFamily {
   if (isAnthropicModelId(id)) return "anthropic";
   if (lower.includes("gemini") || lower.startsWith("google/")) return "google";
   if (lower.includes("deepseek") || lower.startsWith("deepseek/")) return "deepseek";
+  if (lower.includes("grok") || lower.startsWith("xai/")) return "xai";
   if (
     lower.startsWith("gpt-") ||
     lower.includes("/gpt-") ||
@@ -328,6 +331,9 @@ export function formatTokens(value: number): string {
 export function formatUsd(value: number): string {
   if (!Number.isFinite(value)) {
     return "$0.00";
+  }
+  if (value > 0 && value < 0.01) {
+    return "<$0.01";
   }
   if (value >= 1000) {
     return `$${value.toFixed(0)}`;

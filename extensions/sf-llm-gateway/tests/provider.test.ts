@@ -315,9 +315,8 @@ describe("complete native Gateway Provider", () => {
     const modelInfoCall = vi.mocked(network.modelInfo).mock.calls[0];
     expect(modelIdCall?.slice(0, 2)).toEqual(["https://active.example.test", "native-key"]);
     expect(modelInfoCall?.slice(0, 2)).toEqual(["https://active.example.test", "native-key"]);
-    // Pi 0.84 always supplies a concrete signal; Pi 0.82/0.83 may omit it.
-    if (modelIdCall?.[2] !== undefined) expect(modelIdCall[2]).toBeInstanceOf(AbortSignal);
-    if (modelInfoCall?.[2] !== undefined) expect(modelInfoCall[2]).toBeInstanceOf(AbortSignal);
+    expect(modelIdCall?.[2]).toBeInstanceOf(AbortSignal);
+    expect(modelInfoCall?.[2]).toBeInstanceOf(AbortSignal);
     expect(models.getModel(PROVIDER_NAME, "cached-only")).toBeUndefined();
     expect(models.getModel(PROVIDER_NAME, "example-responses-model")?.name).not.toBe(
       "Cached GPT override",

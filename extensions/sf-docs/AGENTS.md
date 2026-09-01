@@ -17,6 +17,7 @@ SF Docs owns Salesforce documentation lookup inside SF Pi. Start from `index.ts`
 | Manager Connect / Disconnect action pages                        | `lib/manager-action-panels.ts` |
 | Collection catalog cache                                         | `lib/catalog-cache.ts`         |
 | Static collection coverage profiles                              | `lib/collection-profiles.ts`   |
+| Collection query defaults and peer fallback                      | `lib/collection-retrieval.ts`  |
 | Developer reference routing                                      | `lib/developer-reference.ts`   |
 | Release-note evidence classification                             | `lib/release-notes.ts`         |
 | Command metadata/help                                            | `lib/command-surface.ts`       |

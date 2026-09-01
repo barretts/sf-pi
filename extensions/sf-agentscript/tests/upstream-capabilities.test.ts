@@ -80,6 +80,28 @@ describe("upstream Agent Script capability contracts", () => {
     });
   });
 
+  test("collapses identical coded and uncoded diagnostics while preserving the code", () => {
+    const range = { start: { line: 2, character: 4 }, end: { line: 2, character: 8 } };
+    const result = combineAgentScriptDiagnostics(
+      [{ severity: 1, message: "Same diagnostic", range, source: "compiler" }],
+      [
+        {
+          code: "same-diagnostic",
+          severity: 1,
+          message: "Same diagnostic",
+          range,
+          source: "agentscript-lint",
+        },
+      ],
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      code: "same-diagnostic",
+      source: "agentscript-lint",
+    });
+  });
+
   test("uses complete diagnostic identity and severity/code ordering ties", () => {
     const range = { start: { line: 4, character: 2 }, end: { line: 4, character: 6 } };
     const widerRange = { start: range.start, end: { line: 4, character: 7 } };
@@ -229,7 +251,28 @@ start_agent main:
     );
   });
 
-  test("preserves the collect experimental information diagnostic", async () => {
+  test("preserves the ask-for beta-services diagnostic", async () => {
+    const result = await checkAgentScriptSource(`${HEAD}variables:
+  email: mutable string = None
+start_agent main:
+  description: "Entry"
+  transition to @subagent.gather
+subagent gather:
+  description: "Gather"
+  reasoning:
+    instructions: ->
+      ask for @variables.email
+        instructions: "What is your email?"
+`);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "ask-for-beta-services", severity: 3 }),
+      ]),
+    );
+    expect(result.diagnostics.some((diagnostic) => diagnostic.severity === 1)).toBe(false);
+  });
+
+  test("treats legacy collect syntax as a compile error", async () => {
     const result = await checkAgentScriptSource(`${HEAD}variables:
   email: mutable string = None
 start_agent main:
@@ -242,12 +285,10 @@ subagent gather:
       collect @variables.email
         message: "What is your email?"
 `);
-    expect(result.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: "collect-experimental", severity: 3 }),
-      ]),
+    expect(result.diagnostics.some((diagnostic) => diagnostic.severity === 1)).toBe(true);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain(
+      "collect-experimental",
     );
-    expect(result.diagnostics.some((diagnostic) => diagnostic.severity === 1)).toBe(false);
   });
 
   test("accepts else-if syntax through sf-pi's lazy package adapter", async () => {

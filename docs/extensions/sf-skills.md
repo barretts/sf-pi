@@ -1,16 +1,16 @@
 ---
 title: "SF Skills"
-description: "Manage skills through one Skill Funnel: catalog every source (Claude/Codex/Cursor/custom/managed) → gate sources → toggle skills per scope (global/project) → resolve name conflicts, all compiled to native settings.skills[]. Plus a passive live-context HUD, forcedotcom/afv-library install, per-skill usage counters, and prune."
+description: "Manage skills through one Skill Funnel: catalog every source (Claude/Codex/Cursor/custom/managed) → gate sources → toggle skills per scope (global/project) → resolve name conflicts, all compiled to native settings.skills[]. Toggle managed-library invocation via disable-model-invocation stamps on an effective tree. Plus a passive live-context HUD, forcedotcom/sf-skills install, per-skill usage counters, and prune."
 editLink: false
 ---
 
 # SF Skills
 
-<p class="sfpi-page-lead">Manage skills through one Skill Funnel: catalog every source (Claude/Codex/Cursor/custom/managed) → gate sources → toggle skills per scope (global/project) → resolve name conflicts, all compiled to native settings.skills[]. Plus a passive live-context HUD, forcedotcom/afv-library install, per-skill usage counters, and prune.</p>
+<p class="sfpi-page-lead">Manage skills through one Skill Funnel: catalog every source (Claude/Codex/Cursor/custom/managed) → gate sources → toggle skills per scope (global/project) → resolve name conflicts, all compiled to native settings.skills[]. Toggle managed-library invocation via disable-model-invocation stamps on an effective tree. Plus a passive live-context HUD, forcedotcom/sf-skills install, per-skill usage counters, and prune.</p>
 
 ## What it does
 
-Skills manager built on the Skill Funnel: a five-tab view (Catalog / Sources / Global / Project / Conflicts) over one resolved Skill Catalog. Source Gate decides which roots Pi sees; Skill Gate toggles individual skills at global and project scope; Skill Conflict Resolution picks a winner by exclusion. Every decision compiles to native settings.skills[] (Compiled Skill Resolution) — no SKILL.md files are ever modified. A Source Registry remembers custom paths and gate state; conflicts that touch an auto-discovered default root are report-only. Plus a passive live-context HUD, forcedotcom/afv-library install, per-skill usage counters, and prune.
+Skills manager built on the Skill Funnel: a five-tab view (Catalog / Sources / Global / Project / Conflicts) over one resolved Skill Catalog. Source Gate decides which roots Pi sees; Skill Gate toggles individual skills at global and project scope; Skill Conflict Resolution picks a winner by exclusion. Wiring compiles to native settings.skills[]. Managed-library prompt visibility is stamped as disable-model-invocation on a global effective tree so the git clone stays pullable. Plus a passive live-context HUD, forcedotcom/sf-skills install, per-skill usage counters, and prune.
 
 ## Start
 

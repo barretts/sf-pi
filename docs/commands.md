@@ -187,7 +187,7 @@ _Salesforce-themed rainbow spinner during LLM thinking_
 
 ### [SF Skills](./extensions/sf-skills)
 
-_Manage skills through one Skill Funnel: catalog every source (Claude/Codex/Cursor/custom/managed) → gate sources → toggle skills per scope (global/project) → resolve name conflicts, all compiled to native settings.skills[]. Plus a passive live-context HUD, forcedotcom/afv-library install, per-skill usage counters, and prune._
+_Manage skills through one Skill Funnel: catalog every source (Claude/Codex/Cursor/custom/managed) → gate sources → toggle skills per scope (global/project) → resolve name conflicts, all compiled to native settings.skills[]. Toggle managed-library invocation via disable-model-invocation stamps on an effective tree. Plus a passive live-context HUD, forcedotcom/sf-skills install, per-skill usage counters, and prune._
 
 - Default: **on**
 - Commands: `/sf-skills`

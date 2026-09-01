@@ -6,6 +6,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let tempAgentDir: string;
+let originalToken: string | undefined;
+let originalEndpoint: string | undefined;
 
 vi.mock("@earendil-works/pi-coding-agent", async () => {
   const actual = await vi.importActual<typeof import("@earendil-works/pi-coding-agent")>(
@@ -17,9 +19,18 @@ vi.mock("@earendil-works/pi-coding-agent", async () => {
 describe("sf_docs tool", () => {
   beforeEach(() => {
     tempAgentDir = mkdtempSync(path.join(tmpdir(), "sf-docs-tool-"));
+    originalToken = process.env.SF_DOCS_MCP_TOKEN;
+    originalEndpoint = process.env.SF_DOCS_MCP_ENDPOINT;
   });
 
-  afterEach(() => rmSync(tempAgentDir, { recursive: true, force: true }));
+  afterEach(() => {
+    if (originalToken === undefined) delete process.env.SF_DOCS_MCP_TOKEN;
+    else process.env.SF_DOCS_MCP_TOKEN = originalToken;
+    if (originalEndpoint === undefined) delete process.env.SF_DOCS_MCP_ENDPOINT;
+    else process.env.SF_DOCS_MCP_ENDPOINT = originalEndpoint;
+    vi.unstubAllGlobals();
+    rmSync(tempAgentDir, { recursive: true, force: true });
+  });
 
   it("registers one family tool with evidence-workflow guidance", async () => {
     vi.resetModules();
@@ -161,18 +172,18 @@ describe("sf_docs tool", () => {
     });
   });
 
-  it("routes high-confidence developer reference searches to legacydeveloper", async () => {
-    const oldToken = process.env.SF_DOCS_MCP_TOKEN;
-    const oldEndpoint = process.env.SF_DOCS_MCP_ENDPOINT;
+  it("falls back from developer to legacydeveloper when reference coverage is missing", async () => {
     process.env.SF_DOCS_MCP_TOKEN = "test-token";
     process.env.SF_DOCS_MCP_ENDPOINT = "https://example.test/";
+    const calls: Array<Record<string, unknown>> = [];
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
       const body = JSON.parse(String(init.body));
       expect(body.params.name).toBe("search");
-      expect(body.params.arguments).toMatchObject({
-        collection: "legacydeveloper",
-        query: "guides:api_meta Metadata API CustomObject reference",
-      });
+      const args = body.params.arguments as Record<string, unknown>;
+      calls.push(args);
+      expect(args.query).toBe("guides:_api_meta Metadata API CustomObject reference");
+      if (args.collection === "developer") return docsResponse({ results: [], totalCount: 0 });
+      expect(args.collection).toBe("legacydeveloper");
       return docsResponse({
         results: [
           {
@@ -202,12 +213,7 @@ describe("sf_docs tool", () => {
       },
     );
 
-    if (oldToken === undefined) delete process.env.SF_DOCS_MCP_TOKEN;
-    else process.env.SF_DOCS_MCP_TOKEN = oldToken;
-    if (oldEndpoint === undefined) delete process.env.SF_DOCS_MCP_ENDPOINT;
-    else process.env.SF_DOCS_MCP_ENDPOINT = oldEndpoint;
-    vi.unstubAllGlobals();
-
+    expect(calls.map((call) => call.collection)).toEqual(["developer", "legacydeveloper"]);
     expect(result.content[0].text).toContain("intent: developer_reference");
     expect(result.content[0].text).toContain(
       "collection override: developer → legacydeveloper (developer_reference_coverage)",
@@ -216,12 +222,170 @@ describe("sf_docs tool", () => {
       ok: true,
       action: "search",
       collection: "legacydeveloper",
-      compiledQuery: "guides:api_meta Metadata API CustomObject reference",
+      compiledQuery: "guides:_api_meta Metadata API CustomObject reference",
       collectionOverride: {
         from: "developer",
         to: "legacydeveloper",
         reason: "developer_reference_coverage",
       },
+    });
+  });
+
+  it("falls back from legacydeveloper to developer as reference content migrates", async () => {
+    process.env.SF_DOCS_MCP_TOKEN = "test-token";
+    process.env.SF_DOCS_MCP_ENDPOINT = "https://example.test/";
+    const collections: string[] = [];
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      const args = body.params.arguments as Record<string, unknown>;
+      collections.push(String(args.collection));
+      if (args.collection === "legacydeveloper") {
+        return docsResponse({ results: [], totalCount: 0 });
+      }
+      return docsResponse({
+        results: [
+          {
+            id: "metadata-reference",
+            title: "Metadata API Reference",
+            url: "https://developer.salesforce.com/docs/platform/metadata-api/reference",
+          },
+        ],
+        totalCount: 1,
+      });
+    }) as unknown as typeof fetch;
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.resetModules();
+    const { registerSfDocsTool } = await import("../lib/sf_docs-tool.ts");
+    const registerTool = vi.fn();
+    registerSfDocsTool({ registerTool } as unknown as ExtensionAPI);
+    const tool = registerTool.mock.calls[0]?.[0];
+    const result = await tool.execute(
+      "id",
+      {
+        action: "search",
+        collection: "legacydeveloper",
+        query: "Metadata API reference guide",
+      },
+      undefined,
+      undefined,
+      {
+        cwd: process.cwd(),
+        modelRegistry: { getApiKeyForProvider: vi.fn(async () => undefined) },
+      },
+    );
+
+    expect(collections).toEqual(["legacydeveloper", "developer"]);
+    expect(result.details).toMatchObject({
+      collection: "developer",
+      collectionOverride: {
+        from: "legacydeveloper",
+        to: "developer",
+        reason: "developer_reference_coverage",
+      },
+    });
+  });
+
+  it("uses peer reference coverage before answering", async () => {
+    process.env.SF_DOCS_MCP_TOKEN = "test-token";
+    process.env.SF_DOCS_MCP_ENDPOINT = "https://example.test/";
+    const calls: Array<{ name: string; collection: string }> = [];
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      const name = String(body.params.name);
+      const collection = String(body.params.arguments.collection);
+      calls.push({ name, collection });
+      if (name === "search" && collection === "developer") {
+        return docsResponse({ results: [], totalCount: 0 });
+      }
+      if (name === "search") {
+        return docsResponse({ results: [{ id: "custom-object", title: "CustomObject" }] });
+      }
+      return docsResponse({ answer: "CustomObject metadata reference.", citations: [] });
+    }) as unknown as typeof fetch;
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.resetModules();
+    const { registerSfDocsTool } = await import("../lib/sf_docs-tool.ts");
+    const registerTool = vi.fn();
+    registerSfDocsTool({ registerTool } as unknown as ExtensionAPI);
+    const tool = registerTool.mock.calls[0]?.[0];
+    const result = await tool.execute(
+      "id",
+      { action: "answer", collection: "developer", query: "Metadata API CustomObject reference" },
+      undefined,
+      undefined,
+      {
+        cwd: process.cwd(),
+        modelRegistry: { getApiKeyForProvider: vi.fn(async () => undefined) },
+      },
+    );
+
+    expect(calls).toEqual([
+      { name: "search", collection: "developer" },
+      { name: "search", collection: "legacydeveloper" },
+      { name: "answer", collection: "legacydeveloper" },
+    ]);
+    expect(result.details).toMatchObject({
+      collection: "legacydeveloper",
+      collectionOverride: {
+        from: "developer",
+        to: "legacydeveloper",
+        reason: "developer_reference_coverage",
+      },
+    });
+  });
+
+  it("adds the MuleSoft latest filter unless a version is requested", async () => {
+    process.env.SF_DOCS_MCP_TOKEN = "test-token";
+    process.env.SF_DOCS_MCP_ENDPOINT = "https://example.test/";
+    const queries: string[] = [];
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      queries.push(String(body.params.arguments.query));
+      return docsResponse({ results: [], totalCount: 0 });
+    }) as unknown as typeof fetch;
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.resetModules();
+    const { registerSfDocsTool } = await import("../lib/sf_docs-tool.ts");
+    const registerTool = vi.fn();
+    registerSfDocsTool({ registerTool } as unknown as ExtensionAPI);
+    const tool = registerTool.mock.calls[0]?.[0];
+    const ctx = {
+      cwd: process.cwd(),
+      modelRegistry: { getApiKeyForProvider: vi.fn(async () => undefined) },
+    };
+    const latestResult = await tool.execute(
+      "latest",
+      { action: "search", collection: "mulesoft", query: "DataWeave map function" },
+      undefined,
+      undefined,
+      ctx,
+    );
+    await tool.execute(
+      "historical",
+      { action: "search", collection: "mulesoft", query: "DataWeave version 2.3 map" },
+      undefined,
+      undefined,
+      ctx,
+    );
+    await tool.execute(
+      "decimal",
+      { action: "search", collection: "mulesoft", query: "DataWeave timeout 1.5 seconds" },
+      undefined,
+      undefined,
+      ctx,
+    );
+
+    expect(queries).toEqual([
+      "+latest:true DataWeave map function",
+      "DataWeave version 2.3 map",
+      "+latest:true DataWeave timeout 1.5 seconds",
+    ]);
+    expect(latestResult.content[0].text).toContain("+latest:true DataWeave map function");
+    expect(latestResult.details).toMatchObject({
+      compiledQuery: "+latest:true DataWeave map function",
     });
   });
 
@@ -284,8 +448,17 @@ describe("sf_docs tool", () => {
             formats: ["text", "markdown"],
             extraFields: ["guides", "release", "product"],
             retrievalHints:
-              "Use +release:<n> for Salesforce release notes and guides:<slug> for product boosts. Use +taxonomyIds:<guid> for taxonomy filters.",
-            landmarks: [{ slug: "sales" }, { slug: "service_cloud" }],
+              "Use +release:<n>, guides:_<slug>, +latest:true, +pill:new, +updated:2026*, and +taxonomyIds:<guid>.",
+            landmarks: [
+              {
+                version: "current",
+                landmarks: [
+                  { slug: "_sales" },
+                  { slug: "_service_cloud", members: ["_digital_engagement"] },
+                ],
+                localeDiffs: [{ locales: ["ja-jp"], removed: [{ slug: "_service_cloud" }] }],
+              },
+            ],
           },
         ],
       });
@@ -320,11 +493,11 @@ describe("sf_docs tool", () => {
       "release notes: Salesforce release notes are available for the latest three release-note releases.",
     );
     expect(result.content[0].text).toContain(
-      "key filters: +release:<n>, guides:<slug>, +taxonomyIds:<guid>",
+      "key filters: +release:<n>, guides:_<slug>, +latest:true, +pill:<value>, +updated:<date>, +taxonomyIds:<guid>",
     );
     expect(result.content[0].text).toContain("hints: Use +release:<n>");
-    expect(result.content[0].text).toContain("guides:<slug>");
-    expect(result.content[0].text).toContain("landmarks: sales, service_cloud");
+    expect(result.content[0].text).toContain("guides:_<slug>");
+    expect(result.content[0].text).toContain("landmarks: current: _sales, _service_cloud");
     expect(result.details).toMatchObject({
       ok: true,
       action: "collections",
@@ -1058,6 +1231,28 @@ describe("sf_docs tool", () => {
     expect(documents[0]?.humanPreview).toContain("Escaped &lt;script&gt; stays text.");
     expect(String(documents[0]?.humanPreview)).not.toContain("window.bad");
     expect(String(documents[0]?.humanPreview)).not.toContain("<code>");
+  });
+
+  it("fails closed when the configured endpoint is invalid", async () => {
+    const secret = "sfdocs_invalid_endpoint_sentinel";
+    process.env.SF_DOCS_MCP_TOKEN = secret;
+    process.env.SF_DOCS_MCP_ENDPOINT = "not-a-url";
+    const fetchMock = vi.fn() as unknown as typeof fetch;
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.resetModules();
+    const { registerSfDocsTool } = await import("../lib/sf_docs-tool.ts");
+    const registerTool = vi.fn();
+    registerSfDocsTool({ registerTool } as unknown as ExtensionAPI);
+    const tool = registerTool.mock.calls[0]?.[0];
+    const result = await tool.execute("id", { action: "collections" }, undefined, undefined, {
+      cwd: process.cwd(),
+      modelRegistry: { getApiKeyForProvider: vi.fn(async () => undefined) },
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.details).toMatchObject({ ok: false, reason: "invalid_endpoint" });
+    expect(JSON.stringify(result)).not.toContain(secret);
   });
 
   it("returns setup guidance when auth is missing", async () => {

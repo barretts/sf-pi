@@ -14,8 +14,13 @@ export function buildStatus(cwd: string): string {
     `Connection: ${tokenSource !== "none" ? "connected" : "not configured"}`,
     `Token source: ${tokenSource}`,
   ];
-  lines.push(`Endpoint: ${endpoint.endpoint} (${endpoint.source})`);
-  if (endpoint.warning) lines.push(`Warning: ${endpoint.warning}`);
+  if (endpoint.ok === true) {
+    lines.push(`Endpoint: ${endpoint.endpoint} (${endpoint.source})`);
+    if (endpoint.warning) lines.push(`Warning: ${endpoint.warning}`);
+  } else {
+    lines.push(`Endpoint: invalid (${endpoint.source})`);
+    lines.push(`Warning: ${endpoint.error}`);
+  }
   lines.push(
     `Catalog cache: ${cache.hit ? `${cache.collections?.length ?? 0} collections, ${formatCacheAge(cache.fetchedAt)}` : "empty"}`,
   );

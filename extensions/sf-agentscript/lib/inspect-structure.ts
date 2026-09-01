@@ -39,9 +39,14 @@ export interface InspectResult {
      */
     system?: { instructions: string; recommended_prompts?: Record<string, unknown> };
     start_agents?: ComponentSummary[];
+    orchestrators?: ComponentSummary[];
     topics: ComponentSummary[];
     subagents: ComponentSummary[];
     connected_subagents?: ConnectedSubagentSummary[];
+    workflows?: ComponentSummary[];
+    triggers?: ComponentSummary[];
+    bundles?: ComponentSummary[];
+    skill_definitions?: ComponentSummary[];
     variables: VariableSummary[];
     actions: ComponentSummary[];
     connections?: ConnectionSummary[];
@@ -52,9 +57,14 @@ export interface InspectResult {
   };
   stats?: {
     start_agents?: number;
+    orchestrators?: number;
     topics: number;
     subagents: number;
     connected_subagents?: number;
+    workflows?: number;
+    triggers?: number;
+    bundles?: number;
+    skill_definitions?: number;
     variables: number;
     actions: number;
     connections?: number;
@@ -88,7 +98,11 @@ export interface ComponentSummary {
   response_format_refs?: string[];
   /** `@utils.X` references such as `@utils.end_session`. */
   utility_refs?: string[];
-  /** Stable names declared under this component's optional `skills:` block. */
+  /**
+   * Nested `skills:` names, if a component still carries that block.
+   * Current Agentforce schema moved skill declarations to top-level
+   * `skill_definitions:` — prefer `components.skill_definitions`.
+   */
   skills?: string[];
   /**
    * For action declarations only: the raw `target:` URI (e.g. `flow://X`,
@@ -577,6 +591,9 @@ export function projectInspectStructure(input: {
   const startAgents = namedMapEntries(ast.start_agent).map(([n, e]) =>
     summarizeWithRefs(n, e, input.walkAstExpressions, input.decomposeAtMemberExpression),
   );
+  const orchestrators = namedMapEntries(ast.orchestrator).map(([n, e]) =>
+    summarizeWithRefs(n, e, input.walkAstExpressions, input.decomposeAtMemberExpression),
+  );
   const topics = namedMapEntries(ast.topic).map(([n, e]) =>
     summarizeWithRefs(n, e, input.walkAstExpressions, input.decomposeAtMemberExpression),
   );
@@ -585,6 +602,18 @@ export function projectInspectStructure(input: {
   );
   const connectedSubagents = namedMapEntries(ast.connected_subagent).map(([n, e]) =>
     summarizeConnectedSubagent(n, e, input.walkAstExpressions, input.decomposeAtMemberExpression),
+  );
+  const workflows = namedMapEntries(ast.workflows).map(([n, e]) =>
+    summarizeWithRefs(n, e, input.walkAstExpressions, input.decomposeAtMemberExpression),
+  );
+  const triggers = namedMapEntries(ast.trigger).map(([n, e]) =>
+    summarizeWithRefs(n, e, input.walkAstExpressions, input.decomposeAtMemberExpression),
+  );
+  const bundles = namedMapEntries(ast.bundles).map(([n, e]) =>
+    summarizeWithRefs(n, e, input.walkAstExpressions, input.decomposeAtMemberExpression),
+  );
+  const skillDefinitions = namedMapEntries(ast.skill_definitions).map(([n, e]) =>
+    summarizeWithRefs(n, e, input.walkAstExpressions, input.decomposeAtMemberExpression),
   );
   // Top-level `actions:` block.
   const topLevelActions = namedMapEntries(ast.actions).map(([n, e]) =>
@@ -636,6 +665,19 @@ export function projectInspectStructure(input: {
       inlineActions.push(summary);
     }
   }
+  for (const [parentName, entry] of namedMapEntries(ast.orchestrator)) {
+    const inner = (entry as { actions?: unknown }).actions;
+    for (const [aName, aEntry] of namedMapEntries(inner)) {
+      const summary = summarizeWithRefs(
+        aName,
+        aEntry,
+        input.walkAstExpressions,
+        input.decomposeAtMemberExpression,
+      );
+      summary.parent = `orchestrator.${parentName}`;
+      inlineActions.push(summary);
+    }
+  }
   const actions = [...topLevelActions, ...inlineActions];
   const variables = namedMapEntries(ast.variables).map(([n, e]) =>
     summarizeVariable(n, e, input.decomposeAtMemberExpression),
@@ -652,9 +694,14 @@ export function projectInspectStructure(input: {
     ...(config !== undefined ? { config } : {}),
     ...(system !== undefined ? { system } : {}),
     ...(startAgents.length > 0 ? { start_agents: startAgents } : {}),
+    ...(orchestrators.length > 0 ? { orchestrators } : {}),
     topics,
     subagents,
     ...(connectedSubagents.length > 0 ? { connected_subagents: connectedSubagents } : {}),
+    ...(workflows.length > 0 ? { workflows } : {}),
+    ...(triggers.length > 0 ? { triggers } : {}),
+    ...(bundles.length > 0 ? { bundles } : {}),
+    ...(skillDefinitions.length > 0 ? { skill_definitions: skillDefinitions } : {}),
     variables,
     actions,
     ...(connections.length > 0 ? { connections } : {}),
@@ -670,9 +717,14 @@ export function projectInspectStructure(input: {
     components,
     stats: {
       start_agents: startAgents.length,
+      ...(orchestrators.length > 0 ? { orchestrators: orchestrators.length } : {}),
       topics: topics.length,
       subagents: subagents.length,
       ...(connectedSubagents.length > 0 ? { connected_subagents: connectedSubagents.length } : {}),
+      ...(workflows.length > 0 ? { workflows: workflows.length } : {}),
+      ...(triggers.length > 0 ? { triggers: triggers.length } : {}),
+      ...(bundles.length > 0 ? { bundles: bundles.length } : {}),
+      ...(skillDefinitions.length > 0 ? { skill_definitions: skillDefinitions.length } : {}),
       variables: variables.length,
       actions: actions.length,
       connections: connections.length,

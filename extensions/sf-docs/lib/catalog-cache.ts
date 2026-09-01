@@ -1,7 +1,12 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Local non-secret cache for the docs collection catalog only. */
 import { createStateStore } from "../../../lib/common/state-store.ts";
-import type { DocsCollection } from "./types.ts";
+import type {
+  DocsCollection,
+  DocsLandmark,
+  DocsLandmarkLocaleDiff,
+  DocsLandmarkSlice,
+} from "./types.ts";
 
 const TTL_MS = 1000 * 60 * 60 * 24;
 
@@ -26,7 +31,9 @@ export function readCatalogCache(now = Date.now()): {
 } {
   const state = store.read();
   const fetchedAt = state.fetchedAt;
-  const collections = Array.isArray(state.collections) ? state.collections : undefined;
+  const collections = Array.isArray(state.collections)
+    ? sanitizeCatalogCollections(state.collections)
+    : undefined;
   if (!fetchedAt || !collections) return { hit: false, stale: true, path: store.path };
   return {
     hit: true,
@@ -38,15 +45,92 @@ export function readCatalogCache(now = Date.now()): {
 }
 
 export function writeCatalogCache(collections: DocsCollection[], now = Date.now()): void {
-  store.write({ fetchedAt: now, collections: stripCollectionBodies(collections) });
+  store.write({ fetchedAt: now, collections: sanitizeCatalogCollections(collections) });
 }
 
 export function clearCatalogCache(): void {
   store.write({});
 }
 
-function stripCollectionBodies(collections: DocsCollection[]): DocsCollection[] {
-  return collections.map((collection) => ({ ...collection }));
+function sanitizeCatalogCollections(collections: unknown[]): DocsCollection[] {
+  return collections
+    .filter(isRecord)
+    .filter((collection) => typeof collection.collection === "string")
+    .map((collection) => ({
+      collection: collection.collection as string,
+      ...optionalString("description", collection.description),
+      ...optionalString("status", collection.status),
+      ...optionalStringArray("versions", collection.versions),
+      ...(isStringRecord(collection.versionLabels)
+        ? { versionLabels: { ...collection.versionLabels } }
+        : {}),
+      ...optionalStringArray("locales", collection.locales),
+      ...optionalStringArray("formats", collection.formats),
+      ...optionalString("retrievalHints", collection.retrievalHints),
+      ...optionalString("fetchHints", collection.fetchHints),
+      ...(Array.isArray(collection.landmarks)
+        ? { landmarks: collection.landmarks.filter(isRecord).map(sanitizeLandmarkSlice) }
+        : {}),
+      ...optionalStringArray("extraFields", collection.extraFields),
+    }));
+}
+
+function sanitizeLandmarkSlice(slice: Record<string, unknown>): DocsLandmarkSlice {
+  return {
+    ...optionalString("version", slice.version),
+    ...(Array.isArray(slice.landmarks)
+      ? { landmarks: slice.landmarks.filter(isRecord).map(sanitizeLandmark) }
+      : {}),
+    ...(Array.isArray(slice.localeDiffs)
+      ? { localeDiffs: slice.localeDiffs.filter(isRecord).map(sanitizeLocaleDiff) }
+      : {}),
+  };
+}
+
+function sanitizeLocaleDiff(diff: Record<string, unknown>): DocsLandmarkLocaleDiff {
+  return {
+    ...optionalStringArray("locales", diff.locales),
+    ...(Array.isArray(diff.added)
+      ? { added: diff.added.filter(isRecord).map(sanitizeLandmark) }
+      : {}),
+    ...(Array.isArray(diff.removed)
+      ? { removed: diff.removed.filter(isRecord).map(sanitizeLandmark) }
+      : {}),
+  };
+}
+
+function sanitizeLandmark(landmark: Record<string, unknown>): DocsLandmark {
+  return {
+    ...optionalString("slug", landmark.slug),
+    ...optionalString("label", landmark.label),
+    ...optionalStringArray("members", landmark.members),
+  };
+}
+
+function optionalString<K extends string>(key: K, value: unknown): Partial<Record<K, string>> {
+  return typeof value === "string" ? ({ [key]: value } as Record<K, string>) : {};
+}
+
+function optionalStringArray<K extends string>(
+  key: K,
+  value: unknown,
+): Partial<Record<K, string[]>> {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+    ? ({ [key]: [...value] } as Record<K, string[]>)
+    : {};
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.values(value).every((item) => typeof item === "string"),
+  );
 }
 
 export function formatCacheAge(fetchedAt?: number, now = Date.now()): string {

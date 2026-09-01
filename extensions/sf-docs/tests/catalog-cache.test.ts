@@ -24,17 +24,85 @@ describe("sf-docs catalog cache", () => {
 
   afterEach(() => rmSync(tempAgentDir, { recursive: true, force: true }));
 
-  it("caches collection metadata and reports staleness", () => {
+  it("caches only allowlisted collection metadata and reports staleness", () => {
     expect(cache.readCatalogCache(1000)).toMatchObject({ hit: false, stale: true });
-    cache.writeCatalogCache([{ collection: "developer", versions: ["current"] }], 1000);
+    cache.writeCatalogCache(
+      [
+        {
+          collection: "legacydeveloper",
+          status: "deprecating",
+          versions: ["current"],
+          landmarks: [
+            {
+              version: "current",
+              landmarks: [{ slug: "_api_meta", members: ["_metadata"] }],
+              localeDiffs: [{ locales: ["ja-jp"], removed: [{ slug: "_api_meta" }] }],
+            },
+          ],
+          content: "must not persist",
+          citations: [{ url: "https://example.test/private" }],
+        } as never,
+      ],
+      1000,
+    );
     expect(cache.readCatalogCache(1000)).toMatchObject({
       hit: true,
       stale: false,
-      collections: [{ collection: "developer", versions: ["current"] }],
+      collections: [
+        {
+          collection: "legacydeveloper",
+          status: "deprecating",
+          versions: ["current"],
+          landmarks: [
+            {
+              version: "current",
+              landmarks: [{ slug: "_api_meta", members: ["_metadata"] }],
+              localeDiffs: [{ locales: ["ja-jp"], removed: [{ slug: "_api_meta" }] }],
+            },
+          ],
+        },
+      ],
     });
+    expect(cache.readCatalogCache(1000).collections?.[0]).not.toHaveProperty("content");
+    expect(cache.readCatalogCache(1000).collections?.[0]).not.toHaveProperty("citations");
     expect(cache.readCatalogCache(1000 + 1000 * 60 * 60 * 25)).toMatchObject({
       hit: true,
       stale: true,
     });
+  });
+
+  it("drops malformed collection and nested landmark entries", () => {
+    expect(() =>
+      cache.writeCatalogCache(
+        [
+          null as never,
+          {
+            collection: "developer",
+            landmarks: [
+              null,
+              {
+                version: "current",
+                landmarks: [null, { slug: "_lwc" }],
+                localeDiffs: [null, { locales: ["ja-jp"], removed: [null, { slug: "_api" }] }],
+              },
+            ],
+          } as never,
+        ],
+        1000,
+      ),
+    ).not.toThrow();
+
+    expect(cache.readCatalogCache(1000).collections).toEqual([
+      {
+        collection: "developer",
+        landmarks: [
+          {
+            version: "current",
+            landmarks: [{ slug: "_lwc" }],
+            localeDiffs: [{ locales: ["ja-jp"], removed: [{ slug: "_api" }] }],
+          },
+        ],
+      },
+    ]);
   });
 });

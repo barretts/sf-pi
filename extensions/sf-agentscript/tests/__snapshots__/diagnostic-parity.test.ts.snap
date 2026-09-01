@@ -122,51 +122,6 @@ exports[`local hardening diagnostic parity > 'Apex target with method suffix' 1`
 }
 `;
 
-exports[`local hardening diagnostic parity > 'Employee Agent with Service-Agent-onl…' 1`] = `
-{
-  "decision": "retain-local",
-  "execution_context": "Employee Agent with messaging connection and escalation utility",
-  "local": [
-    {
-      "code": "employee-agent-connection-messaging",
-      "data": undefined,
-      "message": "Employee Agents must not include a connection messaging block.",
-      "range": {
-        "end": {
-          "character": 35,
-          "line": 11,
-        },
-        "start": {
-          "character": 0,
-          "line": 10,
-        },
-      },
-      "severity": 1,
-      "source": "sf-agentscript-local",
-    },
-    {
-      "code": "employee-agent-escalate",
-      "data": undefined,
-      "message": "@utils.escalate is Service-Agent-only. Employee Agents should use a help subagent or target-backed action.",
-      "range": {
-        "end": {
-          "character": 37,
-          "line": 17,
-        },
-        "start": {
-          "character": 22,
-          "line": 17,
-        },
-      },
-      "severity": 1,
-      "source": "sf-agentscript-local",
-    },
-  ],
-  "upstream": [],
-  "upstream_quick_fixes": [],
-}
-`;
-
 exports[`local hardening diagnostic parity > 'bare numeric action inputs and outputs' 1`] = `
 {
   "decision": "historical-no-local-projection",
@@ -294,15 +249,15 @@ exports[`local hardening diagnostic parity > 'procedural statements inside liter
     {
       "code": "instruction-template-syntax",
       "data": undefined,
-      "message": "'verified' looks like a variable name — did you mean {!@variables.verified}? Variable references require template syntax to be interpolated.",
+      "message": "'@variables.verified' should be wrapped in template syntax — did you mean {!@variables.verified}? Variable references require {! ... } for interpolation.",
       "range": {
         "end": {
-          "character": 45,
-          "line": 15,
+          "character": 34,
+          "line": 16,
         },
         "start": {
-          "character": 37,
-          "line": 15,
+          "character": 15,
+          "line": 16,
         },
       },
       "severity": 3,

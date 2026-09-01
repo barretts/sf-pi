@@ -35,6 +35,9 @@ Open its Manager detail or change its package state with:
 - Quality cards show every finding header by default; overlong variable descriptions gate publication, while official instruction-template diagnostics remain pre-activation recommendations.
 - Eval, trace, preview, and lifecycle calls reuse @salesforce/core / SF CLI auth context; timeout-sensitive HTTP may use bounded native fetch and never logs or persists tokens.
 - Local-first: compile and validate run via official @sf-agentscript packages before any network call.
+- Diagnostics and code actions use deterministic source-bound identities; stale, missing, or ambiguous quick fixes are refused, and official provider availability is explicit.
+- Structure, quality, and review are agent-type-aware: ordinary agents use start_agent, while GoalBasedAgent uses its orchestrator and projects workflows, triggers, bundles, and local actions.
+- Escalation follows the official active Omni-Channel prerequisite without an additional Employee-versus-Service Agent restriction.
 - Apex action preflight uses Salesforce's registered action description for authoritative primitive and wrapper input/output contracts; failed target rows are never hidden behind resolved samples.
 - Eval Studio inventories repository EvalSpec JSON and local Run artifacts without Salesforce calls; org/version resolution occurs only after an explicit Run or Release Contract action.
 - Eval runs synthesize trace artifacts from inline Evaluation API data by default; explicit trace fetches are idempotent GETs.

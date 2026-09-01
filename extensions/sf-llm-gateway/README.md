@@ -113,16 +113,6 @@ health, redirects, TLS, and common authentication/routing failures.
 `usage-probe` performs a fresh read-only usage lookup after key rotation or when
 cached numbers look surprising.
 
-For an opt-in local wire trace:
-
-```bash
-SF_LLM_GATEWAY_TRACE=1 pi
-```
-
-The trace is truncated on launch, filtered to the configured gateway root, and
-written to `~/.pi/agent/sf-llm-gateway.trace.jsonl`. It can contain request and
-response material; treat it as private diagnostic evidence and never commit it.
-
 ## Safety and Data Boundaries
 
 - SF Pi's fixed-mask component collects API keys; Pi alone persists and removes

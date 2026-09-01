@@ -128,38 +128,53 @@ export async function analyzeAgentScriptSource(
 export function combineAgentScriptDiagnostics(
   ...sources: ReadonlyArray<readonly unknown[]>
 ): AgentScriptDiagnostic[] {
-  const combined = new Map<string, AgentScriptDiagnostic>();
+  const combined: AgentScriptDiagnostic[] = [];
   for (const raw of sources.flat()) {
     const diagnostic = toAgentScriptDiagnostic(raw);
     if (!diagnostic) continue;
-    const key = [
-      diagnostic.code ?? "",
-      `${diagnostic.range.start.line}:${diagnostic.range.start.character}`,
-      `${diagnostic.range.end.line}:${diagnostic.range.end.character}`,
-      diagnostic.message,
-    ].join("|");
-    const previous = combined.get(key);
-    if (!previous) {
-      combined.set(key, diagnostic);
+    const index = combined.findIndex(
+      (previous) =>
+        sameDiagnosticLocationAndMessage(previous, diagnostic) &&
+        (previous.code === diagnostic.code || !previous.code || !diagnostic.code),
+    );
+    if (index === -1) {
+      combined.push(diagnostic);
       continue;
     }
+
+    const previous = combined[index];
+    const primary = previous.code ? previous : diagnostic.code ? diagnostic : previous;
+    const secondary = primary === previous ? diagnostic : previous;
     const tags = Array.from(new Set([...(previous.tags ?? []), ...(diagnostic.tags ?? [])]));
-    combined.set(key, {
-      ...previous,
+    combined[index] = {
+      ...primary,
       severity: Math.min(previous.severity, diagnostic.severity) as AgentScriptSeverity,
       ...(tags.length > 0 ? { tags } : {}),
       data:
-        previous.data || diagnostic.data
-          ? { ...(diagnostic.data ?? {}), ...(previous.data ?? {}) }
+        primary.data || secondary.data
+          ? { ...(secondary.data ?? {}), ...(primary.data ?? {}) }
           : undefined,
-    });
+    };
   }
-  return [...combined.values()].sort(
+  return combined.sort(
     (left, right) =>
       left.range.start.line - right.range.start.line ||
       left.range.start.character - right.range.start.character ||
       left.severity - right.severity ||
       String(left.code ?? "").localeCompare(String(right.code ?? "")),
+  );
+}
+
+function sameDiagnosticLocationAndMessage(
+  left: AgentScriptDiagnostic,
+  right: AgentScriptDiagnostic,
+): boolean {
+  return (
+    left.message === right.message &&
+    left.range.start.line === right.range.start.line &&
+    left.range.start.character === right.range.start.character &&
+    left.range.end.line === right.range.end.line &&
+    left.range.end.character === right.range.end.character
   );
 }
 

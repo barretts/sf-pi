@@ -21,6 +21,7 @@
       "lib/client.ts",
       "lib/auth.ts",
       "lib/collection-profiles.ts",
+      "lib/collection-retrieval.ts",
       "lib/render.ts"
     ],
     "stateFiles": [

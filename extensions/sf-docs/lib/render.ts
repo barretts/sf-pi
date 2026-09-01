@@ -539,8 +539,9 @@ function collectionLines(
   const versions = (collection.versions ?? []).join(",") || "-";
   const locales = formatCount(collection.locales);
   const formats = (collection.formats ?? []).join(",") || "-";
+  const status = collection.status ? ` · ${collection.status}` : "";
   const lines = [
-    `${accent(collection.collection, theme)} ${dim(`${versions} · ${locales} · ${formats}`, theme)}`,
+    `${accent(collection.collection, theme)} ${dim(`${versions} · ${locales} · ${formats}${status}`, theme)}`,
   ];
   if (profile?.coverage) lines.push(dim(`  🧭 owns ${profile.coverage}`, theme));
   if (profile?.releaseNotes) lines.push(dim(`  🕘 release notes ${profile.releaseNotes}`, theme));

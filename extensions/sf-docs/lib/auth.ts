@@ -124,12 +124,12 @@ export async function getDocsToken(
 
 export function resolveEndpoint(): EndpointResolution {
   const raw = getEnv(ENV_ENDPOINT);
-  if (!raw) return { source: "default", endpoint: DEFAULT_ENDPOINT };
+  if (!raw) return { ok: true, source: "default", endpoint: DEFAULT_ENDPOINT };
   const parsed = normalizeEndpoint(raw);
   if (parsed.ok === true) {
-    return { source: "env", endpoint: parsed.endpoint, warning: parsed.warning };
+    return { ok: true, source: "env", endpoint: parsed.endpoint, warning: parsed.warning };
   }
-  return { source: "default", endpoint: DEFAULT_ENDPOINT, warning: parsed.error };
+  return { ok: false, source: "env", error: parsed.error };
 }
 
 export function normalizeEndpoint(
@@ -143,15 +143,28 @@ export function normalizeEndpoint(
     if (url.username || url.password) {
       return { ok: false, error: `${ENV_ENDPOINT} must not include username or password.` };
     }
+    if (url.protocol === "http:" && !isLoopbackHost(url.hostname)) {
+      return {
+        ok: false,
+        error: `${ENV_ENDPOINT} must use HTTPS unless the host is loopback.`,
+      };
+    }
     url.hash = "";
     url.search = "";
     const endpoint = url.toString().replace(/\/+$/, "/");
     return {
       ok: true,
       endpoint,
-      warning: url.protocol === "http:" ? `${ENV_ENDPOINT} is using plain HTTP.` : undefined,
+      warning: url.protocol === "http:" ? `${ENV_ENDPOINT} is using loopback HTTP.` : undefined,
     };
   } catch {
     return { ok: false, error: `${ENV_ENDPOINT} is not a valid URL.` };
   }
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  if (normalized === "localhost" || normalized === "::1" || normalized === "[::1]") return true;
+  const match = normalized.match(/^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/u);
+  return Boolean(match && match.slice(1).every((part) => Number(part) <= 255));
 }

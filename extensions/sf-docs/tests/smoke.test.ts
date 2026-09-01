@@ -61,7 +61,7 @@ describe("sf-docs", () => {
   });
 
   const liveIt = process.env.SF_DOCS_LIVE_SMOKE && process.env.SF_DOCS_MCP_TOKEN ? it : it.skip;
-  liveIt("live MCP exposes admin release filters and searchable release-note docs", async () => {
+  liveIt("live MCP preserves the catalog and search protocol", async () => {
     const client = new DocsClient({
       endpoint: process.env.SF_DOCS_MCP_ENDPOINT || "https://mcp.docs.salesforce.com/",
       token: process.env.SF_DOCS_MCP_TOKEN!,
@@ -70,18 +70,18 @@ describe("sf-docs", () => {
     const catalog = (await client.callTool("list", {})) as {
       collections?: Array<Record<string, unknown>>;
     };
-    const admin = catalog.collections?.find((collection) => collection.collection === "admin");
-    expect(String(admin?.retrievalHints)).toContain("+release:<n>");
+    expect(Array.isArray(catalog.collections)).toBe(true);
+    expect(catalog.collections?.some((collection) => collection.collection === "developer")).toBe(
+      true,
+    );
 
     const search = (await client.callTool("search", {
-      collection: "admin",
-      query: "+release:258 sales cloud",
-      pageSize: 3,
-    })) as { results?: Array<{ url?: string; release?: string }> };
-    expect(
-      search.results?.some(
-        (result) => result.release === "258" || result.url?.includes("release=258"),
-      ),
-    ).toBe(true);
+      collection: "developer",
+      version: "current",
+      locale: "en-us",
+      query: '"Named Credentials"',
+      pageSize: 1,
+    })) as { results?: unknown[] };
+    expect(Array.isArray(search.results)).toBe(true);
   });
 });

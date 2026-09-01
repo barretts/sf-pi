@@ -41,7 +41,6 @@ Repo-level rules still apply; see root `AGENTS.md`.
 | Existing setup discovery (Claude/DevBar/CA)    | `lib/onboarding-sources.ts`        |
 | Provider-telemetry (429/5xx footer badge)      | `lib/provider-telemetry.ts`        |
 | Anthropic terminal error normalization         | `lib/transport-internal/shared.ts` |
-| Wire-level request/response tracing            | `lib/wire-trace.ts`                |
 
 The masked input implementation is shared at
 `lib/common/secure-credential-prompt.ts`; do not reintroduce an extension-local

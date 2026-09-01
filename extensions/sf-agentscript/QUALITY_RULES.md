@@ -105,7 +105,7 @@ High rules participate in the publication gate and cannot be suppressed inline.
 
 A procedure is one independently executable logic region, including:
 
-- `reasoning.instructions`;
+- standard-agent and GoalBasedAgent orchestrator `reasoning.instructions`;
 - `before_reasoning`;
 - `after_reasoning`;
 - connected-agent `after_response`;
@@ -172,8 +172,6 @@ Before adding the v1 catalog, clean up the existing source-text hardening layer.
 
 - `apex-target-method-suffix`;
 - `target-ref-looks-like-id`;
-- `employee-agent-connection-messaging`;
-- `employee-agent-escalate`;
 - `inputs-out-of-scope`;
 - `outputs-out-of-scope`.
 
@@ -185,7 +183,7 @@ Delete the text scanner only after every retained diagnostic has source-range an
 
 ## Released-package parity handoff
 
-The Milestone 4 matrix in `docs/DIAGNOSTIC_PARITY.md` compares every current quality rule and hardening diagnostic against the installed official package set using full diagnostic and quick-fix snapshots. At the 2026-08-03 baseline, no current evaluator has strict parity, so no current evaluator is deleted. Similar planner-action diagnostics do not replace deterministic-`run` policy.
+The Milestone 4 matrix in `docs/DIAGNOSTIC_PARITY.md` compares every current quality rule and hardening diagnostic against the installed official package set using full diagnostic and quick-fix snapshots. At the 2026-08-26 baseline, no current evaluator has strict parity, so no current evaluator is deleted. Similar planner-action diagnostics do not replace deterministic-`run` policy.
 
 ## Deferred candidates
 
@@ -202,6 +200,7 @@ The Milestone 4 matrix in `docs/DIAGNOSTIC_PARITY.md` compares every current qua
 ## Grounding
 
 - Agent Script language and flow: https://developer.salesforce.com/docs/ai/agentforce/guide/ascript-lang.html
+- Escalation prerequisites: https://developer.salesforce.com/docs/ai/agentforce/guide/ascript-ref-utils.html#utilsescalate
 - Agent Script flow of control: https://developer.salesforce.com/docs/ai/agentforce/guide/ascript-flow.html
 - Subagent transitions: https://developer.salesforce.com/docs/ai/agentforce/guide/ascript-patterns-transitions.html
 - Agent router strategies: https://developer.salesforce.com/docs/ai/agentforce/guide/ascript-patterns-topic-selector.html

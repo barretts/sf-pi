@@ -652,7 +652,17 @@ async function actionReview(
     });
   } else {
     const stats = (inspect.stats ?? {}) as Record<string, number | undefined>;
-    if ((stats.start_agents ?? 0) === 0) {
+    const agentType = inspect.components?.config?.agent_type;
+    if (agentType === "GoalBasedAgent") {
+      if ((stats.orchestrators ?? 0) !== 1) {
+        findings.push({
+          id: "invalid-goal-based-entry-point",
+          severity: "blocker",
+          category: "shape",
+          message: "GoalBasedAgent requires exactly one orchestrator block.",
+        });
+      }
+    } else if ((stats.start_agents ?? 0) === 0) {
       findings.push({
         id: "missing-start-agent",
         severity: "blocker",
@@ -827,13 +837,23 @@ function renderStructureSummary(
   const dialect = result.dialect
     ? `${result.dialect.name}${result.dialect.version ? ` ${result.dialect.version}` : ""}`
     : "unknown";
+  const counts = [
+    `${stats.start_agents ?? 0} start`,
+    (stats.orchestrators ?? 0) > 0 ? `${stats.orchestrators} orchestrators` : null,
+    `${stats.topics ?? 0} topics`,
+    `${stats.subagents ?? 0} subagents`,
+    (stats.workflows ?? 0) > 0 ? `${stats.workflows} workflows` : null,
+    (stats.triggers ?? 0) > 0 ? `${stats.triggers} triggers` : null,
+    (stats.bundles ?? 0) > 0 ? `${stats.bundles} bundles` : null,
+    `${stats.variables ?? 0} variables`,
+    `${stats.actions ?? 0} actions`,
+    `${stats.connections ?? 0} connections`,
+    `${stats.modalities ?? 0} modalities`,
+  ].filter(Boolean);
   const lines = [
     `📋 Inspected ${agentFile}`,
     `Dialect: ${dialect}`,
-    `Stats: ${stats.start_agents ?? 0} start · ${stats.topics ?? 0} topics · ` +
-      `${stats.subagents ?? 0} subagents · ${stats.variables ?? 0} variables · ` +
-      `${stats.actions ?? 0} actions · ${stats.connections ?? 0} connections · ` +
-      `${stats.modalities ?? 0} modalities`,
+    `Stats: ${counts.join(" · ")}`,
   ];
   if (result.has_parse_errors) {
     lines.push(

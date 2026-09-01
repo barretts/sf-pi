@@ -52,13 +52,13 @@
  *   ----------------------------|------------------------------------|-------------------------------
  *   Extension load              | —                                  | Register one complete Provider; restore Pi catalog cache offline
  *   session_start               | —                                  | Bind cwd/UI/model registry; sync local defaults; no model-discovery network
- *   turn_end                    | model is gateway model             | Update footer (context + monthly usage); first turn_end also kicks refreshUsageDetails
+ *   turn_end                    | model is gateway model             | Refresh monthly usage after completion; first turn also kicks refreshUsageDetails
  *   turn_end                    | model is NOT gateway model         | Clear footer status
- *   model_select                | model changes                       | Refresh footer without mutating thinking
- *   after_provider_response     | model is gateway model + 2xx       | Clear any live throttle/upstream warning
- *   after_provider_response     | model is gateway model + 429       | Record throttle signal, footer shows ⚠ badge for 60s
- *   after_provider_response     | model is gateway model + 401/403   | Record access signal, footer shows ⚠ badge for 60s
- *   after_provider_response     | model is gateway model + 5xx       | Record upstream signal, footer shows ⚠ badge for 60s
+ *   model_select                | model changes                       | Repaint cached footer without mutating thinking
+ *   after_provider_response     | model is gateway model + 2xx       | Clear warning and repaint cached usage without a pre-stream probe
+ *   after_provider_response     | model is gateway model + 429       | Record throttle signal and repaint cached usage
+ *   after_provider_response     | model is gateway model + 401/403   | Record access signal and repaint cached usage
+ *   after_provider_response     | model is gateway model + 5xx       | Record upstream signal and repaint cached usage
  *   message_end                 | recognized gateway request error    | Replace raw error with bounded recovery guidance
  *   session_before_compact      | dedicated model configured          | Summarize through that model or fall back to Pi
  *   session_shutdown            | —                                  | Cancel credential UI; clear cwd/auth/footer/provider state
@@ -213,7 +213,6 @@ import {
   createStaleUsageRefreshState,
   maybeAutoRefreshStaleUsage,
 } from "./lib/stale-usage-refresh.ts";
-import { installWireTrace, isWireTraceEnabled } from "./lib/wire-trace.ts";
 import { requirePiVersion } from "../../lib/common/pi-compat.ts";
 import { markBootStep } from "../../lib/common/boot-timing.ts";
 import { globalAgentPath } from "../../lib/common/pi-paths.ts";
@@ -295,14 +294,6 @@ export default function sfLlmGatewayInternalExtension(pi: ExtensionAPI) {
   // session_shutdown cleanup so same-directory session switches get a fresh
   // refresher without leaking stale callbacks across reloads/resumes.
   let unregisterMonthlyUsage: (() => void) | null = null;
-
-  // Opt-in wire-level trace. Activated by SF_LLM_GATEWAY_TRACE=1.
-  // Writes raw request/response bytes under Pi's global agent directory.
-  // Intended for debugging sessions where the gateway returns empty/odd responses;
-  // no-op otherwise. See lib/wire-trace.ts for details.
-  if (isWireTraceEnabled()) {
-    installWireTrace();
-  }
 
   // Register one complete Pi Provider. Pi owns auth application, provider-scoped
   // model persistence, refresh coordination, and API dispatch from this point on.
@@ -400,9 +391,9 @@ export default function sfLlmGatewayInternalExtension(pi: ExtensionAPI) {
   // stays fast (Phase 1.4 + 2.1).
   let detailsKickedOff = false;
   pi.on("turn_end", async (_event, ctx) => {
-    // Refresh the `💰 $N/∞` pill right after every assistant turn so the
-    // cost figure tracks the session closely. The refresh is throttled by
-    // MONTHLY_USAGE_TTL_MS inside refreshMonthlyUsage(), so back-to-back
+    // Refresh monthly Gateway spend after the assistant turn completes so
+    // accounting for that request can be reflected. The refresh is throttled
+    // by MONTHLY_USAGE_TTL_MS inside refreshMonthlyUsage(), so back-to-back
     // turns do not hammer the gateway — the network call only fires once
     // per TTL window.
     await updateFooterStatus(ctx, false);
@@ -417,7 +408,7 @@ export default function sfLlmGatewayInternalExtension(pi: ExtensionAPI) {
   });
 
   pi.on("model_select", async (_event, ctx) => {
-    await updateFooterStatus(ctx, false);
+    paintFooterStatus(ctx);
   });
 
   // Capture gateway-side throttle/upstream signals so the footer can render
@@ -430,7 +421,7 @@ export default function sfLlmGatewayInternalExtension(pi: ExtensionAPI) {
     // explicitly instead of using a non-null assertion.
     if (!ctx.model || !isGatewayProvider(ctx.model.provider)) return;
     recordProviderResponse(event.status, event.headers, ctx.model.id);
-    await updateFooterStatus(ctx, false);
+    paintFooterStatus(ctx);
   });
 
   pi.on("session_shutdown", async (_event, ctx) => {
@@ -608,20 +599,7 @@ function bindGatewayProviderContext(ctx: ExtensionCommandContext): void {
   }
 }
 
-type GatewayModelRefreshResult = {
-  aborted: boolean;
-  errors: ReadonlyMap<string, Error>;
-};
-
-type GatewayRefreshCapableRegistry = {
-  refresh(options?: {
-    providers?: readonly string[];
-    force?: boolean;
-    signal?: AbortSignal;
-  }): Promise<GatewayModelRefreshResult | void>;
-};
-
-// Exported for cross-version ModelRegistry refresh behavior tests.
+// Exported for ModelRegistry refresh behavior tests.
 export async function refreshGatewayProvider(
   ctx: ExtensionCommandContext,
 ): Promise<ReturnType<typeof gatewayProviderRuntime.getLastDiscovery>> {
@@ -629,11 +607,9 @@ export async function refreshGatewayProvider(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   timeout.unref?.();
-  let result: GatewayModelRefreshResult | void;
+  let result: Awaited<ReturnType<typeof ctx.modelRegistry.refresh>>;
   try {
-    // Pi 0.84 scopes and cancels this refresh. Pi 0.82/0.83 safely ignore
-    // the extra argument and retain their existing broad-refresh behavior.
-    result = await (ctx.modelRegistry as unknown as GatewayRefreshCapableRegistry).refresh({
+    result = await ctx.modelRegistry.refresh({
       providers: [PROVIDER_NAME],
       force: true,
       signal: controller.signal,
@@ -643,14 +619,14 @@ export async function refreshGatewayProvider(
   }
 
   const state = gatewayProviderRuntime.getLastDiscovery();
-  if (result && result.aborted) {
+  if (result.aborted) {
     return {
       ...state,
       error:
         "Gateway model refresh timed out; last-known catalog state was retained. Run /sf-llm-gateway doctor.",
     };
   }
-  if (result && result.errors.has(PROVIDER_NAME) && !state.error) {
+  if (result.errors.has(PROVIDER_NAME) && !state.error) {
     return {
       ...state,
       error:
@@ -2116,7 +2092,7 @@ async function syncGatewaySessionDefaults(
   if (options.awaitFooterRefresh === false) {
     const footerTimer = setTimeout(() => {
       void markBootStep("sf-llm-gateway.sync.footer-refresh (deferred)", () =>
-        updateFooterStatus(ctx, forceRefreshUsage),
+        paintFooterStatus(ctx),
       ).catch(() => undefined);
     }, 3_000);
     footerTimer.unref?.();
@@ -2128,18 +2104,27 @@ async function syncGatewaySessionDefaults(
   );
 }
 
-async function updateFooterStatus(
-  ctx: ExtensionContext,
-  forceRefreshUsage: boolean,
-): Promise<void> {
+function paintFooterStatus(ctx: ExtensionContext): void {
   if (!isGatewayProvider(ctx.model?.provider)) {
     ctx.ui.setStatus(STATUS_KEY, undefined);
     return;
   }
 
+  ctx.ui.setStatus(STATUS_KEY, buildFooterStatus(getRuntimeStatusState()));
+}
+
+async function updateFooterStatus(
+  ctx: ExtensionContext,
+  forceRefreshUsage: boolean,
+): Promise<void> {
+  if (!isGatewayProvider(ctx.model?.provider)) {
+    paintFooterStatus(ctx);
+    return;
+  }
+
   await refreshMonthlyUsage(forceRefreshUsage, ctx.cwd);
   const state = getRuntimeStatusState();
-  ctx.ui.setStatus(STATUS_KEY, buildFooterStatus(state));
+  paintFooterStatus(ctx);
 
   if (!forceRefreshUsage) {
     maybeAutoRefreshStaleUsage({

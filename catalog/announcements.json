@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "revision": "release-0.267.1-2026-08-17",
-  "latestVersion": "0.267.1",
+  "revision": "release-0.275.2-2026-09-01",
+  "latestVersion": "0.275.2",
   "announcements": [
     {
-      "id": "release-0.267.1",
+      "id": "release-0.275.2",
       "kind": "update",
-      "title": "sf-pi v0.267.1 — gateway: reconcile inaccessible model state",
-      "publishedAt": "2026-08-17T00:00:00Z",
-      "link": "https://github.com/salesforce/sf-pi/releases/tag/v0.267.1",
+      "title": "sf-pi v0.275.2 — deps: update browserslist past security advisories",
+      "publishedAt": "2026-09-01T00:00:00Z",
+      "link": "https://github.com/salesforce/sf-pi/releases/tag/v0.275.2",
       "severity": "info",
-      "body": "gateway: reconcile inaccessible model state"
+      "body": "deps: update browserslist past security advisories — sf-llm-gateway: refresh usage after completed turns"
     }
   ]
 }

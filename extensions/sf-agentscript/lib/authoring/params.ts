@@ -44,6 +44,9 @@ export interface AuthoringParams {
   diagnostic_code?: string;
   line?: number;
   fix_index?: number;
+  source_version?: string;
+  diagnostic_id?: string;
+  action_id?: string;
   dry_run?: boolean;
 }
 
@@ -180,7 +183,7 @@ export const AUTHORING_ACTION_SPECS: Record<string, AuthoringActionSpec> = {
     key: "mutate.apply_quick_fix",
     verb: "mutate",
     mode: "apply_quick_fix",
-    required: ["diagnostic_code", "line"],
+    required: [],
     inferable: ["agent_file"],
     writes: true,
   },
@@ -213,6 +216,18 @@ export function validateAuthoringParams(
   const missing = spec.required.filter((field) => bag[field] === undefined || bag[field] === "");
   if (missing.length > 0) {
     return { ok: false, error: `${key} requires: ${missing.join(", ")}.` };
+  }
+  if (
+    key === "mutate.apply_quick_fix" &&
+    !bag.action_id &&
+    !bag.diagnostic_id &&
+    !(bag.diagnostic_code && bag.line !== undefined)
+  ) {
+    return {
+      ok: false,
+      error:
+        "mutate.apply_quick_fix requires source_version/diagnostic_id/action_id from compile/check, or legacy diagnostic_code and line.",
+    };
   }
   return { ok: true, key, spec };
 }

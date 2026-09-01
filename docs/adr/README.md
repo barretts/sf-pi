@@ -82,7 +82,6 @@ ADRs preserve durable architectural rationale. Runtime code and Behavior Proofs 
 - [0085: Agent Workflow Visibility Contract](./0085-agent-workflow-visibility-contract.md) — 2026-07-22
 - [0086: Behavior Proof Ladder](./0086-behavior-proof-ladder.md) — 2026-07-22
 - [0087: Shared Secure Credential Prompt Policy](./0087-secure-native-credential-prompt-prerequisite.md) — 2026-07-22
-- [0088: Pi 0.82.0 Runtime Floor](./0088-pi-082-runtime-floor.md) — 2026-07-27
 - [0089: SF tldraw uses deterministic Salesforce diagram profiles](./0089-sf-tldraw-uses-deterministic-salesforce-diagram-profiles.md) — 2026-07-25
 - [0090: Agent Script Generates Stateful Eval Scenarios for One Evaluation Backend](./0090-agentscript-stateful-eval-scenarios.md) — 2026-07-27
 - [0091: Agent Script Quality Analysis Is Native, AST-Grounded, and Separate from Compilation](./0091-agentscript-native-quality-analysis.md) — 2026-07-28
@@ -100,6 +99,9 @@ ADRs preserve durable architectural rationale. Runtime code and Behavior Proofs 
 - [0104: Manifests Are Attested Against Real Runtime Registration](./0104-manifest-runtime-surface-attestation.md) — 2026-08-10
 - [0105: Extension References Are Role-Routed](./0105-extension-references-are-role-routed.md) — 2026-08-11
 - [0106: Data 360 live proof uses the v2 registry and dispatcher](./0106-data-360-live-proof-uses-the-v2-dispatcher.md) — 2026-08-11
+- [0107: SF tldraw validates Spec v2 at execute instead of advertising the union](./0107-tldraw-validates-spec-v2-at-execute.md) — 2026-08-19
+- [0108: Managed skill invocation stamps use an effective tree](./0108-managed-skill-invocation-stamps.md) — 2026-08-21
+- [0109: Pi 0.84.0 Runtime Floor](./0109-pi-084-runtime-floor.md) — 2026-08-25
 
 ## Proposed
 
@@ -119,6 +121,7 @@ ADRs preserve durable architectural rationale. Runtime code and Behavior Proofs 
 - [0056: Pi 0.79.9 runtime floor](./0056-pi-0799-runtime-floor.md) — 2026-06-21 — superseded by [ADR 0059](./0059-pi-07910-runtime-floor.md)
 - [0059: Pi 0.79.10 runtime floor](./0059-pi-07910-runtime-floor.md) — 2026-06-22 — superseded by [ADR 0066](./0066-pi-0802-runtime-floor.md)
 - [0066: Pi 0.80.2 runtime floor](./0066-pi-0802-runtime-floor.md) — 2026-06-23 — superseded by [ADR 0076](./0076-pi-0806-runtime-delegation.md)
+- [0088: Pi 0.82.0 Runtime Floor](./0088-pi-082-runtime-floor.md) — 2026-07-27 — superseded by [ADR 0109](./0109-pi-084-runtime-floor.md)
 
 ### Rejected
 

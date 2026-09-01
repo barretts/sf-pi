@@ -14,6 +14,7 @@ import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { checkAgentScriptFile } from "../lib/diagnostics.ts";
 import { applyMutation } from "../lib/mutate.ts";
 
 let workDir: string;
@@ -83,6 +84,124 @@ const SEMANTIC_RENAME_FIXTURE = [
 const TOPIC_CONVERSION_FIXTURE = SEMANTIC_RENAME_FIXTURE.replaceAll("subagent", "topic");
 
 describe("applyMutation: apply_quick_fix", () => {
+  const unusedVariableSource = [
+    "config:",
+    '    agent_name: "Quick_Fix_Bot"',
+    "",
+    "system:",
+    '    instructions: "Help"',
+    "",
+    "variables:",
+    '    unused: mutable string = "x"',
+    '    used: mutable string = "y"',
+    "",
+    "start_agent main:",
+    '    description: "Main"',
+    "    reasoning:",
+    "        instructions: |",
+    "            Use {!@variables.used}.",
+    "",
+  ].join("\n");
+
+  test("applies a source-bound diagnostic/action identity", async () => {
+    const filePath = await writeAgent("identity.agent", unusedVariableSource);
+    const compile = await checkAgentScriptFile(filePath);
+    const fix = compile.quickFixes.find(
+      (candidate) => candidate.diagnosticCode === "unused-variable",
+    );
+    expect(fix?.diagnosticId).toBeDefined();
+    expect(fix?.actionId).toBeDefined();
+
+    const result = await applyMutation({
+      op: "apply_quick_fix",
+      path: filePath,
+      source_version: compile.sourceVersion,
+      diagnostic_id: fix?.diagnosticId,
+      action_id: fix?.actionId,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(await readFile(filePath, "utf8")).not.toContain("unused: mutable string");
+  });
+
+  test("refuses a stale source version without modifying the file", async () => {
+    const filePath = await writeAgent("stale.agent", unusedVariableSource);
+    const compile = await checkAgentScriptFile(filePath);
+    const fix = compile.quickFixes.find(
+      (candidate) => candidate.diagnosticCode === "unused-variable",
+    );
+    await writeFile(filePath, `${unusedVariableSource}\n`, "utf8");
+    const before = await readFile(filePath, "utf8");
+
+    const result = await applyMutation({
+      op: "apply_quick_fix",
+      path: filePath,
+      source_version: compile.sourceVersion,
+      diagnostic_id: fix?.diagnosticId,
+      action_id: fix?.actionId,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("stale_source");
+    expect(await readFile(filePath, "utf8")).toBe(before);
+  });
+
+  test("does not fall back to coordinates when an action identity is unknown", async () => {
+    const filePath = await writeAgent("unknown-action.agent", unusedVariableSource);
+    const compile = await checkAgentScriptFile(filePath);
+    const fix = compile.quickFixes.find(
+      (candidate) => candidate.diagnosticCode === "unused-variable",
+    );
+
+    const result = await applyMutation({
+      op: "apply_quick_fix",
+      path: filePath,
+      source_version: compile.sourceVersion,
+      diagnostic_id: fix?.diagnosticId,
+      action_id: "act1:unknown",
+      diagnostic_code: fix?.diagnosticCode,
+      line: (fix?.diagnosticLine ?? 0) + 1,
+      fix_index: 0,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("no_matching_quick_fix");
+    expect(await readFile(filePath, "utf8")).toBe(unusedVariableSource);
+  });
+
+  test("refuses ambiguous legacy line/code selectors", async () => {
+    const source = [
+      "config:",
+      '    agent_name: "Ambiguous_Bot"',
+      "system:",
+      '    instructions: "Use @variables.first and @variables.second."',
+      "variables:",
+      '    first: mutable string = "a"',
+      '    second: mutable string = "b"',
+      "start_agent main:",
+      '    description: "Main"',
+      "",
+    ].join("\n");
+    const filePath = await writeAgent("ambiguous.agent", source);
+    const compile = await checkAgentScriptFile(filePath);
+    const diagnostics = compile.diagnostics.filter(
+      (diagnostic) => diagnostic.code === "instruction-template-syntax",
+    );
+    expect(diagnostics).toHaveLength(2);
+
+    const result = await applyMutation({
+      op: "apply_quick_fix",
+      path: filePath,
+      diagnostic_code: "instruction-template-syntax",
+      line: diagnostics[0].range.start.line + 1,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("ambiguous_diagnostic");
+    expect(result.candidates).toHaveLength(2);
+    expect(await readFile(filePath, "utf8")).toBe(source);
+  });
+
   test("returns no_matching_diagnostic when the line/code don't match", async () => {
     const filePath = await writeAgent(
       "billing.agent",

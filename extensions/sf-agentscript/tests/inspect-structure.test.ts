@@ -171,4 +171,84 @@ describe("projectInspectStructure", () => {
       }
     `);
   });
+
+  test("projects GoalBasedAgent entry points, workflows, triggers, bundles, and actions", () => {
+    const doc = parse(
+      [
+        "config:",
+        '    agent_name: "Goal_Bot"',
+        '    agent_type: "GoalBasedAgent"',
+        "",
+        "system:",
+        '    instructions: "Coordinate work."',
+        "",
+        "actions:",
+        "    audit:",
+        '        description: "Audit work."',
+        '        target: "flow://Audit_Work"',
+        "",
+        "bundles:",
+        "    prospecting:",
+        '        target: "bundle://prospecting"',
+        "",
+        "connected_subagent worker:",
+        '    target: "agent://Worker_Agent"',
+        '    description: "Performs work."',
+        "",
+        "orchestrator agent:",
+        "    actions:",
+        "        local_action:",
+        '            description: "Local action."',
+        '            target: "flow://Local_Action"',
+        "    reasoning:",
+        "        instructions: ->",
+        "            | Coordinate the goal.",
+        "",
+        "workflows:",
+        "    daily_work:",
+        "        agent: @connected_subagent.worker",
+        '        prompt: "Perform the work."',
+        "",
+        "trigger:",
+        "    weekday:",
+        '        schedule: "0 8 * * MON-FRI"',
+        "        target: @workflows.daily_work",
+        "",
+      ].join("\n"),
+    );
+    const result = projectInspectStructure({
+      ast: doc.ast,
+      dialect: { name: "agentforce" },
+      hasParseErrors: false,
+      parseErrorCount: 0,
+      walkAstExpressions,
+      decomposeAtMemberExpression,
+    });
+
+    expect(result.components?.orchestrators).toEqual([expect.objectContaining({ name: "agent" })]);
+    expect(result.components?.workflows).toEqual([
+      expect.objectContaining({
+        name: "daily_work",
+        connected_subagent_refs: ["worker"],
+      }),
+    ]);
+    expect(result.components?.triggers).toEqual([expect.objectContaining({ name: "weekday" })]);
+    expect(result.components?.bundles).toEqual([
+      expect.objectContaining({ name: "prospecting", target: "bundle://prospecting" }),
+    ]);
+    expect(result.components?.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "audit" }),
+        expect.objectContaining({ name: "local_action", parent: "orchestrator.agent" }),
+      ]),
+    );
+    expect(result.stats).toMatchObject({
+      orchestrators: 1,
+      workflows: 1,
+      triggers: 1,
+      bundles: 1,
+      actions: 2,
+      start_agents: 0,
+    });
+  });
 });

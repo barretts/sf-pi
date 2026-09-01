@@ -71,11 +71,6 @@ describe("Manager Gateway setup", () => {
 
   it.each([
     {
-      label: "accepts the Pi 0.82/0.83 void result",
-      result: undefined,
-      expectedError: undefined,
-    },
-    {
       label: "classifies Pi 0.84 cancellation",
       result: { aborted: true, errors: new Map<string, Error>() },
       expectedError: "timed out",

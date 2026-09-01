@@ -4,7 +4,7 @@
  * hardening fixes take a source string and diagnostics and emit TextEdits.
  */
 import { describe, expect, it } from "vitest";
-import { buildQuickFixes } from "../lib/code-actions.ts";
+import { buildQuickFixes, buildQuickFixesResult } from "../lib/code-actions.ts";
 import type { AgentScriptDiagnostic } from "../lib/types.ts";
 
 function makeDiagnostic(overrides: Partial<AgentScriptDiagnostic>): AgentScriptDiagnostic {
@@ -20,6 +20,62 @@ function makeDiagnostic(overrides: Partial<AgentScriptDiagnostic>): AgentScriptD
 }
 
 describe("buildQuickFixes", () => {
+  it("distinguishes an available provider with no fixes from provider failure", async () => {
+    const source = "config:\n  agent_name: hi\n";
+    const diagnostics = [makeDiagnostic({ code: "example" })];
+    const available = await buildQuickFixesResult(source, diagnostics, undefined, {
+      provideCodeActions: () => [],
+    });
+    const unavailable = await buildQuickFixesResult(source, diagnostics, undefined, {
+      provideCodeActions: () => {
+        throw new Error("provider failed");
+      },
+    });
+
+    expect(available.codeActionProvider).toEqual({
+      status: "available",
+      provider: "@sf-agentscript/lsp",
+    });
+    expect(unavailable.codeActionProvider).toMatchObject({
+      status: "unavailable",
+      provider: "@sf-agentscript/lsp",
+      reason: "provider failed",
+    });
+  });
+
+  it("retains local fixes when the official provider is unavailable", async () => {
+    const source = [
+      "config:",
+      '  agent_name: "EmployeeBot"',
+      '  default_agent_user: "service@example.com"',
+      "",
+    ].join("\n");
+    const result = await buildQuickFixesResult(
+      source,
+      [
+        makeDiagnostic({
+          code: "config-ignored-default-agent-user",
+          range: { start: { line: 2, character: 2 }, end: { line: 2, character: 45 } },
+        }),
+      ],
+      undefined,
+      {
+        provideCodeActions: () => {
+          throw new Error("provider failed");
+        },
+      },
+    );
+
+    expect(result.codeActionProvider.status).toBe("unavailable");
+    expect(result.quickFixes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Remove default_agent_user from Employee Agent config",
+        }),
+      ]),
+    );
+  });
+
   it("returns no fixes when diagnostics lack codes", async () => {
     const source = "config:\n  agent_name: hi\n";
     const fixes = await buildQuickFixes(source, [makeDiagnostic({ code: undefined })]);

@@ -75,6 +75,43 @@ describe("inspectStructureMarkdown", () => {
     expect(md).toMatch(/string, mutable/);
   });
 
+  it("renders GoalBasedAgent structure", () => {
+    const md = inspectStructureMarkdown({
+      ok: true,
+      path: "/goal.agent",
+      components: {
+        orchestrators: [{ name: "agent", line: 10, connected_subagent_refs: ["worker"] }],
+        topics: [],
+        subagents: [],
+        connected_subagents: [
+          { name: "worker", line: 20, target: "agent://Worker", has_after_response: false },
+        ],
+        workflows: [{ name: "daily", line: 30 }],
+        triggers: [{ name: "morning", line: 34 }],
+        bundles: [{ name: "sales", line: 38, target: "bundle://sales" }],
+        variables: [],
+        actions: [],
+      },
+      stats: {
+        start_agents: 0,
+        orchestrators: 1,
+        topics: 0,
+        subagents: 0,
+        connected_subagents: 1,
+        workflows: 1,
+        triggers: 1,
+        bundles: 1,
+        variables: 0,
+        actions: 0,
+      },
+    });
+    expect(md).toMatch(/orchestrators \(1\)/);
+    expect(md).toMatch(/workflows \(1\)/);
+    expect(md).toMatch(/triggers \(1\)/);
+    expect(md).toMatch(/bundles \(1\)/);
+    expect(md).toMatch(/bundle:\/\/sales/);
+  });
+
   it("warns when parse errors are present", () => {
     const md = inspectStructureMarkdown({
       ok: true,

@@ -43,6 +43,9 @@
         "Quality cards show every finding header by default; overlong variable descriptions gate publication, while official instruction-template diagnostics remain pre-activation recommendations.",
         "Eval, trace, preview, and lifecycle calls reuse @salesforce/core / SF CLI auth context; timeout-sensitive HTTP may use bounded native fetch and never logs or persists tokens.",
         "Local-first: compile and validate run via official @sf-agentscript packages before any network call.",
+        "Diagnostics and code actions use deterministic source-bound identities; stale, missing, or ambiguous quick fixes are refused, and official provider availability is explicit.",
+        "Structure, quality, and review are agent-type-aware: ordinary agents use start_agent, while GoalBasedAgent uses its orchestrator and projects workflows, triggers, bundles, and local actions.",
+        "Escalation follows the official active Omni-Channel prerequisite without an additional Employee-versus-Service Agent restriction.",
         "Apex action preflight uses Salesforce's registered action description for authoritative primitive and wrapper input/output contracts; failed target rows are never hidden behind resolved samples.",
         "Eval Studio inventories repository EvalSpec JSON and local Run artifacts without Salesforce calls; org/version resolution occurs only after an explicit Run or Release Contract action.",
         "Eval runs synthesize trace artifacts from inline Evaluation API data by default; explicit trace fetches are idempotent GETs.",
@@ -65,7 +68,7 @@
     "entry": "extensions/sf-agentscript/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 37015
+    "srcLoc": 37613
   },
   {
     "id": "sf-apex",
@@ -465,6 +468,7 @@
         "lib/client.ts",
         "lib/auth.ts",
         "lib/collection-profiles.ts",
+        "lib/collection-retrieval.ts",
         "lib/render.ts"
       ],
       "stateFiles": [
@@ -493,7 +497,7 @@
     "entry": "extensions/sf-docs/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 4085
+    "srcLoc": 4443
   },
   {
     "id": "sf-feedback",
@@ -693,7 +697,7 @@
     "entry": "extensions/sf-llm-gateway/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 9589
+    "srcLoc": 9332
   },
   {
     "id": "sf-lsp",
@@ -872,7 +876,7 @@
   {
     "id": "sf-skills",
     "name": "SF Skills",
-    "description": "Manage skills through one Skill Funnel: catalog every source (Claude/Codex/Cursor/custom/managed) → gate sources → toggle skills per scope (global/project) → resolve name conflicts, all compiled to native settings.skills[]. Plus a passive live-context HUD, forcedotcom/afv-library install, per-skill usage counters, and prune.",
+    "description": "Manage skills through one Skill Funnel: catalog every source (Claude/Codex/Cursor/custom/managed) → gate sources → toggle skills per scope (global/project) → resolve name conflicts, all compiled to native settings.skills[]. Toggle managed-library invocation via disable-model-invocation stamps on an effective tree. Plus a passive live-context HUD, forcedotcom/sf-skills install, per-skill usage counters, and prune.",
     "category": "ui",
     "maturity": "stable",
     "defaultEnabled": true,
@@ -893,20 +897,22 @@
     ],
     "docs": {
       "intentGroup": "Personalize pi",
-      "summary": "Skills manager built on the Skill Funnel: a five-tab view (Catalog / Sources / Global / Project / Conflicts) over one resolved Skill Catalog. Source Gate decides which roots Pi sees; Skill Gate toggles individual skills at global and project scope; Skill Conflict Resolution picks a winner by exclusion. Every decision compiles to native settings.skills[] (Compiled Skill Resolution) — no SKILL.md files are ever modified. A Source Registry remembers custom paths and gate state; conflicts that touch an auto-discovered default root are report-only. Plus a passive live-context HUD, forcedotcom/afv-library install, per-skill usage counters, and prune.",
+      "summary": "Skills manager built on the Skill Funnel: a five-tab view (Catalog / Sources / Global / Project / Conflicts) over one resolved Skill Catalog. Source Gate decides which roots Pi sees; Skill Gate toggles individual skills at global and project scope; Skill Conflict Resolution picks a winner by exclusion. Wiring compiles to native settings.skills[]. Managed-library prompt visibility is stamped as disable-model-invocation on a global effective tree so the git clone stays pullable. Plus a passive live-context HUD, forcedotcom/sf-skills install, per-skill usage counters, and prune.",
       "primaryFiles": [
         "index.ts",
         "lib/catalog.ts",
         "lib/gather.ts",
         "lib/resolution.ts",
         "lib/funnel-view/model.ts",
-        "lib/settings.ts"
+        "lib/settings.ts",
+        "lib/invocation/effective-tree.ts",
+        "lib/toggle-view.ts"
       ]
     },
     "entry": "extensions/sf-skills/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 4711
+    "srcLoc": 6012
   },
   {
     "id": "sf-slack",
@@ -1091,7 +1097,7 @@
     "entry": "extensions/sf-tldraw/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 4585
+    "srcLoc": 4594
   },
   {
     "id": "sf-welcome",
@@ -1137,6 +1143,6 @@
     "entry": "extensions/sf-welcome/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 6644
+    "srcLoc": 6673
   }
 ]
