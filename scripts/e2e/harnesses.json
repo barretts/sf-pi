@@ -52,6 +52,26 @@
       "arguments": "--org <alias> [--surface all] [--mutate]"
     },
     {
+      "script": "e2e:sf-flow",
+      "entry": "scripts/e2e/sf-flow-e2e.ts",
+      "title": "SF Flow lifecycle harness",
+      "summary": "Exercises local diagnosis, org preflight, one-file Metadata API check-only validation, Flow test discovery, and optional targeted Flow tests.",
+      "target": "Explicit non-production org and workspace-contained Flow file",
+      "posture": "read-only",
+      "artifacts": "Session-scoped Flow diagnostics, topology, validation, and optional test reports",
+      "arguments": "--org <alias> --file <flow> [--flow <FlowApiName> | --test <FlowApiName.TestName> | --run-first-discovered-test] [--async-test]"
+    },
+    {
+      "script": "e2e:sf-flow-provision",
+      "entry": "scripts/e2e/sf-flow-provision-test-fixture.ts",
+      "title": "SF Flow test-fixture provisioning",
+      "summary": "Check-only validates and optionally deploys a dedicated public-safe autolaunched Flow plus FlowTest fixture.",
+      "target": "Explicit non-production org with FlowTest support",
+      "posture": "bounded-mutation",
+      "artifacts": "Metadata API validation/deployment console evidence",
+      "arguments": "--org <alias> [--deploy]"
+    },
+    {
       "script": "e2e:sf-herdr",
       "entry": "scripts/e2e/sf-herdr-live-smoke.ts",
       "title": "SF Herdr disposable-pane smoke",

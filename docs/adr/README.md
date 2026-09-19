@@ -104,6 +104,10 @@ ADRs preserve durable architectural rationale. Runtime code and Behavior Proofs 
 - [0111: SF Docs Uses Endpoint-Only Pi Login](./0111-sf-docs-uses-endpoint-only-pi-login.md) — 2026-09-09
 - [0112: SF Docs Separates Protocol Validity from Evidence Outcomes](./0112-sf-docs-separates-protocol-validity-from-evidence-outcomes.md) — 2026-09-09
 - [0113: SF Docs Uses Explicit Grounding and Literal Primitives](./0113-sf-docs-uses-explicit-grounding-and-literal-primitives.md) — 2026-09-09
+- [0114: SF Flow is a lean Flow Lifecycle Extension](./0114-sf-flow-is-a-lean-flow-lifecycle-extension.md) — 2026-09-18
+- [0115: SF Flow quality uses white-room behavioral parity](./0115-sf-flow-quality-uses-white-room-behavioral-parity.md) — 2026-09-19
+- [0116: SF Flow repairs are bounded and source-bound](./0116-sf-flow-repairs-are-bounded-and-source-bound.md) — 2026-09-19
+- [0117: SF Flow authoring grounding and live fixtures are bounded](./0117-sf-flow-authoring-grounding-and-live-fixtures-are-bounded.md) — 2026-09-19
 
 ## Proposed
 

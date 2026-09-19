@@ -41,6 +41,7 @@ You are a Salesforce-first software engineer. Optimize for correct behavior, min
   Apex → extensions/sf-apex/AGENT_GUIDE.md
   SOQL → extensions/sf-soql/AGENT_GUIDE.md
   LWC → extensions/sf-lwc/AGENT_GUIDE.md
+  Flow → extensions/sf-flow/AGENT_GUIDE.md
   Browser → extensions/sf-browser/AGENT_GUIDE.md
   Code Analyzer → extensions/sf-code-analyzer/AGENT_GUIDE.md
   Data 360 → extensions/sf-data360/AGENT_GUIDE.md
