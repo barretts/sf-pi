@@ -1,10 +1,9 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** Human-facing Flow Result Card with Mermaid topology rendering. */
+/** Compact human-facing Flow Result Card; topology renders outside the tool tile. */
 
 import type { Component } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { renderMermaidTopology } from "./topology.ts";
 import type { DigestRow, FlowRunDigest, ToolResult } from "./types.ts";
 
 export function renderFlowResult(
@@ -61,24 +60,6 @@ class FlowResultCard implements Component {
         this.theme.fg("accent", this.theme.bold(`—— ${section.icon} ${section.title} ——`)),
       );
       for (const item of section.rows) lines.push(...formatRow(item, available, this.theme));
-    }
-
-    if (this.digest.topology?.mermaid) {
-      lines.push("");
-      lines.push(this.theme.fg("accent", this.theme.bold("—— 🗺️ Flow Topology ——")));
-      const topology = renderMermaidTopology(
-        this.digest.topology.mermaid,
-        Math.max(12, available - 2),
-      );
-      for (const line of topology.lines)
-        lines.push(this.theme.fg(topology.fallback ? "muted" : "toolOutput", `  ${line}`));
-      if (this.digest.topology.truncated)
-        lines.push(
-          this.theme.fg(
-            "warning",
-            "  Topology was bounded; see the .mmd artifact for complete source.",
-          ),
-        );
     }
 
     if (this.digest.artifacts?.length) {

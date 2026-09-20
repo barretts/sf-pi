@@ -43,6 +43,14 @@ import { registerSfFlowTool } from "./lib/sf-flow-tool.ts";
 const COMMAND_NAME = "sf-flow";
 type SfFlowCommandAction = "status" | "help";
 
+interface PendingFlowTopology {
+  mermaid: string;
+  label: string;
+  nodes?: number;
+  totalNodes?: number;
+  truncated: boolean;
+}
+
 const COMMAND_ACTIONS: SfPiCommandAction<SfFlowCommandAction>[] = [
   {
     value: "status",
@@ -61,13 +69,47 @@ const COMMAND_ACTIONS: SfPiCommandAction<SfFlowCommandAction>[] = [
 export default function (pi: ExtensionAPI) {
   if (!requirePiVersion(pi, "sf-flow")) return;
   const repairState = createRepairLoopState();
+  const pendingTopologies = new Map<string, PendingFlowTopology>();
 
   pi.on("session_start", async (event) => {
     repairState.files.clear();
+    pendingTopologies.clear();
     beginSalesforceConnectionSession(event);
     registerSfFlowTool(pi);
   });
-  pi.on("tool_result", async (event, ctx) => handleToolResult(event, ctx, repairState));
+  pi.on("tool_result", async (event, ctx) => {
+    captureFlowTopology(event, pendingTopologies);
+    return handleToolResult(event, ctx, repairState);
+  });
+  pi.on("message_end", (event) => {
+    if (event.message.role !== "assistant" || pendingTopologies.size === 0) return undefined;
+    if (event.message.content.some((part) => part.type === "toolCall")) return undefined;
+
+    const existingText = event.message.content
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join("\n");
+    const topologies = [...pendingTopologies.values()];
+    pendingTopologies.clear();
+    const missing = topologies.filter((topology) => !existingText.includes(topology.mermaid));
+    if (!missing.length) return undefined;
+
+    return {
+      message: {
+        ...event.message,
+        content: [
+          ...event.message.content,
+          {
+            type: "text" as const,
+            text: `\n\n${missing.map(topologyMarkdown).join("\n\n")}`,
+          },
+        ],
+      },
+    };
+  });
+  pi.on("agent_settled", () => {
+    pendingTopologies.clear();
+  });
 
   pi.registerCommand(COMMAND_NAME, {
     description: "SF Flow — Flow lifecycle status & controls",
@@ -84,6 +126,61 @@ export default function (pi: ExtensionAPI) {
       });
     },
   });
+}
+
+function captureFlowTopology(
+  event: ToolResultEvent,
+  pending: Map<string, PendingFlowTopology>,
+): void {
+  if (event.toolName !== "sf_flow" || event.isError) return;
+  const details = event.details as
+    | {
+        file?: unknown;
+        local_analysis?: { file?: unknown };
+        digest?: {
+          title?: unknown;
+          meta?: unknown;
+          topology?: {
+            mermaid?: unknown;
+            nodes?: unknown;
+            total_nodes?: unknown;
+            truncated?: unknown;
+          };
+        };
+      }
+    | undefined;
+  const topology = details?.digest?.topology;
+  if (typeof topology?.mermaid !== "string" || !topology.mermaid.trim()) return;
+  const firstMeta = Array.isArray(details?.digest?.meta) ? details.digest.meta[0] : undefined;
+  const file = [details?.file, details?.local_analysis?.file, firstMeta].find(
+    (value): value is string => typeof value === "string" && Boolean(value.trim()),
+  );
+  const label =
+    file?.split(/[\\/]/).filter(Boolean).at(-1) ??
+    (typeof details?.digest?.title === "string" ? details.digest.title : "Flow");
+  const identity = file?.split(/[\\/]/).filter(Boolean).at(-1) ?? label;
+  pending.set(identity, {
+    mermaid: topology.mermaid,
+    label:
+      label
+        .replace(/[\r\n`#]+/g, " ")
+        .trim()
+        .slice(0, 120) || "Flow",
+    nodes: typeof topology.nodes === "number" ? topology.nodes : undefined,
+    totalNodes: typeof topology.total_nodes === "number" ? topology.total_nodes : undefined,
+    truncated: topology.truncated === true,
+  });
+}
+
+function topologyMarkdown(topology: PendingFlowTopology): string {
+  const count =
+    topology.truncated && topology.nodes !== undefined && topology.totalNodes !== undefined
+      ? ` Showing ${topology.nodes} of ${topology.totalNodes} executable elements.`
+      : "";
+  const note = topology.truncated
+    ? `\n\n_Topology is bounded.${count} Open the \`.mmd\` artifact for the complete graph._`
+    : "";
+  return `### Flow Topology — ${topology.label}\n\n_Normal arrows show the happy path; labeled arrows are outcomes; dashed arrows are faults; diamonds are decisions; hexagons are loops._\n\n\`\`\`mermaid\n${topology.mermaid}\n\`\`\`${note}`;
 }
 
 async function handleToolResult(

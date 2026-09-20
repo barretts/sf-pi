@@ -7,6 +7,7 @@ import path from "node:path";
 import { analyzeFlowSource, resolveFlowFile } from "./analyzer.ts";
 import { artifactTimestamp, writeFlowArtifact } from "./artifacts.ts";
 import { buildFlowDigest, row, section, toolResultFromDigest } from "./digest.ts";
+import { resolveFlowWorkspace } from "./project.ts";
 import type { FlowAnalysis, SfFlowParams, ToolResult } from "./types.ts";
 import { childText, descendants, parseFlowXml } from "./xml.ts";
 
@@ -70,7 +71,8 @@ export async function applyFlowQuickFix(params: SfFlowParams, cwd: string): Prom
   if (!params.fix_id || !params.source_version) {
     throw new Error("fix_id and source_version from diagnose.file are required for fix.apply");
   }
-  const file = await resolveFlowFile(params.file, cwd);
+  const workspace = await resolveFlowWorkspace(params.workspace, cwd);
+  const file = await resolveFlowFile(params.file, workspace);
   const source = await readFile(file.absolute, "utf8");
   const currentVersion = sourceVersion(source);
   if (currentVersion !== params.source_version) {
@@ -81,7 +83,7 @@ export async function applyFlowQuickFix(params: SfFlowParams, cwd: string): Prom
 
   const profile = params.quality_profile ?? "review";
   const before = analyzeFlowSource(source, file.display, { profile });
-  const available = await listFlowQuickFixes(source, before, cwd);
+  const available = await listFlowQuickFixes(source, before, workspace);
   const fix = available.find((candidate) => candidate.id === params.fix_id);
   if (!fix) throw new Error(`Quick fix ${params.fix_id} is not available on the current source.`);
 
@@ -90,7 +92,7 @@ export async function applyFlowQuickFix(params: SfFlowParams, cwd: string): Prom
   await writeFile(file.absolute, updated, "utf8");
 
   const after = analyzeFlowSource(updated, file.display, { profile });
-  const remaining = await listFlowQuickFixes(updated, after, cwd);
+  const remaining = await listFlowQuickFixes(updated, after, workspace);
   const artifact = await writeFlowArtifact(
     "quick-fixes",
     `${artifactTimestamp()}-${path.basename(file.absolute)}-${fix.rule_id}.json`,

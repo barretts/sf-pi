@@ -388,7 +388,7 @@ const scannerRules: FlowQualityRule[] = [
     id: "missing-start-reference",
     label: "Missing Start Reference",
     message:
-      "Connect Start to the first executable element when the Flow contains executable nodes.",
+      "Connect Start to the first executable element; caller-launched and screen Flows require a runnable path.",
     category: "correctness",
     default_severity: "high",
     maturity: "beta",
@@ -396,7 +396,7 @@ const scannerRules: FlowQualityRule[] = [
     engine: "quality",
     profiles: generationProfiles,
     authoring_constraint:
-      "Connect Start to the first executable node unless the trigger itself is the complete Flow.",
+      "Connect Start to the first executable node unless an event or record trigger is intentionally the complete Flow.",
     code_analyzer: ["flow/MissingNextValueConnector"],
   }),
   ...reviewAndAuditScannerRules(),

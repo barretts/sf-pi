@@ -172,7 +172,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
     defaultEnabled: true,
     commands: ["/sf-flow"],
     tools: ["sf_flow"],
-    events: ["session_start","tool_result"],
+    events: ["session_start","tool_result","message_end","agent_settled"],
   },
   {
     id: "sf-guardrail",

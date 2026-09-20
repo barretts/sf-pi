@@ -155,7 +155,7 @@ export async function buildAuthoringPlan(
       section("🎯", "Selection", [
         row("🧩", "Family", family),
         row("⏱️", "Trigger", blueprint.trigger_type ?? "launched by caller"),
-        row("📦", "Object/Event", params.event ?? params.object ?? "define before authoring"),
+        row("📦", "Object/Event", params.event || params.object || "define before authoring"),
         row("💡", "Why", selectionReason(family, timing)),
       ]),
       ...(grounding

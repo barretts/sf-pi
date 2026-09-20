@@ -3,7 +3,7 @@
  * Bounded live E2E for sf-flow. Check-only validation saves no metadata.
  *
  * Usage:
- *   npm run e2e:sf-flow -- --org <alias> --file <workspace.flow-meta.xml>
+ *   npm run e2e:sf-flow -- --org <alias> --workspace <sfdx-project> --file <workspace.flow-meta.xml>
  *   npm run e2e:sf-flow -- --org <alias> --file <file> --flow <FlowApiName>
  *   npm run e2e:sf-flow -- --org <alias> --file <file> --test <FlowApiName.TestName>
  *   npm run e2e:sf-flow -- --org <alias> --file <file> --run-first-discovered-test [--async-test]
@@ -18,6 +18,8 @@ import { diagnoseFile, orgPreflight, status } from "../../extensions/sf-flow/lib
 import {
   discoverFlowTests,
   getFlowTestResult,
+  planFlowTests,
+  rerunFlowTests,
   runFlowTests,
 } from "../../extensions/sf-flow/lib/flow-tests.ts";
 import type {
@@ -29,6 +31,7 @@ import { validateFlowCheck } from "../../extensions/sf-flow/lib/validation.ts";
 
 interface Args {
   org?: string;
+  workspace?: string;
   file?: string;
   flow?: string;
   test?: string;
@@ -40,6 +43,7 @@ function parseArgs(argv: string[]): Args {
   const args: Args = {};
   for (let index = 0; index < argv.length; index++) {
     if (argv[index] === "--org") args.org = argv[++index];
+    else if (argv[index] === "--workspace") args.workspace = argv[++index];
     else if (argv[index] === "--file") args.file = argv[++index];
     else if (argv[index] === "--flow") args.flow = argv[++index];
     else if (argv[index] === "--test") args.test = argv[++index];
@@ -73,11 +77,17 @@ function assertStatus(
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (!args.org || !args.file) {
-    throw new Error("Usage: npm run e2e:sf-flow -- --org <alias> --file <workspace.flow-meta.xml>");
+    throw new Error(
+      "Usage: npm run e2e:sf-flow -- --org <alias> [--workspace <sfdx-project>] --file <workspace.flow-meta.xml>",
+    );
   }
   const session = await connectSalesforce({ cwd: process.cwd(), targetOrg: args.org, fresh: true });
   const state: SfFlowSessionState = {};
-  const prepared = await prepareFlowForTarget(args.file, session.target.apiVersion);
+  const prepared = await prepareFlowForTarget(
+    args.file,
+    session.target.apiVersion,
+    args.workspace ?? process.cwd(),
+  );
 
   try {
     assertStatus("status", status(session, { action: "status", target_org: args.org }), ["pass"]);
@@ -115,6 +125,19 @@ async function main(): Promise<void> {
 
     if (args.flow || args.test || discoveredFlow) {
       const targetFlow = args.flow ?? discoveredFlow;
+      assertStatus(
+        "test.plan",
+        await planFlowTests(
+          {
+            action: "test.plan",
+            target_org: args.org,
+            flow_names: targetFlow ? [targetFlow] : undefined,
+            limit: 25,
+          },
+          session,
+        ),
+        ["pass"],
+      );
       const run = await runFlowTests(
         {
           action: "test.run",
@@ -144,6 +167,29 @@ async function main(): Promise<void> {
           ["pass"],
         );
       }
+
+      const rerun = await rerunFlowTests(
+        { action: "test.rerun", target_org: args.org },
+        session,
+        state,
+      );
+      const rerunDigest = assertStatus("test.rerun", rerun, ["pass", "info"]);
+      if (rerunDigest.status === "info" && state.last_test_run_id) {
+        assertStatus(
+          "test.result after rerun",
+          await getFlowTestResult(
+            {
+              action: "test.result",
+              target_org: args.org,
+              run_id: state.last_test_run_id,
+              wait_seconds: 120,
+            },
+            session,
+            state,
+          ),
+          ["pass"],
+        );
+      }
     }
 
     console.log("SF Flow E2E passed.");
@@ -152,14 +198,18 @@ async function main(): Promise<void> {
   }
 }
 
-async function prepareFlowForTarget(fileInput: string, targetApiVersion: string) {
-  const resolved = await resolveFlowFile(fileInput, process.cwd());
+async function prepareFlowForTarget(
+  fileInput: string,
+  targetApiVersion: string,
+  workspace: string,
+) {
+  const resolved = await resolveFlowFile(fileInput, workspace);
   const source = await readFile(resolved.absolute, "utf8");
   const match = /<apiVersion>([^<]+)<\/apiVersion>/.exec(source);
   const sourceVersion = Number.parseFloat(match?.[1] ?? "0");
   const targetVersion = Number.parseFloat(targetApiVersion);
   if (!Number.isFinite(sourceVersion) || sourceVersion <= targetVersion) {
-    return { cwd: process.cwd(), file: fileInput, cleanup: async () => {} };
+    return { cwd: workspace, file: fileInput, cleanup: async () => {} };
   }
   const root = await mkdtemp(path.join(tmpdir(), "sf-flow-e2e-"));
   const filename = path.basename(resolved.absolute);

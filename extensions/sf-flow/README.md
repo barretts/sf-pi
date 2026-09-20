@@ -91,7 +91,7 @@ Human-facing results use a normalized Flow Run Digest. Cards show:
 - Mermaid-backed Flow topology;
 - artifact paths and a next step.
 
-Mermaid source is rendered as terminal Unicode when it fits. Narrow or unsupported diagrams fall back to a compact message, while complete `.mmd` source remains available as a Flow Artifact.
+The Result Card stays compact. SF Flow appends bounded topology as a top-level Mermaid block on the next final assistant message, so Pi renders it natively outside the tool tile and respects the user’s Mermaid setting. The displayed architecture uses verb-first nodes, labeled decision and loop edges, solid normal paths, thick paths into durable writes, and dotted fault paths for up to 100 executable elements, below Pi’s native 128-node Mermaid parser ceiling. Pi themes borders, node text, edges, arrowheads, and edge labels by semantic class. SF Flow intentionally avoids browser-only Mermaid `classDef`, `style`, per-node colors, and Markdown bold in labels because Pi’s terminal renderer ignores them. Relevant resource details are folded into their operation node; raw resources are not separate boxes. When the displayed graph is bounded, the `.mmd` Flow Artifact contains the complete executable topology.
 
 ## Commands
 
@@ -117,7 +117,7 @@ The E2E harness has passed against a connected non-production org at API 67.0: o
 
 A dedicated public-safe draft autolaunched Flow and FlowTest fixture is available under `scripts/e2e/fixtures/sf-flow/`. Provisioning always performs check-only first and requires an explicit `--deploy` flag. The fixture creates no data records and requires no activation.
 
-The actual wide and 48-column Result Cards were rendered through the production component. Mermaid topology remained readable at both widths; long metadata and artifact paths use compact headers and hanging indentation.
+The actual wide and 48-column Result Cards were rendered through the production component. Both remain bounded without embedding topology; long metadata and artifact paths use compact headers and hanging indentation. Hook tests prove the Mermaid block is appended once to the next final assistant message for Pi-native rendering.
 
 To remove the dedicated fixture later, delete `FlowTest:SfPi_Flow_Test_Fixture_Happy_Path` followed by `Flow:SfPi_Flow_Test_Fixture` from the chosen non-production org.
 

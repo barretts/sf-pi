@@ -85,6 +85,7 @@ export interface FlowElement {
   name: string;
   kind: string;
   label?: string;
+  detail?: string;
   line: number;
   column: number;
 }
@@ -116,6 +117,7 @@ export interface FlowModel {
   trigger_type?: string;
   record_trigger_type?: string;
   object?: string;
+  start_criteria?: string[];
   family: FlowFamily;
   elements: FlowElement[];
   connectors: FlowConnector[];
@@ -153,6 +155,7 @@ export interface FlowRunSection {
 export interface FlowTopologyDigest {
   mermaid: string;
   nodes: number;
+  total_nodes: number;
   edges: number;
   truncated: boolean;
 }

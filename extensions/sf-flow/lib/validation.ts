@@ -8,7 +8,8 @@ import type { SalesforceSession } from "../../../lib/common/sf-conn/index.ts";
 import { analyzeFlowSource, resolveFlowFile } from "./analyzer.ts";
 import { artifactTimestamp, writeFlowArtifact } from "./artifacts.ts";
 import { buildFlowDigest, row, section, toolResultFromDigest } from "./digest.ts";
-import { buildMermaidTopology } from "./topology.ts";
+import { resolveFlowWorkspace } from "./project.ts";
+import { buildTopologyEvidence } from "./topology.ts";
 import type { FlowArtifact, SfFlowParams, ToolResult } from "./types.ts";
 
 const DEPLOY_START_TIMEOUT_MS = 60_000;
@@ -53,7 +54,8 @@ export async function validateFlowCheck(
   signal?: AbortSignal,
 ): Promise<ToolResult> {
   if (!params.file) throw new Error("file is required for validate.check");
-  const file = await resolveFlowFile(params.file, cwd);
+  const workspace = await resolveFlowWorkspace(params.workspace, cwd);
+  const file = await resolveFlowFile(params.file, workspace);
   const source = await readFile(file.absolute, "utf8");
   const analysis = analyzeFlowSource(source, file.display, { profile: "generation" });
   if (analysis.status === "failed") {
@@ -101,7 +103,7 @@ export async function validateFlowCheck(
     `${artifactTimestamp()}-${path.basename(file.absolute)}.json`,
     result.raw,
   );
-  const topology = analysis.model ? buildMermaidTopology(analysis.model) : undefined;
+  const topology = analysis.model ? buildTopologyEvidence(analysis.model).display : undefined;
   const digest = buildFlowDigest({
     action: "validate.check",
     kind: "flow_validation",

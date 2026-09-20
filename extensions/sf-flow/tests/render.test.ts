@@ -29,6 +29,7 @@ const digest: FlowRunDigest = {
     mermaid:
       'flowchart TD\n    a(["Start"])\n    b["Assign a Very Long Flow Result Value"]\n    a --> b',
     nodes: 2,
+    total_nodes: 2,
     edges: 1,
     truncated: false,
   },
@@ -41,13 +42,13 @@ const result: ToolResult = {
 };
 
 describe("SF Flow Result Card", () => {
-  it("renders the Mermaid topology as terminal art in a wide card", () => {
+  it("keeps Mermaid topology outside the Flow Result Card", () => {
     const component = renderFlowResult(result, { expanded: true }, theme);
     const output = component.render(120).join("\n");
 
     expect(output).toContain("Flow Inspection");
-    expect(output).toContain("Flow Topology");
-    expect(output).toContain("Start");
+    expect(output).not.toContain("Flow Topology");
+    expect(output).not.toContain("Start");
     expect(output).not.toContain("flowchart TD");
     expect(output).toContain("/tmp/sample.mmd");
   });
@@ -78,11 +79,11 @@ describe("SF Flow Result Card", () => {
     expect(output[artifactIndex + 1]?.startsWith(" ")).toBe(true);
   });
 
-  it("uses the bounded fallback on a narrow card", () => {
+  it("keeps a narrow card bounded without rendering topology", () => {
     const component = renderFlowResult(result, {}, theme);
     const output = component.render(20).join("\n");
 
-    expect(output).toContain("Topology available");
+    expect(output).not.toContain("Topology available");
     expect(output.split("\n").every((line) => visibleWidth(line) <= 20)).toBe(true);
   });
 });

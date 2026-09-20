@@ -4,7 +4,7 @@ Use `sf_flow` for the Flow-specific lifecycle. Normal Pi file tools own `.flow-m
 
 ## Behavior-proof-first loop
 
-1. Use `project.scan` to locate checked-in Flows or `author.plan` to select a Core Flow Family. Pass `target_org` only when object fields, action contracts, or subflow inputs/outputs must be grounded in that org.
+1. Use `project.scan` to locate checked-in Flows or `author.plan` to select a Core Flow Family. Pass `target_org` only when object fields, action contracts, or subflow inputs/outputs must be grounded in that org. When `workspace` is supplied, file actions resolve paths relative to that explicit SFDX project instead of Pi's current directory.
 2. Use `flow.inspect` to understand an existing Flow’s family, trigger, elements, connectors, and Mermaid topology.
 3. Reproduce the intended behavior with a Flow test when one already exists and the defect is testable before editing.
 4. Edit source with normal Pi file tools. Fast local diagnostics run automatically after successful Flow writes/edits.
@@ -12,7 +12,7 @@ Use `sf_flow` for the Flow-specific lifecycle. Normal Pi file tools own `.flow-m
 6. Use `quality.rules` when rule status, profile membership, provenance, or planned coverage matters.
 7. When diagnosis returns a safe quick fix, pass its exact `fix_id` and `source_version` to `fix.apply`. Re-diagnose after any normal business-logic edit instead of reusing a stale fix.
 8. Run `validate.check` against the intended org. It validates one exact Flow with Metadata API `checkOnly=true` and saves nothing.
-9. Use `test.plan` and `test.run` for the smallest relevant Flow or Flow test. Poll queued runs with `test.result`; use `test.rerun` only for the prior session-scoped target.
+9. Use `test.plan` and `test.run` for the smallest relevant Flow or Flow test. Poll queued runs with `test.result`; use `test.rerun` only for the prior session-scoped target. Discovery is bounded and reads each selected FlowTest's Tooling API `Metadata` field in a separate single-row query. Runs submit asynchronously even when a wait is requested; SF Flow polls before fetching results. A skipped, aborted, failed, or zero-test terminal result is failed evidence, never a pass.
 
 ## Core Flow Family selection
 
@@ -63,4 +63,4 @@ The only mutating lifecycle action is `fix.apply`, and it owns exactly three det
 
 ## Mermaid topology
 
-The Flow Result Card renders bounded Mermaid source as terminal Unicode. Normal edges are solid, fault edges are dashed, decisions are diamonds, and loops are marked. When the graph is too wide or unsupported, use the persisted `.mmd` Flow Artifact.
+SF Flow keeps the Result Card compact and appends bounded topology as a top-level Mermaid block on the next final assistant message. Pi’s native Markdown renderer displays the diagram outside the tool tile and respects the user’s Mermaid rendering setting. Nodes lead with architectural verbs such as START, GET, DECISION, FOR EACH, SET, CREATE, UPDATE, SCREEN, ACTION, and SUBFLOW; relevant object, filter, collection, or assignment detail is folded into the node instead of rendering raw resources as boxes. Normal edges are solid, edges entering durable Create/Update/Delete operations are thick, decision outcomes and loop phases are labeled, and fault edges are dotted. Pi’s terminal renderer supplies theme colors by semantic class: muted borders, normal node text, accent edges and arrowheads, and muted edge labels. Browser-only Mermaid `classDef`, `style`, fill colors, per-node text colors, and Markdown bold in labels are intentionally not emitted because Pi’s terminal renderer ignores them. Uppercase verbs and node shapes carry the visual hierarchy instead. The displayed graph includes up to 100 executable elements, staying below Pi’s native 128-node Mermaid parser ceiling. The persisted `.mmd` Flow Artifact contains the complete executable topology when the display is bounded; use it when the graph is too wide, unsupported, or native Mermaid rendering is disabled.

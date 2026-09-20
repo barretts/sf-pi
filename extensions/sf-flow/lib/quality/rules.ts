@@ -240,17 +240,19 @@ export const QUALITY_EVALUATORS: Record<string, QualityEvaluator> = {
 
   "missing-start-reference": (facts, report) => {
     const executable = facts.model.elements.filter((element) => element.kind !== "start");
-    if (!executable.length) return;
     const hasStartEdge = facts.model.connectors.some(
       (connector) => connector.from === "__start__" && connector.to,
     );
-    if (hasStartEdge) return;
+    if (executable.length && hasStartEdge) return;
+    if (!executable.length && !["autolaunched", "screen"].includes(facts.model.family)) return;
     const start =
       child(facts.root, "start") ?? child(facts.root, "startElementReference") ?? facts.root;
     report({
       rule_id: "missing-start-reference",
       node: start,
-      message: "Executable elements exist, but Start does not identify the first node to run.",
+      message: executable.length
+        ? "Executable elements exist, but Start does not identify the first node to run."
+        : "The Flow has no executable element after Start and cannot run.",
     });
   },
 

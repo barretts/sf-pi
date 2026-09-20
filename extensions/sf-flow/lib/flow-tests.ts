@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** API-native targeted Flow test discovery, execution, and reporting. */
 
-import { Duration } from "@salesforce/kit";
 import { TestLevel, TestService } from "@salesforce/apex-node";
 import type { SalesforceSession } from "../../../lib/common/sf-conn/index.ts";
 import { artifactTimestamp, writeFlowArtifact } from "./artifacts.ts";
@@ -205,13 +204,20 @@ async function formatRun(
     ? []
     : await writeTestArtifacts(params, run, dependencies.writeArtifact ?? writeFlowArtifact);
   const failed = tests.filter((test) => test.outcome !== "Pass");
-  const status = run.queued ? "info" : failing ? "fail" : "pass";
+  const noTestsExecuted = !run.queued && tests.length === 0;
+  const normalizedOutcome = run.outcome?.toLowerCase();
+  const unsuccessfulOutcome =
+    !run.queued &&
+    normalizedOutcome !== undefined &&
+    !["passed", "completed"].includes(normalizedOutcome);
+  const runFailed = failing > 0 || noTestsExecuted || unsuccessfulOutcome;
+  const status = run.queued ? "info" : runFailed ? "fail" : "pass";
   const digest = buildFlowDigest({
     action: params.action,
     kind: "flow_test_run",
     status,
     icon: "🧪",
-    title: `Flow Test Run · ${run.queued ? "queued" : failing ? "failed" : "passed"}`,
+    title: `Flow Test Run · ${run.queued ? "queued" : runFailed ? "failed" : "passed"}`,
     org: { alias: params.target_org },
     meta: [`run=${shortId(run.run_id)}`],
     rail: [
@@ -236,6 +242,23 @@ async function formatRun(
         row("🧾", "Run Id", run.run_id),
       ]),
       section(
+        "🧪",
+        "Tests",
+        tests.length
+          ? tests
+              .slice(0, Math.min(boundedLimit(params.limit), 25))
+              .map((test) =>
+                row(
+                  test.outcome === "Pass" ? "✅" : "❌",
+                  `${test.flow_name}.${test.test_name}`,
+                  test.run_time_ms === undefined
+                    ? test.outcome
+                    : `${test.outcome} · ${test.run_time_ms}ms`,
+                ),
+              )
+          : [row("⏳", "Tests", run.queued ? "results pending" : "none returned")],
+      ),
+      section(
         "🧯",
         "Failures",
         failed.length
@@ -244,7 +267,15 @@ async function formatRun(
               .map((test) =>
                 row("❌", `${test.flow_name}.${test.test_name}`, test.message ?? test.outcome),
               )
-          : [row("✅", "None", run.queued ? "results pending" : "all returned tests passed")],
+          : noTestsExecuted
+            ? [
+                row(
+                  "❌",
+                  "No Tests Executed",
+                  `Salesforce returned ${run.outcome ?? "no terminal outcome"}`,
+                ),
+              ]
+            : [row("✅", "None", run.queued ? "results pending" : "all returned tests passed")],
       ),
     ],
     artifacts,
@@ -252,7 +283,9 @@ async function formatRun(
       ? "Poll with test.result."
       : failing
         ? "Fix the first failure and rerun the same test."
-        : "Widen to the next related Flow test when useful.",
+        : runFailed
+          ? "Verify the requested Flow test names and inspect the terminal run outcome before rerunning."
+          : "Widen to the next related Flow test when useful.",
   });
   return toolResultFromDigest(digest, {
     run_id: run.run_id,
@@ -261,6 +294,7 @@ async function formatRun(
     tests,
     passing,
     failing,
+    no_tests_executed: noTestsExecuted,
     artifacts,
   });
 }
@@ -286,19 +320,26 @@ async function writeTestArtifacts(
 
 export const defaultFlowTestAdapter: FlowTestAdapter = {
   async discover(session, limit) {
+    const recordLimit = Math.min(limit * 4, 25);
     const result = await session.query<{
+      Id?: string;
       DeveloperName?: string;
       MasterLabel?: string;
       NamespacePrefix?: string;
-      Metadata?: { flowApiName?: string };
     }>({
-      soql: `SELECT DeveloperName, MasterLabel, NamespacePrefix, Metadata FROM FlowTest LIMIT ${Math.min(limit * 4, 100)}`,
+      soql: `SELECT Id, DeveloperName, MasterLabel, NamespacePrefix FROM FlowTest ORDER BY DeveloperName LIMIT ${recordLimit}`,
       api: "tooling",
-      maxRows: Math.min(limit * 4, 100),
+      maxRows: recordLimit,
     });
     const grouped = new Map<string, FlowTestCandidate>();
     for (const record of result.records) {
-      const flowName = record.Metadata?.flowApiName;
+      if (!record.Id || !/^[A-Za-z0-9]{15,18}$/.test(record.Id)) continue;
+      const detail = await session.query<{ Metadata?: { flowApiName?: string } }>({
+        soql: `SELECT Metadata FROM FlowTest WHERE Id = '${record.Id}' LIMIT 1`,
+        api: "tooling",
+        maxRows: 1,
+      });
+      const flowName = detail.records[0]?.Metadata?.flowApiName;
       const testName = record.DeveloperName;
       if (!flowName || !testName) continue;
       const existing = grouped.get(flowName) ?? {
@@ -328,15 +369,18 @@ export const defaultFlowTestAdapter: FlowTestAdapter = {
       "Flow",
       !input.include_coverage,
     );
-    const result = await service.runTestAsynchronous(
-      payload,
-      input.include_coverage,
-      input.wait_seconds <= 0,
-      undefined,
-      undefined,
-      input.wait_seconds > 0 ? Duration.seconds(input.wait_seconds) : undefined,
+    const submitted = normalizeServiceResult(
+      await service.runTestAsynchronous(payload, input.include_coverage, true),
     );
-    return normalizeServiceResult(result);
+    if (input.wait_seconds <= 0) return submitted;
+    const status = await waitForFlowTestRun(input.session, submitted.run_id, input.wait_seconds);
+    if (!isFinishedTestStatus(status)) {
+      return { run_id: submitted.run_id, queued: true, outcome: status || "Queued" };
+    }
+    return normalizeServiceResult(
+      await service.reportAsyncResults(submitted.run_id, input.include_coverage),
+      submitted.run_id,
+    );
   },
   async result(input) {
     const status = await waitForFlowTestRun(input.session, input.run_id, input.wait_seconds);

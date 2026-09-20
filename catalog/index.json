@@ -551,7 +551,9 @@
     ],
     "events": [
       "session_start",
-      "tool_result"
+      "tool_result",
+      "message_end",
+      "agent_settled"
     ],
     "docs": {
       "intentGroup": "Build apps",
@@ -592,7 +594,7 @@
     "entry": "extensions/sf-flow/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 5106
+    "srcLoc": 5428
   },
   {
     "id": "sf-guardrail",

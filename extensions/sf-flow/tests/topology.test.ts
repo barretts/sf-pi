@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { analyzeFlowSource } from "../lib/analyzer.ts";
-import { buildMermaidTopology, renderMermaidTopology } from "../lib/topology.ts";
+import { buildMermaidTopology, buildTopologyEvidence } from "../lib/topology.ts";
 
 const fixture = (name: string) =>
   readFile(path.join(import.meta.dirname, "fixtures", name), "utf8");
@@ -15,22 +15,154 @@ describe("SF Flow Mermaid topology", () => {
     const topology = buildMermaidTopology(result.model!, 20);
 
     expect(topology.source).toContain("flowchart TD");
-    expect(topology.source).toContain("-->");
+    expect(topology.source).toContain("START · Account · before save · update");
+    expect(topology.source).toContain("UPDATE · Write In Loop · Account");
+    expect(topology.source).toContain("|Default|");
+    expect(topology.source).toContain("|For each|");
+    expect(topology.source).not.toContain("|Loop Records|");
     expect(topology.nodes).toBeGreaterThan(0);
     expect(topology.truncated).toBe(false);
   });
 
-  it("renders Unicode art when it fits and falls back when narrow", async () => {
+  it("bounds Mermaid source before handing it to Pi", async () => {
+    const result = analyzeFlowSource(
+      await fixture("Record_Triggered_Example.flow-meta.xml"),
+      "Record_Triggered_Example.flow-meta.xml",
+    );
+    const topology = buildTopologyEvidence(result.model!, 1);
+
+    expect(topology.display.source).toContain("flowchart TD");
+    expect(topology.display.nodes).toBe(1);
+    expect(topology.display.total_nodes).toBe(2);
+    expect(topology.display.truncated).toBe(true);
+    expect(topology.artifact.nodes).toBe(2);
+    expect(topology.artifact.truncated).toBe(false);
+  });
+
+  it("displays up to 100 executable elements by default", () => {
+    const elements = Array.from({ length: 101 }, (_, index) => ({
+      id: `node_${index}`,
+      name: `node_${index}`,
+      kind: index === 0 ? "start" : "assignments",
+      label: `Node ${index}`,
+      line: index + 1,
+      column: 1,
+    }));
+    const topology = buildMermaidTopology({
+      file: "large.flow-meta.xml",
+      family: "autolaunched",
+      elements,
+      connectors: [],
+      resources: [],
+      references: [],
+    });
+
+    expect(topology.nodes).toBe(100);
+    expect(topology.total_nodes).toBe(101);
+    expect(topology.truncated).toBe(true);
+  });
+
+  it("uses solid, thick, and dotted edges for sequence, durable writes, and faults", () => {
+    const topology = buildMermaidTopology({
+      file: "edges.flow-meta.xml",
+      family: "autolaunched",
+      elements: [
+        { id: "__start__", name: "Start", kind: "start", line: 1, column: 1 },
+        {
+          id: "Get_Records",
+          name: "Get_Records",
+          kind: "recordLookups",
+          label: "Get Records",
+          detail: "Account",
+          line: 2,
+          column: 1,
+        },
+        {
+          id: "Should_Create",
+          name: "Should_Create",
+          kind: "decisions",
+          label: "Should Create",
+          line: 3,
+          column: 1,
+        },
+        {
+          id: "Create_Task",
+          name: "Create_Task",
+          kind: "recordCreates",
+          label: "Create Task",
+          detail: "Task",
+          line: 4,
+          column: 1,
+        },
+        {
+          id: "Handle_Fault",
+          name: "Handle_Fault",
+          kind: "assignments",
+          label: "Handle Fault",
+          line: 5,
+          column: 1,
+        },
+      ],
+      connectors: [
+        {
+          from: "__start__",
+          to: "Get_Records",
+          kind: "connector",
+          fault: false,
+          line: 1,
+          column: 1,
+        },
+        {
+          from: "Get_Records",
+          to: "Should_Create",
+          kind: "connector",
+          fault: false,
+          line: 2,
+          column: 1,
+        },
+        {
+          from: "Should_Create",
+          to: "Create_Task",
+          kind: "connector",
+          label: "Yes",
+          fault: false,
+          line: 2,
+          column: 1,
+        },
+        {
+          from: "Create_Task",
+          to: "Handle_Fault",
+          kind: "faultConnector",
+          label: "Fault",
+          fault: true,
+          line: 2,
+          column: 1,
+        },
+      ],
+      resources: [],
+      references: [],
+    });
+
+    expect(topology.source).toContain('n1[("GET · Get Records · Account")]');
+    expect(topology.source).toContain("n0 --> n1");
+    expect(topology.source).toContain("n1 --> n2");
+    expect(topology.source).toContain("==>|Yes|");
+    expect(topology.source).toContain("-.->|Fault|");
+  });
+
+  it("describes assignments without turning resources into separate nodes", async () => {
     const result = analyzeFlowSource(
       await fixture("Record_Triggered_Example.flow-meta.xml"),
       "Record_Triggered_Example.flow-meta.xml",
     );
     const topology = buildMermaidTopology(result.model!, 20);
-    const wide = renderMermaidTopology(topology.source, 120);
-    const narrow = renderMermaidTopology(topology.source, 12);
 
-    expect(wide.fallback).toBe(false);
-    expect(wide.lines.length).toBeGreaterThan(1);
-    expect(narrow.fallback).toBe(true);
+    expect(topology.source).toContain(
+      "START · Account · before save · create/update · when Name has value",
+    );
+    expect(topology.source).toContain(
+      "SET · Normalize Description · $Record.Description = Reviewed",
+    );
+    expect(topology.source).not.toContain('missingEmailCount["');
   });
 });

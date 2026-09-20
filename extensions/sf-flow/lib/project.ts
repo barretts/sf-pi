@@ -88,6 +88,14 @@ export async function projectScan(
   });
 }
 
+export async function resolveFlowWorkspace(
+  input: string | undefined,
+  cwd: string,
+): Promise<string> {
+  if (!input) return cwd;
+  return resolveWorkspace(input, cwd);
+}
+
 async function resolveWorkspace(input: string | undefined, cwd: string): Promise<string> {
   const candidate = path.resolve(cwd, input ?? ".");
   const root = await realpath(candidate);

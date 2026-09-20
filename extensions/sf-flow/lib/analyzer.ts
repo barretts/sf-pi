@@ -279,6 +279,7 @@ function buildModel(root: XmlNode, file: string, source: string): FlowModel {
         name,
         kind: node.name,
         label: childText(node, "label"),
+        detail: elementDetail(node),
         line: node.line,
         column: node.column,
       });
@@ -324,6 +325,12 @@ function buildModel(root: XmlNode, file: string, source: string): FlowModel {
     trigger_type: triggerType,
     record_trigger_type: startNode ? childText(startNode, "recordTriggerType") : undefined,
     object: startNode ? childText(startNode, "object") : undefined,
+    start_criteria: startNode
+      ? startNode.children
+          .filter((candidate) => candidate.name === "filters")
+          .map(filterDetail)
+          .filter((value): value is string => Boolean(value))
+      : undefined,
     family,
     elements,
     connectors,
@@ -335,20 +342,120 @@ function buildModel(root: XmlNode, file: string, source: string): FlowModel {
 function connectorsFor(node: XmlNode, from: string): FlowConnector[] {
   return descendants(node)
     .filter((candidate) => /Connector$/.test(candidate.name) || candidate.name === "connector")
-    .map((candidate): FlowConnector | undefined => {
-      const target = childText(candidate, "targetReference");
-      const parentName = candidate.parent ? childText(candidate.parent, "label") : undefined;
-      return {
-        from,
-        to: target,
-        kind: candidate.name,
-        label: parentName,
-        fault: candidate.name === "faultConnector",
-        line: candidate.line,
-        column: candidate.column,
-      };
-    })
+    .map((candidate): FlowConnector | undefined => ({
+      from,
+      to: childText(candidate, "targetReference"),
+      kind: candidate.name,
+      label: semanticConnectorLabel(candidate),
+      fault: candidate.name === "faultConnector",
+      line: candidate.line,
+      column: candidate.column,
+    }))
     .filter((connector): connector is FlowConnector => Boolean(connector));
+}
+
+function semanticConnectorLabel(connector: XmlNode): string | undefined {
+  if (connector.name === "faultConnector") return "Fault";
+  if (connector.name === "nextValueConnector") return "For each";
+  if (connector.name === "noMoreValuesConnector") return "After last";
+  if (connector.name === "defaultConnector") {
+    return connector.parent ? childText(connector.parent, "defaultConnectorLabel") : undefined;
+  }
+  if (connector.name === "connector" && connector.parent?.name === "rules") {
+    return childText(connector.parent, "label") ?? childText(connector.parent, "name");
+  }
+  return undefined;
+}
+
+function elementDetail(node: XmlNode): string | undefined {
+  if (node.name === "assignments") {
+    const items = node.children
+      .filter((candidate) => candidate.name === "assignmentItems")
+      .slice(0, 2)
+      .map((item) => {
+        const target = childText(item, "assignToReference");
+        const operator = childText(item, "operator");
+        const value = referenceOrValue(child(item, "value"));
+        if (!target) return undefined;
+        if (operator === "Add") return `${target} += ${value ?? "value"}`;
+        if (operator === "Subtract") return `${target} -= ${value ?? "value"}`;
+        return value ? `${target} = ${value}` : target;
+      })
+      .filter((value): value is string => Boolean(value));
+    return items.join(", ") || undefined;
+  }
+  if (node.name === "recordLookups") {
+    const object = childText(node, "object") ?? "records";
+    const filters = node.children
+      .filter((candidate) => candidate.name === "filters")
+      .slice(0, 2)
+      .map(filterDetail)
+      .filter((value): value is string => Boolean(value));
+    return [object, ...filters].join(" · ");
+  }
+  if (node.name === "recordCreates") return childText(node, "object") ?? "record";
+  if (node.name === "recordUpdates") {
+    return (
+      childText(node, "object") ??
+      childText(node, "inputReference") ??
+      childText(node, "recordReference") ??
+      "record"
+    );
+  }
+  if (node.name === "recordDeletes") {
+    return childText(node, "object") ?? childText(node, "inputReference") ?? "record";
+  }
+  if (node.name === "loops") return childText(node, "collectionReference");
+  if (node.name === "decisions") {
+    const outcomes = node.children.filter((candidate) => candidate.name === "rules").length + 1;
+    return `${outcomes} outcomes`;
+  }
+  if (node.name === "actionCalls") {
+    return childText(node, "actionName") ?? childText(node, "actionType");
+  }
+  if (node.name === "subflows") return childText(node, "flowName");
+  if (node.name === "screens") {
+    const fields = node.children.filter((candidate) => candidate.name === "fields").length;
+    return fields ? `${fields} fields` : undefined;
+  }
+  return undefined;
+}
+
+function filterDetail(filter: XmlNode): string | undefined {
+  const field = childText(filter, "field");
+  const operator = childText(filter, "operator");
+  const value = referenceOrValue(child(filter, "value"));
+  if (!field) return undefined;
+  if (operator === "IsNull" && value === "true") return `${field} is blank`;
+  if (operator === "IsNull" && value === "false") return `${field} has value`;
+  return [field, operatorWord(operator), value].filter(Boolean).join(" ");
+}
+
+function referenceOrValue(value: XmlNode | undefined): string | undefined {
+  if (!value) return undefined;
+  for (const name of [
+    "elementReference",
+    "stringValue",
+    "numberValue",
+    "booleanValue",
+    "dateValue",
+    "dateTimeValue",
+  ]) {
+    const text = childText(value, name);
+    if (text !== undefined) return text;
+  }
+  return undefined;
+}
+
+function operatorWord(operator: string | undefined): string | undefined {
+  if (operator === "EqualTo") return "=";
+  if (operator === "NotEqualTo") return "≠";
+  if (operator === "IsNull") return "is null";
+  if (operator === "GreaterThan") return ">";
+  if (operator === "GreaterThanOrEqualTo") return "≥";
+  if (operator === "LessThan") return "<";
+  if (operator === "LessThanOrEqualTo") return "≤";
+  return operator;
 }
 
 function flowFamily(processType?: string, triggerType?: string): FlowFamily {

@@ -33,11 +33,18 @@ async function fixture() {
     `<?xml version="1.0" encoding="UTF-8"?>
 <Flow xmlns="http://soap.sforce.com/2006/04/metadata">
   <apiVersion>49.0</apiVersion>
+  <assignments>
+    <name>Set_Result</name><label>Set Result</label><locationX>176</locationX><locationY>158</locationY>
+    <assignmentItems><assignToReference>resultValue</assignToReference><operator>Assign</operator><value><stringValue>Ready</stringValue></value></assignmentItems>
+  </assignments>
   <description>Fresh quick-fix fixture.</description>
   <label>Fix Example</label>
   <processType>AutoLaunchedFlow</processType>
-  <start/>
+  <start><connector><targetReference>Set_Result</targetReference></connector></start>
   <status>Draft</status>
+  <variables>
+    <name>resultValue</name><dataType>String</dataType><isCollection>false</isCollection><isInput>false</isInput><isOutput>true</isOutput>
+  </variables>
   <variables>
     <name>unusedValue</name><dataType>String</dataType><isCollection>false</isCollection><isInput>false</isInput><isOutput>false</isOutput>
   </variables>

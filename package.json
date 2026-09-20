@@ -161,7 +161,6 @@
     "@sf-agentscript/language": "3.2.3",
     "@sf-agentscript/lsp": "2.6.33",
     "fast-xml-parser": "^5.7.0",
-    "grok-mermaid": "0.2.2",
     "node-emoji": "^2.2.0",
     "vscode-languageserver-protocol": "^3.18.3"
   },

@@ -12,6 +12,7 @@ import { Type } from "typebox";
 import { connectSalesforce } from "../../../lib/common/sf-conn/index.ts";
 import { resolveFlowFile } from "./analyzer.ts";
 import { flowErrorResult } from "./errors.ts";
+import { resolveFlowWorkspace } from "./project.ts";
 import { applyFlowQuickFix } from "./quick-fixes.ts";
 import { renderFlowResult } from "./render.ts";
 import type { SfFlowParams, SfFlowSessionState, ToolResult } from "./types.ts";
@@ -158,7 +159,8 @@ export function registerSfFlowTool(pi: ExtensionAPI): void {
         if (params.action === "quality.rules") return qualityRules(params);
         if (params.action === "fix.apply") {
           if (!params.file) throw new Error("file is required for fix.apply");
-          const file = await resolveFlowFile(params.file, ctx.cwd);
+          const workspace = await resolveFlowWorkspace(params.workspace, ctx.cwd);
+          const file = await resolveFlowFile(params.file, workspace);
           return withFileMutationQueue(file.absolute, () => applyFlowQuickFix(params, ctx.cwd));
         }
 

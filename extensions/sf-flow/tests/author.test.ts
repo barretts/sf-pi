@@ -36,6 +36,23 @@ describe("SF Flow authoring plans", () => {
     );
   });
 
+  it("ignores blank optional event values when an object is provided", async () => {
+    const result = await buildAuthoringPlan(
+      {
+        action: "author.plan",
+        intent: "Update the triggering account before save",
+        flow_type: "record-triggered",
+        object: "Account",
+        event: "",
+        trigger_timing: "before-save",
+        record_event: "update",
+      },
+      process.cwd(),
+    );
+
+    expect(result.content[0]?.text).toContain("Object/Event: Account");
+  });
+
   it("returns a structured blueprint and minimal metadata skeleton", async () => {
     const result = await buildAuthoringPlan(
       {

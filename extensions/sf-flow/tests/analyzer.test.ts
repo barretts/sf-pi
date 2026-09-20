@@ -41,6 +41,20 @@ describe("SF Flow local diagnostics", () => {
     expect(result.findings.every((finding) => finding.line > 0 && finding.column > 0)).toBe(true);
   });
 
+  it("reports a Flow that has no executable path from Start", () => {
+    const result = analyzeFlowSource(
+      `<?xml version="1.0"?><Flow><apiVersion>68.0</apiVersion><description>Empty Flow fixture.</description><label>Empty Flow</label><processType>AutoLaunchedFlow</processType><start/><status>Draft</status></Flow>`,
+      "empty.flow-meta.xml",
+    );
+
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({
+        rule_id: "missing-start-reference",
+        severity: "high",
+      }),
+    );
+  });
+
   it("skips specialized record-context semantics instead of guessing", () => {
     const result = analyzeFlowSource(
       `<?xml version="1.0"?><Flow><apiVersion>68.0</apiVersion><assignments><name>Use_Record</name><assignmentItems><assignToReference>$Record.Name</assignToReference><operator>Assign</operator><value><stringValue>x</stringValue></value></assignmentItems></assignments><label>Specialized</label><processType>RoutingFlow</processType><start/><status>Draft</status></Flow>`,

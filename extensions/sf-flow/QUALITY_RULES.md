@@ -44,7 +44,7 @@ SF Flow has no numeric quality score. Findings, metrics, and coverage remain sep
 | `unreachable-element`           | Correctness     |         Moderate | Stable   | Existing SF Pi reachability evaluator                                     |
 | `unused-variable`               | Maintainability |              Low | Stable   | Local non-contract variable with no references                            |
 | `missing-auto-layout`           | Layout          |              Low | Stable   | Canvas mode is not Auto-Layout                                            |
-| `missing-start-reference`       | Correctness     |             High | Beta     | Executable nodes exist without a Start edge                               |
+| `missing-start-reference`       | Correctness     |             High | Beta     | Start has no runnable path for the Flow family                            |
 
 ## Review and Audit Rules
 
@@ -76,7 +76,7 @@ Current intentional SF Pi-broader cases are:
 - `recursive-record-update` and `same-record-field-updates`: recognize same-object Id-filter updates directly.
 - `duplicate-dml`: treats DML before a back-enabled downstream screen as repeatable.
 - `missing-auto-layout`: reports absent CanvasMode on minimal new source.
-- `missing-start-reference`: reports executable nodes without a Start edge.
+- `missing-start-reference`: reports executable nodes without a Start edge and empty caller-launched or screen Flows that cannot run.
 - `record-id-as-string`: reports an input String named like a record ID without requiring additional downstream shape.
 - `inactive-flow`: audits Draft legacy Workflow metadata even though the pinned oracle excludes that process type from this rule.
 
