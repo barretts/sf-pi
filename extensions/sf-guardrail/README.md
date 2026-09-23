@@ -81,11 +81,58 @@ export OPENROUTER_API_KEY_FILE="$HOME/.config/openrouter/key"
 ```
 
 The client uses Node's built-in `fetch` and the OpenRouter Decisions endpoint
-`POST https://openrouter.ai/api/alpha/decisions`, with one Choice question named
-`risk` and the options `allow`, `confirm`, and `block`. It requests
-`typesafe/jev-1.13` and requires the resolved identity
-`typesafe/jev-1.13-20260917` from provider `TypeSafe`. An unexpected model or
-provider identity blocks until the integration is revalidated.
+`POST https://openrouter.ai/api/alpha/decisions`. Protocol v4 asks independent
+Choice questions in one request, each with `allow`, `confirm`, and `block`
+options. Every call asks `risk` using a rubric for its tool family: files,
+shell/Salesforce CLI, Apex, SOQL, Agent Script, Data 360, Canvas, browser, or
+unknown effects. Applicable questions separately judge their own dimensions,
+for at most six model-authored answers against the same state:
+
+- **File policy** is included when paths or file facts are available.
+- **Command policy** is included for parsed shell calls.
+- **Org policy** is included when shell executable or wrapper heads leave
+  potentially applicable org-aware rules. Complete, known heads filter the
+  projected rules by executable name; incomplete/opaque heads, withheld
+  comments, or missing commands retain the full org ruleset. Jev judges rule
+  patterns, flags, org types, ordering, and behaviors.
+- **Disclosure** is included for file reads, SOQL, and other possible
+  data/credential transfers. It is omitted for write/edit authoring, Apex,
+  Agent Script, Canvas, browser calls, complete Data 360 `.plan`/`dry_run=true`
+  calls, and complete
+  known non-disclosing shell shapes such as permission changes or local Git
+  operations without file operands. Incomplete shell metadata retains it.
+- **Authority** is included only for browser tools, where fresh target roles,
+  labels, focus, and gestures matter. An exact `sf_browser_press` with key
+  `Escape` is target-independent cancellation: it still asks risk and authority,
+  but needs no org or fresh target/focus facts. The request does not fabricate
+  fresh browser context. Unknown effects on other tools remain in their
+  risk/disclosure questions and the completeness gate.
+
+The risk question judges executable/operational effects and execution
+uncertainty. File, command, and org policy questions judge matching restrictions;
+disclosure and browser authority assess their own effects. A potentially
+matching block that cannot be excluded because a literal was withheld remains
+a model block criterion. In particular, any withheld scalar with an enabled
+single-word command auto-deny requires the model to block unless a visible
+enabled allow exception applies. This is interpreted by Jev, without a local
+deterministic policy vote.
+
+The state carries the minimum policy and observed facts relevant to those
+questions. Known CLI metadata, trusted file-path variants, verification state,
+and bounded numeric observations such as the effective row-limit bucket help
+describe actual effects without sending private payloads. Full ordered command
+policy lists use compact pattern strings with explicit `commands.defaults`:
+ordinary patterns default to confirm, allow exceptions to allow, and auto-deny
+patterns to block. `[pattern, behavior]` tuples represent overrides, including
+off entries. List order and precedence remain intact. These structural projections do not supply a local risk or policy
+decision; Jev remains the sole decision authority. This follows TypeSafe's separation of supporting
+[state](https://docs.typesafe.ai/concepts/state) from independently evaluated
+[questions](https://docs.typesafe.ai/primitives/choice).
+
+The request pins routing to `only: ["typesafe"]` with
+`allow_fallbacks: false`, requests `typesafe/jev-1.13`, and requires the resolved
+identity `typesafe/jev-1.13-20260917` from provider `TypeSafe`. An unexpected
+model or provider identity blocks until the integration is revalidated.
 
 Classification has a 1,500 ms total deadline, no retries, and a 500 ms
 end-to-end p95 performance target. Missing credentials, invalid supplied
@@ -102,14 +149,16 @@ and [TypeSafe Choice documentation](https://docs.typesafe.ai/primitives/choice).
   only when the engine's approval scope is eligible. In Jev mode, that requires
   complete context and a currently verified non-production org; production,
   unknown, external, and opaque calls remain allow-once.
-- Jev automatically allows only a complete-context `allow` with
-  `P(allow) >= 0.99`. Other valid allow predictions require explicit human
-  confirmation. A model `block` is an unapprovable hard block.
+- Jev automatically allows only complete context with **every requested
+  answer** choosing `allow` and `P(allow) >= 0.99`. Any answer choosing `block`
+  is an unapprovable hard block. Any `confirm`, allow probability below the
+  threshold, or incomplete context requires explicit human confirmation.
 - Jev session approval covers the exact original call. Its local fingerprint
   includes the full canonical input, tool, working directory, verified target,
   engine, policy/protocol hash, and model identity. Withheld content stays local,
   but changing it invalidates approval. Deterministic grants cannot approve Jev
   calls. Session memory remains limited to the current session branch.
+  A grant becomes reusable only after persistence and audit recording succeed.
 - Outbound Jev requests contain operation metadata, effective policy, and
   locally resolved facts. They exclude raw tool arguments, file bodies,
   Apex/scripts, query text, Canvas contents, credentials, transcripts, fetched
@@ -121,13 +170,48 @@ and [TypeSafe Choice documentation](https://docs.typesafe.ai/primitives/choice).
   truncation of oversized metadata.
 - Every automatic allow, human allow, session allow, block, timeout, cancel, and
   headless pass becomes an audit entry. Jev audit includes available model,
-  probability, latency, cost, request-id, and failure facts without raw payloads.
+  per-question choices/probabilities/confidence, latency, cost, request-id, and
+  failure facts without raw payloads. Top-level probabilities and confidence
+  are the actual `risk` answer, even when another question decides the final
+  gate. They are not a combined safety probability.
 - In deterministic mode, Power Tool Mode is off by default, can be limited to selected native families,
   and requires a separate production/unknown-org opt-in.
 - In deterministic mode, strictly validated temporary-directory cleanup can be auto-allowed; other
   dangerous commands are confirmed or hard-blocked according to rule behavior.
 - Disabling the extension removes this mediation layer; the Manager calls that
   out before changing package state.
+
+## Evaluation
+
+Thresholds need evaluation on labels authored for this domain. TypeSafe's
+[confidence guidance](https://docs.typesafe.ai/confidence) recommends
+conservative starting thresholds and validation with your own data; a
+concentrated answer does not establish correctness for an individual tool
+call. Independent questions are evaluated in the same request, following the
+[fan-out pattern](https://docs.typesafe.ai/patterns/fan-out).
+
+The frozen development fixture contains 175 cases covering all 74 bundled
+rule IDs, six native-tool families, and ten additional risk cases. Inputs and
+authored gold labels were frozen before predictions (`81d8199c` fixture hash
+prefix). Gold counts are 32 allow, 132 confirm, and 11 block; the actual current
+deterministic Safety Kernel returns 42 allow, 122 confirm, and 11 block on
+those same cases. Org facts are authored mocks; file/browser observations use
+an isolated local profile, and the operations never execute. These development
+comparisons measure unsafe automatic allows, weakened blocks, safe-call
+coverage, extra confirmations, failures, latency, and reported cost. They do
+not establish held-out qualification or live Salesforce/browser acceptance.
+Protocol revisions are recorded separately from this frozen input/gold set;
+an earlier protocol's result does not establish the revised protocol's behavior.
+
+OpenRouter's [coding-agent approval cookbook](https://openrouter.ai/docs/cookbook/coding-agents/auto-approve-permission-prompts-with-jev)
+uses static host restrictions before consulting Jev, and its
+[tool-call gate cookbook](https://openrouter.ai/docs/cookbook/building-agents/gate-tool-calls-with-jev)
+retains exact host checks. These examples do not qualify a sole-model engine
+for parity with SF Pi's deterministic baseline. SF Pi's selected Jev mode gives
+Jev sole responsibility for risk and policy interpretation; it has no
+deterministic risk floor. Hosted measurements must support any improvement
+claim. The initial hosted qualification remains false, and development results
+alone do not change that status.
 
 ## References
 

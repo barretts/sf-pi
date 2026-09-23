@@ -1,7 +1,13 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** One bounded, pinned OpenRouter request. Failures never retain remote text or credentials. */
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
-import type { JevAction, JevPrediction, JevRequest } from "./types.ts";
+import type {
+  JevAction,
+  JevChoiceAnswer,
+  JevPrediction,
+  JevQuestionId,
+  JevRequest,
+} from "./types.ts";
 
 export const JEV_MODEL = "typesafe/jev-1.13";
 export const JEV_RESOLVED_MODEL = "typesafe/jev-1.13-20260917";
@@ -13,6 +19,14 @@ const MAX_KEY_BYTES = 4_096;
 const MAX_RESPONSE_BYTES = 65_536;
 const MAX_REQUEST_BYTES = 131_072;
 const ACTIONS: JevAction[] = ["allow", "confirm", "block"];
+const QUESTIONS: JevQuestionId[] = [
+  "risk",
+  "file_policy",
+  "command_policy",
+  "org_policy",
+  "disclosure",
+  "authority",
+];
 
 export class JevClientError extends Error {
   readonly code:
@@ -102,6 +116,88 @@ function tokenCount(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
+function validateRequest(request: JevRequest): JevQuestionId[] {
+  // Structured instructions/criteria must be JSON data. Reject serializers, getters,
+  // non-finite values, and cycles instead of silently changing their wire meaning.
+  let nodes = 0;
+  const active = new Set<object>();
+  function json(value: unknown, depth: number): void {
+    if (++nodes > 4_096 || depth > 32) throw new JevClientError("invalid_request");
+    if (value === null || typeof value === "string" || typeof value === "boolean") return;
+    if (typeof value === "number" && Number.isFinite(value)) return;
+    if (typeof value !== "object" || !value || active.has(value))
+      throw new JevClientError("invalid_request");
+    if (
+      !Array.isArray(value) &&
+      Object.getPrototypeOf(value) !== Object.prototype &&
+      Object.getPrototypeOf(value) !== null
+    ) {
+      throw new JevClientError("invalid_request");
+    }
+    active.add(value);
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    if (Array.isArray(value) && Object.keys(descriptors).length !== value.length + 1) {
+      throw new JevClientError("invalid_request");
+    }
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index += 1) {
+        if (!Object.hasOwn(descriptors, String(index))) throw new JevClientError("invalid_request");
+      }
+    }
+    for (const name of Reflect.ownKeys(descriptors)) {
+      if (Array.isArray(value) && name === "length") continue;
+      if (typeof name !== "string") throw new JevClientError("invalid_request");
+      const descriptor = descriptors[name];
+      if (!descriptor.enumerable || !("value" in descriptor))
+        throw new JevClientError("invalid_request");
+      json(descriptor.value, depth + 1);
+    }
+    active.delete(value);
+  }
+  if (!record(request) || request.model !== JEV_MODEL || !record(request.questions)) {
+    throw new JevClientError("invalid_request");
+  }
+  json(request.questions, 0);
+  const ids = Object.keys(request.questions);
+  if (
+    !ids.includes("risk") ||
+    ids.length > QUESTIONS.length ||
+    !ids.every((id) => QUESTIONS.includes(id as JevQuestionId))
+  ) {
+    throw new JevClientError("invalid_request");
+  }
+  for (const id of ids) {
+    const question = request.questions[id];
+    if (
+      !record(question) ||
+      question.type !== "choice" ||
+      !Object.hasOwn(question, "instructions") ||
+      !record(question.criteria) ||
+      Object.keys(question.criteria).length !== ACTIONS.length ||
+      !ACTIONS.every((action) =>
+        Object.hasOwn(question.criteria as Record<string, unknown>, action),
+      )
+    ) {
+      throw new JevClientError("invalid_request");
+    }
+  }
+  if (Object.hasOwn(request, "provider")) {
+    const provider = request.provider;
+    json(provider, 0);
+    if (
+      !record(provider) ||
+      Object.keys(provider).length !== 2 ||
+      !Array.isArray(provider.only) ||
+      provider.only.length !== 1 ||
+      provider.only[0] !== "typesafe" ||
+      provider.allow_fallbacks !== false
+    ) {
+      throw new JevClientError("invalid_request");
+    }
+  }
+  return ids as JevQuestionId[];
+}
+
 function rejectDuplicateKeys(text: string): void {
   // JSON.parse has already validated syntax. Track decoded keys without recursive parsing;
   // otherwise a second model/probability key could silently overwrite the first.
@@ -123,25 +219,9 @@ function rejectDuplicateKeys(text: string): void {
   }
 }
 
-function prediction(value: unknown, key: string): JevPrediction {
-  if (!record(value)) throw new JevClientError("invalid_response");
-  if (value.model !== JEV_RESOLVED_MODEL || value.provider !== JEV_PROVIDER) {
-    throw new JevClientError("identity_mismatch");
-  }
+function choiceAnswer(answer: unknown): JevChoiceAnswer {
   if (
-    typeof value.id !== "string" ||
-    value.id.length > 256 ||
-    !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value.id) ||
-    value.id.includes(key) ||
-    !record(value.answers) ||
-    Object.keys(value.answers).length !== 1 ||
-    !record(value.answers.risk) ||
-    !record(value.usage)
-  ) {
-    throw new JevClientError("invalid_response");
-  }
-  const answer = value.answers.risk;
-  if (
+    !record(answer) ||
     answer.type !== "choice" ||
     !ACTIONS.includes(answer.choice as JevAction) ||
     !record(answer.probabilities) ||
@@ -155,13 +235,7 @@ function prediction(value: unknown, key: string): JevPrediction {
   const choice = answer.choice as JevAction;
   if (
     Math.abs(ACTIONS.reduce((sum, action) => sum + probabilities[action], 0) - 1) > 1e-6 ||
-    probabilities[choice] < Math.max(...ACTIONS.map((action) => probabilities[action])) ||
-    !tokenCount(value.usage.input_tokens) ||
-    !tokenCount(value.usage.output_tokens) ||
-    (value.usage.cost !== undefined &&
-      (typeof value.usage.cost !== "number" ||
-        !Number.isFinite(value.usage.cost) ||
-        value.usage.cost < 0))
+    probabilities[choice] < Math.max(...ACTIONS.map((action) => probabilities[action]))
   ) {
     throw new JevClientError("invalid_response");
   }
@@ -173,6 +247,42 @@ function prediction(value: unknown, key: string): JevPrediction {
       block: probabilities.block,
     },
     confidence: answer.confidence,
+  };
+}
+
+function prediction(value: unknown, key: string, questionIds: JevQuestionId[]): JevPrediction {
+  if (!record(value)) throw new JevClientError("invalid_response");
+  if (value.model !== JEV_RESOLVED_MODEL || value.provider !== JEV_PROVIDER) {
+    throw new JevClientError("identity_mismatch");
+  }
+  if (
+    typeof value.id !== "string" ||
+    value.id.length > 256 ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value.id) ||
+    value.id.includes(key) ||
+    !record(value.answers) ||
+    Object.keys(value.answers).length !== questionIds.length ||
+    !questionIds.every((id) => Object.hasOwn(value.answers as Record<string, unknown>, id)) ||
+    !record(value.usage)
+  ) {
+    throw new JevClientError("invalid_response");
+  }
+  const answers: Partial<Record<JevQuestionId, JevChoiceAnswer>> = {};
+  for (const id of questionIds) answers[id] = choiceAnswer(value.answers[id]);
+  const risk = answers.risk;
+  if (
+    !tokenCount(value.usage.input_tokens) ||
+    !tokenCount(value.usage.output_tokens) ||
+    (value.usage.cost !== undefined &&
+      (typeof value.usage.cost !== "number" ||
+        !Number.isFinite(value.usage.cost) ||
+        value.usage.cost < 0))
+  ) {
+    throw new JevClientError("invalid_response");
+  }
+  return {
+    ...risk,
+    ...(questionIds.length > 1 ? { answers } : {}),
     model: JEV_RESOLVED_MODEL,
     provider: JEV_PROVIDER,
     requestId: value.id,
@@ -211,18 +321,7 @@ export async function requestJev(
   try {
     const operation = async (): Promise<JevPrediction> => {
       const { key } = credential();
-      if (
-        request?.model !== JEV_MODEL ||
-        !record(request.questions) ||
-        Object.keys(request.questions).length !== 1 ||
-        !record(request.questions.risk) ||
-        request.questions.risk.type !== "choice" ||
-        !record(request.questions.risk.criteria) ||
-        Object.keys(request.questions.risk.criteria).length !== ACTIONS.length ||
-        !ACTIONS.every((action) => typeof request.questions.risk.criteria[action] === "string")
-      ) {
-        throw new JevClientError("invalid_request");
-      }
+      const questionIds = validateRequest(request);
       let body: string;
       try {
         body = JSON.stringify(request);
@@ -268,7 +367,7 @@ export async function requestJev(
       } catch {
         throw new JevClientError("invalid_response");
       }
-      const result = prediction(parsed, key);
+      const result = prediction(parsed, key, questionIds);
       if (performance.now() - started >= JEV_TIMEOUT_MS) throw new JevClientError("timeout");
       if (controller.signal.aborted) throw new JevClientError(abortCode);
       return result;

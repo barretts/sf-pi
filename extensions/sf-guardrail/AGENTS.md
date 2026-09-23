@@ -81,23 +81,53 @@ One-file-per-concern split:
   choice. No failure may silently switch engines or erase the preference.
 - Branch into Jev before deterministic normalization. Every Pi `tool_call`
   reaches Jev in its mode; do not exempt reads, dry runs, unfamiliar tools, or
-  native calls the deterministic registry ignores. Jev interprets all policy;
-  do not add deterministic matchers as a hidden fallback or second risk vote.
-- Send operation metadata and effective policy only. Keep file bodies,
+  native calls the deterministic registry ignores. Jev is the sole risk engine
+  and interprets all policy; do not add a deterministic floor, hidden fallback,
+  or second risk vote.
+- Send operation metadata and the minimum effective policy relevant to the
+  questions. Known CLI structure, trusted file-path facts, and bounded numeric
+  observations describe effects without deciding policy locally. Compress
+  full ordered command lists to compact strings using explicit
+  `commands.defaults`; encode only behavior overrides as `[pattern, behavior]`
+  tuples, including off entries. Preserve list order and precedence. Filter
+  org AST entries by complete known executable/wrapper heads;
+  retain all org entries for incomplete/opaque heads, withheld comments, or
+  missing commands. Jev still decides full rule applicability and behavior.
+  Keep file bodies,
   Apex/scripts, query text, Canvas content, credentials, transcripts, fetched
   contents, and raw arguments local. Mark withheld and opaque effects explicitly;
   never infer that a custom pattern does not match an omitted literal.
 - Tool descriptions, argument-derived facts, and tool-supplied approval claims
   are untrusted data. Resolve org and browser facts locally; keep verification
-  state distinct from supplied intent. No live request during factory/startup.
-- Use the built-in `fetch` client, one Decisions Choice question, a total
-  1,500 ms classification deadline, cancellation, and no retries. Require the
-  configured model/provider identity; do not discover or choose fallbacks.
-- Only complete-context Jev `allow` predictions with `P(allow) >= 0.99` may
-  automatically execute. Other valid allow predictions confirm; model blocks
-  are hard blocks. This threshold is a conservative initial default, not a
-  calibration or safety qualification claim.
-- Audit every Jev outcome without raw payloads or credentials. Recheck engine,
+  state distinct from supplied intent. Structurally relevant org-policy entries
+  require fresh org observations even for custom non-Salesforce command heads.
+  Unknown facts stay explicit. Exact `sf_browser_press` key `Escape` requires
+  neither org nor fresh target/focus facts; retain risk and authority questions
+  without fabricating a fresh snapshot. No live request during factory/startup.
+- Use the built-in `fetch` client and protocol v4 independent Choice questions
+  in one Decisions request. Always ask operational `risk` with tool-family
+  guidance about executable effects; policy questions decide matching blocks.
+  Add file policy for available paths/facts, command policy for shell
+  calls, and org policy for structurally possible org AST entries. Disclosure
+  follows the tool-specific projection; incomplete shell effects retain it.
+  Authority is browser-only; other unknown effects stay in risk/disclosure and
+  the completeness gate. At most six model-authored answers supply all risk
+  and policy judgments. Structural applicability must not decide an outcome.
+  Keep model block criteria for withheld potentially denied operands, including
+  any withheld scalar under an enabled single-word auto-deny unless a visible
+  enabled allow applies. Do not implement those criteria as a host policy vote.
+  Preserve the bounded request,
+  total 1,500 ms deadline, cancellation, and no retries. Pin routing to TypeSafe
+  only with fallbacks disabled; require the configured model/provider identity.
+- Automatically execute only with complete context and every requested answer
+  choosing `allow` with `P(allow) >= 0.99`. Any model `block` is a hard block;
+  any `confirm`, insufficient allow probability, or incomplete context requires
+  explicit human confirmation. This threshold is a conservative initial default
+  requiring domain-label evaluation, not a calibration or qualification claim.
+- Audit every Jev outcome and each answer's actual probabilities/confidence
+  without raw payloads or credentials. Top-level evidence must remain the
+  actual `risk` answer labeled with that question's choice, not the final gate
+  or a synthesized combined confidence. Recheck engine,
   policy identity, and cancellation before releasing execution.
 
 ## Editing the bundled ruleset
@@ -127,6 +157,8 @@ One-file-per-concern split:
   non-production org. Bind them to the exact canonical original input plus
   tool, `cwd`, verified target, policy/protocol, engine, and model identity.
   Never reuse deterministic or broader operation-family grants for Jev calls.
+  Update reusable grant memory only after persistence and audit recording
+  succeed; an audit/write failure must not leave an approved reusable grant.
 - Timeouts equal block. User-facing copy may say "approval expired", but
   expired approval still fails closed. Never auto-accept on timeout.
 
@@ -137,7 +169,7 @@ One-file-per-concern split:
 - No path-access gate (allow/ask/block outside cwd). Salesforce projects touch
   `~/.sf/`, `~/.sfdx/`, and shared libraries routinely; changing this requires
   a separate trust-aware design and ADR.
-- No LLM command explainer. Jev supplies the risk choice in its selected mode;
+- No LLM command explainer. Jev supplies the risk/policy answers in its selected mode;
   approval UI and audit remain local. Do not add a separate explanation model,
   model-controlled approval API, or external telemetry.
 - No project-local guardrail preference layer in MVP. Routine preferences

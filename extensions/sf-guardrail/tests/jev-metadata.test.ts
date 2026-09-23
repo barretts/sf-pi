@@ -1,12 +1,28 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { describe, expect, it } from "vitest";
 import { Type } from "typebox";
-import { buildJevMetadata, extractJevTargetOrg } from "../lib/jev-metadata.ts";
+import { readFileSync } from "node:fs";
+import {
+  buildJevMetadata,
+  extractJevTargetOrg,
+  jevShellExecutableHeads,
+} from "../lib/jev-metadata.ts";
+import type { JevToolMetadata } from "../lib/types.ts";
 
 const SECRET = "PRIVATE_PAYLOAD_SENTINEL";
 const descriptor = { description: "Inspect or change a resource.", parameters: { type: "object" } };
 const encoded = (name: string, input: Record<string, unknown>) =>
   JSON.stringify(buildJevMetadata(name, input, descriptor));
+const baselineCommands = (
+  JSON.parse(
+    readFileSync(
+      new URL("../../../scripts/fixtures/jev-guardrail-baseline-dev.json", import.meta.url),
+      "utf8",
+    ),
+  ) as {
+    cases: Array<{ id: string; input: Record<string, unknown> }>;
+  }
+).cases.filter((fixture) => fixture.id.startsWith("command-"));
 
 describe("Jev metadata-only boundary", () => {
   it("retains direct file operation paths while withholding bodies", () => {
@@ -105,7 +121,7 @@ describe("Jev metadata-only boundary", () => {
     });
     expect(result.metadata).toMatchObject({ ref: "@e3", mutation: true });
     expect(JSON.stringify(result)).not.toContain(SECRET);
-    expect(result.complete).toBe(false);
+    expect(result.complete).toBe(true);
     expect(buildJevMetadata("sf_browser_press", { key: "Control+Enter" }).complete).toBe(true);
   });
 
@@ -123,11 +139,7 @@ describe("Jev metadata-only boundary", () => {
       descriptor,
     );
     expect(result.toolName).toBe("fixture_catalog");
-    expect(result.metadata).toMatchObject({
-      action: "inspect",
-      path: "resources/example",
-      execute: false,
-    });
+    expect(result.metadata).toEqual({});
     expect(result.complete).toBe(false);
     expect(JSON.stringify(result)).not.toContain(SECRET);
   });
@@ -242,10 +254,13 @@ describe("Jev metadata-only boundary", () => {
   });
 
   it("removes destination URL userinfo, query and fragment", () => {
-    const result = buildJevMetadata("third_party", {
-      destination: `https://user:${SECRET}@example.invalid/resource?query=${SECRET}#${SECRET}`,
+    const result = buildJevMetadata("data360_api", {
+      action: "rest.request",
+      params: {
+        destination: `https://user:${SECRET}@example.invalid/resource?query=${SECRET}#${SECRET}`,
+      },
     });
-    expect(result.metadata.destination).toBe("https://example.invalid/resource");
+    expect(result.metadata.params).toEqual({ destination: "https://example.invalid/resource" });
     expect(result.complete).toBe(false);
     expect(JSON.stringify(result)).not.toContain(SECRET);
   });
@@ -339,6 +354,263 @@ describe("Jev metadata-only boundary", () => {
   });
 });
 
+describe("schema-based shell effect coverage", () => {
+  it("covers all 62 frozen baseline command families without consulting their decisions", () => {
+    expect(baselineCommands).toHaveLength(62);
+  });
+
+  it.each(baselineCommands)(
+    "retains known executable and operation metadata for $id",
+    (fixture) => {
+      const result = buildJevMetadata("bash", fixture.input);
+      const shell = result.metadata.shell as { commands: Array<Record<string, unknown>> };
+      expect(shell.commands.length).toBeGreaterThan(0);
+      expect(
+        shell.commands.every(
+          (command) => !["unknown", "opaque"].includes(command.executable as string),
+        ),
+      ).toBe(true);
+      expect(result.metadata.command).toBeUndefined();
+      expect(result.metadata.args).toBeUndefined();
+      const privateOperands = [
+        "example_user",
+        "example_group",
+        "example_process",
+        "example_container",
+        "example_namespace",
+        "example_database",
+        "example_package",
+        "example_library",
+        "example_file",
+        "example_push_request",
+        "example_session",
+        "example-plugin",
+        "EvalScratch",
+        "cHJpbnRm",
+      ];
+      for (const operand of privateOperands) expect(JSON.stringify(result)).not.toContain(operand);
+    },
+  );
+
+  it.each([
+    ["pi auth check", { executable: "pi", subcommands: ["auth", "check"] }],
+    [
+      "pi auth check --credentials",
+      { executable: "pi", subcommands: ["auth", "check"], flags: [{ name: "--credentials" }] },
+    ],
+    ["pi auth print-api-key", { executable: "pi", subcommands: ["auth", "print-api-key"] }],
+    [
+      "pi auth print-bearer-token",
+      { executable: "pi", subcommands: ["auth", "print-bearer-token"] },
+    ],
+    [
+      "git status --short",
+      { executable: "git", subcommands: ["status"], flags: [{ name: "--short" }] },
+    ],
+    [
+      "git reset --soft",
+      { executable: "git", subcommands: ["reset"], flags: [{ name: "--soft" }] },
+    ],
+    [
+      "terraform apply -destroy",
+      { executable: "terraform", subcommands: ["apply"], flags: [{ name: "-destroy" }] },
+    ],
+    [
+      "redis-cli flushall ASYNC",
+      { executable: "redis-cli", subcommands: ["FLUSHALL"], mode: "ASYNC" },
+    ],
+    ["chmod -R a+rwx build", { executable: "chmod", mode: "a+rwx", paths: ["build"] }],
+    [
+      "truncate -s 0 activity.log",
+      { executable: "truncate", flags: [{ name: "-s", value: "0" }], paths: ["activity.log"] },
+    ],
+    [
+      "mkfs -t ext4 /dev/example",
+      { executable: "mkfs", flags: [{ name: "-t", value: "ext4" }], paths: ["/dev/example"] },
+    ],
+  ] as Array<[string, Record<string, unknown>]>)(
+    "retains schema-proven distinctions for %s",
+    (command, effect) => {
+      const result = buildJevMetadata("bash", { command });
+      expect(result.metadata.shell).toMatchObject({ commands: [effect] });
+      expect(result.complete).toBe(true);
+    },
+  );
+
+  it("records dd source and destination roles without treating all operands as file paths", () => {
+    const result = buildJevMetadata("bash", {
+      command: `dd if=input.img of=output.img bs=4M count=0 conv=notrunc status=progress ignored=${SECRET}`,
+    });
+    expect(result.metadata.shell).toMatchObject({
+      commands: [
+        {
+          executable: "dd",
+          operands: [
+            { name: "if", path: "input.img" },
+            { name: "of", path: "output.img" },
+            { name: "bs", value: "4M" },
+            { name: "count", value: "0" },
+            { name: "conv", value: "notrunc" },
+            { name: "status", value: "progress" },
+          ],
+        },
+      ],
+    });
+    expect(result.metadata.paths).toEqual(["input.img", "output.img"]);
+    expect(result.complete).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+  });
+
+  it("shows the public find-exec operation while withholding arbitrary command arguments", () => {
+    const result = buildJevMetadata("bash", {
+      command: `find build -exec rm --unknown ${SECRET} {} \\;`,
+    });
+    expect(result.metadata.shell).toMatchObject({
+      commands: [
+        {
+          executable: "find",
+          paths: ["build"],
+          flags: [{ name: "-exec", command: { executable: "rm", target: "current_match" } }],
+        },
+      ],
+    });
+    expect(result.complete).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+  });
+
+  it.each([
+    "env pi auth print-api-key",
+    "nohup pi auth print-api-key",
+    "timeout 5s pi auth print-api-key",
+    "sudo pi auth print-api-key",
+    "env nohup timeout 5s pi auth print-api-key",
+  ])("retains static nested operations through %s", (command) => {
+    const result = buildJevMetadata("bash", { command });
+    expect(result.metadata.shell).toMatchObject({
+      commands: [
+        { executable: "pi", subcommands: ["auth", "print-api-key"], wrappers: expect.any(Array) },
+      ],
+    });
+    expect(result.complete).toBe(true);
+  });
+
+  it("keeps generic assignments private and marks altered environment incomplete", () => {
+    const result = buildJevMetadata("bash", {
+      command: `env PRIVATE_TOKEN=${SECRET} pi auth print-api-key --provider ${SECRET}`,
+    });
+    expect(result.metadata.shell).toMatchObject({
+      commands: [
+        {
+          executable: "pi",
+          subcommands: ["auth", "print-api-key"],
+          environmentAssignments: 1,
+          flags: [{ name: "--provider", value: "specified" }],
+        },
+      ],
+    });
+    expect(result.complete).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+    expect(JSON.stringify(result)).not.toContain("PRIVATE_TOKEN");
+  });
+
+  it("retains the public SF display option's boolean effect without forwarding generic environment values", () => {
+    const result = buildJevMetadata("bash", {
+      command: `SF_TEMP_SHOW_SECRETS=true PRIVATE_TOKEN=${SECRET} sf org display -o ${SECRET}`,
+    });
+    expect(result.metadata.shell).toMatchObject({
+      commands: [
+        {
+          executable: "sf",
+          environmentFlags: { SF_TEMP_SHOW_SECRETS: true },
+          subcommands: ["org", "display"],
+        },
+      ],
+    });
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+    expect(result.complete).toBe(false);
+  });
+
+  it("recognizes operations after known global options without exposing context identifiers", () => {
+    for (const command of [
+      `docker --context ${SECRET} system prune`,
+      `kubectl -n ${SECRET} delete pods --all`,
+      `redis-cli -h ${SECRET} -p 6379 FLUSHDB`,
+      `agent-browser --session ${SECRET} click @e1`,
+      `sf -o ${SECRET} org display --json`,
+    ]) {
+      const result = buildJevMetadata("bash", { command });
+      expect(
+        (result.metadata.shell as { commands: Array<{ subcommands?: unknown }> }).commands[0]
+          .subcommands,
+      ).toBeDefined();
+      expect(JSON.stringify(result)).not.toContain(SECRET);
+    }
+  });
+
+  it.each([
+    `pi auth print-api-key --provider ${SECRET}`,
+    `pi auth check --provider=${SECRET}`,
+    `docker rm -f ${SECRET}`,
+    `dropdb ${SECRET}`,
+    `redis-cli -a ${SECRET} SET ${SECRET} ${SECRET}`,
+    `pkill -9 '${SECRET}.*'`,
+    `killall --signal KILL ${SECRET}`,
+    `chown -R ${SECRET} build`,
+    `chgrp -R ${SECRET} build`,
+    `mkfs.ext4 -L ${SECRET} /dev/example`,
+    `find build -name ${SECRET} -delete`,
+    `kubectl patch pods ${SECRET} --patch ${SECRET}`,
+    `terraform apply -var ${SECRET}`,
+    `agent-browser fill '${SECRET}' '${SECRET}'`,
+    `agent-browser eval '${SECRET}'`,
+    `sf plugins install ${SECRET}`,
+    `sf package push-upgrade abort --push-request-id ${SECRET}`,
+    `sf agent adl file delete --library-id ${SECRET} --file-id ${SECRET}`,
+    `shutdown -h now '${SECRET}'`,
+    `bash -c 'pi auth print-api-key ${SECRET}'`,
+  ])("withholds payloads and scalar identifier roles in %s", (command) => {
+    expect(encoded("bash", { command })).not.toContain(SECRET);
+  });
+
+  it.each([
+    `pi auth print-api-key-extra ${SECRET}`,
+    `docker system prune-extra ${SECRET}`,
+    `rm --namespace ${SECRET} build`,
+    `docker inspect --filename ${SECRET}`,
+    `kubectl exec --filename ${SECRET}`,
+    `terraform validate -out ${SECRET}`,
+    `mkfs.unknown ${SECRET}`,
+    `find build -unknown ${SECRET}`,
+    `truncate -s ${SECRET} target.txt`,
+    `shred --label ${SECRET} archive.txt`,
+    `find build -print ${SECRET}`,
+    `find build -delete ${SECRET}`,
+    `mkfs.ext4 /dev/example ${SECRET}`,
+    `base64 input.txt ${SECRET}`,
+    `terraform apply -out ${SECRET}`,
+  ])("does not project near misses or another operation's value roles for %s", (command) => {
+    const result = buildJevMetadata("bash", { command });
+    expect(result.complete).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+  });
+
+  it("retains initial find paths and the numeric mkfs blocks operand according to their arity", () => {
+    expect(buildJevMetadata("bash", { command: "find src tests -print" }).metadata.paths).toEqual([
+      "src",
+      "tests",
+    ]);
+    const filesystem = buildJevMetadata("bash", { command: "mkfs.ext4 /dev/example 1024" });
+    expect(filesystem.metadata.shell).toMatchObject({
+      commands: [{ executable: "mkfs.ext4", paths: ["/dev/example"], blocks: 1024 }],
+    });
+    expect(filesystem.metadata.paths).toEqual(["/dev/example"]);
+    expect(filesystem.complete).toBe(true);
+    expect(
+      buildJevMetadata("bash", { command: "terraform plan -out plan.tfplan" }).metadata.paths,
+    ).toEqual(["plan.tfplan"]);
+  });
+});
+
 describe("conservative shell metadata extraction", () => {
   it("preserves static executable, subcommands, enum flags and schema-defined paths", () => {
     const result = buildJevMetadata("bash", {
@@ -383,7 +655,8 @@ describe("conservative shell metadata extraction", () => {
       operators: [">", "&&", "||", ";", "|", "\n"],
     });
     expect(result.metadata.paths).toEqual(["out file.txt", "temporary dir", "README.md"]);
-    expect(result.complete).toBe(true);
+    expect(result.complete).toBe(false);
+    expect(result.metadata.shell).toMatchObject({ policyTokens: "comments_withheld" });
     expect(JSON.stringify(result)).not.toContain(SECRET);
   });
 
@@ -535,5 +808,285 @@ describe("conservative shell metadata extraction", () => {
     expect(encoded("custom", { command: `echo ${SECRET}`, action: "execute" })).not.toContain(
       SECRET,
     );
+  });
+});
+
+describe("ambiguous roles remain private", () => {
+  it.each([
+    `mkfs.ext4 -L $LABEL_ARGS ${SECRET} /dev/example`,
+    `mkfs.ext4 -L "$LABEL_ARGS" ${SECRET} /dev/example`,
+    `cat -n $ARGS ${SECRET}`,
+    `rm -- $ARGS ${SECRET}`,
+    `git config --file $FILE_ARGS ${SECRET}`,
+    `curl --user $AUTH_ARGS https://example.invalid/${SECRET}`,
+    `docker --context $CONTEXT_ARGS system prune ${SECRET}`,
+    `truncate --size $SIZE_ARGS ${SECRET}`,
+    `find build -name $PATTERN_ARGS ${SECRET}`,
+  ])("withholds later argument roles after dynamic option values in %s", (command) => {
+    const result = buildJevMetadata("bash", { command });
+    expect(result.complete).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+    expect((result.metadata.paths as string[] | undefined) ?? []).not.toContain("/dev/example");
+    expect(result.omissions).toContain("shell_values_withheld");
+  });
+
+  it.each([
+    `env -u $ENV_ARGS cat ${SECRET}`,
+    `env --unset "$ENV_ARGS" cat ${SECRET}`,
+    `sudo -u $SUDO_ARGS cat ${SECRET}`,
+    `sudo -g "$SUDO_ARGS" cat ${SECRET}`,
+    `env PRIVATE=$ASSIGN_ARGS cat ${SECRET}`,
+    `PRIVATE=$ASSIGN_ARGS cat ${SECRET}`,
+    `env nohup timeout $DURATION_ARGS cat ${SECRET}`,
+  ])("does not infer a static nested executable from dynamic wrapper fields in %s", (command) => {
+    const result = buildJevMetadata("bash", { command });
+    expect(result.metadata.shell).toMatchObject({ commands: [{ executable: "opaque" }] });
+    expect(result.metadata.paths).toBeUndefined();
+    expect(result.complete).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+  });
+
+  it("does not bind an org parsed before an expansion that could override its role", () => {
+    const command = "sf org display -o static-sandbox --json $EXTRA_ARGS";
+    expect(extractJevTargetOrg("bash", { command })).toBeUndefined();
+    expect(buildJevMetadata("bash", { command }).complete).toBe(false);
+  });
+
+  it.each([
+    `/tmp/untrusted/cat ${SECRET}`,
+    `./cat ${SECRET}`,
+    `/usr/bin/cat ${SECRET}`,
+    `/tmp/untrusted/env cat ${SECRET}`,
+    `/tmp/untrusted/sudo cat ${SECRET}`,
+    `/tmp/untrusted/nohup cat ${SECRET}`,
+    `/tmp/untrusted/timeout 5s cat ${SECRET}`,
+    `/tmp/untrusted/sf org display --file ${SECRET}`,
+    `/tmp/untrusted/docker system prune ${SECRET}`,
+  ])("does not apply a known basename's schema to qualified executable %s", (command) => {
+    const result = buildJevMetadata("bash", { command });
+    expect(result.metadata.shell).toMatchObject({ commands: [{ executable: "unknown" }] });
+    expect(result.metadata.paths).toBeUndefined();
+    expect(result.complete).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+    expect(
+      (result.metadata.shell as { commands: Array<Record<string, unknown>> }).commands[0]
+        .subcommands,
+    ).toBeUndefined();
+  });
+
+  it("keeps arbitrary find-exec executable paths opaque", () => {
+    const result = buildJevMetadata("bash", {
+      command: `find build -exec /tmp/untrusted/rm -rf ${SECRET} {} \\;`,
+    });
+    expect(result.metadata.shell).toMatchObject({
+      commands: [{ flags: [{ name: "-exec", command: { executable: "opaque" } }] }],
+    });
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+    expect(JSON.stringify(result)).not.toContain("-rf");
+  });
+
+  it.each([
+    "path",
+    "file",
+    "file_path",
+    "output_file",
+    "object",
+    "ref",
+    "agent_api_name",
+    "canvas_id",
+    "url",
+    "destination",
+    "endpoint",
+    "action",
+    "operation",
+    "method",
+    "pane",
+    "target_org",
+    "format",
+    "api",
+    "output_mode",
+  ])("does not infer a scalar value role from unfamiliar tool field %s", (field) => {
+    const result = buildJevMetadata(
+      "unfamiliar_tool",
+      { [field]: SECRET },
+      {
+        description: "Inspect or mutate a resource.",
+        parameters: Type.Object({ [field]: Type.String({ default: SECRET }) }),
+      },
+    );
+    expect(result.metadata).toEqual({
+      parameterShape: [{ name: field, type: "string", required: true }],
+    });
+    expect(result.complete).toBe(false);
+    expect(result.omissions).toContain("unfamiliar_tool_effects");
+    expect(result.omissions).toContain("unknown_fields_withheld");
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+  });
+
+  it("withholds unfamiliar boolean/numeric values as well as strings", () => {
+    const result = buildJevMetadata("unfamiliar_tool", {
+      execute: true,
+      dry_run: false,
+      allow_confirmed: true,
+      limit: 12345,
+    });
+    expect(result.metadata).toEqual({});
+    expect(result.complete).toBe(false);
+  });
+
+  it.each(["sudo", "sf org delete"])(
+    "records omitted comment tokens without echoing the %s text",
+    (comment) => {
+      const result = buildJevMetadata("bash", { command: `git status # ${comment} ${SECRET}` });
+      expect(result.metadata.shell).toMatchObject({
+        commands: [{ executable: "git", subcommands: ["status"] }],
+        policyTokens: "comments_withheld",
+      });
+      expect(result.complete).toBe(false);
+      expect(result.omissions).toContain("shell_values_withheld");
+      expect(JSON.stringify(result)).not.toContain(comment);
+      expect(JSON.stringify(result)).not.toContain(SECRET);
+    },
+  );
+
+  it("distinguishes quoted and escaped hash literals from comments", () => {
+    for (const command of [`echo '# ${SECRET}'`, `echo \\# ${SECRET}`]) {
+      const result = buildJevMetadata("bash", { command });
+      expect(result.complete).toBe(true);
+      expect((result.metadata.shell as Record<string, unknown>).policyTokens).toBeUndefined();
+      expect(JSON.stringify(result)).not.toContain(SECRET);
+    }
+  });
+});
+
+describe("verified Salesforce CLI structural forms", () => {
+  it("preserves the exact legacy checkonly boolean spelling recognized by the baseline", () => {
+    const result = buildJevMetadata("bash", {
+      command: "sf project deploy start --checkonly -o EvalProduction",
+    });
+    expect(result.metadata.shell).toMatchObject({
+      commands: [
+        {
+          executable: "sf",
+          subcommands: ["project", "deploy", "start"],
+          flags: [{ name: "--checkonly" }, { name: "-o", value: "explicit" }],
+        },
+      ],
+    });
+    expect(result.complete).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("EvalProduction");
+  });
+
+  it.each([
+    "sf api request rest /services/data/v60.0/limits -o EvalProduction",
+    "sf -o EvalProduction api request rest /services/data/v60.0/limits",
+  ])("records documented default GET with a static positional endpoint in %s", (command) => {
+    const result = buildJevMetadata("bash", { command });
+    expect(result.metadata.shell).toMatchObject({
+      commands: [
+        {
+          executable: "sf",
+          subcommands: ["api", "request", "rest"],
+          apiPath: "/services/data/v60.0/limits",
+          method: "GET",
+        },
+      ],
+    });
+    expect(result.metadata.paths).toBeUndefined();
+    expect(result.complete).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("EvalProduction");
+  });
+
+  it("retains an explicit supported REST method instead of substituting the default", () => {
+    const result = buildJevMetadata("bash", {
+      command:
+        "sf api request rest /services/data/v60.0/sobjects/Account --method DELETE -o EvalProduction",
+    });
+    expect(result.metadata.shell).toMatchObject({ commands: [{ method: "DELETE" }] });
+    expect(result.complete).toBe(true);
+  });
+
+  it("keeps the unverified org-api-rest endpoint grammar incomplete", () => {
+    const result = buildJevMetadata("bash", {
+      command: `sf org api rest --method GET --endpoint /services/data/v60.0/${SECRET} -o EvalProduction`,
+    });
+    expect(result.complete).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+    expect(
+      (result.metadata.shell as { commands: Array<Record<string, unknown>> }).commands[0].apiPath,
+    ).toBeUndefined();
+  });
+
+  it.each([
+    `sf api request rest /services/data/v60.0/limits --file ${SECRET}`,
+    `sf api request rest /services/data/v60.0/limits $EXTRA_ARGS ${SECRET}`,
+  ])("does not assign default GET through an opaque request override in %s", (command) => {
+    const result = buildJevMetadata("bash", { command });
+    expect(result.complete).toBe(false);
+    expect(
+      (result.metadata.shell as { commands: Array<Record<string, unknown>> }).commands[0].method,
+    ).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+  });
+
+  it("does not project a second REST positional string as another endpoint", () => {
+    const result = buildJevMetadata("bash", {
+      command: `sf api request rest /services/data/v60.0/limits /${SECRET}`,
+    });
+    expect(result.complete).toBe(false);
+    expect(result.metadata.shell).toMatchObject({
+      commands: [{ apiPath: "/services/data/v60.0/limits" }],
+    });
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+  });
+});
+
+describe("shared structural executable heads", () => {
+  it("includes every complete command and transparent wrapper head", () => {
+    const metadata = buildJevMetadata("bash", {
+      command: "sudo nohup timeout 5s env git status --short && pwd",
+    });
+    expect(metadata.complete).toBe(true);
+    expect(jevShellExecutableHeads(metadata)).toEqual(
+      new Set(["git", "sudo", "nohup", "timeout", "env", "pwd"]),
+    );
+  });
+
+  it("does not collapse complete commands merely because private scalar values were withheld", () => {
+    const metadata = buildJevMetadata("bash", { command: `pi auth check --provider ${SECRET}` });
+    expect(metadata.complete).toBe(true);
+    expect(metadata.omissions).toContain("shell_values_withheld");
+    expect(jevShellExecutableHeads(metadata)).toEqual(new Set(["pi"]));
+  });
+
+  it.each([
+    "git status # omitted policy tokens",
+    "unknown-command arbitrary",
+    "bash -c 'arbitrary script'",
+    "env -u $UNKNOWN_ARGS git status",
+    "sf org display && sf org list",
+  ])("leaves executable coverage unrestricted for incomplete %s", (command) => {
+    expect(jevShellExecutableHeads(buildJevMetadata("bash", { command }))).toBeUndefined();
+  });
+
+  it.each([
+    undefined,
+    {},
+    { commands: [] },
+    { commands: [{ executable: "git" }], policyTokens: "comments_withheld" },
+    { commands: [{}] },
+    { commands: [{ executable: "" }] },
+    { commands: [{ executable: "unknown" }] },
+    { commands: [{ executable: "opaque" }] },
+    { commands: [{ executable: "git", wrappers: [{}] }] },
+    { commands: [{ executable: "git", wrappers: [{ executable: "opaque" }] }] },
+  ])("leaves missing/opaque structural coverage unrestricted: %j", (shell) => {
+    const metadata: JevToolMetadata = {
+      toolName: "bash",
+      metadata: { shell },
+      complete: true,
+      omissions: [],
+    };
+    expect(jevShellExecutableHeads(metadata)).toBeUndefined();
   });
 });

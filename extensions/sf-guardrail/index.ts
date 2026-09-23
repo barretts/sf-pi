@@ -364,8 +364,8 @@ export default function sfGuardrail(pi: ExtensionAPI) {
           recordDecision(pi, decision, "allow_once", event.toolName);
           return undefined;
         case "allow_session":
-          grantSessionApproval(pi, decision);
           recordDecision(pi, decision, "allow_session", event.toolName);
+          grantSessionApproval(pi, decision);
           return undefined;
         case "operator_auto_approve":
           recordDecision(pi, decision, "operator_auto_approve", event.toolName);

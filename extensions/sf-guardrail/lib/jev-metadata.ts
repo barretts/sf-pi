@@ -359,7 +359,7 @@ function buildMetadata(
         : DATA360_FIELDS
       : TOOL_FIELDS[toolName];
     for (const [key, value] of Object.entries(object)) {
-      if (schemaFields && !schemaFields.has(key)) {
+      if (!known || (schemaFields && !schemaFields.has(key))) {
         omit("unknown_fields_withheld", true);
         continue;
       }
@@ -429,7 +429,12 @@ function buildMetadata(
           typeof value !== "string"
         )
           invalid();
-        omit(ordinaryFileBody ? "file_body_withheld" : "payload_withheld", !ordinaryFileBody);
+        const browserReason =
+          ["sf_browser_click", "sf_browser_press"].includes(toolName) && key === "reason";
+        omit(
+          ordinaryFileBody ? "file_body_withheld" : "payload_withheld",
+          !ordinaryFileBody && !browserReason,
+        );
       } else if (!nested && key === "params" && DATA360_TOOLS.has(toolName)) {
         if (!record(value)) invalid();
         output.params = fields(value, true);
@@ -487,13 +492,14 @@ type Word = { value: string; dynamic: boolean };
 type ShellToken = Word | { operator: string; fd?: string };
 
 /** Quote-aware lexical extraction, deliberately not a general shell interpreter. */
-function lex(command: string): ShellToken[] {
+function lex(command: string): { tokens: ShellToken[]; commentsOmitted: boolean } {
   if (Buffer.byteLength(command) > 128 * 1024) invalid();
   const tokens: ShellToken[] = [];
   let value = "",
     active = false,
     dynamic = false,
     quote = "";
+  let commentsOmitted = false;
   const flush = () => {
     if (active) tokens.push({ value, dynamic });
     value = "";
@@ -564,6 +570,7 @@ function lex(command: string): ShellToken[] {
       continue;
     }
     if (char === "#" && !active) {
+      commentsOmitted = true;
       while (i < command.length && command[i] !== "\n") i++;
       i--;
       continue;
@@ -574,6 +581,16 @@ function lex(command: string): ShellToken[] {
       continue;
     }
     if (/[;&|<>(){}]/.test(char)) {
+      if (
+        char === "{" &&
+        command[i + 1] === "}" &&
+        !active &&
+        (i + 2 === command.length || /\s/.test(command[i + 2]))
+      ) {
+        tokens.push({ value: "{}", dynamic: false });
+        i++;
+        continue;
+      }
       const fd = /[<>]/.test(char) && active && /^\d+$/.test(value) ? value : undefined;
       if (fd) {
         value = "";
@@ -593,7 +610,7 @@ function lex(command: string): ShellToken[] {
   if (quote) invalid();
   flush();
   if (tokens.length > 4096) invalid();
-  return tokens;
+  return { tokens, commentsOmitted };
 }
 
 const EXECUTABLES = new Set([
@@ -638,6 +655,43 @@ const EXECUTABLES = new Set([
   "chmod",
   "chown",
   "kill",
+  "killall",
+  "pkill",
+  "shred",
+  "srm",
+  "wipe",
+  "truncate",
+  "chgrp",
+  "dd",
+  "mkfs",
+  "mkfs.ext2",
+  "mkfs.ext3",
+  "mkfs.ext4",
+  "mkfs.xfs",
+  "mkfs.btrfs",
+  "mkfs.vfat",
+  "mkfs.fat",
+  "mkfs.ntfs",
+  "mkfs.exfat",
+  "mkfs.f2fs",
+  "mkfs.minix",
+  "mkfs.hfs",
+  "mkfs.hfsplus",
+  "mkfs.apfs",
+  "mkfs.ufs",
+  "reboot",
+  "shutdown",
+  "docker",
+  "kubectl",
+  "terraform",
+  "dropdb",
+  "redis-cli",
+  "pi",
+  "agent-browser",
+  "base64",
+  "wget",
+  "timeout",
+  "nohup",
 ]);
 const SF_OPERATIONS = new Set([
   "project deploy start",
@@ -671,6 +725,37 @@ const SF_OPERATIONS = new Set([
   "help",
   "force:apex:execute",
   "force:data:soql:query",
+  "project delete source",
+  "project delete tracking",
+  "project reset tracking",
+  "package delete",
+  "package version delete",
+  "package uninstall",
+  "package version promote",
+  "package push-upgrade schedule",
+  "package push-upgrade abort",
+  "package install",
+  "org logout",
+  "org generate password",
+  "org delete",
+  "org api",
+  "org auth show-access-token",
+  "org auth show-sfdx-auth-url",
+  "org auth show-user-password",
+  "plugins install",
+  "plugins uninstall",
+  "plugins remove",
+  "plugins reset",
+  "plugins list",
+  "agent adl delete",
+  "agent adl file delete",
+  "agent activate",
+  "agent deactivate",
+  "agent publish authoring-bundle",
+  "data create record",
+  "data create file",
+  "data upsert record",
+  "data import bulk",
 ]);
 const GIT_OPERATIONS = new Set([
   "status",
@@ -694,10 +779,168 @@ const GIT_OPERATIONS = new Set([
   "rev-parse",
   "ls-files",
 ]);
+const CLI_OPERATIONS: Record<string, Set<string>> = {
+  sf: SF_OPERATIONS,
+  sfdx: SF_OPERATIONS,
+  git: GIT_OPERATIONS,
+  pi: new Set([
+    "auth check",
+    "auth print-api-key",
+    "auth print-bearer-token",
+    "auth list",
+    "auth status",
+    "auth login",
+    "auth logout",
+  ]),
+  docker: new Set([
+    "system prune",
+    "compose down",
+    "rm",
+    "ps",
+    "images",
+    "inspect",
+    "image prune",
+    "container prune",
+    "volume prune",
+    "builder prune",
+    "compose ps",
+    "compose logs",
+    "compose config",
+    "compose up",
+    "stop",
+    "start",
+    "restart",
+    "exec",
+    "run",
+    "build",
+    "pull",
+    "push",
+    "rmi",
+    "volume rm",
+    "network rm",
+  ]),
+  kubectl: new Set([
+    "delete",
+    "get",
+    "describe",
+    "apply",
+    "create",
+    "replace",
+    "patch",
+    "exec",
+    "rollout status",
+    "rollout restart",
+    "scale",
+    "config view",
+    "config current-context",
+    "config use-context",
+    "logs",
+    "version",
+    "cluster-info",
+    "auth can-i",
+  ]),
+  terraform: new Set([
+    "destroy",
+    "apply",
+    "plan",
+    "show",
+    "validate",
+    "fmt",
+    "state list",
+    "state rm",
+    "state pull",
+    "state push",
+    "init",
+    "output",
+    "workspace list",
+    "workspace show",
+    "workspace select",
+  ]),
+  "redis-cli": new Set([
+    "FLUSHALL",
+    "FLUSHDB",
+    "PING",
+    "INFO",
+    "GET",
+    "SET",
+    "DEL",
+    "UNLINK",
+    "KEYS",
+    "SCAN",
+    "CONFIG GET",
+    "CONFIG SET",
+    "SHUTDOWN",
+    "SAVE",
+    "BGSAVE",
+    "MONITOR",
+  ]),
+  "agent-browser": new Set([
+    "open",
+    "snapshot",
+    "click",
+    "fill",
+    "select",
+    "press",
+    "type",
+    "eval",
+    "close",
+    "wait",
+    "get text",
+    "get url",
+    "get title",
+    "get value",
+    "get attr",
+    "get count",
+    "is visible",
+    "is enabled",
+    "is checked",
+    "find role",
+    "find text",
+    "find label",
+    "find placeholder",
+    "screenshot",
+    "pdf",
+    "cookies get",
+    "cookies set",
+    "cookies clear",
+    "storage local",
+    "storage session",
+    "network requests",
+    "tab new",
+    "tab list",
+    "tab switch",
+    "tab close",
+    "download",
+    "upload",
+    "scroll",
+    "back",
+    "forward",
+    "reload",
+    "focus",
+    "hover",
+    "check",
+    "uncheck",
+  ]),
+};
+
+function knownOperation(executable: string, words: Word[], start: number): string {
+  const operations = CLI_OPERATIONS[executable];
+  if (!operations) return "";
+  let result = "";
+  const parts: string[] = [];
+  for (const word of words.slice(start, start + 6)) {
+    if (word.dynamic || word.value.startsWith("-")) break;
+    parts.push(executable === "redis-cli" ? word.value.toUpperCase() : word.value);
+    const candidate = parts.join(" ");
+    if (operations.has(candidate)) result = candidate;
+  }
+  return result;
+}
 const BOOLEAN_FLAGS = new Set([
   "--json",
   "--dry-run",
   "--check-only",
+  "--checkonly",
   "--force",
   "--force-with-lease",
   "--hard",
@@ -796,14 +1039,141 @@ const ENUM_FLAGS: Record<string, string[]> = {
 /** Value roles belong to a particular command schema, never to a flag name alone. */
 function optionKind(executable: string, operation: string, flag: string): string | undefined {
   const includes = (options: string) => options.split(" ").includes(flag);
+  if (CLI_OPERATIONS[executable] && includes("--help --version")) return "boolean";
+  if (["sf", "sfdx"].includes(executable) && ORG_FLAGS.has(flag)) return "org";
+  if (["sf", "sfdx"].includes(executable) && includes("--json --verbose --quiet")) return "boolean";
+  if (executable === "pi") {
+    if (includes("--credentials --help --version")) return "boolean";
+    if (flag === "--provider") return "identifier";
+  }
+  if (
+    executable === "git" &&
+    operation === "status" &&
+    includes("--short --porcelain --branch -s -b")
+  )
+    return "boolean";
+  if (
+    executable === "git" &&
+    operation === "clean" &&
+    includes("--force --dry-run -f -d -x -X -n -fd -fdx -df -dfx")
+  )
+    return "boolean";
+  if (["kill", "killall", "pkill"].includes(executable)) {
+    if (
+      /^-(?:[1-9]\d?|HUP|INT|TERM|KILL|STOP|CONT)$/.test(flag) ||
+      includes("--help --version -f -x -e -v -q")
+    )
+      return "boolean";
+    if (includes("--signal -s")) return "signal";
+  }
+  if (executable.startsWith("mkfs")) {
+    if (
+      includes("--help --version -v -V") ||
+      (["mkfs.ext2", "mkfs.ext3", "mkfs.ext4"].includes(executable) && flag === "-F") ||
+      (executable === "mkfs.xfs" && flag === "-f")
+    )
+      return "boolean";
+    if (executable === "mkfs" && includes("--type -t")) return "filesystem";
+    if (includes("-L --label")) return "identifier";
+  }
+  if (executable === "find") {
+    if (includes("-delete -print -print0 -depth -xdev -mount -empty")) return "boolean";
+    if (includes("-maxdepth -mindepth")) return "numeric";
+    if (includes("-name -iname -path -ipath -regex -iregex")) return "payload";
+    if (includes("-exec -execdir -ok -okdir")) return "exec";
+    if (flag === "-type") return "file-type";
+  }
+  if (executable === "truncate" && includes("--size -s")) return "size";
+  if (executable === "shred" && includes("--iterations -n")) return "numeric";
+  if (executable === "shred" && includes("--size -s")) return "size";
+  if (["chmod", "chown", "chgrp"].includes(executable)) {
+    if (includes("--recursive -R --verbose -v --changes -c --silent --quiet -f --help --version"))
+      return "boolean";
+    if (includes("--reference")) return "path";
+  }
+  const booleans: Record<string, string> = {
+    shred: "--force -f --zero -z --remove -u --verbose -v --help --version",
+    srm: "-f -r -R -s -m -z -v --help --version",
+    wipe: "-f -r -R -q -v --help --version",
+    truncate: "--no-create -c --io-blocks -o --help --version",
+    reboot: "--force -f --halt --poweroff --reboot --no-wall --help",
+    shutdown: "-h -r -H -P -k -c --halt --poweroff --reboot --cancel --no-wall --help",
+    dropdb:
+      "--force -f --if-exists --echo -e --interactive -i --password -W --no-password -w --help --version",
+    "redis-cli": "--raw --no-raw --json --quoted-json --tls --insecure --help --version",
+    base64: "--decode -d -D --ignore-garbage -i --help --version",
+    wget: "--quiet -q --verbose -v --help --version",
+  };
+  if (includes(booleans[executable] ?? "")) return "boolean";
+  if (executable === "dropdb" && includes("--host -h --port -p --username -U --maintenance-db"))
+    return "identifier";
+  if (executable === "redis-cli") {
+    if (includes("-a --pass --user")) return "credential";
+    if (includes("-h --host")) return "identifier";
+    if (includes("-p -n")) return "numeric";
+  }
+  if (executable === "docker") {
+    const options: Record<string, string> = {
+      "system prune": "--all -a --force -f --volumes",
+      "compose down": "--volumes -v --remove-orphans",
+      rm: "--force -f --volumes -v --link -l",
+      ps: "--all -a --quiet -q",
+      images: "--all -a --quiet -q",
+      "image prune": "--all -a --force -f",
+      "container prune": "--force -f",
+      "volume prune": "--all -a --force -f",
+      "builder prune": "--all -a --force -f",
+    };
+    if (includes(options[operation] ?? "")) return "boolean";
+    if (operation === "compose down" && flag === "--rmi") return "image-removal";
+    if (includes("--context --host -H")) return "identifier";
+    if (flag === "--config") return "path";
+    if (includes("--format --filter")) return "payload";
+  }
+  if (executable === "kubectl") {
+    if (includes("--all --force --now --ignore-not-found --help --version")) return "boolean";
+    if (flag === "--cascade") return "cascade";
+    if (flag === "--dry-run") return "dry-run";
+    if (
+      flag === "--kubeconfig" ||
+      (["delete", "get", "describe", "apply", "create", "replace"].includes(operation) &&
+        includes("--filename -f"))
+    )
+      return "path";
+    if (includes("--namespace -n --context --cluster --user")) return "identifier";
+    if (flag === "--grace-period") return "numeric";
+    if (flag === "--timeout") return "duration";
+    if (includes("--selector -l --field-selector --patch -p")) return "payload";
+  }
+  if (executable === "terraform") {
+    if (includes("-destroy -auto-approve -refresh-only -no-color -compact-warnings -help --help"))
+      return "boolean";
+    if (
+      flag === "-chdir" ||
+      (["destroy", "apply", "plan"].includes(operation) && flag === "-var-file") ||
+      (operation === "plan" && flag === "-out")
+    )
+      return "path";
+    if (flag === "-target") return "identifier";
+    if (flag === "-var") return "payload";
+    if (flag === "-parallelism") return "numeric";
+  }
+  if (executable === "agent-browser") {
+    if (includes("--json --headed --help --version -i --interactive --full")) return "boolean";
+    if (includes("--session --profile")) return "identifier";
+  }
   if (["sf", "sfdx"].includes(executable) && SF_OPERATIONS.has(operation)) {
     if (ORG_FLAGS.has(flag)) return "org";
     if (
       BOOLEAN_FLAGS.has(flag) &&
       (includes("--json --help --version --verbose --quiet") ||
         (operation.startsWith("project deploy ") &&
-          includes("--dry-run --check-only --use-most-recent")) ||
-        (operation.startsWith("org delete ") && includes("--no-prompt")) ||
+          includes("--dry-run --check-only --checkonly --use-most-recent")) ||
+        ((operation.startsWith("org delete") ||
+          operation.startsWith("package ") ||
+          operation.startsWith("plugins ")) &&
+          includes("--no-prompt --force")) ||
+        (operation === "org logout" && includes("--all --no-prompt")) ||
         (["data query", "force:data:soql:query"].includes(operation) &&
           includes("--include-deleted --tooling-api")))
     )
@@ -826,7 +1196,21 @@ function optionKind(executable: string, operation: string, flag: string): string
         (operation.startsWith("data ") && includes("--values --sobject --record-id")))
     )
       return "payload";
-    if (operation === "api request rest" && flag === "--method") return "method";
+    if (["api request rest", "org api"].includes(operation) && flag === "--method") return "method";
+    if (operation.startsWith("project delete ") && includes("--source-dir --manifest"))
+      return "path";
+    if (operation === "project delete source" && flag === "--metadata") return "identifier";
+    if (operation === "agent publish authoring-bundle" && includes("--file --path")) return "path";
+    if (
+      operation.startsWith("package ") &&
+      includes(
+        "--package --package-id --package-version-id --target-dev-hub --installation-key --push-request-id",
+      )
+    )
+      return "identifier";
+    if (operation.startsWith("agent adl ") && includes("--library-id --file-id"))
+      return "identifier";
+    if (operation === "plugins reset" && flag === "--hard") return "boolean";
     if (NUMBER_FLAGS.has(flag) && includes("--wait --limit --max-rows")) return "numeric";
     if (
       ENUM_FLAGS[flag] &&
@@ -838,6 +1222,7 @@ function optionKind(executable: string, operation: string, flag: string): string
     return undefined;
   }
   if (executable === "curl") {
+    if (flag === "-fsSL" || flag === "-sSL" || flag === "-fsS") return "boolean";
     if (
       BOOLEAN_FLAGS.has(flag) &&
       includes(
@@ -881,7 +1266,7 @@ function optionKind(executable: string, operation: string, flag: string): string
     if (["log", "show"].includes(operation) && flag === "-n") return "numeric";
     return undefined;
   }
-  const booleans: Record<string, string> = {
+  const utilityBooleans: Record<string, string> = {
     echo: "-n",
     printf: "",
     rm: "--force --recursive --verbose -f -r -R -rf -fr -d -v",
@@ -894,7 +1279,7 @@ function optionKind(executable: string, operation: string, flag: string): string
     touch: "-a",
     mkdir: "--verbose -p -v",
   };
-  if (BOOLEAN_FLAGS.has(flag) && includes(booleans[executable] ?? "")) return "boolean";
+  if (BOOLEAN_FLAGS.has(flag) && includes(utilityBooleans[executable] ?? "")) return "boolean";
   if (["head", "tail"].includes(executable) && flag === "-n") return "numeric";
   return undefined;
 }
@@ -908,7 +1293,7 @@ function shellMetadata(value: unknown): {
 } {
   if (typeof value !== "string" || !value.trim()) invalid();
   if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value)) invalid();
-  const tokens = lex(value);
+  const { tokens, commentsOmitted } = lex(value);
   if (
     tokens.some(
       (token) =>
@@ -919,6 +1304,7 @@ function shellMetadata(value: unknown): {
     return {
       metadata: {
         commands: [{ executable: "opaque" }],
+        ...(commentsOmitted ? { policyTokens: "comments_withheld" } : {}),
         operators: tokens
           .filter((token): token is { operator: string; fd?: string } => "operator" in token)
           .map((token) => `${token.fd ?? ""}${token.operator}`),
@@ -931,9 +1317,10 @@ function shellMetadata(value: unknown): {
   const commands: Record<string, unknown>[] = [];
   const operators: string[] = [];
   const paths: string[] = [];
-  let complete = true,
-    withheld = false;
+  let complete = !commentsOmitted,
+    withheld = commentsOmitted;
   const targets = new Set<string>();
+  let targetRolesAmbiguous = false;
   let words: Word[] = [];
   const process = () => {
     if (!words.length) return;
@@ -941,24 +1328,121 @@ function shellMetadata(value: unknown): {
     const flags: Record<string, unknown>[] = [];
     const commandPaths: string[] = [],
       destinations: string[] = [];
+    const wrappers: Record<string, unknown>[] = [];
     let i = 0;
-    while (words[i] && /^[a-zA-Z_][a-zA-Z0-9_]*=/.test(words[i].value)) {
-      i++;
+    let environmentAssignments = 0;
+    let ambiguousWrapper = false;
+    const obscureRemainder = () => {
+      i = words.length;
+      ambiguousWrapper = true;
+      targetRolesAmbiguous = true;
       complete = false;
       withheld = true;
+    };
+    const assignment = (word: Word) => {
+      environmentAssignments++;
+      complete = false;
+      withheld = true;
+      if (!word.dynamic && /^SF_TEMP_SHOW_SECRETS=(?:true|false|1|0)$/.test(word.value)) {
+        command.environmentFlags = { SF_TEMP_SHOW_SECRETS: /=(?:true|1)$/.test(word.value) };
+      }
+    };
+    while (words[i] && /^[a-zA-Z_][a-zA-Z0-9_]*=/.test(words[i].value)) {
+      const word = words[i++];
+      assignment(word);
+      if (word.dynamic) {
+        obscureRemainder();
+        break;
+      }
     }
-    let executableWord = words[i++];
-    if (!executableWord || executableWord.dynamic) {
+    while (!ambiguousWrapper && words[i] && !words[i].dynamic) {
+      const wrapper = words[i].value;
+      if (!wrapper || !["env", "nohup", "timeout", "sudo"].includes(wrapper)) break;
+      i++;
+      const wrapperMetadata: Record<string, unknown> = { executable: wrapper };
+      wrappers.push(wrapperMetadata);
+      if (wrapper === "sudo") command.privileged = true;
+      if (wrapper === "env") {
+        while (words[i]) {
+          if (/^[a-zA-Z_][a-zA-Z0-9_]*=/.test(words[i].value)) {
+            const word = words[i++];
+            assignment(word);
+            if (word.dynamic) {
+              obscureRemainder();
+              break;
+            }
+            continue;
+          }
+          if (["-i", "--ignore-environment"].includes(words[i].value)) {
+            wrapperMetadata.clearEnvironment = true;
+            complete = false;
+            i++;
+            continue;
+          }
+          if (["-u", "--unset"].includes(words[i].value)) {
+            i++;
+            if (!words[i]) invalid();
+            wrapperMetadata.unsetVariable = "specified";
+            complete = false;
+            withheld = true;
+            if (words[i].dynamic) {
+              obscureRemainder();
+              break;
+            }
+            i++;
+            continue;
+          }
+          if (words[i].value === "--") i++;
+          break;
+        }
+      } else if (wrapper === "timeout") {
+        const duration = words[i++];
+        if (duration?.dynamic) obscureRemainder();
+        else if (!duration || !/^\d+(?:\.\d+)?[smhd]?$/.test(duration.value)) invalid();
+        else wrapperMetadata.duration = duration.value;
+      } else if (wrapper === "sudo") {
+        while (words[i] && ["-u", "-g", "-n", "-E", "-H", "--"].includes(words[i].value)) {
+          const option = words[i++].value;
+          if (["-u", "-g"].includes(option)) {
+            const identity = words[i++];
+            if (!identity) invalid();
+            wrapperMetadata.identity = "specified";
+            withheld = true;
+            complete = false;
+            if (identity.dynamic) {
+              obscureRemainder();
+              break;
+            }
+          }
+          if (["-E", "-H"].includes(option)) {
+            wrapperMetadata.environmentModified = true;
+            complete = false;
+          }
+          if (option === "--") break;
+        }
+      } else if (words[i]?.value === "--") i++;
+      if (ambiguousWrapper) break;
+      if (!words[i]) {
+        if (wrapper === "env") {
+          command.executable = "env";
+          command.output = "environment_variables";
+          complete = false;
+        } else invalid();
+        break;
+      }
+    }
+    if (wrappers.length) command.wrappers = wrappers;
+    if (environmentAssignments) command.environmentAssignments = environmentAssignments;
+    const executableWord = words[i++];
+    if (!executableWord && command.executable === "env") {
+      /* env without a command prints environment data. */
+    } else if (!executableWord || executableWord.dynamic) {
       command.executable = "opaque";
       complete = false;
     } else {
-      let executable = executableWord.value.split("/").pop() ?? "opaque";
-      if (executable === "sudo") {
-        command.privileged = true;
-        executableWord = words[i++];
-        executable = executableWord?.value.split("/").pop() ?? "opaque";
-      }
-      if (!EXECUTABLES.has(executable) || !executableWord || executableWord.dynamic) {
+      // A basename does not establish an arbitrary executable's argument schema.
+      const executable = executableWord.value.includes("/") ? "opaque" : executableWord.value;
+      if (!EXECUTABLES.has(executable)) {
         command.executable = "unknown";
         complete = false;
         withheld = true;
@@ -988,36 +1472,26 @@ function shellMetadata(value: unknown): {
         withheld = true;
       }
       let operation = "";
-      if (["sf", "sfdx", "git"].includes(executable)) {
-        const start = i;
-        while (words[i] && !words[i].value.startsWith("-")) i++;
-        const candidates = words.slice(start, i);
-        if (executable === "git") {
-          const first = candidates[0];
-          if (first && !first.dynamic && GIT_OPERATIONS.has(first.value)) {
-            operation = first.value;
-            command.subcommands = [operation];
-            i = start + 1;
-          } else {
-            complete = false;
-            withheld = true;
-          }
-        } else {
-          operation = candidates.map((word) => word.value).join(" ");
-          if (candidates.some((word) => word.dynamic) || !SF_OPERATIONS.has(operation)) {
-            complete = false;
-            withheld = true;
-          } else command.subcommands = candidates.map((word) => word.value);
+      if (CLI_OPERATIONS[executable]) {
+        operation = knownOperation(executable, words, i);
+        if (operation) {
+          command.subcommands = operation.split(" ");
+          i += operation.split(" ").length;
         }
       }
       let explicitMethod = false,
         dataMethod = false,
         optionsEnded = false,
         ambiguousArguments = false;
+      let positionalCount = 0;
+      let findExpression = false;
       if (executable === "curl") command.method = "GET";
       for (; i < words.length; i++) {
         const word = words[i];
-        if (word.dynamic && !optionsEnded) ambiguousArguments = true;
+        if (word.dynamic) {
+          ambiguousArguments = true;
+          targetRolesAmbiguous = true;
+        }
         if (
           word.dynamic ||
           opaque ||
@@ -1029,12 +1503,31 @@ function shellMetadata(value: unknown): {
           withheld = true;
           continue;
         }
+        if (
+          !operation &&
+          CLI_OPERATIONS[executable] &&
+          !optionsEnded &&
+          !word.value.startsWith("-")
+        ) {
+          operation = knownOperation(executable, words, i);
+          if (operation) {
+            command.subcommands = operation.split(" ");
+            i += operation.split(" ").length - 1;
+            continue;
+          }
+          complete = false;
+          withheld = true;
+          ambiguousArguments = true;
+          targetRolesAmbiguous = true;
+          continue;
+        }
         if (!optionsEnded && word.value === "--") {
           flags.push({ name: "--" });
           optionsEnded = true;
           continue;
         }
         if (!optionsEnded && word.value.startsWith("-")) {
+          if (executable === "find") findExpression = true;
           const equal = word.value.indexOf("=");
           const flag = equal < 0 ? word.value : word.value.slice(0, equal);
           const curl = executable === "curl";
@@ -1050,11 +1543,12 @@ function shellMetadata(value: unknown): {
             complete = false;
             withheld = true;
             ambiguousArguments = true;
+            targetRolesAmbiguous = true;
             continue;
           }
           const info: Record<string, unknown> = { name: flag };
           flags.push(info);
-          if (!(org || payload || flagPath || method || numeric || enums)) {
+          if (kind === "boolean") {
             if (equal >= 0) {
               complete = false;
               withheld = true;
@@ -1065,11 +1559,46 @@ function shellMetadata(value: unknown): {
             }
             continue;
           }
+          if (kind === "exec") {
+            const nestedWords: Word[] = [];
+            while (words[i + 1] && ![";", "+"].includes(words[i + 1].value))
+              nestedWords.push(words[++i]);
+            if (words[i + 1]) i++;
+            else complete = false;
+            const nestedExecutable = nestedWords[0]?.value;
+            const nested: Record<string, unknown> = {
+              executable:
+                nestedExecutable && !nestedWords[0].dynamic && EXECUTABLES.has(nestedExecutable)
+                  ? nestedExecutable
+                  : "opaque",
+            };
+            if (nestedExecutable && nested.executable !== "opaque") {
+              const nestedOperation = knownOperation(nestedExecutable, nestedWords, 1);
+              if (nestedOperation) nested.subcommands = nestedOperation.split(" ");
+              const nestedFlags = nestedWords
+                .slice(1)
+                .filter(
+                  (item) =>
+                    !item.dynamic &&
+                    item.value.startsWith("-") &&
+                    optionKind(nestedExecutable, nestedOperation, item.value) === "boolean",
+                )
+                .map((item) => item.value);
+              if (nestedFlags.length) nested.flags = nestedFlags;
+              if (nestedWords.some((item) => item.value === "{}")) nested.target = "current_match";
+            }
+            info.command = nested;
+            complete = false;
+            withheld = true;
+            continue;
+          }
           const argument =
             equal >= 0 ? { value: word.value.slice(equal + 1), dynamic: false } : words[++i];
           if (!argument || argument.dynamic) {
             complete = false;
             withheld = true;
+            ambiguousArguments = true;
+            targetRolesAmbiguous = true;
             continue;
           }
           if (org) {
@@ -1090,7 +1619,60 @@ function shellMetadata(value: unknown): {
           } else if (enums) {
             if (!enums.includes(argument.value)) invalid();
             info.value = argument.value;
-          } else {
+          } else if (kind === "identifier" || kind === "credential") {
+            info.value = "specified";
+            withheld = true;
+          } else if (
+            [
+              "size",
+              "duration",
+              "signal",
+              "filesystem",
+              "file-type",
+              "image-removal",
+              "cascade",
+              "dry-run",
+            ].includes(kind)
+          ) {
+            const safe =
+              kind === "size"
+                ? /^[+-]?\d+(?:\.\d+)?(?:[KMGTPEZY](?:i?B)?|[kmgtpezy])?$/.test(argument.value)
+                : kind === "duration"
+                  ? /^\d+(?:\.\d+)?(?:ms|s|m|h|d)?$/.test(argument.value)
+                  : kind === "signal"
+                    ? /^(?:[1-9]\d?|(?:SIG)?(?:HUP|INT|TERM|KILL|STOP|CONT))$/.test(argument.value)
+                    : (kind === "filesystem"
+                        ? [
+                            "ext2",
+                            "ext3",
+                            "ext4",
+                            "xfs",
+                            "btrfs",
+                            "vfat",
+                            "fat",
+                            "ntfs",
+                            "exfat",
+                            "f2fs",
+                            "minix",
+                            "hfs",
+                            "hfsplus",
+                            "apfs",
+                            "ufs",
+                          ]
+                        : kind === "file-type"
+                          ? ["b", "c", "d", "f", "l", "p", "s"]
+                          : kind === "image-removal"
+                            ? ["all", "local"]
+                            : kind === "cascade"
+                              ? ["orphan", "background", "foreground"]
+                              : ["client", "server", "none"]
+                      ).includes(argument.value);
+            if (safe) info.value = argument.value;
+            else {
+              complete = false;
+              withheld = true;
+            }
+          } else if (payload) {
             withheld = true;
             // Headers can override methods or other effects; their values stay private.
             if (!["--user", "--password", "--token", "--api-key"].includes(flag)) complete = false;
@@ -1107,10 +1689,17 @@ function shellMetadata(value: unknown): {
               ].includes(flag)
             )
               dataMethod = true;
+          } else {
+            complete = false;
+            withheld = true;
           }
           continue;
         }
-        if (executable === "curl") {
+        positionalCount++;
+        if (
+          ["curl", "wget"].includes(executable) ||
+          (executable === "agent-browser" && operation === "open")
+        ) {
           const target = destination(word.value);
           destinations.push(target.value);
           if (target.omitted) {
@@ -1118,18 +1707,186 @@ function shellMetadata(value: unknown): {
             withheld = true;
           }
         } else if (
-          ["rm", "cat", "head", "tail", "ls", "touch", "mkdir", "cp", "mv"].includes(executable) ||
+          [
+            "rm",
+            "cat",
+            "head",
+            "tail",
+            "ls",
+            "touch",
+            "mkdir",
+            "cp",
+            "mv",
+            "shred",
+            "srm",
+            "wipe",
+            "truncate",
+          ].includes(executable) ||
+          (executable === "find" && !findExpression) ||
+          ((executable.startsWith("mkfs") || executable === "base64") && positionalCount === 1) ||
           (executable === "git" &&
             (["add", "restore"].includes(operation) || (operation === "diff" && optionsEnded)))
         )
           commandPaths.push(pathValue(word.value));
-        else if (["echo", "printf", "true", "false", "pwd"].includes(executable)) withheld = true;
+        else if (
+          ["mkfs", "mkfs.ext2", "mkfs.ext3", "mkfs.ext4"].includes(executable) &&
+          positionalCount === 2 &&
+          /^\d{1,15}$/.test(word.value)
+        )
+          command.blocks = Number(word.value);
+        else if (executable === "dd") {
+          const equal = word.value.indexOf("=");
+          const name = word.value.slice(0, equal),
+            operand = word.value.slice(equal + 1);
+          if (equal > 0 && ["if", "of"].includes(name)) {
+            const path = pathValue(operand);
+            command.operands ??= [];
+            (command.operands as unknown[]).push({ name, path });
+            commandPaths.push(path);
+          } else if (
+            equal > 0 &&
+            ["bs", "ibs", "obs", "count", "skip", "seek"].includes(name) &&
+            /^\d+(?:[kKMGTPEZY](?:i?B)?)?$/.test(operand)
+          ) {
+            command.operands ??= [];
+            (command.operands as unknown[]).push({ name, value: operand });
+          } else if (
+            equal > 0 &&
+            ["conv", "iflag", "oflag", "status"].includes(name) &&
+            operand
+              .split(",")
+              .every((item) =>
+                [
+                  "notrunc",
+                  "sync",
+                  "fsync",
+                  "fdatasync",
+                  "noerror",
+                  "sparse",
+                  "append",
+                  "direct",
+                  "fullblock",
+                  "nocache",
+                  "none",
+                  "noxfer",
+                  "progress",
+                ].includes(item),
+              )
+          ) {
+            command.operands ??= [];
+            (command.operands as unknown[]).push({ name, value: operand });
+          } else {
+            complete = false;
+            withheld = true;
+          }
+        } else if (["chmod", "chown", "chgrp"].includes(executable)) {
+          const reference = flags.some((flag) => flag.name === "--reference");
+          if (positionalCount === 1 && !reference) {
+            if (
+              executable === "chmod" &&
+              /^(?:[0-7]{3,4}|[ugoa]*[+=-][rwxXstugo]*(?:,[ugoa]*[+=-][rwxXstugo]*)*)$/.test(
+                word.value,
+              )
+            )
+              command.mode = word.value;
+            else {
+              command.identity = "specified";
+              complete = false;
+              withheld = true;
+            }
+          } else if (executable === "chmod" && !command.mode && !reference) {
+            complete = false;
+            withheld = true;
+          } else commandPaths.push(pathValue(word.value));
+        } else if (
+          executable === "kubectl" &&
+          ["delete", "get", "describe"].includes(operation) &&
+          positionalCount === 1 &&
+          [
+            "all",
+            "pods",
+            "pod",
+            "deployments",
+            "deployment",
+            "services",
+            "service",
+            "namespaces",
+            "namespace",
+            "jobs",
+            "job",
+            "secrets",
+            "secret",
+            "configmaps",
+            "configmap",
+            "nodes",
+            "node",
+            "persistentvolumes",
+            "persistentvolume",
+            "persistentvolumeclaims",
+            "persistentvolumeclaim",
+            "statefulsets",
+            "daemonsets",
+            "replicasets",
+            "ingresses",
+          ].includes(word.value)
+        ) {
+          command.resourceType = word.value;
+        } else if (
+          executable === "redis-cli" &&
+          ["FLUSHALL", "FLUSHDB"].includes(operation) &&
+          ["ASYNC", "SYNC"].includes(word.value.toUpperCase())
+        ) {
+          command.mode = word.value.toUpperCase();
+        } else if (
+          executable === "shutdown" &&
+          positionalCount === 1 &&
+          /^(?:now|\+\d+|\d{1,2}:\d{2})$/.test(word.value)
+        ) {
+          command.schedule = word.value;
+        } else if (
+          ["sf", "sfdx"].includes(executable) &&
+          ["api request rest", "org api"].includes(operation) &&
+          word.value.startsWith("/")
+        ) {
+          if (command.apiPath !== undefined) {
+            complete = false;
+            withheld = true;
+            ambiguousArguments = true;
+            targetRolesAmbiguous = true;
+            continue;
+          }
+          command.apiPath = word.value.split(/[?#]/, 1)[0];
+          if (command.apiPath !== word.value) {
+            complete = false;
+            withheld = true;
+          }
+        } else if (["echo", "printf", "true", "false", "pwd"].includes(executable)) withheld = true;
         else {
           complete = false;
           withheld = true;
         }
       }
+      if (
+        CLI_OPERATIONS[executable] &&
+        !operation &&
+        !flags.some((flag) => ["--help", "--version"].includes(flag.name as string))
+      )
+        complete = false;
+      if (
+        executable === "agent-browser" &&
+        !["snapshot", "close", "back", "forward", "reload", "tab list"].includes(operation)
+      )
+        complete = false;
       if (dataMethod && !explicitMethod) command.method = "POST";
+      // Official plugin-api uses GET when no method or request-file override is present.
+      if (
+        ["sf", "sfdx"].includes(executable) &&
+        operation === "api request rest" &&
+        command.apiPath !== undefined &&
+        command.method === undefined &&
+        !ambiguousArguments
+      )
+        command.method = "GET";
     }
     if (flags.length) command.flags = flags;
     if (commandPaths.length) {
@@ -1175,13 +1932,36 @@ function shellMetadata(value: unknown): {
     metadata: {
       commands,
       operators,
+      ...(commentsOmitted ? { policyTokens: "comments_withheld" } : {}),
       ...(orgCommands > 1 ? { orgContext: "ambiguous_multiple_commands" } : {}),
     },
     paths,
-    targetOrg: targets.size === 1 && orgCommands <= 1 ? [...targets][0] : undefined,
+    targetOrg:
+      targets.size === 1 && orgCommands <= 1 && !targetRolesAmbiguous ? [...targets][0] : undefined,
     complete,
     withheld,
   };
+}
+
+/** Shared structural head projection; unknown effect context retains no head restriction. */
+export function jevShellExecutableHeads(
+  metadata: JevToolMetadata,
+): ReadonlySet<string> | undefined {
+  const shell = metadata.metadata.shell as
+    | {
+        commands?: Array<{ executable?: string; wrappers?: Array<{ executable?: string }> }>;
+        policyTokens?: string;
+      }
+    | undefined;
+  // Omitted comments/scripts can contain heads the baseline tokenizer still sees.
+  if (!metadata.complete || shell?.policyTokens === "comments_withheld" || !shell?.commands?.length)
+    return undefined;
+  const heads = shell.commands.flatMap((command) => [
+    command.executable,
+    ...(command.wrappers ?? []).map((wrapper) => wrapper.executable),
+  ]);
+  if (heads.some((head) => !head || ["unknown", "opaque"].includes(head))) return undefined;
+  return new Set(heads as string[]);
 }
 
 /** Local-only resolver hint. The org identity is never included in outbound metadata. */

@@ -16,8 +16,12 @@ const SESSION = "synthetic-facts-session";
 const NOW = new Date("2026-09-23T12:00:00.000Z");
 let directory: string;
 let cwd: string;
+let homeDirectory: string;
 let agentDir: string;
 let resolveFacts: typeof import("../lib/jev-facts.ts").resolveJevFacts;
+let resolveFileFacts: typeof import("../lib/jev-facts.ts").resolveJevFileFacts;
+let targetIndependentPress: typeof import("../lib/jev-facts.ts").isJevTargetIndependentBrowserPress;
+let contextComplete: typeof import("../lib/jev-risk.ts").jevContextComplete;
 let snapshots: typeof import("../../../lib/common/sf-browser-snapshot-state.ts");
 let config: GuardrailConfig;
 let controller: AbortController;
@@ -58,13 +62,21 @@ const resolve = (
 beforeAll(async () => {
   directory = mkdtempSync(join(tmpdir(), "sf-guardrail-jev-facts-"));
   cwd = join(directory, "project");
+  homeDirectory = join(directory, "home");
   agentDir = join(directory, "agent");
   mkdirSync(cwd);
+  mkdirSync(homeDirectory);
   mkdirSync(agentDir);
   // The real browser store captures its path at module load. Load after isolating Pi state.
   vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
+  vi.stubEnv("HOME", homeDirectory);
   vi.resetModules();
-  ({ resolveJevFacts: resolveFacts } = await import("../lib/jev-facts.ts"));
+  ({
+    resolveJevFacts: resolveFacts,
+    resolveJevFileFacts: resolveFileFacts,
+    isJevTargetIndependentBrowserPress: targetIndependentPress,
+  } = await import("../lib/jev-facts.ts"));
+  ({ jevContextComplete: contextComplete } = await import("../lib/jev-risk.ts"));
   snapshots = await import("../../../lib/common/sf-browser-snapshot-state.ts");
 });
 
@@ -105,9 +117,29 @@ describe("Jev filesystem facts", () => {
     );
     const canonical = await realpath(join(cwd, "body.txt"));
     expect(result.facts.files).toEqual([
-      { path: "body.txt", exists: true, resolvedPath: canonical },
-      { path: "body-link.txt", exists: true, resolvedPath: canonical },
-      { path: "missing.txt", exists: false },
+      {
+        path: "body.txt",
+        absolutePath: join(cwd, "body.txt"),
+        relativePath: "body.txt",
+        basename: "body.txt",
+        exists: true,
+        resolvedPath: canonical,
+      },
+      {
+        path: "body-link.txt",
+        absolutePath: join(cwd, "body-link.txt"),
+        relativePath: "body-link.txt",
+        basename: "body-link.txt",
+        exists: true,
+        resolvedPath: canonical,
+      },
+      {
+        path: "missing.txt",
+        absolutePath: join(cwd, "missing.txt"),
+        relativePath: "missing.txt",
+        basename: "missing.txt",
+        exists: false,
+      },
     ]);
     expect(JSON.stringify(result)).not.toContain(BODY);
     expect(sdk.connect).not.toHaveBeenCalled();
@@ -132,7 +164,13 @@ describe("Jev filesystem facts", () => {
       symlinkSync("loop-b", join(cwd, "loop-a"));
       symlinkSync("loop-a", join(cwd, "loop-b"));
       expect((await resolve("read", { path: "loop-a" })).facts.files).toEqual([
-        { path: "loop-a", exists: "unknown" },
+        {
+          path: "loop-a",
+          absolutePath: join(cwd, "loop-a"),
+          relativePath: "loop-a",
+          basename: "loop-a",
+          exists: "unknown",
+        },
       ]);
     },
   );
@@ -148,10 +186,105 @@ describe("Jev filesystem facts", () => {
     expect(first.facts.files?.[0].resolvedPath).not.toBe(second.facts.files?.[0].resolvedPath);
   });
 
+  it("provides the same logical variants for absolute and normalized relative inputs", async () => {
+    const absolute = join(cwd, "nested", "new-file.ts");
+    const files = await resolveFileFacts([absolute, "nested/../nested/new-file.ts"], cwd);
+    expect(files).toEqual([
+      {
+        path: absolute,
+        absolutePath: absolute,
+        relativePath: join("nested", "new-file.ts"),
+        basename: "new-file.ts",
+        exists: false,
+      },
+      {
+        path: "nested/../nested/new-file.ts",
+        absolutePath: absolute,
+        relativePath: join("nested", "new-file.ts"),
+        basename: "new-file.ts",
+        exists: false,
+      },
+    ]);
+  });
+
+  it("observes home-relative paths equivalently and supplies variants even for missing files", async () => {
+    mkdirSync(join(homeDirectory, ".sf"));
+    const absolute = join(homeDirectory, ".sf", "fixture.json");
+    writeFileSync(absolute, BODY);
+    const files = await resolveFileFacts(
+      [absolute, "~/.sf/fixture.json", "../home/.sf/fixture.json", "~/.sfdx/new.json", "~"],
+      cwd,
+    );
+    const canonical = await realpath(absolute);
+    for (const file of files.slice(0, 3))
+      expect(file).toMatchObject({
+        absolutePath: absolute,
+        relativePath: join("..", "home", ".sf", "fixture.json"),
+        basename: "fixture.json",
+        homeRelativePath: "~/.sf/fixture.json",
+        exists: true,
+        resolvedPath: canonical,
+      });
+    expect(files[3]).toEqual({
+      path: "~/.sfdx/new.json",
+      absolutePath: join(homeDirectory, ".sfdx", "new.json"),
+      relativePath: join("..", "home", ".sfdx", "new.json"),
+      basename: "new.json",
+      homeRelativePath: "~/.sfdx/new.json",
+      exists: false,
+    });
+    expect(files[4]).toMatchObject({
+      path: "~",
+      absolutePath: homeDirectory,
+      relativePath: join("..", "home"),
+      basename: "home",
+      homeRelativePath: "~",
+      exists: true,
+    });
+    expect(JSON.stringify(files)).not.toContain(BODY);
+  });
+
+  it("does not label sibling directories or traversal outside HOME as home-relative", async () => {
+    const files = await resolveFileFacts(
+      [join(directory, "home-extra", "new.json"), "~/../outside/new.json"],
+      cwd,
+    );
+    expect(files.map((file) => file.absolutePath)).toEqual([
+      join(directory, "home-extra", "new.json"),
+      join(directory, "outside", "new.json"),
+    ]);
+    for (const file of files) expect(file).not.toHaveProperty("homeRelativePath");
+  });
+
+  it("keeps the logical link variants and the actual target as separate observations", async () => {
+    const target = join(homeDirectory, "linked-target.txt");
+    writeFileSync(target, BODY);
+    symlinkSync(target, join(cwd, "home-target-link"));
+    const [file] = await resolveFileFacts(["home-target-link"], cwd);
+    expect(file).toEqual({
+      path: "home-target-link",
+      absolutePath: join(cwd, "home-target-link"),
+      relativePath: "home-target-link",
+      basename: "home-target-link",
+      exists: true,
+      resolvedPath: await realpath(target),
+    });
+    expect(JSON.stringify(file)).not.toContain(BODY);
+  });
+
   it("bounds filesystem lookups before touching an unbounded path population", async () => {
     await expect(
       resolve("read", { paths: Array.from({ length: 33 }, (_, index) => `missing-${index}`) }),
     ).rejects.toThrow("invalid-metadata");
+  });
+
+  it("rejects invalid direct helper inputs before filesystem lookup", async () => {
+    await expect(resolveFileFacts(["valid.txt", 3] as unknown as string[], cwd)).rejects.toThrow(
+      "invalid-metadata",
+    );
+    await expect(resolveFileFacts("invalid" as unknown as string[], cwd)).rejects.toThrow(
+      "invalid-metadata",
+    );
   });
 });
 
@@ -304,6 +437,115 @@ describe("fresh Salesforce org facts", () => {
     expect(result.orgIdentity).toBeUndefined();
     expect(sdk.connect).not.toHaveBeenCalled();
   });
+
+  const customOrgRule = (cmd = "git") => ({
+    id: "synthetic-custom-org-rule",
+    match: { tool: "bash" as const, ast: { cmd, subCmd: ["status"] } },
+    whenOrgType: ["production" as const],
+    action: "block" as const,
+    behavior: "block" as const,
+  });
+
+  it.each(["production", "sandbox"])(
+    "resolves a fresh %s default for a retained custom non-SF org policy",
+    async (orgType) => {
+      config.orgAwareGate.rules = [customOrgRule()];
+      sdk.connect.mockResolvedValueOnce(session({ orgType }));
+      const result = await resolve("bash", {
+        shell: { commands: [{ executable: "git", subcommands: ["status"] }] },
+      });
+      expect(result.facts.org).toEqual({ type: orgType, verified: true, explicit: false });
+      expect(sdk.connect).toHaveBeenCalledOnce();
+      expect(sdk.connect.mock.calls[0][0]).toMatchObject({
+        cwd,
+        targetOrg: undefined,
+        fresh: true,
+        timeoutMs: 400,
+      });
+      expect(result.orgIdentity).toBe("synthetic-org-identity");
+      expect(JSON.stringify(result.facts)).not.toContain("synthetic-org-identity");
+    },
+  );
+
+  it("keeps failed custom-policy org resolution unknown and incomplete", async () => {
+    config.orgAwareGate.rules = [customOrgRule()];
+    sdk.connect.mockRejectedValueOnce(new Error("synthetic-auth-failure"));
+    const fields = { shell: { commands: [{ executable: "git", subcommands: ["status"] }] } };
+    const result = await resolve("bash", fields);
+    expect(result.facts.org).toEqual({ type: "unknown", verified: false, explicit: false });
+    expect(result.orgIdentity).toBeUndefined();
+    expect(contextComplete(metadata("bash", fields), result.facts)).toBe(false);
+  });
+
+  it("gathers org facts by executable applicability without matching subcommands or severity", async () => {
+    config.orgAwareGate.rules = [
+      {
+        ...customOrgRule(),
+        match: {
+          tool: "bash",
+          ast: { cmd: "git", subCmd: ["push"], flagIn: { "--force": ["true"] } },
+        },
+        enabled: false,
+        behavior: "off",
+      },
+    ];
+    const result = await resolve("bash", {
+      shell: { commands: [{ executable: "git", subcommands: ["status"] }] },
+    });
+    expect(result.facts.org).toEqual({ type: "sandbox", verified: true, explicit: false });
+    expect(sdk.connect).toHaveBeenCalledOnce();
+  });
+
+  it("includes wrapper heads when gathering custom-policy org facts", async () => {
+    config.orgAwareGate.rules = [customOrgRule("env")];
+    const result = await resolve("bash", {
+      shell: { commands: [{ executable: "git", wrappers: [{ executable: "env" }] }] },
+    });
+    expect(result.facts.org).toEqual({ type: "sandbox", verified: true, explicit: false });
+    expect(sdk.connect).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { shell: { commands: [{ executable: "unknown" }] } },
+    { shell: { commands: [{ executable: "git" }], policyTokens: "comments_withheld" } },
+    { shell: { commands: [] } },
+  ])("retains org fact requirements for opaque or absent shell heads", async (fields) => {
+    config.orgAwareGate.rules = [customOrgRule("terraform")];
+    const result = await resolve("bash", fields);
+    expect(result.facts.org).toEqual({ type: "sandbox", verified: true, explicit: false });
+    expect(sdk.connect).toHaveBeenCalledOnce();
+  });
+
+  it("retains org fact requirements when complete head filtering is unavailable", async () => {
+    config.orgAwareGate.rules = [customOrgRule("terraform")];
+    const fields = { shell: { commands: [{ executable: "git" }] } };
+    const result = await resolve(
+      "bash",
+      fields,
+      {},
+      {
+        metadata: { ...metadata("bash", fields), complete: false },
+      },
+    );
+    expect(result.facts.org).toEqual({ type: "sandbox", verified: true, explicit: false });
+    expect(sdk.connect).toHaveBeenCalledOnce();
+  });
+
+  it("avoids org lookup when all configured policy heads are structurally excluded", async () => {
+    config.orgAwareGate.rules = [customOrgRule("terraform")];
+    const result = await resolve("bash", {
+      shell: { commands: [{ executable: "git", subcommands: ["status"] }] },
+    });
+    expect(result.facts).toEqual({});
+    expect(sdk.connect).not.toHaveBeenCalled();
+  });
+
+  it("keeps exact Escape target-independent in the presence of custom shell org policy", async () => {
+    config.orgAwareGate.rules = [customOrgRule()];
+    const result = await resolve("sf_browser_press", { key: "Escape" }, { key: "Escape" });
+    expect(result.facts).toEqual({});
+    expect(sdk.connect).not.toHaveBeenCalled();
+  });
 });
 
 describe("browser snapshot facts and local binding", () => {
@@ -331,6 +573,84 @@ describe("browser snapshot facts and local binding", () => {
     expect(JSON.stringify(result)).not.toContain(BODY);
     expect(JSON.stringify(result.facts)).not.toContain("fixture.lightning.force.com");
     expect(result.facts.org).toEqual({ type: "sandbox", verified: true, explicit: false });
+  });
+
+  it("omits irrelevant target and org facts for exact Escape without claiming a fresh target", async () => {
+    const result = await resolve(
+      "sf_browser_press",
+      { key: "Escape" },
+      { key: "Escape", reason: `Cancel ${BODY}` },
+    );
+    expect(result.facts).toEqual({});
+    expect(result.orgIdentity).toBeUndefined();
+    expect(result.browserIdentity).toMatch(/^[0-9a-f]{64}$/);
+    expect(sdk.connect).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain(BODY);
+  });
+
+  it("binds actual page observations locally for Escape without claiming the probe is a target", async () => {
+    const escape = () => resolve("sf_browser_press", { key: "Escape" }, { key: "Escape" });
+    const missing = await escape();
+    snapshots.writeLatestBrowserSnapshotRefs({
+      sessionId: SESSION,
+      snapshot: `- button "Save ${BODY}" [ref=e0]`,
+      url: `https://fixture.lightning.force.com/form?token=${BODY}`,
+    });
+    const observed = await escape();
+    snapshots.markLatestBrowserSnapshotStale(SESSION, "Synthetic page change");
+    const invalidated = await escape();
+    snapshots.writeLatestBrowserSnapshotRefs({
+      sessionId: SESSION,
+      snapshot: `- button "Delete ${BODY}" [ref=e0]`,
+      url: `https://other.lightning.force.com/form?token=${BODY}`,
+    });
+    const replaced = await escape();
+    expect(missing.browserIdentity).not.toBe(observed.browserIdentity);
+    expect(observed.browserIdentity).not.toBe(invalidated.browserIdentity);
+    expect(invalidated.browserIdentity).not.toBe(replaced.browserIdentity);
+    for (const result of [missing, observed, invalidated, replaced]) {
+      expect(result.facts).toEqual({});
+      expect(result.orgIdentity).toBeUndefined();
+      expect(JSON.stringify(result)).not.toContain(BODY);
+      expect(JSON.stringify(result)).not.toContain("lightning.force.com");
+    }
+    expect(sdk.connect).not.toHaveBeenCalled();
+  });
+
+  it.each(["Enter", "NumpadEnter", "Tab", "escape", "Control+Escape", "Shift+Escape"])(
+    "retains missing focus and org verification requirements for %s",
+    async (key) => {
+      capture();
+      const result = await resolve("sf_browser_press", { key }, { key });
+      expect(result.facts.browser).toEqual({ status: "missing-ref" });
+      expect(result.facts.org).toEqual({ type: "unknown", verified: false, explicit: false });
+      expect(sdk.connect).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("does not apply target independence to mismatched metadata or another browser tool", async () => {
+    capture();
+    expect(
+      targetIndependentPress(
+        "sf_browser_press",
+        { key: "Escape" },
+        metadata("sf_browser_press", { key: "Enter" }),
+      ),
+    ).toBe(false);
+    expect(
+      targetIndependentPress(
+        "sf_browser_press",
+        { key: "Escape" },
+        metadata("sf_browser_click", { key: "Escape" }),
+      ),
+    ).toBe(false);
+    const mismatch = await resolve("sf_browser_press", { key: "Enter" }, { key: "Escape" });
+    const click = await resolve("sf_browser_click", { key: "Escape" }, { key: "Escape" });
+    for (const result of [mismatch, click]) {
+      expect(result.facts.browser).toEqual({ status: "missing-ref" });
+      expect(result.facts.org).toEqual({ type: "unknown", verified: false, explicit: false });
+    }
+    expect(sdk.connect).toHaveBeenCalledTimes(2);
   });
 
   it.each([

@@ -13,6 +13,14 @@ export type ProtectionLevel = "noAccess" | "readOnly" | "none";
 export type RuleBehavior = "off" | "confirm" | "block";
 export type GuardrailEngine = "deterministic" | "jev";
 export type JevAction = "allow" | "confirm" | "block";
+export type JevQuestionId =
+  "risk" | "file_policy" | "command_policy" | "org_policy" | "disclosure" | "authority";
+
+export interface JevChoiceAnswer {
+  choice: JevAction;
+  probabilities: Record<JevAction, number>;
+  confidence: number;
+}
 
 export interface JevToolDescriptor {
   description: string;
@@ -30,7 +38,15 @@ export interface JevToolMetadata {
 
 export interface JevFacts {
   org?: { type: OrgTypeFilter; verified: boolean; explicit: boolean };
-  files?: Array<{ path: string; exists: boolean | "unknown"; resolvedPath?: string }>;
+  files?: Array<{
+    path: string;
+    exists: boolean | "unknown";
+    resolvedPath?: string;
+    absolutePath?: string;
+    relativePath?: string;
+    basename?: string;
+    homeRelativePath?: string;
+  }>;
   browser?: { status: string; role?: string; label?: string; ageMs?: number };
 }
 
@@ -47,6 +63,8 @@ export interface JevEvidence {
   requestId?: string;
   probabilities?: Record<JevAction, number>;
   confidence?: number;
+  /** Independent model answers; these are not combined into a calibrated probability. */
+  answers?: Partial<Record<JevQuestionId, JevChoiceAnswer>>;
   latencyMs: number;
   cost?: number;
   failure?: string;
@@ -57,26 +75,27 @@ export interface JevEvidence {
   factsHash?: string;
 }
 
-export interface JevPrediction {
-  choice: JevAction;
-  probabilities: Record<JevAction, number>;
-  confidence: number;
+export interface JevPrediction extends JevChoiceAnswer {
+  answers?: Partial<Record<JevQuestionId, JevChoiceAnswer>>;
   model: string;
   provider: string;
   requestId: string;
   usage: { input_tokens: number; output_tokens: number; cost?: number };
 }
 
+export interface JevChoiceQuestion {
+  type: "choice";
+  instructions: unknown;
+  criteria: Record<JevAction, unknown>;
+}
+
 export interface JevRequest {
   model: string;
+  provider?: { only: ["typesafe"]; allow_fallbacks: false };
   state: unknown;
-  questions: {
-    risk: {
-      type: "choice";
-      instructions: unknown;
-      criteria: Record<JevAction, string>;
-    };
-  };
+  questions: { risk: JevChoiceQuestion } & Partial<
+    Record<Exclude<JevQuestionId, "risk">, JevChoiceQuestion>
+  >;
 }
 
 export interface PolicyPattern {

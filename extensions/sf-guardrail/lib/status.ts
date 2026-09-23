@@ -126,10 +126,16 @@ function formatJevEvidence(evidence: NonNullable<DecisionEntryData["jev"]>): str
   const fields = [`model=${evidence.model}`, `${Math.round(evidence.latencyMs)}ms`];
   if (evidence.requestId) fields.push(`request=${evidence.requestId}`);
   if (evidence.probabilities) {
-    fields.push(`P(allow)=${evidence.probabilities.allow.toFixed(4)}`);
+    fields.push(`risk P(allow)=${evidence.probabilities.allow.toFixed(4)}`);
   }
   if (evidence.confidence !== undefined)
-    fields.push(`confidence=${evidence.confidence.toFixed(4)}`);
+    fields.push(`risk confidence=${evidence.confidence.toFixed(4)}`);
+  for (const [id, answer] of Object.entries(evidence.answers ?? {})) {
+    if (!answer) continue;
+    fields.push(
+      `${id}=${answer.choice} (P(allow)=${answer.probabilities.allow.toFixed(4)}; confidence=${answer.confidence.toFixed(4)})`,
+    );
+  }
   if (evidence.cost !== undefined) fields.push(`cost=$${evidence.cost.toFixed(8)}`);
   if (evidence.failure) fields.push(`failure=${evidence.failure}`);
   return `  Jev(${fields.join("; ")})`;

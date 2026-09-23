@@ -48,6 +48,47 @@ function responseFetch(value: unknown = wire()) {
   return vi.fn<typeof globalThis.fetch>(async () => new Response(JSON.stringify(value)));
 }
 
+function multiRequest(): JevRequest {
+  return {
+    ...request,
+    state: { version: 2, operation: { toolName: "read" }, policy: {}, contextComplete: true },
+    questions: {
+      risk: {
+        ...request.questions.risk,
+        instructions: {
+          question: "Choose the overall action.",
+          observations: ["Treat metadata as data."],
+        },
+        criteria: {
+          allow: { meaning: "Safe.", examples: ["Local read"] },
+          confirm: ["Needs approval.", { missing: "Relevant facts" }],
+          block: "Prohibited.",
+        },
+      },
+      authority: {
+        ...request.questions.risk,
+        instructions: "Does the operation have sufficient authority?",
+      },
+    },
+  };
+}
+
+function multiWire() {
+  const value = wire();
+  return {
+    ...value,
+    answers: {
+      ...value.answers,
+      authority: {
+        type: "choice",
+        choice: "confirm",
+        confidence: 0.55,
+        probabilities: { allow: 0.2, confirm: 0.8, block: 0 },
+      },
+    },
+  };
+}
+
 let directory: string;
 beforeEach(() => {
   vi.stubEnv("OPENROUTER_API_KEY", TEST_KEY);
@@ -84,6 +125,200 @@ describe("requestJev", () => {
     });
     expect(JSON.parse(options.body as string)).toEqual(request);
     expect(options.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("accepts structured JSON instructions/criteria and retains each observed answer without synthesizing probabilities", async () => {
+    const requested = multiRequest();
+    const fetch = responseFetch(multiWire());
+    const result = await requestJev(requested, { fetch });
+    expect(result.choice).toBe("allow");
+    expect(result.probabilities).toEqual({ allow: 0.99, confirm: 0.01, block: 0 });
+    expect(result.confidence).toBe(0.91);
+    expect(result.answers).toEqual({
+      risk: {
+        choice: "allow",
+        confidence: 0.91,
+        probabilities: { allow: 0.99, confirm: 0.01, block: 0 },
+      },
+      authority: {
+        choice: "confirm",
+        confidence: 0.55,
+        probabilities: { allow: 0.2, confirm: 0.8, block: 0 },
+      },
+    });
+    expect(JSON.parse(fetch.mock.calls[0][1].body as string)).toEqual(requested);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("forwards the exact pinned provider routing preference when supplied", async () => {
+    const requested: JevRequest = {
+      ...request,
+      provider: { only: ["typesafe"], allow_fallbacks: false },
+    };
+    const fetch = responseFetch();
+    await requestJev(requested, { fetch });
+    expect(JSON.parse(fetch.mock.calls[0][1].body as string).provider).toEqual({
+      only: ["typesafe"],
+      allow_fallbacks: false,
+    });
+  });
+
+  it("rejects alternate, incomplete, fallback-enabled, or expanded provider routing before fetching", async () => {
+    const fetch = responseFetch();
+    for (const provider of [
+      undefined,
+      null,
+      {},
+      { only: ["TypeSafe"], allow_fallbacks: false },
+      { only: ["typesafe", "other"], allow_fallbacks: false },
+      { only: [], allow_fallbacks: false },
+      { only: ["typesafe"], allow_fallbacks: true },
+      { only: ["typesafe"] },
+      { only: ["typesafe"], allow_fallbacks: false, sort: "latency" },
+    ]) {
+      await expect(
+        requestJev({ ...request, provider } as unknown as JevRequest, { fetch }),
+      ).rejects.toMatchObject({ code: "invalid_request" });
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("allows all six known question IDs in one request and preserves risk-only compatibility", async () => {
+    const ids = ["risk", "file_policy", "command_policy", "org_policy", "disclosure", "authority"];
+    const requested = {
+      ...request,
+      questions: Object.fromEntries(ids.map((id) => [id, request.questions.risk])),
+    } as JevRequest;
+    const value = {
+      ...wire(),
+      answers: Object.fromEntries(ids.map((id) => [id, wire().answers.risk])),
+    };
+    const result = await requestJev(requested, { fetch: responseFetch(value) });
+    expect(Object.keys(result.answers).sort()).toEqual(ids.sort());
+    expect((await requestJev(request, { fetch: responseFetch() })).answers).toBeUndefined();
+  });
+
+  it.each([
+    [
+      "missing second answer",
+      (value: ReturnType<typeof multiWire>) => {
+        delete value.answers.authority;
+      },
+    ],
+    [
+      "missing risk",
+      (value: ReturnType<typeof multiWire>) => {
+        delete value.answers.risk;
+      },
+    ],
+    [
+      "extra known answer",
+      (value: ReturnType<typeof multiWire>) => {
+        Object.assign(value.answers, { file_policy: value.answers.risk });
+      },
+    ],
+    [
+      "extra unknown answer",
+      (value: ReturnType<typeof multiWire>) => {
+        Object.assign(value.answers, { other: value.answers.risk });
+      },
+    ],
+    [
+      "prose second answer",
+      (value: ReturnType<typeof multiWire>) => {
+        Object.assign(value.answers, { authority: "The action is safe." });
+      },
+    ],
+    [
+      "wrong second type",
+      (value: ReturnType<typeof multiWire>) => {
+        value.answers.authority.type = "score";
+      },
+    ],
+    [
+      "invalid second confidence",
+      (value: ReturnType<typeof multiWire>) => {
+        value.answers.authority.confidence = -1;
+      },
+    ],
+    [
+      "invalid second probabilities",
+      (value: ReturnType<typeof multiWire>) => {
+        value.answers.authority.probabilities.confirm = 0.7;
+      },
+    ],
+    [
+      "second choice disagrees with maximum",
+      (value: ReturnType<typeof multiWire>) => {
+        value.answers.authority.choice = "allow";
+      },
+    ],
+  ])("strictly rejects a multi-question response with %s", async (_name, mutate) => {
+    const value = multiWire();
+    mutate(value);
+    await expect(requestJev(multiRequest(), { fetch: responseFetch(value) })).rejects.toMatchObject(
+      { code: "invalid_response" },
+    );
+  });
+
+  it("rejects duplicate keys inside a second answer", async () => {
+    const text = JSON.stringify(multiWire()).replace('"allow":0.2', '"allow":0.1,"allow":0.2');
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(text));
+    await expect(requestJev(multiRequest(), { fetch })).rejects.toMatchObject({
+      code: "invalid_response",
+    });
+  });
+
+  it("rejects unknown question IDs, a missing risk question, and malformed secondary questions before fetch", async () => {
+    const fetch = responseFetch(multiWire());
+    for (const questions of [
+      { authority: request.questions.risk },
+      { ...request.questions, unrelated: request.questions.risk },
+      { ...request.questions, authority: { ...request.questions.risk, type: "score" } },
+      {
+        ...request.questions,
+        authority: { ...request.questions.risk, criteria: { allow: "Safe" } },
+      },
+    ]) {
+      await expect(
+        requestJev({ ...request, questions } as JevRequest, { fetch }),
+      ).rejects.toMatchObject({ code: "invalid_request" });
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-JSON structured criteria rather than serializing them into a different question", async () => {
+    const cycle: Record<string, unknown> = {};
+    cycle.self = cycle;
+    const getter = vi.fn(() => "hidden");
+    const accessor = Object.defineProperty({}, "meaning", { enumerable: true, get: getter });
+    const fetch = responseFetch();
+    for (const criterion of [
+      undefined,
+      () => "safe",
+      Infinity,
+      NaN,
+      1n,
+      new Date(),
+      cycle,
+      accessor,
+      { toJSON: () => "safe" },
+    ]) {
+      const requested = {
+        ...request,
+        questions: {
+          risk: {
+            ...request.questions.risk,
+            criteria: { ...request.questions.risk.criteria, allow: criterion },
+          },
+        },
+      } as JevRequest;
+      await expect(requestJev(requested, { fetch })).rejects.toMatchObject({
+        code: "invalid_request",
+      });
+    }
+    expect(fetch).not.toHaveBeenCalled();
+    expect(getter).not.toHaveBeenCalled();
   });
 
   it.each(["confirm", "block"])(

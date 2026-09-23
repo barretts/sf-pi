@@ -142,13 +142,13 @@ export function hasSessionApproval(decision: ClassifiedDecision): boolean {
 
 export function grantSessionApproval(pi: ExtensionAPI, decision: ClassifiedDecision): void {
   if (decision.feature === "jevGate" && decision.approvalScope?.allowSession !== true) return;
-  allowed.add(approvalKey(decision.ruleId, decision.fingerprint));
   const data: AllowEntryData = {
     ruleId: decision.ruleId,
     fingerprint: decision.fingerprint,
     grantedAt: Date.now(),
   };
   pi.appendEntry(ALLOW_ENTRY_TYPE, data);
+  allowed.add(approvalKey(decision.ruleId, decision.fingerprint));
 }
 
 export function forgetSessionApprovals(pi?: ExtensionAPI): void {

@@ -100,6 +100,33 @@ describe("Approval Ledger", () => {
     expect(ledger.hasSessionApproval(d)).toBe(true);
   });
 
+  it("does not keep a Jev session grant in memory when its entry cannot be persisted", () => {
+    const d: ClassifiedDecision = {
+      ...decision(),
+      feature: "jevGate",
+      approvalScope: {
+        fingerprint: "synthetic-exact-call",
+        label: "Exact synthetic call",
+        allowSession: true,
+      },
+    };
+    const appendEntry = vi.fn(() => {
+      throw new Error("Synthetic grant persistence failure.");
+    });
+
+    expect(() => ledger.grantSessionApproval({ appendEntry } as unknown as PiForRecord, d)).toThrow(
+      "Synthetic grant persistence failure.",
+    );
+    expect(appendEntry).toHaveBeenCalledOnce();
+    expect(ledger.hasSessionApproval(d)).toBe(false);
+
+    const entries: unknown[] = [];
+    ledger.grantSessionApproval(pi(entries), d);
+    expect(ledger.hasSessionApproval(d)).toBe(true);
+    ledger.restoreApprovalLedger(ctx(entries));
+    expect(ledger.hasSessionApproval(d)).toBe(true);
+  });
+
   it("forgets session approvals with a revocation marker", () => {
     const entries: unknown[] = [];
     const d = decision();

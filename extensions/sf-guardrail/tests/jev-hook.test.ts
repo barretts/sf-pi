@@ -24,6 +24,12 @@ import { readRecentDecisions } from "../lib/approval-ledger.ts";
 import { JEV_PROVIDER, JEV_RESOLVED_MODEL } from "../lib/jev-client.ts";
 import { OPERATOR_AUTO_APPROVE_VALUE } from "../lib/hitl.ts";
 import type { GuardrailPiSettings } from "../lib/guardrail-settings.ts";
+import {
+  ALLOW_ENTRY_TYPE,
+  DECISION_ENTRY_TYPE,
+  type JevAction,
+  type JevQuestionId,
+} from "../lib/types.ts";
 
 let syntheticSandbox = false;
 vi.mock("../lib/jev-facts.ts", async (importOriginal) => {
@@ -53,6 +59,8 @@ let runner: ExtensionRunner;
 let controller: AbortController;
 let counter: number;
 let appendEntryFails: boolean;
+let appendEntryFailureType: string | undefined;
+let appendEntryTypes: string[];
 let sequence: number;
 let tools: ToolInfo[];
 let select: ReturnType<typeof vi.fn<ExtensionUIContext["select"]>>;
@@ -61,24 +69,32 @@ let fetch: ReturnType<typeof vi.fn<typeof globalThis.fetch>>;
 function reply(
   choice: "allow" | "confirm" | "block" = "allow",
   allow = choice === "allow" ? 1 : 0,
+  overrides: Partial<Record<JevQuestionId, { choice: JevAction; allow: number }>> = {},
 ) {
+  const requestBody = fetch?.mock.calls.at(-1)?.[1]?.body;
+  const questions =
+    typeof requestBody === "string" ? Object.keys(JSON.parse(requestBody).questions) : ["risk"];
+  const answer = (selected: JevAction, pAllow: number) => ({
+    type: "choice",
+    choice: selected,
+    confidence: 0.95,
+    probabilities: {
+      allow: pAllow,
+      confirm: selected === "block" ? 0 : 1 - pAllow,
+      block: selected === "block" ? 1 - pAllow : 0,
+    },
+  });
   return new Response(
     JSON.stringify({
       model: JEV_RESOLVED_MODEL,
       provider: JEV_PROVIDER,
       id: "gen-dec-synthetic-hook-test",
-      answers: {
-        risk: {
-          type: "choice",
-          choice,
-          confidence: 0.95,
-          probabilities: {
-            allow,
-            confirm: choice === "block" ? 0 : 1 - allow,
-            block: choice === "block" ? 1 - allow : 0,
-          },
-        },
-      },
+      answers: Object.fromEntries(
+        questions.map((id) => {
+          const override = overrides[id];
+          return [id, override ? answer(override.choice, override.allow) : answer(choice, allow)];
+        }),
+      ),
       usage: { input_tokens: 200, output_tokens: 35, cost: 0.00002 },
     }),
   );
@@ -151,6 +167,8 @@ beforeEach(async () => {
   syntheticSandbox = false;
   counter = 0;
   appendEntryFails = false;
+  appendEntryFailureType = undefined;
+  appendEntryTypes = [];
   sequence = 0;
   controller = new AbortController();
   fetch = vi.fn<typeof globalThis.fetch>(async () => reply());
@@ -202,7 +220,9 @@ beforeEach(async () => {
       sendMessage: () => {},
       sendUserMessage: () => {},
       appendEntry: (type, data) => {
-        if (appendEntryFails) throw new Error("Synthetic audit append failure.");
+        appendEntryTypes.push(type);
+        if (appendEntryFails || type === appendEntryFailureType)
+          throw new Error("Synthetic audit append failure.");
         session.appendCustomEntry(type, data);
       },
       setSessionName: () => {},
@@ -279,6 +299,45 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     });
   });
 
+  it("enforces a model policy-question block despite a high-probability overall allow", async () => {
+    interactive();
+    fetch.mockImplementationOnce(async () =>
+      reply("allow", 1, { file_policy: { choice: "block", allow: 0 } }),
+    );
+    expect(await invoke()).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(Object.keys(JSON.parse(fetch.mock.calls[0][1].body as string).questions)).toContain(
+      "file_policy",
+    );
+    expect(select).not.toHaveBeenCalled();
+    expect(audit()[0]).toMatchObject({
+      outcome: "hard_block",
+      jev: {
+        probabilities: { allow: 1 },
+        answers: { file_policy: { choice: "block", probabilities: { block: 1 } } },
+      },
+    });
+  });
+
+  it("requires explicit approval for an uncertain policy question despite a high-probability overall allow", async () => {
+    interactive();
+    fetch.mockImplementationOnce(async () =>
+      reply("allow", 1, { file_policy: { choice: "allow", allow: 0.98 } }),
+    );
+    expect(await invoke()).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(select).toHaveBeenCalledOnce();
+    expect(audit()[0]).toMatchObject({
+      outcome: "block",
+      jev: {
+        probabilities: { allow: 1 },
+        answers: { file_policy: { choice: "allow", probabilities: { allow: 0.98 } } },
+      },
+    });
+  });
+
   it("blocks an approval UI exception and records a hard block when the audit remains available", async () => {
     interactive();
     fetch.mockImplementationOnce(async () => reply("confirm"));
@@ -321,6 +380,62 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     expect(counter).toBe(0);
     expect(fetch).toHaveBeenCalledOnce();
     expect(audit()).toHaveLength(0);
+  });
+
+  it("requires approval again after a failed session-grant write recovers", async () => {
+    syntheticSandbox = true;
+    interactive();
+    fetch.mockImplementation(async () => reply("confirm"));
+    select.mockResolvedValue("Allow for this session");
+    appendEntryFailureType = ALLOW_ENTRY_TYPE;
+    const input = { path: "source.ts", content: BODY };
+
+    expect(await invoke("write", input)).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(select).toHaveBeenCalledOnce();
+    expect(appendEntryTypes).toContain(ALLOW_ENTRY_TYPE);
+    expect(
+      session
+        .getBranch()
+        .some((entry) => entry.type === "custom" && entry.customType === ALLOW_ENTRY_TYPE),
+    ).toBe(false);
+    expect(audit()[0]).toMatchObject({ outcome: "hard_block" });
+
+    appendEntryFailureType = undefined;
+    select.mockResolvedValue("Block");
+    expect(await invoke("write", { ...input })).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(select).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(audit()[0]).toMatchObject({ outcome: "block" });
+  });
+
+  it("does not create a session grant when its approval audit fails", async () => {
+    syntheticSandbox = true;
+    interactive();
+    fetch.mockImplementation(async () => reply("confirm"));
+    select.mockResolvedValue("Allow for this session");
+    appendEntryFailureType = DECISION_ENTRY_TYPE;
+    const input = { path: "source.ts", content: BODY };
+
+    expect(await invoke("write", input)).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(select).toHaveBeenCalledOnce();
+    expect(appendEntryTypes).not.toContain(ALLOW_ENTRY_TYPE);
+    expect(
+      session
+        .getBranch()
+        .some((entry) => entry.type === "custom" && entry.customType === ALLOW_ENTRY_TYPE),
+    ).toBe(false);
+    expect(audit()).toHaveLength(0);
+
+    appendEntryFailureType = undefined;
+    select.mockResolvedValue("Block");
+    expect(await invoke("write", { ...input })).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(select).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(audit()[0]).toMatchObject({ outcome: "block" });
   });
 
   it("routes unknown effects to actual explicit allow-once UI and asks again on the next call", async () => {

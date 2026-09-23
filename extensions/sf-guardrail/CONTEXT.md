@@ -17,16 +17,24 @@ The existing local rule implementation that matches file, command, org-aware, an
 _Avoid_: Jev backup, hidden second vote, model safety guarantee
 
 **Jev Engine**:
-The opt-in engine that classifies every Pi `tool_call` using TypeSafe Jev through OpenRouter Decisions. Jev interprets all effective policy in this mode, including protected paths, exact blocks, and custom patterns. Exact rules lose their deterministic matching guarantee; SF Pi still enforces the returned decision and human approval locally. There is no deterministic fallback.
+The opt-in sole risk engine that classifies every Pi `tool_call` using TypeSafe Jev through OpenRouter Decisions. Jev interprets all effective policy in this mode, including protected paths, exact blocks, and custom patterns. Exact rules lose their deterministic matching guarantee; SF Pi still enforces the model answers and human approval locally. There is no deterministic risk floor or fallback.
 _Avoid_: qualified replacement, calibrated safety score, deterministic model policy
 
+**Jev Decision Questions**:
+Protocol v4's independent Choice questions sent in one request against the same state, each choosing `allow`, `confirm`, or `block`. Every call asks `risk` about executable/operational effects using tool-family guidance; matching block restrictions belong to policy questions. File paths add file policy; parsed shell calls add command policy and structurally possible org policy. Complete known executable/wrapper heads narrow the projected org rules; opaque/incomplete heads, withheld comments, or missing commands retain all of them. Disclosure follows tool-specific possible data effects, with incomplete shell effects retaining the question; authority is browser-only. Exact `sf_browser_press` key `Escape` remains risk- and authority-evaluated target-independent cancellation without requiring org or fresh target/focus facts or fabricating freshness. At most six model-authored answers supply all risk/policy judgments; structural applicability does not decide an outcome.
+_Avoid_: sequential model chain, deterministic policy vote, combined confidence
+
 **Operation Metadata**:
-The bounded tool identity, operation, flags, paths or destinations, execution intent, and locally resolved facts sent to Jev with effective policy. File bodies, scripts/Apex, query text, Canvas content, credentials, transcripts, fetched contents, raw arguments, and full browser pages/forms stay local. Withheld or unresolved effects are explicit uncertainty; hidden custom-pattern literals cannot be presumed nonmatches.
+The bounded tool identity, operation, flags, paths or destinations, execution intent, and locally resolved facts sent to Jev with the minimum effective policy relevant to the questions. Known CLI structure, trusted file-path variants, and bounded numeric observations describe effects without a local policy verdict. Full ordered command lists use compact strings with explicit `commands.defaults` and `[pattern, behavior]` tuples for overrides, preserving precedence. File bodies, scripts/Apex, query text, Canvas content, credentials, transcripts, fetched contents, raw arguments, and full browser pages/forms stay local. Withheld or unresolved effects are explicit uncertainty; hidden custom-pattern literals cannot be presumed nonmatches. Jev's command criteria require block for any withheld scalar under an enabled single-word auto-deny unless a visible enabled allow applies; the host does not cast a policy vote.
 _Avoid_: raw payload, full context, content inspection, implicit nonmatch
 
 **Jev Automatic Allow**:
-A valid Jev `allow` choice with complete operation context and `P(allow) >= 0.99`. Other valid allow predictions require human confirmation; a model `block` is a **Hard Block**. The initial probability cutoff is conservative and requires domain evaluation; it is not a qualification claim.
+Complete operation context with every requested model answer choosing `allow` and `P(allow) >= 0.99`. Any answer choosing `block` is a **Hard Block**; any `confirm`, allow probability below the cutoff, or incomplete context requires human confirmation. The initial probability cutoff is conservative and requires evaluation against our domain labels; it is not a qualification claim.
 _Avoid_: guaranteed safe, confidence-based approval, local C11 qualification
+
+**Jev Answer Evidence**:
+The individual model-authored choices, probability distributions, and confidence values preserved in audit. Top-level probabilities and confidence are the actual `risk` answer, even when a different question determines the enforced outcome. They are not a combined probability of safety.
+_Avoid_: synthesized confidence, aggregate calibration claim, threshold as security guarantee
 
 **Safety Mediator**:
 The product posture where **SF Guardrail** evaluates risky agent actions and returns a clear allow, block, or human-approval decision. It is opinionated and narrow rather than a configurable policy platform.
@@ -117,7 +125,7 @@ A branch/session-scoped approval that suppresses repeated prompts for the same *
 _Avoid_: timed grant, permanent allow, global trust, hidden bypass
 
 **Jev Exact-Call Session Approval**:
-A **Session Approval** available only for a complete call against a currently verified non-production org. Its locally computed fingerprint binds the full canonical original input, tool, working directory, verified target, engine, policy/protocol hash, and model identity. Changing withheld content invalidates approval without sending it to Jev. Deterministic grants do not transfer; production, unknown, external, and opaque calls remain allow-once.
+A **Session Approval** available only for a complete call against a currently verified non-production org. Its locally computed fingerprint binds the full canonical original input, tool, working directory, verified target, engine, policy/protocol hash, and model identity. Changing withheld content invalidates approval without sending it to Jev. A grant enters reusable memory only after persistence and audit recording succeed. Deterministic grants do not transfer; production, unknown, external, and opaque calls remain allow-once.
 _Avoid_: family grant, path prefix approval, payload-independent approval
 
 **Stable Bounded Operation**:
@@ -157,7 +165,7 @@ A non-blocking instruction that helps the agent recover safely after a block or 
 _Avoid_: hard gate, policy requirement, mandatory workflow
 
 **Hard Block**:
-A **Guardrail Decision** that refuses an action without asking the user because the matching deterministic **Rule Behavior** is Block or Jev returns a model `block`. Transport, identity, configuration, cancellation, deadline, and invalid-response failures also prevent execution.
+A **Guardrail Decision** that refuses an action without asking the user because the matching deterministic **Rule Behavior** is Block or any Jev question returns a model `block`. Transport, identity, configuration, cancellation, deadline, and invalid-response failures also prevent execution.
 _Avoid_: default refusal, prompt, warning, soft block
 
 **Rule-Derived Guidance**:

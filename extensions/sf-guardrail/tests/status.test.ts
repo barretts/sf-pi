@@ -4,6 +4,9 @@ import { describe, expect, it } from "vitest";
 
 import { renderAudit, renderStatus } from "../lib/status.ts";
 import { readBundledConfig } from "../lib/config.ts";
+import { recordDecision } from "../lib/approval-ledger.ts";
+import { evaluateJevSafety } from "../lib/jev-risk.ts";
+import { JEV_PROVIDER, JEV_RESOLVED_MODEL } from "../lib/jev-client.ts";
 import type { Data360ExecutionChainEntryData } from "../lib/approval-ledger.ts";
 import type { DecisionEntryData } from "../lib/types.ts";
 
@@ -32,6 +35,83 @@ const chain: Data360ExecutionChainEntryData = {
 };
 
 describe("sf-guardrail status rendering", () => {
+  it("shows an independent file-policy block alongside the actual operational risk allow", async () => {
+    const decision = await evaluateJevSafety(
+      {
+        toolName: "write",
+        input: { path: ".env", content: "PRIVATE_FILE_BODY_SENTINEL" },
+        cwd: "/synthetic/project",
+        config: readBundledConfig(),
+      },
+      {
+        request: async () => ({
+          choice: "allow",
+          probabilities: { allow: 1, confirm: 0, block: 0 },
+          confidence: 0.83,
+          answers: {
+            risk: {
+              choice: "allow",
+              probabilities: { allow: 1, confirm: 0, block: 0 },
+              confidence: 0.83,
+            },
+            file_policy: {
+              choice: "block",
+              probabilities: { allow: 0.02, confirm: 0.03, block: 0.95 },
+              confidence: 0.95,
+            },
+          },
+          model: JEV_RESOLVED_MODEL,
+          provider: JEV_PROVIDER,
+          requestId: "synthetic-independent-answer-request",
+          usage: { input_tokens: 20, output_tokens: 30 },
+        }),
+        resolveFacts: async () => ({ facts: { files: [{ path: ".env", exists: true }] } }),
+      },
+    );
+    expect(decision.action).toBe("block");
+    const recent: DecisionEntryData[] = [];
+    const pi = {
+      appendEntry: (_type: string, entry: DecisionEntryData) => recent.push(entry),
+    } as unknown as Parameters<typeof recordDecision>[0];
+    recordDecision(
+      pi,
+      decision,
+      decision.action === "block" ? "hard_block" : "allow_auto",
+      "write",
+    );
+    const audit = renderAudit(recent);
+    expect(audit).toContain("hard_block");
+    expect(audit).toContain("risk P(allow)=1.0000; risk confidence=0.8300");
+    expect(audit).toContain("risk=allow (P(allow)=1.0000; confidence=0.8300)");
+    expect(audit).toContain("file_policy=block (P(allow)=0.0200; confidence=0.9500)");
+    expect(audit).not.toContain("PRIVATE_FILE_BODY_SENTINEL");
+  });
+
+  it("labels historical risk-only evidence without requiring independent answers", () => {
+    const recent: DecisionEntryData[] = [
+      {
+        timestamp: Date.UTC(2026, 6, 6, 20, 0, 0),
+        toolName: "read",
+        subject: "read metadata",
+        feature: "jevGate",
+        ruleId: "jev-risk",
+        outcome: "allow_auto",
+        fingerprint: "exact-call",
+        reason: "Allowed.",
+        jev: {
+          model: JEV_RESOLVED_MODEL,
+          latencyMs: 150,
+          probabilities: { allow: 0.999, confirm: 0.001, block: 0 },
+          confidence: 0.999,
+          policyHash: "policy",
+          protocolHash: "protocol",
+        },
+      },
+    ];
+    expect(renderAudit(recent)).toContain("risk P(allow)=0.9990; risk confidence=0.9990");
+    expect(renderAudit(recent)).not.toContain("file_policy=");
+  });
+
   it("shows Jev readiness, failures, and disabled legacy automation", () => {
     const recent: DecisionEntryData[] = [
       {
