@@ -10,7 +10,7 @@ editLink: false
 
 ## What it does
 
-Salesforce-aware safety layer with a default deterministic engine and opt-in TypeSafe Jev through OpenRouter Decisions. Jev classifies operation metadata for every Pi tool call and interprets the effective policy without deterministic fallback; SF Pi owns blocking, explicit approval, session memory, and audit.
+Salesforce-aware safety layer with a default deterministic engine and optional TypeSafe Jev through a configured HTTPS Decisions provider. Jev classifies operation metadata for every Pi tool call and interprets the effective policy without deterministic fallback. SF Pi owns blocking, explicit approval, session memory, and audit.
 
 ## Start
 
@@ -35,7 +35,8 @@ Open its Manager detail or change its package state with:
 - In deterministic mode, Power Tool and audited process-level operator/headless controls can allow confirm-class decisions, but never bypass hard blocks. Jev confirmations require explicit human approval and block headless execution regardless of those controls.
 - Jev sends operation metadata and effective policy for every Pi tool call, excluding raw arguments and file, script, Apex, query, Canvas, credential, transcript, fetched, and full browser content. Omitted effects remain uncertainty.
 - Jev auto-allows only complete-context allow predictions with P(allow) &gt;= 0.99; model block predictions are hard blocks. Transport, configuration, deadline, cancellation, malformed-response, and identity failures block without retries.
-- Jev session approval requires a complete exact call and verified non-production org, bound locally to full input, target, cwd, policy/protocol, engine, and model identity. Factory/startup makes no live Jev requests.
+- Jev requires an explicit HTTPS Decisions endpoint and API key. There is no default endpoint. The gateway must support the pinned TypeSafe Jev model and independent Choice contract. Readiness checks do not send requests or disclose the endpoint, key value, or key path.
+- Jev session approval requires a complete exact call and verified non-production org. It binds full input, target, cwd, policy/protocol, engine, model identity, and a local transport hash. A changed endpoint, model, provider, or routing invalidates approval. Factory/startup makes no live Jev requests.
 - alwaysActive=false but disabling removes the safety layer entirely; the manager surfaces this clearly.
 
 ## Exact reference

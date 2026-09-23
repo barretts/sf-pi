@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { createHash } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readBundledConfig } from "../lib/config.ts";
 import {
   buildJevRequest,
@@ -8,12 +8,24 @@ import {
   evaluateJevSafety,
   jevContextComplete,
   jevPolicyContext,
+  jevTransportBindingHash,
   JEV_PROTOCOL_HASH,
 } from "../lib/jev-risk.ts";
 import { jevHash } from "../lib/jev-identity.ts";
 import { buildJevMetadata } from "../lib/jev-metadata.ts";
 import { JEV_RESOLVED_MODEL, JEV_PROVIDER, JevClientError } from "../lib/jev-client.ts";
-import type { JevPrediction, JevToolMetadata } from "../lib/types.ts";
+import type { JevPrediction, JevResolvedFacts, JevToolMetadata } from "../lib/types.ts";
+
+const ENDPOINT = "https://decisions.example.test/v1/decisions";
+const OTHER_ENDPOINT = "https://other-decisions.example.test/v1/decisions";
+
+beforeEach(() => {
+  vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", ENDPOINT);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const prediction = (choice: JevPrediction["choice"] = "allow", allow = 1): JevPrediction => ({
   choice,
@@ -54,11 +66,90 @@ describe("Jev risk adapter", () => {
     expect(decision.jev?.model).toBe(JEV_RESOLVED_MODEL);
     expect(decision.jev?.cost).toBe(0.00001);
     expect(decision.jev?.inputHash).toBe(jevHash(call().input));
+    expect(decision.jev?.transportHash).toBe(jevTransportBindingHash(ENDPOINT));
+    expect(JSON.stringify(decision)).not.toContain(ENDPOINT);
     const serialized = JSON.stringify(request.mock.calls);
     expect(serialized).not.toContain("SENTINEL_PRIVATE_BODY");
     expect(serialized).not.toContain("/synthetic/project");
     expect(serialized).toContain('"block"');
     expect(decision.approvalScope?.allowSession).toBe(false);
+  });
+  it.each([undefined, "", "http://decisions.example.test/v1/decisions"])(
+    "blocks an absent or invalid endpoint before fact lookup and a model request",
+    async (endpoint) => {
+      vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", endpoint);
+      const resolveFacts = vi.fn(async () => ({ facts: {} }));
+      const request = vi.fn(async () => prediction());
+      const decision = await evaluateJevSafety(call(), { descriptor, resolveFacts, request });
+      expect(decision.action).toBe("block");
+      expect(decision.jev?.failure).toBe(endpoint ? "invalid_endpoint" : "missing_endpoint");
+      expect(decision.jev?.transportHash).toBeUndefined();
+      expect(resolveFacts).not.toHaveBeenCalled();
+      expect(request).not.toHaveBeenCalled();
+      expect(JSON.stringify(decision)).not.toContain("decisions.example.test");
+    },
+  );
+  it("changes the exact approval fingerprint when the endpoint changes", async () => {
+    const options = {
+      descriptor,
+      request: async () => prediction("confirm", 0),
+      resolveFacts: async () => ({
+        facts: { org: { type: "sandbox" as const, verified: true, explicit: true } },
+        orgIdentity: "synthetic-org",
+      }),
+    };
+    const first = await evaluateJevSafety(call(), options);
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", OTHER_ENDPOINT);
+    const second = await evaluateJevSafety(call(), options);
+    expect(first.action).toBe("confirm");
+    expect(second.action).toBe("confirm");
+    expect(first.approvalScope?.allowSession).toBe(true);
+    expect(second.approvalScope?.allowSession).toBe(true);
+    expect(first.jev?.transportHash).toBe(jevTransportBindingHash(ENDPOINT));
+    expect(second.jev?.transportHash).toBe(jevTransportBindingHash(OTHER_ENDPOINT));
+    expect(first.jev?.inputHash).toBe(second.jev?.inputHash);
+    expect(first.jev?.factsHash).toBe(second.jev?.factsHash);
+    expect(first.jev?.transportHash).not.toBe(second.jev?.transportHash);
+    expect(first.fingerprint).not.toBe(second.fingerprint);
+    expect(JSON.stringify([first, second])).not.toContain("decisions.example.test");
+  });
+  it("uses the captured endpoint after fact lookup and while a model reply is pending", async () => {
+    let releaseFacts!: (value: JevResolvedFacts) => void;
+    let releasePrediction!: (value: JevPrediction) => void;
+    const resolveFacts = vi.fn(
+      () =>
+        new Promise<JevResolvedFacts>((resolve) => {
+          releaseFacts = resolve;
+        }),
+    );
+    const request = vi.fn<typeof import("../lib/jev-client.ts").requestJev>(
+      () =>
+        new Promise<JevPrediction>((resolve) => {
+          releasePrediction = resolve;
+        }),
+    );
+    const pending = evaluateJevSafety(call(), { descriptor, resolveFacts, request });
+    expect(resolveFacts).toHaveBeenCalledOnce();
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", OTHER_ENDPOINT);
+    releaseFacts({ facts: { files: [{ path: "src/example.ts", exists: false }] } });
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    expect(request.mock.calls[0][1]?.endpoint).toBe(ENDPOINT);
+    const wireRequest = request.mock.calls[0][0];
+    expect(wireRequest).toEqual(
+      buildJevRequest(
+        buildJevMetadata(call().toolName, call().input, descriptor),
+        { files: [{ path: "src/example.ts", exists: false }] },
+        call().config,
+      ),
+    );
+    expect(JSON.stringify(wireRequest)).not.toContain(ENDPOINT);
+    expect(JSON.stringify(wireRequest)).not.toContain("transportHash");
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", "");
+    releasePrediction(prediction());
+    const decision = await pending;
+    expect(decision.action).toBe("allow");
+    expect(decision.jev?.transportHash).toBe(jevTransportBindingHash(ENDPOINT));
+    expect(JSON.stringify(decision)).not.toContain(ENDPOINT);
   });
   it.each([
     [prediction("allow", 1), true, "allow"],

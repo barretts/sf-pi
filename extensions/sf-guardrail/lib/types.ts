@@ -73,6 +73,8 @@ export interface JevEvidence {
   inputHash?: string;
   descriptorHash?: string;
   factsHash?: string;
+  /** Local endpoint, model, provider, and routing binding. No endpoint text is stored. */
+  transportHash?: string;
 }
 
 export interface JevPrediction extends JevChoiceAnswer {

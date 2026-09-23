@@ -20,7 +20,7 @@ One-file-per-concern split:
 | Event wiring + command handler       | `index.ts`                                          |
 | Schema + persisted entry types       | `lib/types.ts`                                      |
 | Safety decision seam                 | `lib/safety-kernel.ts`                              |
-| OpenRouter Decisions transport       | `lib/jev-client.ts`                                 |
+| Jev Decisions transport              | `lib/jev-client.ts`                                 |
 | Jev metadata and local facts         | `lib/jev-metadata.ts` + `lib/jev-facts.ts`          |
 | Mechanical command token projection  | `lib/jev-command-tokens.ts`                         |
 | Jev request and decision adapter     | `lib/jev-risk.ts`                                   |
@@ -70,7 +70,7 @@ One-file-per-concern split:
 4. **No new `tool_call` side effects without audit.** Every decision path
    must call `recordDecision(...)` through `lib/approval-ledger.ts` so
    `/sf-guardrail audit` stays truthful.
-5. **No runtime deps.** Keep the OpenRouter client, tokenizer, globber, and matchers
+5. **No runtime deps.** Keep the Jev client, tokenizer, globber, and matchers
    dependency-free. If we ever need a real shell AST, prefer a well-
    maintained package (`shell-quote`) and pin the version, rather than
    rolling another one.
@@ -129,8 +129,13 @@ One-file-per-concern split:
   ingest, and manifest runs ignore supplied dry-run intent. Do not infer a
   preview from that intent or a suffix alone; prerequisite reads can still occur
   under an honored business-write dry run. These facts do not decide risk.
-- Use the built-in `fetch` client. Protocol version 7 sends independent Choice
-  questions in one Decisions request. Wire state version stays 6.
+- Use the built-in `fetch` client. Send independent Choice questions in one
+  Decisions request. Wire state version stays 6. Require an explicit HTTPS
+  `SF_GUARDRAIL_JEV_ENDPOINT`; there is no default endpoint. Read
+  `SF_GUARDRAIL_JEV_API_KEY`, otherwise `SF_GUARDRAIL_JEV_API_KEY_FILE`.
+  Check the endpoint before reading a key. This connection must support the
+  pinned TypeSafe Jev contract. Keep endpoint URLs, key values, and key paths
+  out of the UI, status, audit, and request body.
   Always ask operational `risk` with tool-family
   guidance about executable effects; policy questions decide matching blocks.
   Add file policy for available paths/facts, command policy for shell
@@ -184,7 +189,10 @@ One-file-per-concern split:
   bypass them.
 - Jev session grants require complete context and a currently verified
   non-production org. Bind them to the exact canonical original input plus
-  tool, `cwd`, verified target, policy/protocol, engine, and model identity.
+  tool, `cwd`, verified target, policy/protocol, engine, model identity, and
+  local transport hash. This hash binds the endpoint, model, provider, and
+  routing without storing endpoint text. A changed connection invalidates
+  the grant.
   Never reuse deterministic or broader operation-family grants for Jev calls.
   Update reusable grant memory only after persistence and audit recording
   succeed; an audit/write failure must not leave an approved reusable grant.

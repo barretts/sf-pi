@@ -17,7 +17,7 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { ConfigPanelFactory, ConfigPanelResult } from "../../../catalog/registry.ts";
 import { globalSettingsPath } from "../../../lib/common/sf-pi-settings.ts";
 import { loadGuardrailSnapshot, userConfigPath } from "./config.ts";
-import { JEV_RESOLVED_MODEL, jevCredentialStatus } from "./jev-client.ts";
+import { JEV_RESOLVED_MODEL, jevCredentialStatus, jevEndpointStatus } from "./jev-client.ts";
 import {
   readGuardrailPiSettings,
   setGuardrailEngine,
@@ -243,7 +243,7 @@ class SfGuardrailConfigPanel implements Focusable {
       ` ${t.fg("muted", "Routine preferences:")} ${t.fg("dim", globalSettingsPath())}`,
       ` ${t.fg("muted", "Advanced overrides:")}  ${t.fg("dim", userConfigPath())}`,
       ` ${t.fg("muted", "Effective source:")}     ${t.fg("text", this.source)}`,
-      ` ${t.fg("muted", "Decision engine:")}      ${t.fg("text", this.engine === "jev" ? "TypeSafe Jev (OpenRouter)" : "Deterministic")}`,
+      ` ${t.fg("muted", "Decision engine:")}      ${t.fg("text", this.engine === "jev" ? "TypeSafe Jev" : "Deterministic")}`,
       "",
       ` ${t.fg("muted", "Approval timeout:")}    ${t.fg("text", displayValue(preferenceValue(this.config, "confirmTimeoutMs")))}`,
       ` ${t.fg("muted", "Headless mode:")}       ${t.fg("text", this.engine === "deterministic" && process.env[this.config.headlessEscapeHatchEnv] ? "opt-in pass" : "fail-closed")}`,
@@ -411,16 +411,17 @@ class SfGuardrailConfigPanel implements Focusable {
     return [
       ` ${t.fg("accent", themeBold(t, "Decision engine"))}`,
       "",
-      ` ${t.fg("muted", "Current:")} ${this.engine === "jev" ? "TypeSafe Jev (OpenRouter)" : "Deterministic"}`,
+      ` ${t.fg("muted", "Current:")} ${this.engine === "jev" ? "TypeSafe Jev" : "Deterministic"}`,
       ` ${t.fg("muted", "Jev model:")} ${JEV_RESOLVED_MODEL}`,
-      ` ${t.fg("muted", "OpenRouter credentials:")} ${jevCredentialStatus()}`,
+      ` ${t.fg("muted", "Decisions provider connection:")} ${jevEndpointStatus()}`,
+      ` ${t.fg("muted", "Jev API key:")} ${jevCredentialStatus()}`,
       ...wrapLines(
-        "Jev interprets the effective policy for every tool call using operation metadata. Credentials are required at execution. Unavailable or invalid Jev responses block. Model confirmation requires explicit human approval.",
+        "Jev uses operation metadata to interpret the effective policy for every tool call. Set an HTTPS Decisions endpoint and an API key before execution. Invalid configuration or responses block execution. Model confirmation requires explicit human approval.",
         width - 3,
       ).map((line) => ` ${t.fg("dim", line)}`),
       "",
       ` ${t.fg("accent", "d")} ${t.fg("text", "Deterministic rules")}`,
-      ` ${t.fg("accent", "j")} ${t.fg("text", "TypeSafe Jev through OpenRouter")}`,
+      ` ${t.fg("accent", "j")} ${t.fg("text", "TypeSafe Jev through Decisions")}`,
     ];
   }
 

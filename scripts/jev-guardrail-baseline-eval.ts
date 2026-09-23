@@ -431,6 +431,10 @@ export async function createBaselineDevEvaluator() {
         { ...input, engine: "jev" },
         {
           descriptor: row.descriptor,
+          // Offline preparation uses a reserved endpoint and sends no request.
+          ...(options.prepareOnly
+            ? { endpoint: "https://decisions.example.invalid/v1/decisions" }
+            : {}),
           resolveFacts: async (context): Promise<JevResolvedFacts> => {
             if (
               factsModule.isJevTargetIndependentBrowserPress(row.tool, row.input, context.metadata)

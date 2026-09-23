@@ -24,6 +24,7 @@ export interface StatusInput {
   powerTool?: GuardrailPowerToolSettings;
   engine?: GuardrailEngine;
   jevModel?: string;
+  jevEndpointStatus?: string;
   jevCredentialReady?: boolean;
 }
 
@@ -39,6 +40,7 @@ export function renderStatus(input: StatusInput): string {
     powerTool,
     engine = "deterministic",
     jevModel,
+    jevEndpointStatus,
     jevCredentialReady,
   } = input;
   const lines: string[] = [];
@@ -46,8 +48,15 @@ export function renderStatus(input: StatusInput): string {
   lines.push(`  decision engine: ${engine}`);
   if (engine === "jev") {
     if (jevModel) lines.push(`  Jev model: ${jevModel}`);
+    const connectionStatus =
+      jevEndpointStatus === undefined
+        ? "not checked"
+        : ["ready", "missing", "invalid"].includes(jevEndpointStatus)
+          ? jevEndpointStatus
+          : "invalid";
+    lines.push(`  Decisions provider connection: ${connectionStatus}`);
     lines.push(
-      `  OpenRouter credentials: ${jevCredentialReady === true ? "ready" : jevCredentialReady === false ? "unavailable" : "not checked"}`,
+      `  Jev API key: ${jevCredentialReady === true ? "ready" : jevCredentialReady === false ? "unavailable" : "not checked"}`,
     );
     const failures = recent.filter((entry) => entry.jev?.failure).slice(0, 3);
     if (failures.length) {

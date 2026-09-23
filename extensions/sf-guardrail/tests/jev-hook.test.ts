@@ -22,6 +22,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import sfGuardrail from "../index.ts";
 import { readRecentDecisions } from "../lib/approval-ledger.ts";
 import { JEV_PROVIDER, JEV_RESOLVED_MODEL } from "../lib/jev-client.ts";
+import { resolveJevFacts } from "../lib/jev-facts.ts";
+import { jevTransportBindingHash } from "../lib/jev-risk.ts";
 import { OPERATOR_AUTO_APPROVE_VALUE } from "../lib/hitl.ts";
 import type { GuardrailPiSettings } from "../lib/guardrail-settings.ts";
 import {
@@ -51,6 +53,8 @@ vi.mock("../lib/jev-facts.ts", async (importOriginal) => {
 
 const BODY = "PRIVATE_OMITTED_BODY_SENTINEL";
 const TEST_KEY = "sk-test-hook-only-credential";
+const ENDPOINT = "https://decisions.example.test/v1/decisions";
+const OTHER_ENDPOINT = "https://other-decisions.example.test/v1/decisions";
 let directory: string;
 let agentDir: string;
 let cwd: string;
@@ -159,8 +163,9 @@ beforeEach(async () => {
   mkdirSync(cwd);
   writeFileSync(join(cwd, "README.md"), BODY);
   vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
-  vi.stubEnv("OPENROUTER_API_KEY", TEST_KEY);
-  vi.stubEnv("OPENROUTER_API_KEY_FILE", "");
+  vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", ENDPOINT);
+  vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", TEST_KEY);
+  vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY_FILE", "");
   vi.stubEnv("SF_GUARDRAIL_ALLOW_HEADLESS", "");
   vi.stubEnv("SF_GUARDRAIL_OPERATOR_AUTO_APPROVE", "");
   settings();
@@ -279,11 +284,28 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
         probabilities: { allow: 1, confirm: 0, block: 0 },
         confidence: 0.95,
         cost: 0.00002,
+        transportHash: jevTransportBindingHash(ENDPOINT),
       },
     });
     expect(JSON.stringify(audit())).not.toContain(BODY);
     expect(JSON.stringify(audit())).not.toContain(TEST_KEY);
+    expect(JSON.stringify(audit())).not.toContain(ENDPOINT);
     expect(fetch.mock.calls[0][1].body).not.toContain(BODY);
+    expect(fetch.mock.calls[0][0]).toBe(ENDPOINT);
+  });
+
+  it("blocks a missing endpoint before fact lookup or a model request", async () => {
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", "");
+    vi.mocked(resolveJevFacts).mockClear();
+    expect(await invoke()).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(resolveJevFacts).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(select).not.toHaveBeenCalled();
+    expect(audit()[0]).toMatchObject({
+      outcome: "hard_block",
+      jev: { failure: "missing_endpoint" },
+    });
   });
 
   it("blocks a model hard block before inert execution without offering approval", async () => {
@@ -512,6 +534,64 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     expect(audit()[0].jev.policyHash).not.toBe(audit()[1].jev.policyHash);
   });
 
+  it("requires a new approval when the endpoint changes after an exact session grant", async () => {
+    syntheticSandbox = true;
+    interactive();
+    fetch.mockImplementation(async () => reply("confirm"));
+    select.mockResolvedValue("Allow for this session");
+    const input = { path: "source.ts", content: BODY };
+    expect(await invoke("write", input)).toBeUndefined();
+    expect(await invoke("write", { ...input })).toBeUndefined();
+    expect(counter).toBe(2);
+    expect(select).toHaveBeenCalledOnce();
+
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", OTHER_ENDPOINT);
+    select.mockResolvedValue("Block");
+    expect(await invoke("write", { ...input })).toMatchObject({ block: true });
+    expect(counter).toBe(2);
+    expect(select).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls.map((call) => call[0])).toEqual([ENDPOINT, ENDPOINT, OTHER_ENDPOINT]);
+    const decisions = audit();
+    expect(decisions[0].outcome).toBe("block");
+    expect(decisions[1].outcome).toBe("allow_session");
+    expect(decisions[0].jev.transportHash).toBe(jevTransportBindingHash(OTHER_ENDPOINT));
+    expect(decisions[1].jev.transportHash).toBe(jevTransportBindingHash(ENDPOINT));
+    expect(decisions[0].fingerprint).not.toBe(decisions[1].fingerprint);
+    expect(JSON.stringify(decisions)).not.toContain("decisions.example.test");
+  });
+
+  it("does not save a session grant when the endpoint changes during approval", async () => {
+    syntheticSandbox = true;
+    interactive();
+    fetch.mockImplementation(async () => reply("confirm"));
+    let approve!: (choice: string) => void;
+    select.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          approve = resolve;
+        }),
+    );
+    const input = { path: "source.ts", content: BODY };
+    const pending = invoke("write", input);
+    await vi.waitFor(() => expect(select).toHaveBeenCalledOnce());
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", OTHER_ENDPOINT);
+    approve("Allow for this session");
+    expect(await pending).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(appendEntryTypes).not.toContain(ALLOW_ENTRY_TYPE);
+    expect(audit()[0]).toMatchObject({
+      outcome: "hard_block",
+      jev: { failure: "changed-context", transportHash: jevTransportBindingHash(ENDPOINT) },
+    });
+
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", ENDPOINT);
+    select.mockResolvedValue("Block");
+    expect(await invoke("write", { ...input })).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(select).toHaveBeenCalledTimes(2);
+    expect(appendEntryTypes).not.toContain(ALLOW_ENTRY_TYPE);
+  });
+
   it("does not restore a session grant from a sibling SDK session branch", async () => {
     syntheticSandbox = true;
     interactive();
@@ -542,7 +622,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     expect(audit()).toHaveLength(1);
   });
 
-  it.each(["engine", "policy", "input", "registry", "file", "org", "branch"] as const)(
+  it.each(["engine", "policy", "endpoint", "input", "registry", "file", "org", "branch"] as const)(
     "blocks %s changes while a provider response is awaited",
     async (change) => {
       const input = { path: "README.md" };
@@ -553,6 +633,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
       await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
       if (change === "engine") settings({ engine: "deterministic" });
       if (change === "policy") settings({ confirmTimeoutMs: 45_000 });
+      if (change === "endpoint") vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", OTHER_ENDPOINT);
       if (change === "input") input.path = "other.md";
       if (change === "registry")
         tools = tools.map((tool) =>
@@ -565,6 +646,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
         session.appendCustomEntry("synthetic-sibling-root", {});
       }
       release();
+      expect(fetch.mock.calls[0][0]).toBe(ENDPOINT);
       expect(await pending).toMatchObject({ block: true });
       expect(counter).toBe(0);
       expect(audit()[0]).toMatchObject({
@@ -574,44 +656,52 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     },
   );
 
-  it.each(["engine", "policy", "input", "registry", "cancelled", "file", "org", "branch"] as const)(
-    "blocks %s changes while approval UI is awaited",
-    async (change) => {
-      interactive();
-      syntheticSandbox = change === "org";
-      if (change === "branch") session.appendCustomEntry("synthetic-branch-anchor", {});
-      fetch.mockImplementationOnce(async () => reply("confirm"));
-      const input = { path: "source.ts", content: BODY };
-      let approve: (choice: string) => void;
-      select.mockImplementationOnce(
-        () =>
-          new Promise<string>((resolve) => {
-            approve = resolve;
-          }),
+  it.each([
+    "engine",
+    "policy",
+    "endpoint",
+    "input",
+    "registry",
+    "cancelled",
+    "file",
+    "org",
+    "branch",
+  ] as const)("blocks %s changes while approval UI is awaited", async (change) => {
+    interactive();
+    syntheticSandbox = change === "org";
+    if (change === "branch") session.appendCustomEntry("synthetic-branch-anchor", {});
+    fetch.mockImplementationOnce(async () => reply("confirm"));
+    const input = { path: "source.ts", content: BODY };
+    let approve: (choice: string) => void;
+    select.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          approve = resolve;
+        }),
+    );
+    const pending = invoke("write", input);
+    await vi.waitFor(() => expect(select).toHaveBeenCalledOnce());
+    if (change === "engine") settings({ engine: "deterministic" });
+    if (change === "policy") settings({ confirmTimeoutMs: 45_000 });
+    if (change === "endpoint") vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", OTHER_ENDPOINT);
+    if (change === "input") input.content = `${BODY}_changed`;
+    if (change === "registry")
+      tools = tools.map((tool) =>
+        tool.name === "write" ? { ...tool, description: "Changed tool semantics." } : tool,
       );
-      const pending = invoke("write", input);
-      await vi.waitFor(() => expect(select).toHaveBeenCalledOnce());
-      if (change === "engine") settings({ engine: "deterministic" });
-      if (change === "policy") settings({ confirmTimeoutMs: 45_000 });
-      if (change === "input") input.content = `${BODY}_changed`;
-      if (change === "registry")
-        tools = tools.map((tool) =>
-          tool.name === "write" ? { ...tool, description: "Changed tool semantics." } : tool,
-        );
-      if (change === "cancelled") controller.abort();
-      if (change === "file") writeFileSync(join(cwd, "source.ts"), "Changed local file facts.");
-      if (change === "org") syntheticSandbox = false;
-      if (change === "branch") {
-        session.resetLeaf();
-        session.appendCustomEntry("synthetic-sibling-root", {});
-      }
-      approve("Allow once");
-      expect(await pending).toMatchObject({ block: true });
-      expect(counter).toBe(0);
-      expect(audit()[0]).toMatchObject({
-        outcome: "hard_block",
-        jev: { failure: "changed-context" },
-      });
-    },
-  );
+    if (change === "cancelled") controller.abort();
+    if (change === "file") writeFileSync(join(cwd, "source.ts"), "Changed local file facts.");
+    if (change === "org") syntheticSandbox = false;
+    if (change === "branch") {
+      session.resetLeaf();
+      session.appendCustomEntry("synthetic-sibling-root", {});
+    }
+    approve("Allow once");
+    expect(await pending).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(audit()[0]).toMatchObject({
+      outcome: "hard_block",
+      jev: { failure: "changed-context" },
+    });
+  });
 });

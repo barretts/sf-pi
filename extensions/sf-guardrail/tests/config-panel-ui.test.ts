@@ -18,12 +18,16 @@ let prevAgentDir: string | undefined;
 
 beforeEach(() => {
   vi.resetModules();
+  vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", undefined);
+  vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", undefined);
+  vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY_FILE", undefined);
   tmpDir = mkdtempSync(path.join(tmpdir(), "sf-guardrail-config-panel-"));
   prevAgentDir = process.env[PI_AGENT_ENV];
   process.env[PI_AGENT_ENV] = tmpDir;
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   if (prevAgentDir === undefined) delete process.env[PI_AGENT_ENV];
   else process.env[PI_AGENT_ENV] = prevAgentDir;
   rmSync(tmpDir, { recursive: true, force: true });
@@ -41,12 +45,52 @@ describe("SF Guardrail config panel", () => {
     };
     for (let i = 0; i < 6; i++) panel.handleInput("\u001b[B");
     panel.handleInput("\r");
-    expect(panel.renderContent(120).join("\n")).toContain("OpenRouter credentials:");
+    const text = panel.renderContent(120).join("\n");
+    expect(text).toContain("Decisions provider connection: missing");
+    expect(text).toContain("Jev API key: missing");
     panel.handleInput("j");
     expect(config.loadGuardrailSnapshot().engine).toBe("jev");
     expect(panel.renderContent(120).join("\n")).toContain("Decision engine: jev saved");
     panel.handleInput("d");
     expect(config.loadGuardrailSnapshot().engine).toBe("deterministic");
+  });
+
+  it("shows readiness without exposing the endpoint or key", async () => {
+    const endpoint = "https://decisions.example.invalid/private-gateway/v1/decisions";
+    const key = "synthetic-jev-key";
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", endpoint);
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", key);
+    const { createConfigPanel } = await import("../lib/config-panel.ts");
+    const panel = createConfigPanel(theme, "/tmp/project", "global", vi.fn(), tui) as unknown as {
+      handleInput(data: string): void;
+      renderContent(width: number): string[];
+    };
+    for (let i = 0; i < 6; i++) panel.handleInput("\u001b[B");
+    panel.handleInput("\r");
+    const text = panel.renderContent(120).join("\n");
+    expect(text).toContain("Decisions provider connection: ready");
+    expect(text).toContain("Jev API key: ready");
+    expect(text).not.toContain(endpoint);
+    expect(text).not.toContain(key);
+  });
+
+  it("shows invalid configuration without exposing the endpoint or key path", async () => {
+    const endpoint = "http://decisions.example.invalid/private-gateway/v1/decisions";
+    const keyPath = path.join(tmpDir, "missing-synthetic-key-file");
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", endpoint);
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY_FILE", keyPath);
+    const { createConfigPanel } = await import("../lib/config-panel.ts");
+    const panel = createConfigPanel(theme, "/tmp/project", "global", vi.fn(), tui) as unknown as {
+      handleInput(data: string): void;
+      renderContent(width: number): string[];
+    };
+    for (let i = 0; i < 6; i++) panel.handleInput("\u001b[B");
+    panel.handleInput("\r");
+    const text = panel.renderContent(120).join("\n");
+    expect(text).toContain("Decisions provider connection: invalid");
+    expect(text).toContain("Jev API key: invalid");
+    expect(text).not.toContain(endpoint);
+    expect(text).not.toContain(keyPath);
   });
 
   it("edits protected aliases with a native input page", async () => {

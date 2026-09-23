@@ -89,10 +89,16 @@ import { evaluateSafety } from "./lib/safety-kernel.ts";
 import { loadGuardrailSnapshot } from "./lib/config.ts";
 import { confirmDecision, isOperatorAutoApproveEnabled } from "./lib/hitl.ts";
 import { readGuardrailPiSettings, setGuardrailEngine } from "./lib/guardrail-settings.ts";
-import { jevCredentialStatus, JEV_RESOLVED_MODEL, JEV_TIMEOUT_MS } from "./lib/jev-client.ts";
+import {
+  jevCredentialStatus,
+  jevEndpointStatus,
+  JEV_RESOLVED_MODEL,
+  JEV_TIMEOUT_MS,
+} from "./lib/jev-client.ts";
 import {
   jevConfigHash,
   jevFactBindingHash,
+  jevTransportBindingHash,
   withinDeadline,
   JEV_PROTOCOL_HASH,
 } from "./lib/jev-risk.ts";
@@ -253,6 +259,7 @@ export default function sfGuardrail(pi: ExtensionAPI) {
           return (
             current.engine !== "jev" ||
             jevConfigHash(current.config) !== decision.jev?.policyHash ||
+            jevTransportBindingHash() !== decision.jev?.transportHash ||
             jevHash(event.input ?? {}) !== decision.jev?.inputHash ||
             jevHash(JSON.parse(JSON.stringify(getDescriptor() ?? null))) !==
               decision.jev?.descriptorHash
@@ -554,6 +561,7 @@ async function handleGuardrailCommand(
             engine,
             jevModel: JEV_RESOLVED_MODEL,
             jevCredentialReady: jevCredentialStatus().startsWith("ready ("),
+            jevEndpointStatus: engine === "jev" ? jevEndpointStatus() : undefined,
           });
     await emitGuardrailOutput(
       ctx,

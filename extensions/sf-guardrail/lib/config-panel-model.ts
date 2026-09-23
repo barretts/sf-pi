@@ -54,7 +54,7 @@ export const SECTION_ITEMS: SettingsSectionItem[] = [
   {
     value: "engine",
     label: "Decision engine",
-    description: "Choose deterministic rules or TypeSafe Jev through OpenRouter.",
+    description: "Choose deterministic rules or TypeSafe Jev through Decisions.",
   },
 ];
 

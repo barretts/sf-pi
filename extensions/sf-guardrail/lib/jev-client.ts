@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** One bounded, pinned OpenRouter request. Failures never retain remote text or credentials. */
+/** Send one bounded request. Keep errors free of remote text and keys. */
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import type {
   JevAction,
@@ -22,8 +22,8 @@ export const JEV_RESPONSE_VALIDATION_CONTRACT = Object.freeze({
   preserveWireProbabilities: true,
 } as const);
 
-const ENDPOINT = "https://openrouter.ai/api/alpha/decisions";
 const MAX_KEY_BYTES = 4_096;
+const MAX_ENDPOINT_BYTES = 4_096;
 const MAX_RESPONSE_BYTES = 65_536;
 const MAX_REQUEST_BYTES = 131_072;
 const ACTIONS: JevAction[] = ["allow", "confirm", "block"];
@@ -38,6 +38,8 @@ const QUESTIONS: JevQuestionId[] = [
 
 export class JevClientError extends Error {
   readonly code:
+    | "missing_endpoint"
+    | "invalid_endpoint"
     | "missing_credentials"
     | "invalid_credentials"
     | "invalid_request"
@@ -56,12 +58,56 @@ export class JevClientError extends Error {
   }
 }
 
+function validateEndpoint(value: unknown): string {
+  if (value === undefined) throw new JevClientError("missing_endpoint");
+  if (typeof value !== "string") throw new JevClientError("invalid_endpoint");
+  if (Buffer.byteLength(value) > MAX_ENDPOINT_BYTES) throw new JevClientError("invalid_endpoint");
+  const input = value.trim();
+  if (input === "") throw new JevClientError("missing_endpoint");
+  if (/[\\\s]/.test(input)) throw new JevClientError("invalid_endpoint");
+  try {
+    const authority = /^https:\/\/([^/?#]+)/i.exec(input)?.[1];
+    const endpoint = new URL(input);
+    if (
+      !authority ||
+      authority.includes("@") ||
+      endpoint.protocol !== "https:" ||
+      endpoint.username ||
+      endpoint.password ||
+      input.includes("?") ||
+      input.includes("#")
+    ) {
+      throw new Error();
+    }
+    return endpoint.href;
+  } catch {
+    throw new JevClientError("invalid_endpoint");
+  }
+}
+
+/** Read and check the endpoint before a key is read or a request is sent. */
+export function resolveJevEndpoint(value = process.env.SF_GUARDRAIL_JEV_ENDPOINT): string {
+  return validateEndpoint(value);
+}
+
+/** Check local endpoint settings. Do not return the URL. */
+export function jevEndpointStatus(): "ready" | "missing" | "invalid" {
+  try {
+    resolveJevEndpoint();
+    return "ready";
+  } catch (error) {
+    return error instanceof JevClientError && error.code === "missing_endpoint"
+      ? "missing"
+      : "invalid";
+  }
+}
+
 function credential(): { key: string; source: "environment" | "file" } {
-  const environmentKey = process.env.OPENROUTER_API_KEY;
+  const environmentKey = process.env.SF_GUARDRAIL_JEV_API_KEY;
   if (environmentKey !== undefined && environmentKey !== "") {
     return { key: validateKey(environmentKey), source: "environment" };
   }
-  const path = process.env.OPENROUTER_API_KEY_FILE;
+  const path = process.env.SF_GUARDRAIL_JEV_API_KEY_FILE;
   if (!path) throw new JevClientError("missing_credentials");
   let descriptor: number | undefined;
   try {
@@ -129,9 +175,8 @@ function normalizedChoiceProbabilities(probabilities: Record<JevAction, number>)
   const sum = values.reduce((total, value) => total + value, 0);
   if (Math.abs(sum - 1) <= JEV_RESPONSE_VALIDATION_CONTRACT.exactSumTolerance) return true;
 
-  // OpenRouter rounds Decisions probabilities to two decimals:
-  // https://github.com/OpenRouterTeam/ai-sdk-provider#evaluation-jev-with-ai-sdk-through-openrouter
-  // Test clipped, closed half-cent intervals using integer units; retain every wire value.
+  // A reply can round probabilities to two decimals.
+  // Check clipped, closed half-cent intervals in integer units. Keep each wire value.
   const scale = 10 ** JEV_RESPONSE_VALIDATION_CONTRACT.roundedDecimals;
   const cents = values.map((value) => Math.round(value * scale));
   if (
@@ -329,10 +374,13 @@ function prediction(value: unknown, key: string, questionIds: JevQuestionId[]): 
 
 export async function requestJev(
   request: JevRequest,
-  options: { signal?: AbortSignal; fetch?: typeof fetch } = {},
+  options: { signal?: AbortSignal; fetch?: typeof fetch; endpoint?: string } = {},
 ): Promise<JevPrediction> {
   const started = performance.now();
   if (options.signal?.aborted) throw new JevClientError("cancelled");
+  const configuredEndpoint = options.endpoint;
+  const endpoint =
+    configuredEndpoint === undefined ? resolveJevEndpoint() : validateEndpoint(configuredEndpoint);
   const controller = new AbortController();
   let abortCode: "cancelled" | "timeout" = "cancelled";
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -362,7 +410,7 @@ export async function requestJev(
       } catch {
         throw new JevClientError("invalid_request");
       }
-      const response = await (options.fetch ?? globalThis.fetch)(ENDPOINT, {
+      const response = await (options.fetch ?? globalThis.fetch)(endpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         body,

@@ -3,9 +3,10 @@
  * One opt-in live request through the real Pi extension loader and tool_call hook.
  * The registered read tool only increments a counter; it reads no file contents.
  *
- * OPENROUTER_API_KEY_FILE=/absolute/key/path node --experimental-strip-types \
- *   scripts/jev-guardrail-hook-smoke.ts
- * Add --prepare-only to exercise SDK setup without reading credentials or calling Jev.
+ * Set SF_GUARDRAIL_JEV_ENDPOINT and SF_GUARDRAIL_JEV_API_KEY or
+ * SF_GUARDRAIL_JEV_API_KEY_FILE. Add --live to send a request.
+ * No arguments or --prepare-only exercise SDK setup without connection settings,
+ * key reads, or a Jev request.
  */
 import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
@@ -23,6 +24,7 @@ import {
   JEV_MODEL,
   JEV_PROVIDER,
   JEV_RESOLVED_MODEL,
+  resolveJevEndpoint,
 } from "../extensions/sf-guardrail/lib/jev-client.ts";
 import {
   DECISION_ENTRY_TYPE,
@@ -32,7 +34,6 @@ import {
   type JevRequest,
 } from "../extensions/sf-guardrail/lib/types.ts";
 
-const ENDPOINT = "https://openrouter.ai/api/alpha/decisions";
 const EXECUTION_ENTRY_TYPE = "sf-guardrail-hook-smoke-execution";
 const PRIVATE_FILE_MARKER = "private-file-body-must-stay-local-hook-smoke";
 const QUESTION_IDS: JevQuestionId[] = [
@@ -75,6 +76,7 @@ export interface HookSmokeReport {
 export async function runHookSmoke(
   options: { prepareOnly?: boolean } = {},
 ): Promise<HookSmokeReport> {
+  const prepareOnly = options.prepareOnly !== false;
   const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
   const originalFetch = globalThis.fetch;
   const temporaryRoot = await mkdtemp(join(tmpdir(), "sf-pi-jev-hook-smoke-"));
@@ -83,10 +85,11 @@ export async function runHookSmoke(
   const readmePath = join(cwd, "README.md");
   let runner: ExtensionRunner | undefined;
   let hookActive = false;
+  let endpoint: string | undefined;
   const report: HookSmokeReport = {
     success: false,
-    preparedOnly: options.prepareOnly === true,
-    proofLevel: options.prepareOnly ? "sdk-preparation-only" : "actual-sdk-hook-with-inert-tool",
+    preparedOnly: prepareOnly,
+    proofLevel: prepareOnly ? "sdk-preparation-only" : "actual-sdk-hook-with-inert-tool",
     model: null,
     provider: null,
     requestId: null,
@@ -119,7 +122,14 @@ export async function runHookSmoke(
     // Inspect the bounded body only. Never inspect or retain authorization headers.
     globalThis.fetch = async (input, init) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      if (!hookActive || url !== ENDPOINT || init?.method !== "POST" || report.requests !== 0) {
+      if (
+        !hookActive ||
+        endpoint === undefined ||
+        url !== endpoint ||
+        init?.method !== "POST" ||
+        report.requests !== 0
+      ) {
+        report.failure ??= "unexpected-smoke-network-call";
         throw new Error("unexpected-smoke-network-call");
       }
       report.requests += 1;
@@ -216,11 +226,12 @@ export async function runHookSmoke(
       report.failure ??= "sdk-hook-or-tool-missing";
       return report;
     }
-    if (options.prepareOnly) {
-      report.success = report.requests === 0;
+    if (prepareOnly) {
+      report.success = report.requests === 0 && !report.failure;
       return report;
     }
 
+    endpoint = resolveJevEndpoint();
     const toolCallId = "jev-live-hook-smoke-read";
     const input = { path: readmePath };
     hookActive = true;
@@ -393,7 +404,7 @@ function wirePrivacyPasses(
     request.provider?.allow_fallbacks === false &&
     request.provider.only?.length === 1 &&
     request.provider.only[0] === "typesafe" &&
-    state.version === 4 &&
+    state.version === 6 &&
     Object.keys(state).sort().join(",") === "facts,observations,operation,policy,version" &&
     operation?.toolName === "read" &&
     operation.complete === true &&
@@ -451,13 +462,16 @@ export default function inertRead(pi) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  if (args.some((arg) => arg !== "--prepare-only")) {
+  if (
+    args.some((arg) => arg !== "--prepare-only" && arg !== "--live") ||
+    (args.includes("--prepare-only") && args.includes("--live"))
+  ) {
     console.error(
-      "Usage: node --experimental-strip-types scripts/jev-guardrail-hook-smoke.ts [--prepare-only]",
+      "Usage: node --experimental-strip-types scripts/jev-guardrail-hook-smoke.ts [--prepare-only | --live]",
     );
     process.exitCode = 2;
   } else {
-    const report = await runHookSmoke({ prepareOnly: args.includes("--prepare-only") });
+    const report = await runHookSmoke({ prepareOnly: !args.includes("--live") });
     console.log(JSON.stringify(report, null, 2));
     if (!report.success) process.exitCode = 1;
   }

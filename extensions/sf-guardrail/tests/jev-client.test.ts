@@ -10,12 +10,15 @@ import {
   JEV_TIMEOUT_MS,
   JevClientError,
   jevCredentialStatus,
+  jevEndpointStatus,
+  resolveJevEndpoint,
   requestJev,
 } from "../lib/jev-client.ts";
 import { evaluateJevPrediction } from "../lib/jev-risk.ts";
 import type { JevRequest } from "../lib/types.ts";
 
 const TEST_KEY = "sk-test-only-credential";
+const TEST_ENDPOINT = "https://jev.example.test/decisions";
 const request: JevRequest = {
   model: JEV_MODEL,
   state: { toolName: "read", path: "README.md" },
@@ -92,8 +95,9 @@ function multiWire() {
 
 let directory: string;
 beforeEach(() => {
-  vi.stubEnv("OPENROUTER_API_KEY", TEST_KEY);
-  vi.stubEnv("OPENROUTER_API_KEY_FILE", "");
+  vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", TEST_ENDPOINT);
+  vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", TEST_KEY);
+  vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY_FILE", "");
   directory = mkdtempSync(join(tmpdir(), "sf-guardrail-jev-client-"));
 });
 afterEach(() => {
@@ -102,8 +106,151 @@ afterEach(() => {
   rmSync(directory, { recursive: true, force: true });
 });
 
+describe("Jev endpoint settings", () => {
+  it.each([undefined, "", " \n\t "])(
+    "requires an endpoint before it checks a key",
+    async (endpoint) => {
+      vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", endpoint);
+      vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "invalid\nkey");
+      vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY_FILE", join(directory, "missing"));
+      const fetch = responseFetch();
+      expect(jevEndpointStatus()).toBe("missing");
+      expect(() => resolveJevEndpoint()).toThrow("missing_endpoint");
+      await expect(requestJev(request, { fetch })).rejects.toMatchObject({
+        code: "missing_endpoint",
+        message: "Jev request failed: missing_endpoint.",
+      });
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    "not-a-url",
+    "/decisions",
+    "https:jev.example.test/decisions",
+    "//jev.example.test/decisions",
+    "https:///jev.example.test/decisions",
+    "http://jev.example.test/decisions",
+    "file:///decisions",
+    "https://username@jev.example.test/decisions",
+    "https://username:password@jev.example.test/decisions",
+    "https://@jev.example.test/decisions",
+    "https://jev.example.test/decisions?mode=test",
+    "https://jev.example.test/decisions?",
+    "https://jev.example.test/decisions#test",
+    "https://jev.example.test/decisions#",
+    "https://jev.example.test/deci\nsions",
+    "https://jev.example.test/deci\tsions",
+    "https://jev.example.test/deci sions",
+    "https://jev.example.test\\decisions",
+  ])("rejects an invalid endpoint without a request", async (endpoint) => {
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", endpoint);
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "");
+    const fetch = responseFetch();
+    expect(jevEndpointStatus()).toBe("invalid");
+    expect(() => resolveJevEndpoint()).toThrow("invalid_endpoint");
+    await expect(requestJev(request, { fetch })).rejects.toMatchObject({
+      code: "invalid_endpoint",
+      message: "Jev request failed: invalid_endpoint.",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("normalizes a full HTTPS URL that has no URL key, query, or fragment", async () => {
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", " \tHTTPS://JEV.EXAMPLE.TEST:443/v1/../decisions\n ");
+    const fetch = responseFetch();
+    expect(resolveJevEndpoint()).toBe(TEST_ENDPOINT);
+    expect(jevEndpointStatus()).toBe("ready");
+    await requestJev(request, { fetch });
+    expect(fetch.mock.calls[0][0]).toBe(TEST_ENDPOINT);
+  });
+
+  it("keeps the captured endpoint when the environment setting changes", async () => {
+    const endpoint = resolveJevEndpoint();
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", "http://changed.example.test/private");
+    const fetch = responseFetch();
+    await requestJev(request, { fetch, endpoint });
+    expect(fetch.mock.calls[0][0]).toBe(TEST_ENDPOINT);
+    expect(fetch.mock.calls[0][1].body).toBe(JSON.stringify(request));
+    expect(jevEndpointStatus()).toBe("invalid");
+  });
+
+  it("accepts the 4096-byte input limit", async () => {
+    const prefix = `${TEST_ENDPOINT}/`;
+    const endpoint = prefix + "a".repeat(4096 - Buffer.byteLength(prefix));
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", endpoint);
+    const fetch = responseFetch();
+    expect(resolveJevEndpoint()).toBe(endpoint);
+    await requestJev(request, { fetch });
+    expect(fetch.mock.calls[0][0]).toBe(endpoint);
+  });
+
+  it.each(["a".repeat(4096), "é".repeat(2048)])(
+    "rejects oversized endpoint bytes before it checks a key",
+    async (path) => {
+      const endpoint = `${TEST_ENDPOINT}/${path}`;
+      vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", endpoint);
+      vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "invalid\nkey");
+      vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY_FILE", join(directory, "missing"));
+      const fetch = responseFetch();
+      expect(jevEndpointStatus()).toBe("invalid");
+      await expect(requestJev(request, { fetch })).rejects.toMatchObject({
+        code: "invalid_endpoint",
+      });
+      await expect(requestJev(request, { fetch, endpoint })).rejects.toMatchObject({
+        code: "invalid_endpoint",
+      });
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it("checks an explicit endpoint with the same rules before it checks a key", async () => {
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "invalid\nkey");
+    const fetch = responseFetch();
+    for (const endpoint of [
+      "http://jev.example.test/decisions",
+      "https://user:password@jev.example.test/decisions",
+      "https://jev.example.test/decisions?",
+      "https://jev.example.test/decisions#",
+      "https://jev.example.test/deci\nsions",
+      "https://jev.example.test\\decisions",
+      null,
+      123,
+    ]) {
+      await expect(
+        requestJev(request, { fetch, endpoint: endpoint as string }),
+      ).rejects.toMatchObject({ code: "invalid_endpoint" });
+    }
+    await expect(requestJev(request, { fetch, endpoint: "" })).rejects.toMatchObject({
+      code: "missing_endpoint",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("normalizes an explicit endpoint when no environment endpoint is set", async () => {
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", undefined);
+    const fetch = responseFetch();
+    await requestJev(request, {
+      fetch,
+      endpoint: "https://JEV.EXAMPLE.TEST:443/v1/../decisions",
+    });
+    expect(fetch.mock.calls[0][0]).toBe(TEST_ENDPOINT);
+  });
+
+  it("keeps endpoint errors free of the URL and key", async () => {
+    const endpoint = `https://user:${TEST_KEY}@private.example.test/decisions?private-value`;
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", endpoint);
+    const error = await requestJev(request, { fetch: responseFetch() }).catch((caught) => caught);
+    expect(error).toBeInstanceOf(JevClientError);
+    expect(error).toMatchObject({ code: "invalid_endpoint" });
+    expect(JSON.stringify(error)).not.toContain(TEST_KEY);
+    expect(JSON.stringify(error)).not.toContain(endpoint);
+    expect(jevEndpointStatus()).toBe("invalid");
+  });
+});
+
 describe("requestJev", () => {
-  it("uses the fixed Decisions endpoint and returns validated hosted output tokens", async () => {
+  it("uses the configured endpoint and returns valid output token counts", async () => {
     const fetch = responseFetch();
     const result = await requestJev(request, { fetch });
     expect(result).toEqual({
@@ -117,7 +264,7 @@ describe("requestJev", () => {
     });
     expect(fetch).toHaveBeenCalledOnce();
     const [url, options] = fetch.mock.calls[0];
-    expect(url).toBe("https://openrouter.ai/api/alpha/decisions");
+    expect(url).toBe(TEST_ENDPOINT);
     expect(options.method).toBe("POST");
     expect(options.redirect).toBe("error");
     expect(options.headers).toEqual({
@@ -476,7 +623,7 @@ describe("requestJev", () => {
   });
 
   it("does not read credentials or fetch for an already cancelled call", async () => {
-    vi.stubEnv("OPENROUTER_API_KEY", "");
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "");
     const controller = new AbortController();
     controller.abort();
     const fetch = responseFetch();
@@ -712,7 +859,7 @@ describe("Jev credential readiness", () => {
   });
 
   it("prefers the environment key to an unreadable configured file", async () => {
-    vi.stubEnv("OPENROUTER_API_KEY_FILE", join(directory, "missing"));
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY_FILE", join(directory, "missing"));
     const fetch = responseFetch();
     expect(jevCredentialStatus()).toBe("ready (environment)");
     await requestJev(request, { fetch });
@@ -720,10 +867,10 @@ describe("Jev credential readiness", () => {
   });
 
   it("reads only the explicitly configured bounded regular file", async () => {
-    vi.stubEnv("OPENROUTER_API_KEY", "");
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "");
     const path = join(directory, "credential");
     writeFileSync(path, `${TEST_KEY}\n`, { mode: 0o600 });
-    vi.stubEnv("OPENROUTER_API_KEY_FILE", path);
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY_FILE", path);
     const fetch = responseFetch();
     expect(jevCredentialStatus()).toBe("ready (file)");
     await requestJev(request, { fetch });
@@ -731,7 +878,21 @@ describe("Jev credential readiness", () => {
   });
 
   it("reports absent credentials and does not fetch", async () => {
-    vi.stubEnv("OPENROUTER_API_KEY", "");
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "");
+    const fetch = responseFetch();
+    expect(jevCredentialStatus()).toBe("missing");
+    await expect(requestJev(request, { fetch })).rejects.toMatchObject({
+      code: "missing_credentials",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("ignores an unrelated legacy key setting", async () => {
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "");
+    vi.stubEnv("LEGACY_JEV_API_KEY", TEST_KEY);
+    const path = join(directory, "legacy-key");
+    writeFileSync(path, TEST_KEY, { mode: 0o600 });
+    vi.stubEnv("LEGACY_JEV_API_KEY_FILE", path);
     const fetch = responseFetch();
     expect(jevCredentialStatus()).toBe("missing");
     await expect(requestJev(request, { fetch })).rejects.toMatchObject({
@@ -743,8 +904,8 @@ describe("Jev credential readiness", () => {
   it("does not fall back when a supplied environment key is invalid", async () => {
     const path = join(directory, "credential");
     writeFileSync(path, TEST_KEY);
-    vi.stubEnv("OPENROUTER_API_KEY", "invalid\ncredential");
-    vi.stubEnv("OPENROUTER_API_KEY_FILE", path);
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "invalid\ncredential");
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY_FILE", path);
     expect(jevCredentialStatus()).toBe("invalid");
     await expect(requestJev(request, { fetch: responseFetch() })).rejects.toMatchObject({
       code: "invalid_credentials",
@@ -752,7 +913,7 @@ describe("Jev credential readiness", () => {
   });
 
   it("sanitizes missing, directory, empty, oversized, and non-ASCII key file errors", async () => {
-    vi.stubEnv("OPENROUTER_API_KEY", "");
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "");
     const folder = join(directory, "folder");
     mkdirSync(folder);
     const empty = join(directory, "empty");
@@ -762,7 +923,7 @@ describe("Jev credential readiness", () => {
     const binary = join(directory, "binary");
     writeFileSync(binary, new Uint8Array([0xff]));
     for (const path of [join(directory, "missing"), folder, empty, large, binary]) {
-      vi.stubEnv("OPENROUTER_API_KEY_FILE", path);
+      vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY_FILE", path);
       expect(jevCredentialStatus()).toBe("invalid");
       const fetch = responseFetch();
       await expect(requestJev(request, { fetch })).rejects.toMatchObject({

@@ -17,11 +17,15 @@ The existing local rule implementation that matches file, command, org-aware, an
 _Avoid_: Jev backup, hidden second vote, model safety guarantee
 
 **Jev Engine**:
-The opt-in sole risk engine that classifies every Pi `tool_call` using TypeSafe Jev through OpenRouter Decisions. Jev interprets all effective policy in this mode, including protected paths, exact blocks, and custom patterns. Exact rules lose their deterministic matching guarantee; SF Pi still enforces the model answers and human approval locally. There is no deterministic risk floor or fallback.
+The optional sole risk engine that classifies every Pi `tool_call` with TypeSafe Jev through a configured **Decisions Provider**. Jev interprets all effective policy in this mode. This includes protected paths, exact blocks, and custom patterns. Exact rules lose their deterministic matching guarantee. SF Pi enforces the model answers and human approval locally. There is no deterministic risk floor or fallback.
 _Avoid_: qualified replacement, calibrated safety score, deterministic model policy
 
+**Decisions Provider**:
+The configured HTTPS gateway for the pinned TypeSafe Jev model and independent Choice contract. Set `SF_GUARDRAIL_JEV_ENDPOINT` and `SF_GUARDRAIL_JEV_API_KEY` or `SF_GUARDRAIL_JEV_API_KEY_FILE` explicitly. There is no default endpoint. Local readiness checks do not send a request. The UI, status, and audit exclude the endpoint, key value, and key path.
+_Avoid_: arbitrary chat endpoint, model discovery, automatic provider fallback
+
 **Jev Decision Questions**:
-Protocol v6's independent Choice questions sent in one request against state version 6, each choosing `allow`, `confirm`, or `block`. Every call asks `risk` about executable/operational effects using tool-family guidance; matching block restrictions belong to policy questions. File paths add file policy; parsed shell calls add command policy and structurally possible org policy. Complete known executable/wrapper heads narrow the projected org rules; opaque/incomplete heads, withheld comments, or missing commands retain all of them. Disclosure follows tool-specific possible data effects and mechanical runner execution facts, with incomplete shell effects retaining the question; authority is browser-only. Exact `sf_browser_press` key `Escape` remains risk- and authority-evaluated target-independent cancellation without requiring org or fresh target/focus facts or fabricating freshness. At most six model-authored answers supply all risk/policy judgments; structural applicability does not decide an outcome.
+Independent Choice questions sent in one request against wire state version 6. Each question chooses `allow`, `confirm`, or `block`. Every call asks `risk` about executable effects with guidance for the tool family. Policy questions judge matching block restrictions. File paths add file policy. Parsed shell calls add command policy and structurally possible org policy. Complete known executable or wrapper heads reduce the projected org rules. Opaque or incomplete heads, withheld comments, or missing commands retain all of them. Disclosure follows possible data effects and observed runner facts. Incomplete shell effects retain the disclosure question. Authority applies only to browser tools. Exact `sf_browser_press` key `Escape` remains risk- and authority-evaluated cancellation. It requires no org or fresh target/focus facts. The request does not create false freshness. At most six model answers supply all risk and policy judgments. Structural applicability does not decide an outcome.
 _Avoid_: sequential model chain, deterministic policy vote, combined confidence
 
 **Operation Metadata**:
@@ -137,7 +141,7 @@ A branch/session-scoped approval that suppresses repeated prompts for the same *
 _Avoid_: timed grant, permanent allow, global trust, hidden bypass
 
 **Jev Exact-Call Session Approval**:
-A **Session Approval** available only for a complete call against a currently verified non-production org. Its locally computed fingerprint binds the full canonical original input, tool, working directory, verified target, engine, policy/protocol hash, and model identity. Changing withheld content invalidates approval without sending it to Jev. A grant enters reusable memory only after persistence and audit recording succeed. Deterministic grants do not transfer; production, unknown, external, and opaque calls remain allow-once.
+A **Session Approval** available only for a complete call against a currently verified non-production org. Its local fingerprint binds the full canonical original input, tool, working directory, verified target, engine, policy/protocol hash, model identity, and transport hash. The transport hash binds endpoint, model, provider, and routing without storing endpoint text. A changed connection or withheld content invalidates approval. Withheld content stays local. A grant enters reusable memory only after persistence and audit recording succeed. Deterministic grants do not transfer. Production, unknown, external, and opaque calls remain allow-once.
 _Avoid_: family grant, path prefix approval, payload-independent approval
 
 **Stable Bounded Operation**:

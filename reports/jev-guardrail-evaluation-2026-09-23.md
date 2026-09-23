@@ -1,5 +1,12 @@
 # Hosted Jev Guardrail evaluation — 2026-09-23
 
+The public adapter now uses a configured Decisions endpoint and generic key
+variables. It has no default remote address. The hosted measurements below
+come from the earlier service and transport. They do not validate another
+endpoint. Public provider names and links were removed from this report.
+Frozen local receipts remain unchanged. Earlier commits retain their original
+provider references.
+
 The selectable Jev engine and baseline comparison are implemented. The latest
 full DEV175 test put command match definitions directly in the question. All 175 responses passed
 the checks. Jev preserved all 133 baseline restrictions and flagged all ten
@@ -14,6 +21,35 @@ deterministic. The runtime now uses the smaller measured v11 representation.
 The latest v14 question text remains outside runtime source. Both versions
 approved only 1/32 safe controls automatically in their saved hosted tests.
 
+## Current provider-neutral adapter
+
+The current client requires `SF_GUARDRAIL_JEV_ENDPOINT`. It has no default
+endpoint. Use `SF_GUARDRAIL_JEV_API_KEY`, or point
+`SF_GUARDRAIL_JEV_API_KEY_FILE` at a local key file. The client checks the
+endpoint before it reads a key. It requires HTTPS and rejects embedded
+credentials, query text, fragments, and redirects. The configured gateway must
+support the pinned TypeSafe Jev Decisions contract. This is a functional
+adapter, not a general chat client.
+
+The local transport hash binds endpoint, model, provider, and routing. Exact-call
+approval binds that hash and checks it again before release. A changed
+connection invalidates approval. Status and audit omit the endpoint text, key
+value, and key path. Internal protocol version is 8. Wire state version remains 6. The current protocol hash is
+`42c2049ed4ef29a5e6baa442dee3fd68d77b3ff163901782a998d66b8fc214fd`.
+
+The new offline source proof matched all 175 saved v11 request bodies exactly.
+It made no provider requests, key reads, endpoint reads, real fact lookups, or
+tool executions. Its receipt SHA-256 is
+`b43a3005f7b191d1abad97642294b00833b31aa573624b8e62dde1edc9440e3f`.
+The proof covers the current source, including the configured transport.
+
+Current validation passed 260 focused tests. Full CI passed 4,992 tests and
+skipped 39. Lint passed. These checks prove source compatibility and the offline
+request contract. No new live endpoint was tested. Historical hosted results
+below do not prove that a configured gateway works or qualifies for enforcement.
+Baseline preparation and hook smoke are offline by default. Live hook smoke
+requires an explicit `--live` argument.
+
 ## Candidate and execution boundary
 
 The user chose Jev as the sole policy engine in Jev mode, with baseline coverage
@@ -22,7 +58,7 @@ prioritizes proving coverage and permits slower experimental responses. The
 ten-second inert diagnostic deadline serves that experiment; normal runtime
 configuration and the initial performance target remain separate.
 
-- OpenRouter Decisions endpoint, independent applicable Choice questions in one
+- Historical hosted Decisions endpoint, independent applicable Choice questions in one
   request (the initial version used one question), requested model
   `typesafe/jev-1.13`, required resolved model `typesafe/jev-1.13-20260917`,
   required provider `TypeSafe`.
@@ -151,13 +187,11 @@ qualification.
 
 The revision follows TypeSafe's recommendations to use independent questions,
 explicit option boundaries and minimum relevant structured state. Those
-recommendations do not supply an exact-policy guarantee. OpenRouter's coding
-permission cookbook retains static host restrictions as its security boundary;
-that example does not qualify the selected sole-model design. See
+recommendations do not supply an exact-policy guarantee. Examples with static
+host restrictions do not qualify the selected sole-model design. See
 [TypeSafe Choice](https://docs.typesafe.ai/primitives/choice),
 [TypeSafe structured criteria](https://docs.typesafe.ai/primitives/advanced),
-[TypeSafe State](https://docs.typesafe.ai/concepts/state),
-[OpenRouter permission cookbook](https://openrouter.ai/docs/cookbook/coding-agents/auto-approve-permission-prompts-with-jev).
+[TypeSafe State](https://docs.typesafe.ai/concepts/state).
 
 ### Lean protocol v3, consumed DEV subset
 
@@ -312,22 +346,16 @@ justify extending the runtime deadline or relaxing thresholds.
 
 The read-only transport audit found inexpensive local preparation and response
 validation, and successful connection reuse against a local synthetic HTTP
-server. Those local checks do not measure hosted HTTPS performance. OpenRouter's
-[current endpoint catalog](https://openrouter.ai/api/v1/models/typesafe/jev-1.13/endpoints)
-lists one TypeSafe endpoint, no supported model parameters and no implicit
-caching. The [Decisions schema](https://openrouter.ai/docs/api/api-reference/alphadecisions/submit-a-decisions-questions-and-answers-request)
-documents no streaming or priority-tier speed setting. Provider latency
-preferences reorder available providers; they supply no faster alternative
-under the required sole TypeSafe routing. See
-[OpenRouter latency guidance](https://openrouter.ai/docs/guides/best-practices/latency-and-performance).
+server. Those local checks do not measure hosted HTTPS performance. The
+historical service catalog offered no second provider under the fixed routing.
+That observation does not establish another configured endpoint's latency,
+caching, streaming, or scheduling behavior.
 
 A read-only current-key diagnostic showed the key was not close to its configured
 spending limit. Account-wide balance remains unknown: the supplied key is a
 completion key, while the documented credit-balance endpoint requires a
 management key. The low-account-balance latency hypothesis is therefore
 unverified, and the check establishes no particular cause of remote latency.
-See [current-key API](https://openrouter.ai/docs/api/api-reference/api-keys/get-current-key)
-and [credits API](https://openrouter.ai/docs/api/api-reference/credits/get-credits).
 Only sanitized limit metadata was retained in ignored local receipts.
 
 The known reported response-cost sum through these diagnostics is $0.057090180.
@@ -912,7 +940,7 @@ The failed ordinary local read returned HTTP 200. The bounded structural
 snapshot retained risk probabilities allow `.93`, confirm `.05`, block `.01`,
 which total `.99` and necessarily trigger the current exact-sum rejection. The
 other two probability maps summed to one. This demonstrates a numeric
-compatibility mismatch with documented OpenRouter rounding; it does not prove
+compatibility mismatch with historical rounded responses; it does not prove
 every other part of the rejected response valid. The failure remains in the
 original denominator, and its recommendation is not retroactively substituted.
 No raw remote strings, IDs, headers or state were retained in that snapshot.
@@ -1489,15 +1517,14 @@ qualification result. The saved v11 test still has 100% observed baseline
 strength coverage and only 3.125% safe automatic coverage. Known reported task
 cost remains $0.340758348. Offline preparation adds no provider cost.
 
-## OpenRouter rounded-probability compatibility repair
+## Historical rounded-probability compatibility repair
 
-OpenRouter's official adapter documents two-decimal rounding for Decisions
-probabilities. Independently rounded probabilities can consequently total `.99`
+The earlier adapter used two-decimal Decisions probabilities. Independently
+rounded probabilities can consequently total `.99`
 or `1.01`, while TypeSafe describes the underlying distribution as normalized.
 The v9 risk vector `.93/.05/.01` exposes the difference in an observed response.
 This explains an incompatible numeric check, not every historical validation
-failure. [OpenRouter adapter documentation](https://github.com/OpenRouterTeam/ai-sdk-provider#evaluation-jev-with-ai-sdk-through-openrouter),
-[TypeSafe Choice answer](https://docs.typesafe.ai/primitives/choice).
+failure. [TypeSafe Choice answer](https://docs.typesafe.ai/primitives/choice).
 
 The narrow client repair retains the original sum tolerance of `1e-6` for
 normalized distributions. Otherwise, each probability must lie within `1e-12`
@@ -1505,7 +1532,7 @@ of a numeric cent value, and the clipped closed half-cent intervals must admit
 a distribution summing to one. The feasibility comparison uses small integer
 units; it does not apply a blanket sum tolerance or renormalize returned values.
 Nearest-cent rounding with closed intervals is an explicit compatibility
-assumption: OpenRouter does not specify its half-tie convention. Infeasible,
+assumption. It is not a claim that every configured endpoint uses this rule. Infeasible,
 off-lattice, nonfinite, out-of-range, missing/extra and nonmaximum-selected
 answers remain invalid. Model/provider identity, deadlines and cancellation
 remain unchanged. The execution cutoff still uses the actual returned allow
@@ -1521,13 +1548,10 @@ Historical failures remain failures in their original receipts.
 
 ## Separate SystemOne compatibility probe
 
-OpenRouter documents `/api/v1/systemone` as a TypeSafe-compatible route. Its
-official SDK sends the shared `DecisionsRequest`, including provider preferences,
-and parses the shared `DecisionsResponse`. This is a supported contract for a
-same-body comparison, rather than an unrecognized transport option.
-[OpenRouter compatibility guide](https://openrouter.ai/docs/guides/community/typesafe-sdk),
-[SystemOne request schema](https://github.com/OpenRouterTeam/typescript-sdk/blob/main/src/models/operations/createsystemone.ts),
-[shared provider preferences](https://github.com/OpenRouterTeam/typescript-sdk/blob/main/src/models/providerpreferences.ts).
+The historical service offered a TypeSafe-compatible SystemOne route. Its SDK
+used a shared request and response contract, including provider preferences.
+The same-body test below checked that particular route. It does not establish
+SystemOne support at another configured Decisions endpoint.
 
 A separate frozen ten-call diagnostic compared Decisions and SystemOne with
 five byte-identical request pairs: one public positive, one public negative
@@ -1591,7 +1615,7 @@ assertions in unchanged DevBar/Welcome tests under the environment's ambient
 `NO_COLOR=1`; receipts retain that failed run.
 
 The earlier v4 replacement/comparison change passed
-`env -u NO_COLOR -u OPENROUTER_API_KEY -u OPENROUTER_API_KEY_FILE npm run validate:ci`:
+credential-free `npm run validate:ci` with `NO_COLOR` unset:
 605 test files passed and one file was skipped; 4,789 tests passed and 39 were
 skipped. Generated catalog checks, formatting, types, source/command/boot checks,
 docs build and health, ESLint and the LLM artifact check also passed. The receipt
@@ -1600,7 +1624,7 @@ responses and do not override the live classification failures above.
 The final `npm run lint` also passed; receipt: `.logs/jev-v4-lint.log`.
 
 The final v5 source and approval-lifetime refinement passed
-`env -u NO_COLOR -u OPENROUTER_API_KEY -u OPENROUTER_API_KEY_FILE npm run validate:ci`:
+credential-free `npm run validate:ci` with `NO_COLOR` unset:
 606 test files passed and one file was skipped; 4,905 tests passed and 39 were
 skipped. Formatting, generated catalog checks, types, source/command/runtime/
 boot checks, docs build and health, ESLint and the LLM artifact check passed.

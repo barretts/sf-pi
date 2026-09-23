@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   baselineDevConfig,
   createBaselineDevEvaluator,
@@ -41,6 +41,10 @@ vi.mock("node:child_process", async (importOriginal) => {
 
 let evaluator: Awaited<ReturnType<typeof createBaselineDevEvaluator>>;
 let base: GuardrailConfig;
+beforeEach(() => {
+  vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", "https://decisions.example.test/v1/decisions");
+});
+afterEach(() => vi.unstubAllEnvs());
 beforeAll(async () => {
   // Fresh module instances bind the real browser store to the evaluator's temp
   // profile before importing either actual runtime adapter.
@@ -176,7 +180,9 @@ describe("current deterministic baseline development evaluation", () => {
         browser: { role: "link", label: "Accounts", status: "fresh" as const },
       },
     ];
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", undefined);
     const results = await evaluator.runCases(rows, { prepareOnly: true, request });
+    expect(process.env.SF_GUARDRAIL_JEV_ENDPOINT).toBeUndefined();
     expect(request).not.toHaveBeenCalled();
     expect(results.every((row) => row.stage === "prepared" && row.candidateAction === null)).toBe(
       true,

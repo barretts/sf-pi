@@ -26,7 +26,7 @@ branches before deterministic normalization and classifies every Pi
 the effective policy after bundled defaults, stable-id overrides, and routine
 settings. It has no automatic deterministic fallback.
 
-Protocol version 7 uses Node's built-in `fetch` to call OpenRouter Decisions.
+Use Node's built-in `fetch` to call the configured HTTPS Decisions provider.
 Independent Choice questions share one state. Their options are `allow`,
 `confirm`, and `block`. Wire state version stays 6. Always ask `risk` with tool-family guidance about
 operational effects. Available paths/file facts add file policy; parsed shell
@@ -49,10 +49,16 @@ outcome. Every answer is model-authored;
 Jev is the sole risk engine in its selected mode, without a deterministic floor.
 Request `typesafe/jev-1.13` with routing `only: ["typesafe"]` and
 `allow_fallbacks: false`; initially require resolved model
-`typesafe/jev-1.13-20260917` and provider `TypeSafe`. Read
-`OPENROUTER_API_KEY`, otherwise the explicit `OPENROUTER_API_KEY_FILE`.
+`typesafe/jev-1.13-20260917` and provider `TypeSafe`. Require an explicit
+`SF_GUARDRAIL_JEV_ENDPOINT`. There is no default endpoint. The URL must use
+HTTPS with no embedded credentials, query, or fragment. Read
+`SF_GUARDRAIL_JEV_API_KEY`, otherwise `SF_GUARDRAIL_JEV_API_KEY_FILE`.
+Check the endpoint before reading a key. The gateway must implement the pinned
+Jev Decisions contract with independent Choice answers and required usage fields.
+Keep endpoint URLs, key values, and key paths out of UI, status, audit, and
+request bodies. Reject redirects.
 Apply a 1,500 ms total classification deadline, cancellation, bounded parsing,
-and no retries. Invalid supplied configuration, missing credentials, malformed
+and no retries. Invalid supplied configuration, missing endpoint or credentials, malformed
 metadata/responses, API failures, cancellation, deadline expiry, and identity
 drift prevent execution with audit. Registration and startup make no live
 requests.
@@ -121,11 +127,11 @@ own domain labels, following TypeSafe's
 Preserve returned probability values rather than renormalizing them. Accept an
 exactly normalized distribution within numeric tolerance, or a two-decimal
 distribution whose clipped closed half-cent intervals admit normalization.
-OpenRouter documents two-decimal rounding; the interval convention and tiny
-floating point tolerance are explicit local compatibility assumptions. Other
+Two-decimal values, the interval convention, and the small floating point
+tolerance are explicit client compatibility assumptions. Validate the behavior
+of the configured provider. Other
 unnormalized distributions remain invalid. Bind this response-validation
 contract into the protocol hash to invalidate grants when validation changes.
-[OpenRouter rounding documentation](https://github.com/OpenRouterTeam/ai-sdk-provider#evaluation-jev-with-ai-sdk-through-openrouter).
 Jev confirmations cannot use Power Tool
 Mode, operator auto-approval, or headless escape hatches. Headless confirms
 block. Existing local confirmation UI and audit handle all outcomes.
@@ -133,7 +139,9 @@ block. Existing local confirmation UI and audit handle all outcomes.
 Jev session approval is available only for a complete exact call against a
 currently verified non-production org. Construct its fingerprint locally
 from the full canonical original input, tool, working directory, verified
-target, engine, policy/protocol hash, and model identity. Changed withheld
+target, engine, policy/protocol hash, model identity, and local transport hash.
+The transport hash binds endpoint, model, provider, and routing without storing
+endpoint text. A changed connection invalidates approval. Changed withheld
 content invalidates approval without being sent to the provider. Deterministic
 grants cannot transfer; production, unknown, external, and opaque operations
 remain allow-once. Recheck cancellation and engine/policy identity before
@@ -145,13 +153,10 @@ and audit recording succeed; failures cannot leave reusable approval behind.
 - Exact protected paths and block patterns become model interpretations in
   Jev mode and lose their deterministic matching guarantee. Passing a finite
   acceptance set does not restore that guarantee.
-- The explicitly chosen sole-model design requires direct comparison with
-  the actual deterministic Safety Kernel. OpenRouter's
-  [coding-agent approval recipe](https://openrouter.ai/docs/cookbook/coding-agents/auto-approve-permission-prompts-with-jev)
-  uses static restrictions before Jev; its
-  [tool-call gate recipe](https://openrouter.ai/docs/cookbook/building-agents/gate-tool-calls-with-jev)
-  also retains exact host checks. Their examples do not prove sole-model parity
-  or transfer an enforcement qualification to this integration.
+- The selected sole-model design requires direct comparison with the actual
+  deterministic Safety Kernel. The configured Decisions gateway must satisfy
+  the pinned model and independent Choice contract. Provider examples or
+  general model benchmarks do not establish qualification for this integration.
 - Metadata privacy can increase confirmations for content-dependent effects.
   Failures, omitted information, and extra prompts stay visible in audit and
   evaluation reports instead of silently allowing calls.

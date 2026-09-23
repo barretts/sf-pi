@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Tests for sf-guardrail status/audit rendering. */
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderAudit, renderStatus } from "../lib/status.ts";
 import { readBundledConfig } from "../lib/config.ts";
@@ -33,6 +33,14 @@ const chain: Data360ExecutionChainEntryData = {
     },
   ],
 };
+
+beforeEach(() => {
+  vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", "https://decisions.example.invalid/v1/decisions");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("sf-guardrail status rendering", () => {
   it("shows an independent file-policy block alongside the actual operational risk allow", async () => {
@@ -142,10 +150,12 @@ describe("sf-guardrail status rendering", () => {
       powerTool: { mode: "all", productionUnknown: true },
       engine: "jev",
       jevModel: "typesafe/jev-1.13-20260917",
+      jevEndpointStatus: "missing",
       jevCredentialReady: false,
     });
     expect(text).toContain("decision engine: jev");
-    expect(text).toContain("OpenRouter credentials: unavailable");
+    expect(text).toContain("Decisions provider connection: missing");
+    expect(text).toContain("Jev API key: unavailable");
     expect(text).toContain("recent Jev failures: timeout");
     expect(text).toContain("headless mode: fail-closed");
     expect(text).toContain("power tool mode: disabled for Jev");
@@ -153,6 +163,41 @@ describe("sf-guardrail status rendering", () => {
     expect(renderAudit(recent)).toContain(
       "model=typesafe/jev-1.13-20260917; 1500ms; failure=timeout",
     );
+  });
+
+  it.each(["ready", "missing", "invalid"] as const)(
+    "shows a fixed %s connection status",
+    (jevEndpointStatus) => {
+      const text = renderStatus({
+        config: readBundledConfig(),
+        configSource: "settings",
+        recent: [],
+        hasUI: true,
+        headlessEnabled: false,
+        operatorAutoApproveEnabled: false,
+        engine: "jev",
+        jevEndpointStatus,
+        jevCredentialReady: true,
+      });
+      expect(text).toContain(`Decisions provider connection: ${jevEndpointStatus}`);
+      expect(text).toContain("Jev API key: ready");
+    },
+  );
+
+  it("does not print an unexpected connection status value", () => {
+    const endpoint = "https://decisions.example.invalid/private-gateway/v1/decisions";
+    const text = renderStatus({
+      config: readBundledConfig(),
+      configSource: "settings",
+      recent: [],
+      hasUI: true,
+      headlessEnabled: false,
+      operatorAutoApproveEnabled: false,
+      engine: "jev",
+      jevEndpointStatus: endpoint,
+    });
+    expect(text).toContain("Decisions provider connection: invalid");
+    expect(text).not.toContain(endpoint);
   });
 
   it("surfaces Data 360 execution chains separately from guardrail decisions", () => {

@@ -2,8 +2,8 @@
 
 ## What It Does
 
-SF Guardrail mediates agent tool calls before execution, with a selectable
-deterministic engine or a TypeSafe Jev engine accessed through OpenRouter.
+SF Guardrail checks agent tool calls before execution. Select the deterministic
+engine or the TypeSafe Jev engine through a configured HTTPS Decisions provider.
 SF Pi owns execution blocking, human confirmation, approval memory, and audit
 for both engines. The deterministic engine remains the default.
 
@@ -59,8 +59,8 @@ Bundled rules live in `SF_GUARDRAIL_DEFAULTS.json`. Routine global preferences
 live under `sfPi.guardrail` in Pi settings and cover the engine, confirmation
 timeout, protected aliases, Power Tool choices, and bundled-rule behavior.
 Select the engine in the Manager Guardrail preferences or with the explicit
-engine command. Status reports the selected engine and Jev credential readiness
-without making a live request.
+engine command. Status reports the selected engine, Decisions provider connection,
+and API key readiness. These local checks do not send a request.
 
 Advanced custom patterns or full stable-id overrides live in
 `<globalAgentDir>/sf-guardrail/rules.json`. Effective configuration resolves
@@ -79,18 +79,31 @@ Tool Mode for confirmation decisions; headless confirmations block.
 
 ## Jev Connection
 
-Set `OPENROUTER_API_KEY`, or set `OPENROUTER_API_KEY_FILE` to an explicit local
-credential file. The environment key takes precedence. Credential contents
-never belong in Pi settings, audit entries, or tracked files. For example:
+Set `SF_GUARDRAIL_JEV_ENDPOINT` to the full HTTPS Decisions URL. There is no
+default endpoint. The URL must have no embedded credentials, query, or fragment.
+Set `SF_GUARDRAIL_JEV_API_KEY`, or set `SF_GUARDRAIL_JEV_API_KEY_FILE` to a local
+key file. The environment key takes precedence. Keep the endpoint, key value,
+and key path out of Pi settings, audit entries, and tracked files. This example
+uses a placeholder URL. Replace it with your approved Decisions endpoint:
 
 ```bash
-export OPENROUTER_API_KEY_FILE="$HOME/.config/openrouter/key"
+export SF_GUARDRAIL_JEV_ENDPOINT="https://decisions.example.invalid/v1/decisions"
+export SF_GUARDRAIL_JEV_API_KEY_FILE="$HOME/.config/jev/key"
 ```
 
-The client uses Node's built-in `fetch` and the OpenRouter Decisions endpoint
-`POST https://openrouter.ai/api/alpha/decisions`. Protocol v6 asks independent
-Choice questions in one request, each with `allow`, `confirm`, and `block`
-options. Every call asks `risk` using a rubric for its tool family: files,
+The client uses Node's built-in `fetch`. It sends one HTTPS `POST` to the
+configured URL with JSON and `Authorization: Bearer <key>`. It rejects redirects.
+The gateway must accept `model`, pinned `provider` routing, wire state version 6,
+and independent Choice `questions`. It must return the resolved model and
+provider identity, a request `id`, exactly one `answers` entry per requested
+question, and `usage.input_tokens` and `usage.output_tokens`. Reported
+`usage.cost` is optional. Each answer must have `type: "choice"`, a valid
+`choice`, probabilities for `allow`, `confirm`, and `block`, and `confidence`.
+This connection implements the pinned Jev Decisions contract. It does not select
+arbitrary chat models.
+
+Each independent Choice question has `allow`, `confirm`, and `block` options.
+Every call asks `risk` using a rubric for its tool family: files,
 shell/Salesforce CLI, Apex, SOQL, Agent Script, Data 360, Canvas, browser, or
 unknown effects. Applicable questions separately judge their own dimensions,
 for at most six model-authored answers against the same state:
@@ -160,22 +173,35 @@ identity `typesafe/jev-1.13-20260917` from provider `TypeSafe`. An unexpected
 model or provider identity blocks until the integration is revalidated.
 
 Classification has a 1,500 ms total deadline, no retries, and a 500 ms
-end-to-end p95 performance target. Missing credentials, invalid supplied
+end-to-end p95 performance target. Missing endpoint or credentials, invalid supplied
 configuration, malformed metadata or responses, API/transport failures,
 cancellation, and deadline expiry block with an audited failure. Factory
 execution and session startup make no live Jev requests.
 
-See the [OpenRouter Decisions API](https://openrouter.ai/docs/client-sdks/typescript/sdks/decisions/README)
-and [TypeSafe Choice documentation](https://docs.typesafe.ai/primitives/choice).
+See the [TypeSafe Choice documentation](https://docs.typesafe.ai/primitives/choice)
+for independent decision questions. Validate your configured gateway against
+the client contract before live use.
 
 Response validation preserves the actual returned probabilities. A distribution
-must sum to one within the numeric tolerance, or contain only values compatible
-with OpenRouter's documented two-decimal rounding whose clipped half-cent
-intervals can contain a normalized distribution. This does not renormalize
-answers or raise their allow probabilities. Range, complete answer sets, chosen
-maximum, identity, and confidence checks remain required. The validation contract
-is included in the local protocol hash, so changing it invalidates old grants.
-See [OpenRouter's rounding contract](https://github.com/OpenRouterTeam/ai-sdk-provider#evaluation-jev-with-ai-sdk-through-openrouter).
+must sum to one within the numeric tolerance. The client also accepts compatible
+two-decimal values when their clipped, closed half-cent intervals can contain a
+normalized distribution. This is an explicit client compatibility assumption.
+Check the behavior of your configured provider during validation. The client
+does not renormalize answers or increase their allow probabilities. Range,
+complete answer sets, chosen maximum, identity, and confidence checks remain
+required. The validation contract is included in the local protocol hash.
+A changed contract invalidates old grants.
+
+For SDK preparation without an endpoint, key, or network request, run:
+
+```bash
+node --experimental-strip-types scripts/jev-guardrail-hook-smoke.ts --prepare-only
+```
+
+Use `--live` explicitly to send one request through the real Pi hook with an
+inert read tool. The script uses an isolated temporary Pi profile. Its callback
+reads no file contents and changes no Salesforce or browser state. Live smoke
+evidence does not establish model qualification.
 
 ## Safety and Data Boundaries
 
@@ -189,8 +215,10 @@ See [OpenRouter's rounding contract](https://github.com/OpenRouterTeam/ai-sdk-pr
   threshold, or incomplete context requires explicit human confirmation.
 - Jev session approval covers the exact original call. Its local fingerprint
   includes the full canonical input, tool, working directory, verified target,
-  engine, policy/protocol hash, and model identity. Withheld content stays local,
-  but changing it invalidates approval. Deterministic grants cannot approve Jev
+  engine, policy/protocol hash, model identity, and local transport hash. The
+  transport hash binds endpoint, model, provider, and routing without storing
+  endpoint text. A changed connection invalidates approval. Withheld content
+  stays local, but changing it invalidates approval. Deterministic grants cannot approve Jev
   calls. Session memory remains limited to the current session branch.
   A grant becomes reusable only after persistence and audit recording succeed.
 - Outbound Jev requests contain operation metadata, effective policy, and
@@ -241,15 +269,11 @@ deadline while keeping operations inert. Report that profile separately from
 the enforced 1,500 ms runtime deadline and its 500 ms p95 target. Qualification
 still requires the normal runtime profile and its safety/performance gates.
 
-OpenRouter's [coding-agent approval cookbook](https://openrouter.ai/docs/cookbook/coding-agents/auto-approve-permission-prompts-with-jev)
-uses static host restrictions before consulting Jev, and its
-[tool-call gate cookbook](https://openrouter.ai/docs/cookbook/building-agents/gate-tool-calls-with-jev)
-retains exact host checks. These examples do not qualify a sole-model engine
-for parity with SF Pi's deterministic baseline. SF Pi's selected Jev mode gives
-Jev sole responsibility for risk and policy interpretation; it has no
-deterministic risk floor. Hosted measurements must support any improvement
-claim. The initial hosted qualification remains false, and development results
-alone do not change that status.
+SF Pi's selected Jev mode gives Jev sole responsibility for risk and policy
+interpretation. It has no deterministic risk floor. Compare the configured
+model directly with SF Pi's actual deterministic baseline. Hosted measurements
+must support improvement claims. The initial hosted qualification remains
+false. Development results alone do not change that status.
 
 ## References
 
@@ -278,7 +302,7 @@ documented operator control with audit output. Jev confirmations require a
 human and block without UI, even when those controls are set.
 
 **Jev calls fail or ask too often:** Inspect status and `/sf-guardrail audit`
-for credential, deadline, identity, or incomplete-context failures. Metadata
+for endpoint, credential, deadline, identity, or incomplete-context failures. Metadata
 privacy can increase confirmations when operation effects depend on withheld
 content. Revalidate model identity changes and measure failures and extra
 confirmations in the acceptance report; switching engines is an explicit
