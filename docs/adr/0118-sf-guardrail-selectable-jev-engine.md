@@ -111,6 +111,14 @@ and confidence. Top-level probability/confidence evidence remains the actual
 threshold is a conservative initial default requiring evaluation against our
 own domain labels, following TypeSafe's
 [confidence guidance](https://docs.typesafe.ai/confidence).
+Preserve returned probability values rather than renormalizing them. Accept an
+exactly normalized distribution within numeric tolerance, or a two-decimal
+distribution whose clipped closed half-cent intervals admit normalization.
+OpenRouter documents two-decimal rounding; the interval convention and tiny
+floating point tolerance are explicit local compatibility assumptions. Other
+unnormalized distributions remain invalid. Bind this response-validation
+contract into the protocol hash to invalidate grants when validation changes.
+[OpenRouter rounding documentation](https://github.com/OpenRouterTeam/ai-sdk-provider#evaluation-jev-with-ai-sdk-through-openrouter).
 Jev confirmations cannot use Power Tool
 Mode, operator auto-approval, or headless escape hatches. Headless confirms
 block. Existing local confirmation UI and audit handle all outcomes.

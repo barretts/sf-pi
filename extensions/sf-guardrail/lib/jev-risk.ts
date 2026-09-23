@@ -1,6 +1,12 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { performance } from "node:perf_hooks";
-import { requestJev, JEV_MODEL, JEV_RESOLVED_MODEL, JEV_TIMEOUT_MS } from "./jev-client.ts";
+import {
+  requestJev,
+  JEV_MODEL,
+  JEV_RESOLVED_MODEL,
+  JEV_TIMEOUT_MS,
+  JEV_RESPONSE_VALIDATION_CONTRACT,
+} from "./jev-client.ts";
 import { buildJevMetadata, extractJevTargetOrg, jevShellExecutableHeads } from "./jev-metadata.ts";
 import { resolveJevFacts } from "./jev-facts.ts";
 import { jevHash } from "./jev-identity.ts";
@@ -339,6 +345,7 @@ export const JEV_PROTOCOL_HASH = jevHash({
   sessionGrantUnboundSfOperations: SESSION_UNBOUND_SF_OPERATIONS,
   routing: ROUTING,
   minAllowProbability: JEV_MIN_ALLOW_PROBABILITY,
+  responseValidation: JEV_RESPONSE_VALIDATION_CONTRACT,
 });
 
 export function jevConfigHash(config: GuardrailConfig): string {

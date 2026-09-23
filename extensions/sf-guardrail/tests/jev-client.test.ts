@@ -12,6 +12,7 @@ import {
   jevCredentialStatus,
   requestJev,
 } from "../lib/jev-client.ts";
+import { evaluateJevPrediction } from "../lib/jev-risk.ts";
 import type { JevRequest } from "../lib/types.ts";
 
 const TEST_KEY = "sk-test-only-credential";
@@ -335,6 +336,103 @@ describe("requestJev", () => {
     },
   );
 
+  it.each([
+    [0.93, 0.05, 0.01],
+    [0.33, 0.33, 0.33],
+    [0.34, 0.34, 0.33],
+    [0.99, 0, 0],
+    [1, 0.01, 0],
+    [0.45999999999999996, 0.45, 0.08],
+  ])("preserves a feasible rounded distribution %s/%s/%s", async (allow, confirm, block) => {
+    const value = wire();
+    value.answers.risk.probabilities = { allow, confirm, block };
+    value.answers.risk.confidence = 0.9;
+    const fetch = responseFetch(value);
+    const result = await requestJev(request, { fetch });
+    expect(result.probabilities).toEqual({ allow, confirm, block });
+    expect(result.choice).toBe("allow");
+    expect(result.confidence).toBe(0.9);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [0.334, 0.333, 0.333],
+    [0.4999995, 0.25, 0.25],
+  ])(
+    "preserves the existing exact-normalization tolerance for %s/%s/%s",
+    async (allow, confirm, block) => {
+      const value = wire();
+      value.answers.risk.probabilities = { allow, confirm, block };
+      const result = await requestJev(request, { fetch: responseFetch(value) });
+      expect(result.probabilities).toEqual({ allow, confirm, block });
+    },
+  );
+
+  it.each([
+    [0.34, 0.34, 0.34],
+    [0.33, 0.33, 0.32],
+    [1, 0.02, 0],
+    [0, 0, 0],
+    [0.333, 0.333, 0.333],
+    [0.46 + 2e-12, 0.45, 0.08],
+  ])("rejects infeasible or non-lattice distributions %s/%s/%s", async (allow, confirm, block) => {
+    const value = wire();
+    value.answers.risk.probabilities = { allow, confirm, block };
+    await expect(requestJev(request, { fetch: responseFetch(value) })).rejects.toMatchObject({
+      code: "invalid_response",
+    });
+  });
+
+  it("accepts any selected tied maximum without changing the choice", async () => {
+    const value = wire();
+    value.answers.risk.choice = "confirm";
+    value.answers.risk.probabilities = { allow: 0.33, confirm: 0.33, block: 0.33 };
+    const result = await requestJev(request, { fetch: responseFetch(value) });
+    expect(result.choice).toBe("confirm");
+    expect(result.probabilities).toEqual(value.answers.risk.probabilities);
+  });
+
+  it("rejects a rounded distribution whose selected choice is below the maximum", async () => {
+    const value = wire();
+    value.answers.risk.choice = "confirm";
+    value.answers.risk.probabilities = { allow: 0.34, confirm: 0.33, block: 0.34 };
+    await expect(requestJev(request, { fetch: responseFetch(value) })).rejects.toMatchObject({
+      code: "invalid_response",
+    });
+  });
+
+  it("preserves a rounded secondary answer without combining probabilities", async () => {
+    const value = multiWire();
+    value.answers.authority.probabilities = { allow: 0.01, confirm: 0.93, block: 0.05 };
+    const result = await requestJev(multiRequest(), { fetch: responseFetch(value) });
+    expect(result.probabilities).toEqual(value.answers.risk.probabilities);
+    expect(result.answers.authority).toEqual({
+      choice: "confirm",
+      confidence: 0.55,
+      probabilities: value.answers.authority.probabilities,
+    });
+  });
+
+  it("rejects a rounded primary answer with an infeasible secondary distribution", async () => {
+    const value = multiWire();
+    value.answers.risk.probabilities = { allow: 0.93, confirm: 0.05, block: 0.01 };
+    value.answers.authority.probabilities = { allow: 0.34, confirm: 0.35, block: 0.34 };
+    await expect(requestJev(multiRequest(), { fetch: responseFetch(value) })).rejects.toMatchObject(
+      {
+        code: "invalid_response",
+      },
+    );
+  });
+
+  it("keeps a near-cent allow probability below the actual execution cutoff", async () => {
+    const value = wire();
+    value.answers.risk.probabilities = { allow: 0.99 - Number.EPSILON, confirm: 0, block: 0 };
+    const result = await requestJev(request, { fetch: responseFetch(value) });
+    expect(result.probabilities).toEqual(value.answers.risk.probabilities);
+    expect(result.probabilities.allow).toBeLessThan(0.99);
+    expect(evaluateJevPrediction(result, true)).toBe("confirm");
+  });
+
   it("fails a fetch that ignores AbortSignal at the total deadline without retrying", async () => {
     vi.useFakeTimers();
     const fetch = vi.fn<typeof globalThis.fetch>(() => new Promise<Response>(() => {}));
@@ -499,7 +597,7 @@ describe("requestJev", () => {
     [
       "distribution not normalized",
       (value: ReturnType<typeof wire>) => {
-        value.answers.risk.probabilities.allow = 0.98;
+        value.answers.risk.probabilities.allow = 0.97;
       },
     ],
     [

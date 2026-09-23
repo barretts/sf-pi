@@ -160,6 +160,15 @@ execution and session startup make no live Jev requests.
 See the [OpenRouter Decisions API](https://openrouter.ai/docs/client-sdks/typescript/sdks/decisions/README)
 and [TypeSafe Choice documentation](https://docs.typesafe.ai/primitives/choice).
 
+Response validation preserves the actual returned probabilities. A distribution
+must sum to one within the numeric tolerance, or contain only values compatible
+with OpenRouter's documented two-decimal rounding whose clipped half-cent
+intervals can contain a normalized distribution. This does not renormalize
+answers or raise their allow probabilities. Range, complete answer sets, chosen
+maximum, identity, and confidence checks remain required. The validation contract
+is included in the local protocol hash, so changing it invalidates old grants.
+See [OpenRouter's rounding contract](https://github.com/OpenRouterTeam/ai-sdk-provider#evaluation-jev-with-ai-sdk-through-openrouter).
+
 ## Safety and Data Boundaries
 
 - Interactive confirms offer Allow once or Block. The session option appears

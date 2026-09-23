@@ -20,6 +20,7 @@ export default tseslint.config(
       "node_modules/**",
       "dist/**",
       "coverage/**",
+      ".logs/**", // ignored local diagnostic artifacts
       "docs/.vitepress/cache/**",
       "docs/.vitepress/dist/**",
       "catalog/registry.ts", // generated

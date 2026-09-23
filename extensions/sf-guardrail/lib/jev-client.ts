@@ -13,6 +13,14 @@ export const JEV_MODEL = "typesafe/jev-1.13";
 export const JEV_RESOLVED_MODEL = "typesafe/jev-1.13-20260917";
 export const JEV_PROVIDER = "TypeSafe";
 export const JEV_TIMEOUT_MS = 1_500;
+export const JEV_RESPONSE_VALIDATION_CONTRACT = Object.freeze({
+  version: 2,
+  exactSumTolerance: 1e-6,
+  roundedDecimals: 2,
+  centLatticeTolerance: 1e-12,
+  roundingIntervals: "clipped-closed-nearest-cent",
+  preserveWireProbabilities: true,
+} as const);
 
 const ENDPOINT = "https://openrouter.ai/api/alpha/decisions";
 const MAX_KEY_BYTES = 4_096;
@@ -114,6 +122,31 @@ function probability(value: unknown): value is number {
 
 function tokenCount(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function normalizedChoiceProbabilities(probabilities: Record<JevAction, number>): boolean {
+  const values = ACTIONS.map((action) => probabilities[action]);
+  const sum = values.reduce((total, value) => total + value, 0);
+  if (Math.abs(sum - 1) <= JEV_RESPONSE_VALIDATION_CONTRACT.exactSumTolerance) return true;
+
+  // OpenRouter rounds Decisions probabilities to two decimals:
+  // https://github.com/OpenRouterTeam/ai-sdk-provider#evaluation-jev-with-ai-sdk-through-openrouter
+  // Test clipped, closed half-cent intervals using integer units; retain every wire value.
+  const scale = 10 ** JEV_RESPONSE_VALIDATION_CONTRACT.roundedDecimals;
+  const cents = values.map((value) => Math.round(value * scale));
+  if (
+    values.some(
+      (value, index) =>
+        Math.abs(value - cents[index] / scale) >
+        JEV_RESPONSE_VALIDATION_CONTRACT.centLatticeTolerance,
+    )
+  ) {
+    return false;
+  }
+  const normalized = 2 * scale;
+  const lower = cents.reduce((total, value) => total + Math.max(0, 2 * value - 1), 0);
+  const upper = cents.reduce((total, value) => total + Math.min(normalized, 2 * value + 1), 0);
+  return lower <= normalized && normalized <= upper;
 }
 
 function validateRequest(request: JevRequest): JevQuestionId[] {
@@ -234,7 +267,7 @@ function choiceAnswer(answer: unknown): JevChoiceAnswer {
   const probabilities = answer.probabilities as Record<JevAction, number>;
   const choice = answer.choice as JevAction;
   if (
-    Math.abs(ACTIONS.reduce((sum, action) => sum + probabilities[action], 0) - 1) > 1e-6 ||
+    !normalizedChoiceProbabilities(probabilities) ||
     probabilities[choice] < Math.max(...ACTIONS.map((action) => probabilities[action]))
   ) {
     throw new JevClientError("invalid_response");
