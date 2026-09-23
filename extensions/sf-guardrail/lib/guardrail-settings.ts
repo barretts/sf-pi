@@ -11,8 +11,13 @@ import {
   readJsonFile,
   writeJsonFile,
 } from "../../../lib/common/sf-pi-settings.ts";
-import { normalizePowerToolSettings, type GuardrailPowerToolSettings } from "./power-tool-mode.ts";
-import type { GuardrailConfig, RuleBehavior } from "./types.ts";
+import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
+import {
+  NATIVE_TOOL_FAMILIES,
+  normalizePowerToolSettings,
+  type GuardrailPowerToolSettings,
+} from "./power-tool-mode.ts";
+import type { GuardrailConfig, GuardrailEngine, RuleBehavior } from "./types.ts";
 import { behaviorEnabled } from "./rule-behavior.ts";
 
 export interface GuardrailSettingsRuleBehaviors {
@@ -22,6 +27,7 @@ export interface GuardrailSettingsRuleBehaviors {
 }
 
 export interface GuardrailPiSettings {
+  engine?: GuardrailEngine;
   confirmTimeoutMs?: number;
   productionAliases?: string[];
   ruleBehaviors?: GuardrailSettingsRuleBehaviors;
@@ -33,7 +39,12 @@ const GUARDRAIL_KEY = "guardrail";
 
 export function readGuardrailPiSettings(): GuardrailPiSettings {
   const root = readJsonFile(globalSettingsPath());
-  return normalizeGuardrailPiSettings(readNestedObject(root, SF_PI_KEY, GUARDRAIL_KEY));
+  return normalizeGuardrailPiSettings(guardrailSettingsValue(root));
+}
+
+/** Extract settings without normalizing away an invalid engine or policy value. */
+export function guardrailSettingsValue(root: Record<string, unknown>): unknown {
+  return readNestedObject(root, SF_PI_KEY, GUARDRAIL_KEY);
 }
 
 export function writeGuardrailPiSettings(settings: GuardrailPiSettings): void {
@@ -54,6 +65,7 @@ export function updateGuardrailPiSettings(
 
 export function hasGuardrailPiSettings(settings: GuardrailPiSettings): boolean {
   return (
+    settings.engine !== undefined ||
     typeof settings.confirmTimeoutMs === "number" ||
     settings.productionAliases !== undefined ||
     settings.ruleBehaviors !== undefined ||
@@ -82,6 +94,151 @@ export function applyGuardrailPiSettings(
 
 export function setGuardrailTimeoutPreference(confirmTimeoutMs: number): GuardrailPiSettings {
   return updateGuardrailPiSettings((settings) => ({ ...settings, confirmTimeoutMs }));
+}
+
+export function setGuardrailEngine(engine: GuardrailEngine): GuardrailPiSettings {
+  if (engine !== "deterministic" && engine !== "jev") {
+    throw new Error("Invalid Guardrail engine.");
+  }
+  // An explicit engine change must preserve supplied policy values verbatim;
+  // the tolerant preference normalizer must not erase an invalid Jev policy.
+  const settingsPath = globalSettingsPath();
+  const root = readSettingsForEngineUpdate(settingsPath);
+  const sfPi = root[SF_PI_KEY];
+  if (sfPi !== undefined && (!sfPi || typeof sfPi !== "object" || Array.isArray(sfPi))) {
+    throw new Error("Guardrail engine change blocked: invalid settings.");
+  }
+  const current = guardrailSettingsValue(root);
+  validateGuardrailPiSettings(current ?? {});
+  root[SF_PI_KEY] = {
+    ...objectValue(sfPi),
+    [GUARDRAIL_KEY]: { ...objectValue(current), engine },
+  };
+  writeJsonFile(settingsPath, root);
+  return readGuardrailPiSettings();
+}
+
+function readSettingsForEngineUpdate(settingsPath: string): Record<string, unknown> {
+  let fd: number | undefined;
+  try {
+    try {
+      fd = openSync(settingsPath, constants.O_RDONLY | constants.O_NONBLOCK);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+      throw error;
+    }
+    const limit = 256 * 1024;
+    const stat = fstatSync(fd);
+    if (!stat.isFile() || stat.size > limit) throw new Error();
+    const buffer = Buffer.alloc(limit + 1);
+    let size = 0;
+    while (size < buffer.length) {
+      const bytes = readSync(fd, buffer, size, buffer.length - size, null);
+      if (!bytes) break;
+      size += bytes;
+    }
+    if (size > limit) throw new Error();
+    const text = buffer.subarray(0, size).toString("utf8");
+    const parsed: unknown = JSON.parse(text);
+    rejectGuardrailJsonDuplicateKeys(text);
+    if (!settingsObject(parsed)) throw new Error();
+    return parsed;
+  } catch {
+    throw new Error("Guardrail engine change blocked: invalid or unreadable settings.");
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+/** Called after JSON syntax validation, before a selector or policy is trusted. */
+export function rejectGuardrailJsonDuplicateKeys(text: string): void {
+  const containers: Array<Set<string> | null> = [];
+  for (const match of text.matchAll(/"(?:\\.|[^"\\])*"|[{}[\]]/g)) {
+    const token = match[0];
+    if (token === "{") containers.push(new Set());
+    else if (token === "[") containers.push(null);
+    else if (token === "}" || token === "]") containers.pop();
+    else {
+      let next = match.index + token.length;
+      while (/\s/.test(text[next] ?? "")) next += 1;
+      if (text[next] !== ":") continue;
+      const keys = containers.at(-1);
+      const key = JSON.parse(token) as string;
+      if (!keys || keys.has(key)) throw new Error("Guardrail JSON has duplicate keys.");
+      keys.add(key);
+    }
+  }
+}
+
+/** Validate raw preferences before a Jev snapshot or explicit engine update. */
+export function validateGuardrailPiSettings(input: unknown): void {
+  const invalid = (): never => {
+    throw new Error("Guardrail settings invalid.");
+  };
+  if (!settingsObject(input)) invalid();
+  const raw = input as Record<string, unknown>;
+  if (
+    Object.keys(raw).some(
+      (key) =>
+        !["engine", "confirmTimeoutMs", "productionAliases", "ruleBehaviors", "powerTool"].includes(
+          key,
+        ),
+    )
+  )
+    invalid();
+  if (raw.engine !== undefined && raw.engine !== "jev" && raw.engine !== "deterministic") invalid();
+  if (
+    raw.confirmTimeoutMs !== undefined &&
+    (typeof raw.confirmTimeoutMs !== "number" ||
+      !Number.isFinite(raw.confirmTimeoutMs) ||
+      raw.confirmTimeoutMs <= 0)
+  )
+    invalid();
+  if (raw.productionAliases !== undefined && !settingsStrings(raw.productionAliases)) invalid();
+  if (raw.ruleBehaviors !== undefined) {
+    if (!settingsObject(raw.ruleBehaviors)) invalid();
+    const behaviors = raw.ruleBehaviors as Record<string, unknown>;
+    if (
+      Object.keys(behaviors).some(
+        (key) => !["policies", "commandGate", "orgAwareGate"].includes(key),
+      )
+    )
+      invalid();
+    for (const section of Object.values(behaviors)) {
+      if (!settingsObject(section)) invalid();
+      for (const [id, behavior] of Object.entries(section as Record<string, unknown>)) {
+        if (!id || !["off", "confirm", "block"].includes(behavior as string)) invalid();
+      }
+    }
+  }
+  if (raw.powerTool !== undefined) {
+    if (!settingsObject(raw.powerTool)) invalid();
+    const power = raw.powerTool as Record<string, unknown>;
+    if (
+      Object.keys(power).some(
+        (key) => !["mode", "nativeFamilies", "productionUnknown"].includes(key),
+      )
+    )
+      invalid();
+    if (power.mode !== undefined && !["off", "native", "all"].includes(power.mode as string))
+      invalid();
+    if (power.productionUnknown !== undefined && typeof power.productionUnknown !== "boolean")
+      invalid();
+    if (
+      power.nativeFamilies !== undefined &&
+      (!settingsStrings(power.nativeFamilies) ||
+        power.nativeFamilies.some((id) => !NATIVE_TOOL_FAMILIES.some((family) => family.id === id)))
+    )
+      invalid();
+  }
+}
+
+function settingsObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function settingsStrings(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
 
 export function setGuardrailProductionAliases(aliases: string[]): GuardrailPiSettings {
@@ -138,10 +295,12 @@ function applyRuleBehaviors(
   }
 }
 
-function normalizeGuardrailPiSettings(input: unknown): GuardrailPiSettings {
+export function normalizeGuardrailPiSettings(input: unknown): GuardrailPiSettings {
   if (!input || typeof input !== "object" || Array.isArray(input)) return {};
   const raw = input as Record<string, unknown>;
   const next: GuardrailPiSettings = {};
+
+  if (raw.engine === "deterministic" || raw.engine === "jev") next.engine = raw.engine;
 
   if (typeof raw.confirmTimeoutMs === "number" && raw.confirmTimeoutMs > 0) {
     next.confirmTimeoutMs = raw.confirmTimeoutMs;
@@ -172,7 +331,7 @@ function normalizeRuleBehaviors(input: unknown): GuardrailSettingsRuleBehaviors 
 
 function normalizeBehaviorMap(input: unknown): Record<string, RuleBehavior> | undefined {
   if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
-  const output: Record<string, RuleBehavior> = {};
+  const output: Record<string, RuleBehavior> = Object.create(null) as Record<string, RuleBehavior>;
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
     if (value === "off" || value === "confirm" || value === "block") output[key] = value;
   }
@@ -181,6 +340,7 @@ function normalizeBehaviorMap(input: unknown): Record<string, RuleBehavior> | un
 
 function pruneEmptyGuardrailSettings(settings: GuardrailPiSettings): GuardrailPiSettings {
   const next: GuardrailPiSettings = {};
+  if (settings.engine !== undefined) next.engine = settings.engine;
   if (typeof settings.confirmTimeoutMs === "number")
     next.confirmTimeoutMs = settings.confirmTimeoutMs;
   if (settings.productionAliases) next.productionAliases = settings.productionAliases;

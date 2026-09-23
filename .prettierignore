@@ -1,6 +1,7 @@
 node_modules
 .pi
 coverage/
+.logs/
 catalog/index.json
 catalog/registry.ts
 reports/dependency-license-report.md

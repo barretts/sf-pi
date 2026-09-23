@@ -177,7 +177,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
   {
     id: "sf-guardrail",
     name: "SF Guardrail",
-    description: "Salesforce-aware safety hooks — file protection policies, dangerous-command gating, org-aware confirmation, and native high-value mutation mediation",
+    description: "Salesforce-aware safety hooks with selectable deterministic or TypeSafe Jev classification, human approval, and audit",
     file: "extensions/sf-guardrail/index.ts",
     category: "safety",
     maturity: "stable",

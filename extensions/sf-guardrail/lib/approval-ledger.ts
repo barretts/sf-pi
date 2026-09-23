@@ -70,7 +70,7 @@ const grantStore = createStateStore<ApprovalGrantState>({
 
 export function restoreApprovalLedger(ctx: ExtensionContext): void {
   allowed.clear();
-  const entries = ctx.sessionManager.getEntries();
+  const entries = ctx.sessionManager.getBranch?.() ?? ctx.sessionManager.getEntries();
   const lastRevokeAt = entries.reduce(
     (latest, entry) =>
       isAllowRevokeEntry(entry) ? Math.max(latest, entry.data.revokedAt) : latest,
@@ -107,6 +107,7 @@ export function recordDecision(
     approvalScopeDetail: decision.approvalScope?.detail,
     approvalRiskTier: decision.approvalScope?.riskTier,
     reason: decision.reason,
+    ...(decision.jev ? { jev: decision.jev } : {}),
   };
   pi.appendEntry(DECISION_ENTRY_TYPE, data);
 }
@@ -135,10 +136,12 @@ export function readRecentData360ExecutionChains(
 }
 
 export function hasSessionApproval(decision: ClassifiedDecision): boolean {
+  if (decision.feature === "jevGate" && decision.approvalScope?.allowSession !== true) return false;
   return allowed.has(approvalKey(decision.ruleId, decision.fingerprint));
 }
 
 export function grantSessionApproval(pi: ExtensionAPI, decision: ClassifiedDecision): void {
+  if (decision.feature === "jevGate" && decision.approvalScope?.allowSession !== true) return;
   allowed.add(approvalKey(decision.ruleId, decision.fingerprint));
   const data: AllowEntryData = {
     ruleId: decision.ruleId,

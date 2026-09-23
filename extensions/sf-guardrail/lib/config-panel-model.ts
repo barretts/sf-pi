@@ -11,10 +11,11 @@ export type RulePanelSection = "files" | "commands" | "orgs";
 
 export interface SettingsSectionItem {
   value:
-    | Exclude<GuardrailSettingsSection, "aliases" | "advanced" | "power">
+    | Exclude<GuardrailSettingsSection, "aliases" | "advanced" | "power" | "engine">
     | "aliases"
     | "advanced"
-    | "power";
+    | "power"
+    | "engine";
   label: string;
   description: string;
 }
@@ -43,12 +44,17 @@ export const SECTION_ITEMS: SettingsSectionItem[] = [
   {
     value: "power",
     label: "Power Tool Mode",
-    description: "Persisted auto-approval scope for advanced users.",
+    description: "Deterministic engine only: persisted auto-approval scope.",
   },
   {
     value: "advanced",
     label: "Advanced Rule Overrides",
     description: "Expert-only JSON rule definition source.",
+  },
+  {
+    value: "engine",
+    label: "Decision engine",
+    description: "Choose deterministic rules or TypeSafe Jev through OpenRouter.",
   },
 ];
 

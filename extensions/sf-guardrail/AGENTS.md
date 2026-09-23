@@ -20,6 +20,10 @@ One-file-per-concern split:
 | Event wiring + command handler       | `index.ts`                                          |
 | Schema + persisted entry types       | `lib/types.ts`                                      |
 | Safety decision seam                 | `lib/safety-kernel.ts`                              |
+| OpenRouter Decisions transport       | `lib/jev-client.ts`                                 |
+| Jev metadata and local facts         | `lib/jev-metadata.ts` + `lib/jev-facts.ts`          |
+| Jev request and decision adapter     | `lib/jev-risk.ts`                                   |
+| Jev exact-call identity              | `lib/jev-identity.ts`                               |
 | Safety subject normalization         | `lib/safety-subject.ts`                             |
 | Safety envelope construction         | `lib/safety-envelope.ts`                            |
 | Rule behavior resolution             | `lib/rule-behavior.ts`                              |
@@ -57,18 +61,44 @@ One-file-per-concern split:
    They take config + input, return decisions.
    Side effects (prompts, appendEntry, notify) happen only in `index.ts`,
    `hitl.ts`, and approval-ledger/UI adapters.
-3. **Fail-closed is the rule.** Any ambiguity — unknown org type,
-   unreadable override, tokenizer failure, timeout — must default to
-   blocking. The command-gate substring fallback for tokenizer failure
-   is the sole exception: it prefers false-positive over false-negative
-   because that error direction is safer.
+3. **Fail-closed is the rule.** Configuration, transport, deadline, cancellation,
+   malformed-response, and model-identity failures block. Incomplete Jev
+   operation context may require human confirmation, but cannot automatically
+   allow. In deterministic mode, the command-gate substring fallback for
+   tokenizer failure prefers false-positive over false-negative.
 4. **No new `tool_call` side effects without audit.** Every decision path
    must call `recordDecision(...)` through `lib/approval-ledger.ts` so
    `/sf-guardrail audit` stays truthful.
-5. **No runtime deps.** Keep the tokenizer, globber, and matchers
+5. **No runtime deps.** Keep the OpenRouter client, tokenizer, globber, and matchers
    dependency-free. If we ever need a real shell AST, prefer a well-
    maintained package (`shell-quote`) and pin the version, rather than
    rolling another one.
+
+## Selectable engine contract
+
+- `sfPi.guardrail.engine` is `deterministic` by default or explicitly `jev`.
+  Manager preferences and `/sf-guardrail engine deterministic|jev` own this
+  choice. No failure may silently switch engines or erase the preference.
+- Branch into Jev before deterministic normalization. Every Pi `tool_call`
+  reaches Jev in its mode; do not exempt reads, dry runs, unfamiliar tools, or
+  native calls the deterministic registry ignores. Jev interprets all policy;
+  do not add deterministic matchers as a hidden fallback or second risk vote.
+- Send operation metadata and effective policy only. Keep file bodies,
+  Apex/scripts, query text, Canvas content, credentials, transcripts, fetched
+  contents, and raw arguments local. Mark withheld and opaque effects explicitly;
+  never infer that a custom pattern does not match an omitted literal.
+- Tool descriptions, argument-derived facts, and tool-supplied approval claims
+  are untrusted data. Resolve org and browser facts locally; keep verification
+  state distinct from supplied intent. No live request during factory/startup.
+- Use the built-in `fetch` client, one Decisions Choice question, a total
+  1,500 ms classification deadline, cancellation, and no retries. Require the
+  configured model/provider identity; do not discover or choose fallbacks.
+- Only complete-context Jev `allow` predictions with `P(allow) >= 0.99` may
+  automatically execute. Other valid allow predictions confirm; model blocks
+  are hard blocks. This threshold is a conservative initial default, not a
+  calibration or safety qualification claim.
+- Audit every Jev outcome without raw payloads or credentials. Recheck engine,
+  policy identity, and cancellation before releasing execution.
 
 ## Editing the bundled ruleset
 
@@ -89,8 +119,14 @@ One-file-per-concern split:
   `allow_auto`, `block`, `timeout`, `cancel`, `hard_block`,
   `headless_pass`, `headless_block`). Anything new needs plumb-through
   in `approval-ledger.ts` and `status.ts`.
-- Headless escape hatch is an env var only. No config-file setting to
-  "always allow headless" — that would hide behavior from the user.
+- The deterministic headless escape hatch is an env var only. No config-file
+  setting to "always allow headless". Jev confirmations require explicit human
+  approval; Power Tool, operator auto-approve, and headless controls cannot
+  bypass them.
+- Jev session grants require complete context and a currently verified
+  non-production org. Bind them to the exact canonical original input plus
+  tool, `cwd`, verified target, policy/protocol, engine, and model identity.
+  Never reuse deterministic or broader operation-family grants for Jev calls.
 - Timeouts equal block. User-facing copy may say "approval expired", but
   expired approval still fails closed. Never auto-accept on timeout.
 
@@ -101,8 +137,9 @@ One-file-per-concern split:
 - No path-access gate (allow/ask/block outside cwd). Salesforce projects touch
   `~/.sf/`, `~/.sfdx/`, and shared libraries routinely; changing this requires
   a separate trust-aware design and ADR.
-- No LLM command explainer. Guardrail decisions and approval copy remain
-  deterministic and do not depend on another model call or telemetry.
+- No LLM command explainer. Jev supplies the risk choice in its selected mode;
+  approval UI and audit remain local. Do not add a separate explanation model,
+  model-controlled approval API, or external telemetry.
 - No project-local guardrail preference layer in MVP. Routine preferences
   are global Pi settings under `sfPi.guardrail`; project-local weakening is
   deferred with project-local rule overrides. Adding either means plumbing

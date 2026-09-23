@@ -208,6 +208,7 @@ Jump to an extension's Troubleshooting section to see the full fix. This index i
 - Production confirms fire for a sandbox
 - A protected file remains blocked after removing an override
 - Headless CI is blocked
+- Jev calls fail or ask too often
 - Audit is empty after resume
 
 **[SF Brain](./extensions/sf-brain.md#troubleshooting)**

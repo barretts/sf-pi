@@ -2,12 +2,14 @@
 
 ## What It Does
 
-SF Guardrail mediates protected files, dangerous shell commands, org-aware
-Salesforce operations, and known high-value native-tool mutations before
-execution. Every rule has one behavior: `off`, `confirm`, or `block`.
+SF Guardrail mediates agent tool calls before execution, with a selectable
+deterministic engine or a TypeSafe Jev engine accessed through OpenRouter.
+SF Pi owns execution blocking, human confirmation, approval memory, and audit
+for both engines. The deterministic engine remains the default.
 
-Rule families share the same Safety Kernel, human confirmation, headless
-fail-closed behavior, session approval memory, and audit path:
+The deterministic engine evaluates protected files, dangerous shell commands,
+org-aware Salesforce operations, and known high-value native-tool mutations.
+Every rule has one behavior: `off`, `confirm`, or `block`:
 
 - **Policies** protect files as no-access, read-only, or explicit no-op.
 - **Command gate** structurally matches dangerous commands, including commands
@@ -20,6 +22,18 @@ fail-closed behavior, session approval memory, and audit path:
 Intent flags such as `allow_mutation`, `allow_confirmed`, or `mutation=true` aid
 classification but never become approval.
 
+The opt-in Jev engine sends operation metadata for **every Pi `tool_call`**,
+including reads, dry runs, unfamiliar tools, and calls skipped by the native
+risk registry. Jev interprets the effective file, command, org, and custom rule
+policy and returns `allow`, `confirm`, or `block`. There is no automatic
+fallback to deterministic rules.
+
+In Jev mode, exact protected-file and block patterns are interpreted by a
+model. They no longer have a deterministic matching guarantee. Reported model
+probabilities are inputs to a conservative threshold, not proof that a call is
+safe. The local Gemma C11 diagnostic results do not qualify hosted Jev for
+enforcement; evaluate the configured hosted model before normal use.
+
 ## Commands
 
 - `/sf-guardrail` — open the Manager detail, or print status without UI.
@@ -27,6 +41,7 @@ classification but never become approval.
 - `/sf-guardrail audit` — show up to 50 recent session decisions.
 - `/sf-guardrail grants` — list legacy persisted grants if present.
 - `/sf-guardrail settings` — open routine preferences.
+- `/sf-guardrail engine deterministic|jev` — select and persist the engine.
 - `/sf-guardrail aliases` — edit aliases that receive production-level policy.
 - `/sf-guardrail forget` — clear current-branch session allowances and legacy
   project grants.
@@ -34,44 +49,96 @@ classification but never become approval.
 ## Configuration
 
 Bundled rules live in `SF_GUARDRAIL_DEFAULTS.json`. Routine global preferences
-live under `sfPi.guardrail` in Pi settings and cover confirmation timeout,
-protected aliases, Power Tool choices, and bundled-rule behavior.
+live under `sfPi.guardrail` in Pi settings and cover the engine, confirmation
+timeout, protected aliases, Power Tool choices, and bundled-rule behavior.
+Select the engine in the Manager Guardrail preferences or with the explicit
+engine command. Status reports the selected engine and Jev credential readiness
+without making a live request.
 
 Advanced custom patterns or full stable-id overrides live in
 `<globalAgentDir>/sf-guardrail/rules.json`. Effective configuration resolves
 bundled defaults, advanced overrides, then routine Pi settings. Project-local
 weakening is not supported.
 
-Process-level automation controls are explicit:
+In deterministic mode, process-level automation controls are explicit:
 
 - `SF_GUARDRAIL_ALLOW_HEADLESS=1` allows otherwise confirmable headless calls
   with an audit warning.
 - `SF_GUARDRAIL_OPERATOR_AUTO_APPROVE=allow-confirm-actions-for-this-process`
   auto-allows confirm-class decisions for that process.
 
-Neither path bypasses hard blocks.
+Neither path bypasses hard blocks. Jev mode ignores these controls and Power
+Tool Mode for confirmation decisions; headless confirmations block.
+
+## Jev Connection
+
+Set `OPENROUTER_API_KEY`, or set `OPENROUTER_API_KEY_FILE` to an explicit local
+credential file. The environment key takes precedence. Credential contents
+never belong in Pi settings, audit entries, or tracked files. For example:
+
+```bash
+export OPENROUTER_API_KEY_FILE="$HOME/.config/openrouter/key"
+```
+
+The client uses Node's built-in `fetch` and the OpenRouter Decisions endpoint
+`POST https://openrouter.ai/api/alpha/decisions`, with one Choice question named
+`risk` and the options `allow`, `confirm`, and `block`. It requests
+`typesafe/jev-1.13` and requires the resolved identity
+`typesafe/jev-1.13-20260917` from provider `TypeSafe`. An unexpected model or
+provider identity blocks until the integration is revalidated.
+
+Classification has a 1,500 ms total deadline, no retries, and a 500 ms
+end-to-end p95 performance target. Missing credentials, invalid supplied
+configuration, malformed metadata or responses, API/transport failures,
+cancellation, and deadline expiry block with an audited failure. Factory
+execution and session startup make no live Jev requests.
+
+See the [OpenRouter Decisions API](https://openrouter.ai/docs/client-sdks/typescript/sdks/decisions/README)
+and [TypeSafe Choice documentation](https://docs.typesafe.ai/primitives/choice).
 
 ## Safety and Data Boundaries
 
-- Interactive confirms offer Allow once, Allow for this session, or Block.
-  Session approval is scoped to a Safety Envelope and survives resume/fork only
-  through the current session branch.
+- Interactive confirms offer Allow once or Block. The session option appears
+  only when the engine's approval scope is eligible. In Jev mode, that requires
+  complete context and a currently verified non-production org; production,
+  unknown, external, and opaque calls remain allow-once.
+- Jev automatically allows only a complete-context `allow` with
+  `P(allow) >= 0.99`. Other valid allow predictions require explicit human
+  confirmation. A model `block` is an unapprovable hard block.
+- Jev session approval covers the exact original call. Its local fingerprint
+  includes the full canonical input, tool, working directory, verified target,
+  engine, policy/protocol hash, and model identity. Withheld content stays local,
+  but changing it invalidates approval. Deterministic grants cannot approve Jev
+  calls. Session memory remains limited to the current session branch.
+- Outbound Jev requests contain operation metadata, effective policy, and
+  locally resolved facts. They exclude raw tool arguments, file bodies,
+  Apex/scripts, query text, Canvas contents, credentials, transcripts, fetched
+  contents, and full browser pages or forms. Tool descriptions and extracted
+  argument metadata are untrusted data, not approval authority.
+- Unsupported shell grammar, hidden content, unresolved effects, and missing
+  metadata remain explicit uncertainty. A custom pattern that could match an
+  omitted literal cannot be assumed to be a nonmatch. There is no silent
+  truncation of oversized metadata.
 - Every automatic allow, human allow, session allow, block, timeout, cancel, and
-  headless pass becomes an audit entry.
-- Power Tool Mode is off by default, can be limited to selected native families,
+  headless pass becomes an audit entry. Jev audit includes available model,
+  probability, latency, cost, request-id, and failure facts without raw payloads.
+- In deterministic mode, Power Tool Mode is off by default, can be limited to selected native families,
   and requires a separate production/unknown-org opt-in.
-- Strictly validated temporary-directory cleanup can be auto-allowed; other
+- In deterministic mode, strictly validated temporary-directory cleanup can be auto-allowed; other
   dangerous commands are confirmed or hard-blocked according to rule behavior.
 - Disabling the extension removes this mediation layer; the Manager calls that
   out before changing package state.
 
 ## References
 
-Canonical terminology lives in [`CONTEXT.md`](../../CONTEXT.md). Durable design
+Canonical terminology lives in [`CONTEXT.md`](./CONTEXT.md). Durable design
 trade-offs live in the generated [ADR lifecycle index](../../docs/adr/README.md),
 including fail-closed behavior, Safety Envelopes, rule-derived guidance,
 session approvals, org classification, rule behavior, and native mutation
-mediation.
+mediation. The selectable engine contract is described in
+[ADR 0118](../../docs/adr/0118-sf-guardrail-selectable-jev-engine.md).
+The [initial hosted evaluation](../../reports/jev-guardrail-evaluation-2026-09-23.md)
+records the live replay, actual SDK smoke, and unmet activation gates.
 
 ## Troubleshooting
 
@@ -84,8 +151,16 @@ merge by stable id. Add an explicit disabled/no-op override instead of merely
 omitting the bundled rule.
 
 **Headless CI is blocked:** Prefer a non-production CI target and rehearsals.
-When unattended confirmation is intentional, set the documented headless
-operator control and retain the audit output; hard blocks remain active.
+In deterministic mode, intentional unattended confirmation can use the
+documented operator control with audit output. Jev confirmations require a
+human and block without UI, even when those controls are set.
+
+**Jev calls fail or ask too often:** Inspect status and `/sf-guardrail audit`
+for credential, deadline, identity, or incomplete-context failures. Metadata
+privacy can increase confirmations when operation effects depend on withheld
+content. Revalidate model identity changes and measure failures and extra
+confirmations in the acceptance report; switching engines is an explicit
+preference change.
 
 **Audit is empty after resume:** Decisions belong to the active session file.
 Confirm that the resumed branch is the one that recorded the decision.

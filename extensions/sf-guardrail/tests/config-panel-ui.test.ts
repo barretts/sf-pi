@@ -30,6 +30,25 @@ afterEach(() => {
 });
 
 describe("SF Guardrail config panel", () => {
+  it("selects Jev through the Manager engine page and displays local readiness", async () => {
+    const [{ createConfigPanel }, config] = await Promise.all([
+      import("../lib/config-panel.ts"),
+      import("../lib/config.ts"),
+    ]);
+    const panel = createConfigPanel(theme, "/tmp/project", "global", vi.fn(), tui) as unknown as {
+      handleInput(data: string): void;
+      renderContent(width: number): string[];
+    };
+    for (let i = 0; i < 6; i++) panel.handleInput("\u001b[B");
+    panel.handleInput("\r");
+    expect(panel.renderContent(120).join("\n")).toContain("OpenRouter credentials:");
+    panel.handleInput("j");
+    expect(config.loadGuardrailSnapshot().engine).toBe("jev");
+    expect(panel.renderContent(120).join("\n")).toContain("Decision engine: jev saved");
+    panel.handleInput("d");
+    expect(config.loadGuardrailSnapshot().engine).toBe("deterministic");
+  });
+
   it("edits protected aliases with a native input page", async () => {
     const [{ createConfigPanel }, preferences] = await Promise.all([
       import("../lib/config-panel.ts"),

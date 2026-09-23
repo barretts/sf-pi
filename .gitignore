@@ -49,6 +49,7 @@ docs/.vitepress/dist/
 # Coverage output
 coverage/
 *.log
+.logs/
 
 # Security scan reports
 gitleaks.json

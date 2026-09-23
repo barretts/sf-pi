@@ -5,8 +5,28 @@ SF Guardrail is the safety context for mediating risky agent actions in SF Pi. I
 ## Language
 
 **SF Guardrail**:
-The **Bundled Extension** that mediates risky file access, dangerous shell commands, and Salesforce org-sensitive operations in the **Pi Runtime**.
+The **Bundled Extension** that mediates agent tool calls in the **Pi Runtime** through a selectable **Guardrail Engine**, while SF Pi owns blocking, human approval, approval memory, and audit.
 _Avoid_: generic guardrails, policy platform, security scanner, Salesforce org policy engine
+
+**Guardrail Engine**:
+The selected risk-classification implementation under `sfPi.guardrail.engine`: **Deterministic Engine** by default, or the explicitly selected **Jev Engine**. The Manager preferences and `/sf-guardrail engine deterministic|jev` expose the same choice. Failures cannot silently switch engines.
+_Avoid_: fallback chain, model discovery, automatic migration
+
+**Deterministic Engine**:
+The existing local rule implementation that matches file, command, org-aware, and known native-mutation risks through the **Safety Kernel**.
+_Avoid_: Jev backup, hidden second vote, model safety guarantee
+
+**Jev Engine**:
+The opt-in engine that classifies every Pi `tool_call` using TypeSafe Jev through OpenRouter Decisions. Jev interprets all effective policy in this mode, including protected paths, exact blocks, and custom patterns. Exact rules lose their deterministic matching guarantee; SF Pi still enforces the returned decision and human approval locally. There is no deterministic fallback.
+_Avoid_: qualified replacement, calibrated safety score, deterministic model policy
+
+**Operation Metadata**:
+The bounded tool identity, operation, flags, paths or destinations, execution intent, and locally resolved facts sent to Jev with effective policy. File bodies, scripts/Apex, query text, Canvas content, credentials, transcripts, fetched contents, raw arguments, and full browser pages/forms stay local. Withheld or unresolved effects are explicit uncertainty; hidden custom-pattern literals cannot be presumed nonmatches.
+_Avoid_: raw payload, full context, content inspection, implicit nonmatch
+
+**Jev Automatic Allow**:
+A valid Jev `allow` choice with complete operation context and `P(allow) >= 0.99`. Other valid allow predictions require human confirmation; a model `block` is a **Hard Block**. The initial probability cutoff is conservative and requires domain evaluation; it is not a qualification claim.
+_Avoid_: guaranteed safe, confidence-based approval, local C11 qualification
 
 **Safety Mediator**:
 The product posture where **SF Guardrail** evaluates risky agent actions and returns a clear allow, block, or human-approval decision. It is opinionated and narrow rather than a configurable policy platform.
@@ -17,7 +37,7 @@ The safety posture where **SF Guardrail** mediates risky action surfaces that SF
 _Avoid_: complete mutation sandbox, universal write prevention, guaranteed no mutation
 
 **Rule Behavior**:
-The per-rule setting that decides whether a risk is off, human-confirmable, or a non-overridable hard block. The settings UI presents these as Off, Ask me, and Block.
+The per-rule setting that describes whether a risk is off, human-confirmable, or a non-overridable hard block. The settings UI presents these as Off, Ask me, and Block. The deterministic engine matches it locally; the Jev engine interprets it as policy context.
 _Avoid_: enabled flag, theme, policy mode
 
 **Safety Kernel**:
@@ -49,11 +69,11 @@ A narrow safety check that explains why a **Safety Subject** is risky, such as p
 _Avoid_: rule engine, detector, scanner
 
 **Native Tool Risk Registry**:
-The SF Guardrail-owned registry of classifiers for bundled SF Pi native tools. Each classifier normalizes a known **High-Value Durable Mutation** into a **Native Tool Safety Subject** so the existing **Safety Kernel**, **Safety Envelope**, **Approval Ledger**, and **Human-in-the-Loop Approval** flow can handle it consistently. Native tools are not risky by default; classifiers should ignore read-only actions, dry runs, local diagnostics, local tests, and pre-commit browser draft state.
+The deterministic-engine registry of classifiers for bundled SF Pi native tools. Each classifier normalizes a known **High-Value Durable Mutation** into a **Native Tool Safety Subject** so the existing **Safety Kernel**, **Safety Envelope**, **Approval Ledger**, and **Human-in-the-Loop Approval** flow can handle it consistently. Those classifiers ignore read-only actions, dry runs, local diagnostics, local tests, and pre-commit browser draft state. Jev mode classifies all tool calls before this registry.
 _Avoid_: per-extension approval helper, policy marketplace, tool-specific HITL layer, agent-callable approval API, all-native-tool gating
 
 **Committing UI Gesture**:
-A browser action that attempts to persist or submit Salesforce UI state, such as Save, Apply, Submit, Activate, Assign, Delete, or an Enter key that submits a form. SF Guardrail should mediate committing gestures rather than every pre-commit fill, select, or editor write.
+A browser action that attempts to persist or submit Salesforce UI state, such as Save, Apply, Submit, Activate, Assign, Delete, or an Enter key that submits a form. The deterministic engine mediates committing gestures; Jev mode also classifies metadata for pre-commit interactions.
 _Avoid_: any browser interaction, field edit, visual navigation, snapshot
 
 **Safety Envelope**:
@@ -73,7 +93,7 @@ A target org whose type cannot be verified from the available Salesforce/Core or
 _Avoid_: assume sandbox, infer from alias name, demo org guess
 
 **Operation Family**:
-A small, named class of related actions that may share an approval when the rest of the **Safety Envelope** is unchanged, such as Salesforce metadata deploys to one verified org.
+A small, named class of related actions that may share an approval in deterministic mode when the rest of the **Safety Envelope** is unchanged, such as Salesforce metadata deploys to one verified org. Jev session approval covers an exact call, not a family of calls.
 _Avoid_: arbitrary command prefix, broad tool permission, workflow
 
 **Human-in-the-Loop Approval**:
@@ -81,11 +101,11 @@ The explicit user confirmation step used when a **Guardrail Decision** cannot be
 _Avoid_: silent approval, background prompt, exception
 
 **User Intent Boundary**:
-The point where a human or configured operator authority accepts a specific **Safety Envelope** before an AI-mediated **High-Value Durable Mutation** proceeds. It complements Salesforce, Slack, Data 360, and operating-system authorization; it does not replace those systems.
+The point where a human accepts a specific **Safety Envelope** before an AI-mediated **High-Value Durable Mutation** proceeds, or a configured operator authority accepts it in deterministic mode. Jev confirmation requires a human. It complements Salesforce, Slack, Data 360, and operating-system authorization; it does not replace those systems.
 _Avoid_: permission check, authz replacement, user authentication, blanket consent
 
 **Execution Intent Flag**:
-A model- or tool-supplied parameter that declares the requested operation is intentionally live or mutating, such as `allow_mutation`, `allow_confirmed`, `mutation`, or `dry_run=false`. It helps classify risk and reject accidental mutation, but it is not approval. Approval comes from **Human-in-the-Loop Approval**, an existing **Session Approval**, or explicit operator-approved headless mode.
+A model- or tool-supplied parameter that declares the requested operation is intentionally live or mutating, such as `allow_mutation`, `allow_confirmed`, `mutation`, or `dry_run=false`. It helps classify risk and reject accidental mutation, but it is not approval. Approval comes from **Human-in-the-Loop Approval**, an existing **Session Approval**, or explicit operator-approved headless mode in the deterministic engine.
 _Avoid_: approval flag, self-approval, bypass flag, trust parameter
 
 **Approval Ledger**:
@@ -95,6 +115,10 @@ _Avoid_: audit helper, allowlist, approval store, grant manager
 **Session Approval**:
 A branch/session-scoped approval that suppresses repeated prompts for the same **Safety Envelope** during the current Pi session path. It is appropriate only when the envelope describes a stable bounded operation; arbitrary-code, raw-REST, UI-ref-based, external-content, destructive, production, or unknown-org operations should stay exact or allow-once.
 _Avoid_: timed grant, permanent allow, global trust, hidden bypass
+
+**Jev Exact-Call Session Approval**:
+A **Session Approval** available only for a complete call against a currently verified non-production org. Its locally computed fingerprint binds the full canonical original input, tool, working directory, verified target, engine, policy/protocol hash, and model identity. Changing withheld content invalidates approval without sending it to Jev. Deterministic grants do not transfer; production, unknown, external, and opaque calls remain allow-once.
+_Avoid_: family grant, path prefix approval, payload-independent approval
 
 **Stable Bounded Operation**:
 A risky action whose **Safety Envelope** can be described in durable domain terms, such as the same verified org, project, agent, operation family, and resource identity, without depending primarily on arbitrary payload text or short-lived UI references.
@@ -113,11 +137,11 @@ The safety posture where ambiguity resolves to block or human approval rather th
 _Avoid_: best-effort allow, convenience-first safety, optimistic pass
 
 **Operator-Approved Headless Mode**:
-A non-interactive execution mode where confirm-class **Guardrail Decisions** may pass only because a human or operator configured an explicit environment-level opt-in before the run, currently `SF_GUARDRAIL_ALLOW_HEADLESS=1`. It is not settable by the model or tool input, is recorded in the **Guardrail Audit Trail**, and does not weaken **Hard Blocks**.
+A deterministic-engine non-interactive execution mode where confirm-class **Guardrail Decisions** may pass only because a human or operator configured an explicit environment-level opt-in before the run, currently `SF_GUARDRAIL_ALLOW_HEADLESS=1`. It is not settable by the model or tool input, is recorded in the **Guardrail Audit Trail**, and does not weaken **Hard Blocks**. Jev ignores this opt-in and blocks headless confirmations.
 _Avoid_: tool-specific headless write flag, model-approved headless, CI trust mode, silent bypass
 
 **Operator Auto-Approve Mode**:
-An explicit process-scoped power-user mode where confirm-class **Guardrail Decisions** are automatically allowed because an operator set `SF_GUARDRAIL_OPERATOR_AUTO_APPROVE=allow-confirm-actions-for-this-process` before launch. It is audited, does not create **Session Approvals**, and never weakens **Hard Blocks**.
+An explicit deterministic-engine process-scoped power-user mode where confirm-class **Guardrail Decisions** are automatically allowed because an operator set `SF_GUARDRAIL_OPERATOR_AUTO_APPROVE=allow-confirm-actions-for-this-process` before launch. It is audited, does not create **Session Approvals**, and never weakens **Hard Blocks**. Jev ignores this mode and persisted Power Tool choices for confirmation decisions.
 _Avoid_: model-set approval, permanent trust mode, hard-block bypass, silent bypass
 
 **Guardrail Audit Trail**:
@@ -133,7 +157,7 @@ A non-blocking instruction that helps the agent recover safely after a block or 
 _Avoid_: hard gate, policy requirement, mandatory workflow
 
 **Hard Block**:
-A **Guardrail Decision** that refuses an action without asking the user because the matching **Rule Behavior** is Block.
+A **Guardrail Decision** that refuses an action without asking the user because the matching deterministic **Rule Behavior** is Block or Jev returns a model `block`. Transport, identity, configuration, cancellation, deadline, and invalid-response failures also prevent execution.
 _Avoid_: default refusal, prompt, warning, soft block
 
 **Rule-Derived Guidance**:

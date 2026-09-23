@@ -11,6 +11,73 @@
 
 export type ProtectionLevel = "noAccess" | "readOnly" | "none";
 export type RuleBehavior = "off" | "confirm" | "block";
+export type GuardrailEngine = "deterministic" | "jev";
+export type JevAction = "allow" | "confirm" | "block";
+
+export interface JevToolDescriptor {
+  description: string;
+  parameters?: unknown;
+}
+
+/** Values here have crossed the metadata-only privacy boundary. */
+export interface JevToolMetadata {
+  toolName: string;
+  description?: string;
+  metadata: Record<string, unknown>;
+  omissions: string[];
+  complete: boolean;
+}
+
+export interface JevFacts {
+  org?: { type: OrgTypeFilter; verified: boolean; explicit: boolean };
+  files?: Array<{ path: string; exists: boolean | "unknown"; resolvedPath?: string }>;
+  browser?: { status: string; role?: string; label?: string; ageMs?: number };
+}
+
+export interface JevResolvedFacts {
+  facts: JevFacts;
+  /** Local-only approval binding; never serialized into a hosted request. */
+  orgIdentity?: string;
+  browserIdentity?: string;
+}
+
+export interface JevEvidence {
+  model: string;
+  provider?: string;
+  requestId?: string;
+  probabilities?: Record<JevAction, number>;
+  confidence?: number;
+  latencyMs: number;
+  cost?: number;
+  failure?: string;
+  policyHash: string;
+  protocolHash: string;
+  inputHash?: string;
+  descriptorHash?: string;
+  factsHash?: string;
+}
+
+export interface JevPrediction {
+  choice: JevAction;
+  probabilities: Record<JevAction, number>;
+  confidence: number;
+  model: string;
+  provider: string;
+  requestId: string;
+  usage: { input_tokens: number; output_tokens: number; cost?: number };
+}
+
+export interface JevRequest {
+  model: string;
+  state: unknown;
+  questions: {
+    risk: {
+      type: "choice";
+      instructions: unknown;
+      criteria: Record<JevAction, string>;
+    };
+  };
+}
 
 export interface PolicyPattern {
   pattern: string;
@@ -196,7 +263,7 @@ export type SafetyEnvelope = ApprovalScope;
 
 export interface ClassifiedDecision {
   ruleId: string;
-  feature: "policies" | "commandGate" | "orgAwareGate" | "nativeToolGate";
+  feature: "policies" | "commandGate" | "orgAwareGate" | "nativeToolGate" | "jevGate";
   action: "allow" | "block" | "confirm";
   /** Human-readable reason surfaced back to the LLM on block. */
   reason: string;
@@ -217,6 +284,7 @@ export interface ClassifiedDecision {
   orgResolutionSource?: "cache" | "lookup" | "productionAliases" | "guessed";
   orgTargetExplicit?: boolean;
   orgCommand?: string;
+  jev?: JevEvidence;
 }
 
 // ─── Persisted entries (pi.appendEntry customType values) ───────────────────────
@@ -236,7 +304,7 @@ export const INJECTION_ENTRY_TYPE = "sf-guardrail-prompt";
 export interface DecisionEntryData {
   timestamp: number;
   ruleId: string;
-  feature: "policies" | "commandGate" | "orgAwareGate" | "nativeToolGate";
+  feature: "policies" | "commandGate" | "orgAwareGate" | "nativeToolGate" | "jevGate";
   outcome: DecisionOutcome;
   toolName: string;
   subject: string;
@@ -251,6 +319,7 @@ export interface DecisionEntryData {
   approvalScopeDetail?: string;
   approvalRiskTier?: string;
   reason: string;
+  jev?: JevEvidence;
 }
 
 export interface AllowEntryData {

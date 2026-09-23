@@ -125,7 +125,7 @@ Each extension owns one focused Salesforce workflow. Pick an outcome, then open 
 <a class="sfpi-extension-card" href="./extensions/sf-guardrail">
   <span class="sfpi-card-kicker">Safety · on</span>
   <strong>SF Guardrail</strong>
-  <span>Salesforce-aware safety hooks — file protection policies, dangerous-command gating, org-aware confirmation, and native high-value mutation mediation</span>
+  <span>Salesforce-aware safety hooks with selectable deterministic or TypeSafe Jev classification, human approval, and audit</span>
   <span class="sfpi-card-meta"><code class="sfpi-code-chip">/sf-guardrail</code></span>
 </a>
 <a class="sfpi-extension-card" href="./extensions/sf-herdr">

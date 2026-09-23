@@ -142,7 +142,7 @@ _Deterministic, editable Salesforce diagrams rendered through the local tldraw o
 
 ### [SF Guardrail](./extensions/sf-guardrail)
 
-_Salesforce-aware safety hooks — file protection policies, dangerous-command gating, org-aware confirmation, and native high-value mutation mediation_
+_Salesforce-aware safety hooks with selectable deterministic or TypeSafe Jev classification, human approval, and audit_
 
 - Default: **on**
 - Commands: `/sf-guardrail`

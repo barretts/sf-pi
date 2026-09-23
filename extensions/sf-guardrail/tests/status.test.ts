@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { renderAudit, renderStatus } from "../lib/status.ts";
 import { readBundledConfig } from "../lib/config.ts";
 import type { Data360ExecutionChainEntryData } from "../lib/approval-ledger.ts";
+import type { DecisionEntryData } from "../lib/types.ts";
 
 const chain: Data360ExecutionChainEntryData = {
   timestamp: Date.UTC(2026, 6, 6, 20, 0, 0),
@@ -31,6 +32,49 @@ const chain: Data360ExecutionChainEntryData = {
 };
 
 describe("sf-guardrail status rendering", () => {
+  it("shows Jev readiness, failures, and disabled legacy automation", () => {
+    const recent: DecisionEntryData[] = [
+      {
+        timestamp: Date.UTC(2026, 6, 6, 20, 0, 0),
+        toolName: "read",
+        subject: "read metadata",
+        feature: "jevGate",
+        ruleId: "jev-unavailable",
+        outcome: "hard_block",
+        fingerprint: "exact-call",
+        reason: "Jev unavailable.",
+        jev: {
+          model: "typesafe/jev-1.13-20260917",
+          latencyMs: 1500,
+          failure: "timeout",
+          policyHash: "policy",
+          protocolHash: "protocol",
+        },
+      },
+    ];
+    const text = renderStatus({
+      config: readBundledConfig(),
+      configSource: "settings",
+      recent,
+      hasUI: false,
+      headlessEnabled: true,
+      operatorAutoApproveEnabled: true,
+      powerTool: { mode: "all", productionUnknown: true },
+      engine: "jev",
+      jevModel: "typesafe/jev-1.13-20260917",
+      jevCredentialReady: false,
+    });
+    expect(text).toContain("decision engine: jev");
+    expect(text).toContain("OpenRouter credentials: unavailable");
+    expect(text).toContain("recent Jev failures: timeout");
+    expect(text).toContain("headless mode: fail-closed");
+    expect(text).toContain("power tool mode: disabled for Jev");
+    expect(text).toContain("operator auto-approve env: disabled for Jev");
+    expect(renderAudit(recent)).toContain(
+      "model=typesafe/jev-1.13-20260917; 1500ms; failure=timeout",
+    );
+  });
+
   it("surfaces Data 360 execution chains separately from guardrail decisions", () => {
     const text = renderAudit([], [chain]);
 

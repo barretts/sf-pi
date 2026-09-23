@@ -41,6 +41,8 @@ function riskGateLabel(decision: ClassifiedDecision): string {
       return `Org-aware operation (${decision.ruleId})`;
     case "nativeToolGate":
       return `Native tool operation (${decision.ruleId})`;
+    case "jevGate":
+      return "Jev policy decision";
   }
 }
 

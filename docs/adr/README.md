@@ -108,6 +108,7 @@ ADRs preserve durable architectural rationale. Runtime code and Behavior Proofs 
 - [0115: SF Flow quality uses white-room behavioral parity](./0115-sf-flow-quality-uses-white-room-behavioral-parity.md) — 2026-09-19
 - [0116: SF Flow repairs are bounded and source-bound](./0116-sf-flow-repairs-are-bounded-and-source-bound.md) — 2026-09-19
 - [0117: SF Flow authoring grounding and live fixtures are bounded](./0117-sf-flow-authoring-grounding-and-live-fixtures-are-bounded.md) — 2026-09-19
+- [0118: SF Guardrail supports a selectable TypeSafe Jev engine](./0118-sf-guardrail-selectable-jev-engine.md) — 2026-09-23
 
 ## Proposed
 

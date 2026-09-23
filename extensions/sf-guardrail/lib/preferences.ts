@@ -34,7 +34,7 @@ export type GuardrailPreferenceKey =
   | `orgAwareGate.rules.${string}.enabled`;
 
 export type GuardrailSettingsSection =
-  "files" | "commands" | "orgs" | "aliases" | "power" | "advanced";
+  "files" | "commands" | "orgs" | "aliases" | "power" | "advanced" | "engine";
 
 export interface GuardrailPreferenceDescriptor {
   key: GuardrailPreferenceKey;

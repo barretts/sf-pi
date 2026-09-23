@@ -599,7 +599,7 @@
   {
     "id": "sf-guardrail",
     "name": "SF Guardrail",
-    "description": "Salesforce-aware safety hooks — file protection policies, dangerous-command gating, org-aware confirmation, and native high-value mutation mediation",
+    "description": "Salesforce-aware safety hooks with selectable deterministic or TypeSafe Jev classification, human approval, and audit",
     "category": "safety",
     "maturity": "stable",
     "defaultEnabled": true,
@@ -621,35 +621,39 @@
       "intentGroup": "Work safely",
       "editingRules": "AGENTS.md",
       "contextGlossary": "CONTEXT.md",
-      "summary": "Salesforce-aware safety layer for pi: file-protection policies, AST-matched command gating, org-aware confirmation on production deploys/Apex/DML/destructive REST, native high-value mutation mediation, plus a once-per-session prompt-injection that teaches the LLM the gating categories and validate-first workflow.",
+      "summary": "Salesforce-aware safety layer with a default deterministic engine and opt-in TypeSafe Jev through OpenRouter Decisions. Jev classifies operation metadata for every Pi tool call and interprets the effective policy without deterministic fallback; SF Pi owns blocking, explicit approval, session memory, and audit.",
       "primaryFiles": [
         "index.ts",
         "lib/safety-kernel.ts",
         "lib/native-tool-risk-registry.ts",
-        "lib/command-gate.ts",
-        "lib/org-aware-gate.ts",
+        "lib/jev-client.ts",
+        "lib/jev-risk.ts",
         "lib/config.ts"
       ],
       "stateFiles": [
-        "session entries: SF_GUARDRAIL_DEFAULTS allow/deny memory and audit decisions"
+        "Pi settings: sfPi.guardrail preferences",
+        "session entries: approval memory and audit decisions"
       ],
       "env": [
         "SF_GUARDRAIL_ALLOW_HEADLESS",
-        "SF_GUARDRAIL_OPERATOR_AUTO_APPROVE"
+        "SF_GUARDRAIL_OPERATOR_AUTO_APPROVE",
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_API_KEY_FILE"
       ],
       "safety": [
-        "Fail-closed in headless mode unless SF_GUARDRAIL_ALLOW_HEADLESS=1.",
-        "Every block / allow / confirm decision is persisted as an audit entry.",
-        "Power Tool Mode can persistently auto-approve selected confirm-class decisions; production/unknown org auto-approve is a separate opt-in and hard blocks are never bypassed.",
-        "Operator auto-approve env mode is process-scoped, audited, and does not bypass hard blocks.",
-        "Known high-value native tool mutations are mediated before execution through the same Safety Kernel and HITL path, including first-slice AgentScript lifecycle, Data 360, Apex, Slack Canvas, and SF Browser commit surfaces.",
+        "Deterministic is the default. Jev is an explicit engine preference and has no automatic deterministic fallback; exact policy patterns are interpreted by a model without a deterministic matching guarantee.",
+        "Every block / allow / confirm decision is persisted as an audit entry without credentials or raw Jev payloads.",
+        "In deterministic mode, Power Tool and audited process-level operator/headless controls can allow confirm-class decisions, but never bypass hard blocks. Jev confirmations require explicit human approval and block headless execution regardless of those controls.",
+        "Jev sends operation metadata and effective policy for every Pi tool call, excluding raw arguments and file, script, Apex, query, Canvas, credential, transcript, fetched, and full browser content. Omitted effects remain uncertainty.",
+        "Jev auto-allows only complete-context allow predictions with P(allow) >= 0.99; model block predictions are hard blocks. Transport, configuration, deadline, cancellation, malformed-response, and identity failures block without retries.",
+        "Jev session approval requires a complete exact call and verified non-production org, bound locally to full input, target, cwd, policy/protocol, engine, and model identity. Factory/startup makes no live Jev requests.",
         "alwaysActive=false but disabling removes the safety layer entirely; the manager surfaces this clearly."
       ]
     },
     "entry": "extensions/sf-guardrail/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 5673
+    "srcLoc": 8462
   },
   {
     "id": "sf-herdr",

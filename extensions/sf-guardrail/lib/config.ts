@@ -14,15 +14,25 @@
  * Project-level overrides / project-local Guardrail weakening remain deferred
  * by ADR 0041 and ADR 0049.
  */
-import { existsSync, readFileSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fstatSync,
+  openSync,
+  readFileSync,
+  readSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { globalAgentPath } from "../../../lib/common/pi-paths.ts";
+import { globalSettingsPath } from "../../../lib/common/sf-pi-settings.ts";
 import type {
   CommandGateConfig,
   CommandPattern,
   GuardrailConfig,
+  GuardrailEngine,
   OrgAwareGateConfig,
   OrgAwareRule,
   PoliciesConfig,
@@ -32,10 +42,28 @@ import { behaviorEnabled, resolveRuleBehavior } from "./rule-behavior.ts";
 import {
   applyGuardrailPiSettings,
   hasGuardrailPiSettings,
+  guardrailSettingsValue,
+  normalizeGuardrailPiSettings,
   readGuardrailPiSettings,
+  rejectGuardrailJsonDuplicateKeys,
+  validateGuardrailPiSettings,
+  type GuardrailPiSettings,
 } from "./guardrail-settings.ts";
 
 export type GuardrailConfigSource = "bundled" | "override" | "settings" | "override+settings";
+
+/** Error messages and categories never contain settings values, paths, or parse text. */
+export class GuardrailConfigError extends Error {
+  readonly category: string;
+
+  constructor(category: string) {
+    super(`Guardrail configuration blocked: ${category}.`);
+    this.category = category;
+    this.name = "GuardrailConfigError";
+  }
+}
+
+const CONFIG_FILE_LIMIT_BYTES = 256 * 1024;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -83,6 +111,56 @@ export function loadConfig(): { config: GuardrailConfig; source: GuardrailConfig
   const override = readUserOverride();
   const settings = readGuardrailPiSettings();
 
+  return effectiveConfig(bundled, override, settings);
+}
+
+/**
+ * Read each policy source once. Settings errors cannot silently switch engines;
+ * Jev additionally rejects supplied policy fields that legacy sanitizers drop.
+ */
+export function loadGuardrailSnapshot(): {
+  config: GuardrailConfig;
+  source: GuardrailConfigSource;
+  engine: GuardrailEngine;
+} {
+  const root = readBoundedJsonObject(globalSettingsPath(), "settings", true) ?? {};
+  if (root.sfPi !== undefined && !isObject(root.sfPi)) invalid("settings");
+  const rawSettings = guardrailSettingsValue(root);
+  if (rawSettings !== undefined && !isObject(rawSettings)) invalid("settings");
+  const raw = (rawSettings ?? {}) as Record<string, unknown>;
+  if (raw.engine !== undefined && raw.engine !== "deterministic" && raw.engine !== "jev") {
+    invalid("settings");
+  }
+  const engine: GuardrailEngine = raw.engine === "jev" ? "jev" : "deterministic";
+  if (engine === "jev") {
+    try {
+      validateGuardrailPiSettings(raw);
+    } catch {
+      invalid("settings");
+    }
+  }
+  const settings = normalizeGuardrailPiSettings(raw);
+
+  const bundled = readBoundedJsonObject(BUNDLED_PATH, "bundled", false);
+  validateConfig(bundled, "bundled");
+  let override: Partial<GuardrailConfig> | undefined;
+  try {
+    const parsed = readBoundedJsonObject(userConfigPath(), "override", true);
+    if (parsed !== undefined) {
+      if (engine === "jev") validateConfig(parsed, "override");
+      override = parsed as Partial<GuardrailConfig>;
+    }
+  } catch (error) {
+    if (engine === "jev") throw error;
+  }
+  return { ...effectiveConfig(sanitize(bundled), override, settings), engine };
+}
+
+function effectiveConfig(
+  bundled: GuardrailConfig,
+  override: Partial<GuardrailConfig> | undefined,
+  settings: GuardrailPiSettings,
+): { config: GuardrailConfig; source: GuardrailConfigSource } {
   let config = override ? merge(bundled, override) : bundled;
   let source: GuardrailConfigSource = override ? "override" : "bundled";
 
@@ -92,6 +170,208 @@ export function loadConfig(): { config: GuardrailConfig; source: GuardrailConfig
   }
 
   return { config, source };
+}
+
+function readBoundedJsonObject(
+  filePath: string,
+  source: "settings" | "override" | "bundled",
+  optional: boolean,
+): Record<string, unknown> | undefined {
+  let fd: number;
+  try {
+    fd = openSync(filePath, constants.O_RDONLY | constants.O_NONBLOCK);
+  } catch (error) {
+    if (optional && (error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw new GuardrailConfigError(`${source}-unreadable`);
+  }
+  let text: string;
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) throw new GuardrailConfigError(`${source}-unreadable`);
+    if (stat.size > CONFIG_FILE_LIMIT_BYTES) {
+      throw new GuardrailConfigError(`${source}-too-large`);
+    }
+    const buffer = Buffer.alloc(CONFIG_FILE_LIMIT_BYTES + 1);
+    let size = 0;
+    while (size < buffer.length) {
+      const bytes = readSync(fd, buffer, size, buffer.length - size, null);
+      if (!bytes) break;
+      size += bytes;
+    }
+    if (size > CONFIG_FILE_LIMIT_BYTES) {
+      throw new GuardrailConfigError(`${source}-too-large`);
+    }
+    text = buffer.subarray(0, size).toString("utf8");
+  } catch (error) {
+    if (error instanceof GuardrailConfigError) throw error;
+    throw new GuardrailConfigError(`${source}-unreadable`);
+  } finally {
+    closeSync(fd);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+    rejectGuardrailJsonDuplicateKeys(text);
+  } catch {
+    throw new GuardrailConfigError(`${source}-invalid-json`);
+  }
+  if (!isObject(parsed)) invalid(source);
+  return parsed as Record<string, unknown>;
+}
+
+function invalid(source: string): never {
+  throw new GuardrailConfigError(`${source}-invalid-schema`);
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function strings(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function keys(value: Record<string, unknown>, allowed: string[], source: string): void {
+  if (Object.keys(value).some((key) => !allowed.includes(key))) invalid(source);
+}
+
+function validateScalars(raw: Record<string, unknown>, source: string): void {
+  if (
+    raw.confirmTimeoutMs !== undefined &&
+    (typeof raw.confirmTimeoutMs !== "number" ||
+      !Number.isFinite(raw.confirmTimeoutMs) ||
+      raw.confirmTimeoutMs <= 0)
+  )
+    invalid(source);
+  if (raw.productionAliases !== undefined && !strings(raw.productionAliases)) invalid(source);
+}
+
+function validateRule(raw: unknown, allowed: string[], source: string): Record<string, unknown> {
+  if (!isObject(raw)) invalid(source);
+  keys(raw, allowed, source);
+  if (typeof raw.id !== "string" || !raw.id) invalid(source);
+  if (raw.behavior !== undefined && !["off", "confirm", "block"].includes(raw.behavior as string))
+    invalid(source);
+  if (raw.enabled !== undefined && typeof raw.enabled !== "boolean") invalid(source);
+  if (raw.description !== undefined && typeof raw.description !== "string") invalid(source);
+  if (raw.action !== undefined && raw.action !== "confirm" && raw.action !== "block")
+    invalid(source);
+  return raw;
+}
+
+function validateConfig(input: unknown, source: string): void {
+  if (!isObject(input)) invalid(source);
+  keys(
+    input,
+    [
+      "version",
+      "productionAliases",
+      "headlessEscapeHatchEnv",
+      "confirmTimeoutMs",
+      "policies",
+      "commandGate",
+      "orgAwareGate",
+    ],
+    source,
+  );
+  if (input.version !== undefined && input.version !== 1) invalid(source);
+  validateScalars(input, source);
+  if (
+    input.headlessEscapeHatchEnv !== undefined &&
+    (typeof input.headlessEscapeHatchEnv !== "string" || !input.headlessEscapeHatchEnv)
+  )
+    invalid(source);
+  for (const sectionName of ["policies", "commandGate", "orgAwareGate"] as const) {
+    const section = input[sectionName];
+    if (section === undefined) continue;
+    if (!isObject(section)) invalid(source);
+    const listKeys =
+      sectionName === "commandGate"
+        ? ["patterns", "allowedPatterns", "autoDenyPatterns"]
+        : ["rules"];
+    keys(section, listKeys, source);
+    for (const list of Object.values(section)) {
+      if (!Array.isArray(list)) invalid(source);
+      const ids = new Set<string>();
+      for (const raw of list) {
+        const shared = ["id", "description", "behavior", "enabled"];
+        const allowed =
+          sectionName === "policies"
+            ? [
+                ...shared,
+                "patterns",
+                "allowedPatterns",
+                "protection",
+                "onlyIfExists",
+                "blockMessage",
+              ]
+            : sectionName === "commandGate"
+              ? [...shared, "pattern", "action"]
+              : [...shared, "match", "whenOrgType", "action", "confirmMessage"];
+        const rule = validateRule(raw, allowed, source);
+        if (ids.has(rule.id as string)) invalid(source);
+        ids.add(rule.id as string);
+        if (sectionName === "policies") validatePolicyRule(rule, source);
+        else if (sectionName === "commandGate") {
+          if (typeof rule.pattern !== "string" || !rule.pattern) invalid(source);
+        } else validateOrgRule(rule, source);
+      }
+    }
+  }
+}
+
+function validatePolicyRule(rule: Record<string, unknown>, source: string): void {
+  if (!["noAccess", "readOnly", "none"].includes(rule.protection as string)) invalid(source);
+  if (rule.onlyIfExists !== undefined && typeof rule.onlyIfExists !== "boolean") invalid(source);
+  if (rule.blockMessage !== undefined && typeof rule.blockMessage !== "string") invalid(source);
+  if (!Array.isArray(rule.patterns) || rule.patterns.length === 0) invalid(source);
+  for (const name of ["patterns", "allowedPatterns"]) {
+    const patterns = rule[name];
+    if (patterns === undefined) continue;
+    if (!Array.isArray(patterns)) invalid(source);
+    for (const pattern of patterns) {
+      if (!isObject(pattern)) invalid(source);
+      keys(pattern, ["pattern", "regex"], source);
+      if (typeof pattern.pattern !== "string" || !pattern.pattern) invalid(source);
+      if (pattern.regex !== undefined && typeof pattern.regex !== "boolean") invalid(source);
+      if (pattern.regex) {
+        try {
+          new RegExp(pattern.pattern);
+        } catch {
+          invalid(source);
+        }
+      }
+    }
+  }
+}
+
+function validateOrgRule(rule: Record<string, unknown>, source: string): void {
+  if (!isObject(rule.match) || rule.match.tool !== "bash" || !isObject(rule.match.ast))
+    invalid(source);
+  keys(rule.match, ["tool", "ast"], source);
+  const ast = rule.match.ast;
+  keys(ast, ["cmd", "subCmd", "flagIn"], source);
+  if (typeof ast.cmd !== "string" || !ast.cmd) invalid(source);
+  if (
+    ast.subCmd !== undefined &&
+    (!Array.isArray(ast.subCmd) ||
+      !ast.subCmd.every((entry) => typeof entry === "string" || strings(entry)))
+  )
+    invalid(source);
+  if (
+    ast.flagIn !== undefined &&
+    (!isObject(ast.flagIn) || !Object.values(ast.flagIn).every(strings))
+  )
+    invalid(source);
+  if (
+    !strings(rule.whenOrgType) ||
+    rule.whenOrgType.some(
+      (value) =>
+        !["production", "sandbox", "scratch", "developer", "trial", "unknown"].includes(value),
+    )
+  )
+    invalid(source);
+  if (rule.confirmMessage !== undefined && typeof rule.confirmMessage !== "string") invalid(source);
 }
 
 // ─── Merge helpers ──────────────────────────────────────────────────────────────

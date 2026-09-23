@@ -16,8 +16,13 @@ import {
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { ConfigPanelFactory, ConfigPanelResult } from "../../../catalog/registry.ts";
 import { globalSettingsPath } from "../../../lib/common/sf-pi-settings.ts";
-import { loadConfig, userConfigPath } from "./config.ts";
-import { readGuardrailPiSettings, setGuardrailPowerToolSettings } from "./guardrail-settings.ts";
+import { loadGuardrailSnapshot, userConfigPath } from "./config.ts";
+import { JEV_RESOLVED_MODEL, jevCredentialStatus } from "./jev-client.ts";
+import {
+  readGuardrailPiSettings,
+  setGuardrailEngine,
+  setGuardrailPowerToolSettings,
+} from "./guardrail-settings.ts";
 import {
   NATIVE_TOOL_FAMILIES,
   defaultNativeFamilies,
@@ -34,7 +39,13 @@ import {
   updateUserPreference,
   type GuardrailPreferenceDescriptor,
 } from "./preferences.ts";
-import type { CommandPattern, GuardrailConfig, OrgAwareRule, PolicyRule } from "./types.ts";
+import type {
+  CommandPattern,
+  GuardrailConfig,
+  GuardrailEngine,
+  OrgAwareRule,
+  PolicyRule,
+} from "./types.ts";
 import {
   SECTION_ITEMS,
   resolveRuleBehaviorSource,
@@ -57,6 +68,7 @@ type SettingsPage =
   | { kind: "rule-detail"; section: RulePanelSection; ruleId: string }
   | { kind: "aliases"; editing: boolean; draft: string }
   | { kind: "power" }
+  | { kind: "engine" }
   | { kind: "confirm-power"; next: GuardrailPowerToolSettings; message: string }
   | { kind: "advanced" };
 
@@ -73,7 +85,9 @@ class SfGuardrailConfigPanel implements Focusable {
   private page: SettingsPage = { kind: "home" };
   private selectedByPage: Record<string, number> = {};
   private lastSavedMessage = "";
+  private lastSaveFailed = false;
   private config: GuardrailConfig;
+  private engine: GuardrailEngine;
   private source: string;
   private aliasInput: Input | undefined;
 
@@ -90,9 +104,10 @@ class SfGuardrailConfigPanel implements Focusable {
     private readonly scope: "global" | "project",
     private readonly done: (result: ConfigPanelResult | undefined) => void,
   ) {
-    const loaded = loadConfig();
+    const loaded = loadGuardrailSnapshot();
     this.config = loaded.config;
     this.source = loaded.source;
+    this.engine = loaded.engine;
   }
 
   handleInput(data: string): void {
@@ -132,6 +147,9 @@ class SfGuardrailConfigPanel implements Focusable {
       case "power":
         this.handlePowerInput(data);
         return;
+      case "engine":
+        this.handleEngineInput(data);
+        return;
       case "confirm-power":
         this.handleConfirmPowerInput(data);
         return;
@@ -168,6 +186,9 @@ class SfGuardrailConfigPanel implements Focusable {
       case "power":
         lines.push(...this.renderPower(width));
         break;
+      case "engine":
+        lines.push(...this.renderEngine(width));
+        break;
       case "confirm-power":
         lines.push(...this.renderConfirmPower(width));
         break;
@@ -177,7 +198,8 @@ class SfGuardrailConfigPanel implements Focusable {
     }
 
     lines.push("");
-    if (this.lastSavedMessage) lines.push(` ${t.fg("success", this.lastSavedMessage)}`);
+    if (this.lastSavedMessage)
+      lines.push(` ${t.fg(this.lastSaveFailed ? "warning" : "success", this.lastSavedMessage)}`);
     lines.push(` ${t.fg("dim", this.footerText())}`);
     return lines.map(pad);
   }
@@ -221,9 +243,10 @@ class SfGuardrailConfigPanel implements Focusable {
       ` ${t.fg("muted", "Routine preferences:")} ${t.fg("dim", globalSettingsPath())}`,
       ` ${t.fg("muted", "Advanced overrides:")}  ${t.fg("dim", userConfigPath())}`,
       ` ${t.fg("muted", "Effective source:")}     ${t.fg("text", this.source)}`,
+      ` ${t.fg("muted", "Decision engine:")}      ${t.fg("text", this.engine === "jev" ? "TypeSafe Jev (OpenRouter)" : "Deterministic")}`,
       "",
       ` ${t.fg("muted", "Approval timeout:")}    ${t.fg("text", displayValue(preferenceValue(this.config, "confirmTimeoutMs")))}`,
-      ` ${t.fg("muted", "Headless mode:")}       ${t.fg("text", process.env[this.config.headlessEscapeHatchEnv] ? "opt-in pass" : "fail-closed")}`,
+      ` ${t.fg("muted", "Headless mode:")}       ${t.fg("text", this.engine === "deterministic" && process.env[this.config.headlessEscapeHatchEnv] ? "opt-in pass" : "fail-closed")}`,
       "",
       ` ${t.fg("accent", themeBold(t, "Sections"))}`,
     ];
@@ -326,7 +349,7 @@ class SfGuardrailConfigPanel implements Focusable {
     const lines = [
       ` ${t.fg("warning", themeBold(t, "Power Tool Mode"))}`,
       ...wrapLines(
-        "Persistent power-user mode. Auto-approves matching confirm-class Guardrail decisions. Hard blocks still apply and every auto-approval is audited.",
+        "Deterministic engine only. Persistent power-user mode auto-approves matching confirm-class Guardrail decisions. Jev always requires explicit approval. Hard blocks still apply and every auto-approval is audited.",
         width - 3,
       ).map((line) => ` ${t.fg("dim", line)}`),
       "",
@@ -361,7 +384,7 @@ class SfGuardrailConfigPanel implements Focusable {
       ...wrapLines(this.page.message, width - 3).map((line) => ` ${t.fg("dim", line)}`),
       "",
       ` ${t.fg("warning", "This setting persists across Pi restarts.")}`,
-      ` ${t.fg("dim", "It auto-approves matching confirm-class Guardrail decisions. Hard blocks still apply. Every auto-approval is audited.")}`,
+      ` ${t.fg("dim", "It auto-approves deterministic confirm-class decisions only. Jev requires explicit approval. Hard blocks still apply. Every auto-approval is audited.")}`,
       "",
       ` ${t.fg("accent", "Enter")} ${t.fg("text", "enable")}`,
       ` ${t.fg("accent", "Esc")} ${t.fg("text", "cancel")}`,
@@ -383,6 +406,43 @@ class SfGuardrailConfigPanel implements Focusable {
     ];
   }
 
+  private renderEngine(width: number): string[] {
+    const t = this.theme;
+    return [
+      ` ${t.fg("accent", themeBold(t, "Decision engine"))}`,
+      "",
+      ` ${t.fg("muted", "Current:")} ${this.engine === "jev" ? "TypeSafe Jev (OpenRouter)" : "Deterministic"}`,
+      ` ${t.fg("muted", "Jev model:")} ${JEV_RESOLVED_MODEL}`,
+      ` ${t.fg("muted", "OpenRouter credentials:")} ${jevCredentialStatus()}`,
+      ...wrapLines(
+        "Jev interprets the effective policy for every tool call using operation metadata. Credentials are required at execution. Unavailable or invalid Jev responses block. Model confirmation requires explicit human approval.",
+        width - 3,
+      ).map((line) => ` ${t.fg("dim", line)}`),
+      "",
+      ` ${t.fg("accent", "d")} ${t.fg("text", "Deterministic rules")}`,
+      ` ${t.fg("accent", "j")} ${t.fg("text", "TypeSafe Jev through OpenRouter")}`,
+    ];
+  }
+
+  private handleEngineInput(data: string): void {
+    const engine =
+      data === "j" || data === "J"
+        ? "jev"
+        : data === "d" || data === "D"
+          ? "deterministic"
+          : undefined;
+    if (!engine) return;
+    try {
+      setGuardrailEngine(engine);
+      this.engine = engine;
+      this.reload(`Decision engine: ${engine} saved.`);
+    } catch (error) {
+      this.lastSaveFailed = true;
+      this.lastSavedMessage =
+        error instanceof Error ? error.message : "Guardrail configuration blocked.";
+    }
+  }
+
   private handleHomeInput(data: string): void {
     if (matchesKey(data, "up")) this.moveSelection("home", SECTION_ITEMS.length, -1);
     else if (matchesKey(data, "down")) this.moveSelection("home", SECTION_ITEMS.length, 1);
@@ -397,6 +457,8 @@ class SfGuardrailConfigPanel implements Focusable {
         this.page = { kind: "power" };
       } else if (item.value === "advanced") {
         this.page = { kind: "advanced" };
+      } else if (item.value === "engine") {
+        this.page = { kind: "engine" };
       }
     } else if (matchesKey(data, "left")) {
       this.cycleTimeout(-1);
@@ -709,6 +771,8 @@ class SfGuardrailConfigPanel implements Focusable {
         return "Protected org aliases";
       case "power":
         return "Power Tool Mode";
+      case "engine":
+        return "Decision engine";
       case "confirm-power":
         return "Power Tool Mode › Confirm";
       case "advanced":
@@ -731,16 +795,19 @@ class SfGuardrailConfigPanel implements Focusable {
     }
     if (this.page.kind === "power")
       return "o off · n native · a all · p prod/unknown · 1-6 families · Esc back";
+    if (this.page.kind === "engine") return "d deterministic · j Jev · Esc back";
     if (this.page.kind === "confirm-power") return "Enter enable · Esc cancel";
     if (this.page.kind === "advanced") return "Esc back";
     return "↑↓ move · ←/→ change · saved immediately · Esc back";
   }
 
   private reload(message: string): void {
-    const loaded = loadConfig();
+    const loaded = loadGuardrailSnapshot();
     this.config = loaded.config;
     this.source = loaded.source;
+    this.engine = loaded.engine;
     this.lastSavedMessage = message;
+    this.lastSaveFailed = false;
   }
 
   private jsonPreview(

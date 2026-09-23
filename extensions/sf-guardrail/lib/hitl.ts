@@ -32,6 +32,8 @@ export interface ConfirmOptions {
   escapeHatchEnv: string;
   signal?: AbortSignal;
   allowSession?: boolean;
+  /** Jev confirmations require an explicit human decision. Defaults preserve legacy behavior. */
+  allowAutomaticApproval?: boolean;
 }
 
 export const OPERATOR_AUTO_APPROVE_ENV = "SF_GUARDRAIL_OPERATOR_AUTO_APPROVE";
@@ -45,20 +47,27 @@ export async function confirmDecision(
   ctx: ExtensionContext,
   options: ConfirmOptions,
 ): Promise<ConfirmResult> {
-  if (isOperatorAutoApproveEnabled()) {
+  if (options.allowAutomaticApproval !== false && isOperatorAutoApproveEnabled()) {
     return { outcome: "operator_auto_approve" };
   }
 
   if (!ctx.hasUI) {
     const envValue = process.env[options.escapeHatchEnv];
-    if (envValue && envValue !== "0" && envValue.toLowerCase() !== "false") {
+    if (
+      options.allowAutomaticApproval !== false &&
+      envValue &&
+      envValue !== "0" &&
+      envValue.toLowerCase() !== "false"
+    ) {
       return { outcome: "headless_pass" };
     }
     return {
       outcome: "headless_block",
       reason:
         `${options.title}\n\n${options.detail}\n\n` +
-        `Blocked by sf-guardrail in headless mode. Set ${options.escapeHatchEnv}=1 to opt in.`,
+        (options.allowAutomaticApproval === false
+          ? "Blocked by sf-guardrail in headless mode. Jev requires explicit human approval."
+          : `Blocked by sf-guardrail in headless mode. Set ${options.escapeHatchEnv}=1 to opt in.`),
     };
   }
 

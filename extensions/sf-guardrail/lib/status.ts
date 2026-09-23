@@ -11,7 +11,7 @@ import { labelForRuleBehavior, resolveRuleBehavior } from "./rule-behavior.ts";
 import type { GuardrailConfigSource } from "./config.ts";
 import type { GuardrailPowerToolSettings } from "./power-tool-mode.ts";
 import type { Data360ExecutionChainEntryData } from "./approval-ledger.ts";
-import type { DecisionEntryData, GuardrailConfig } from "./types.ts";
+import type { DecisionEntryData, GuardrailConfig, GuardrailEngine } from "./types.ts";
 
 export interface StatusInput {
   config: GuardrailConfig;
@@ -22,6 +22,9 @@ export interface StatusInput {
   headlessEnabled: boolean;
   operatorAutoApproveEnabled: boolean;
   powerTool?: GuardrailPowerToolSettings;
+  engine?: GuardrailEngine;
+  jevModel?: string;
+  jevCredentialReady?: boolean;
 }
 
 export function renderStatus(input: StatusInput): string {
@@ -34,9 +37,25 @@ export function renderStatus(input: StatusInput): string {
     headlessEnabled,
     operatorAutoApproveEnabled,
     powerTool,
+    engine = "deterministic",
+    jevModel,
+    jevCredentialReady,
   } = input;
   const lines: string[] = [];
   lines.push(`sf-guardrail: extension-enabled (source: ${configSource})`);
+  lines.push(`  decision engine: ${engine}`);
+  if (engine === "jev") {
+    if (jevModel) lines.push(`  Jev model: ${jevModel}`);
+    lines.push(
+      `  OpenRouter credentials: ${jevCredentialReady === true ? "ready" : jevCredentialReady === false ? "unavailable" : "not checked"}`,
+    );
+    const failures = recent.filter((entry) => entry.jev?.failure).slice(0, 3);
+    if (failures.length) {
+      lines.push(
+        `  recent Jev failures: ${failures.map((entry) => entry.jev?.failure).join(", ")}`,
+      );
+    }
+  }
 
   lines.push(
     `  policies: ${count(config.policies.rules, (r) => resolveRuleBehavior(r) !== "off")} active / ${config.policies.rules.length} defined`,
@@ -53,10 +72,16 @@ export function renderStatus(input: StatusInput): string {
   }
 
   if (!hasUI) {
-    lines.push(`  headless mode: ${headlessEnabled ? "opt-in pass" : "fail-closed"}`);
+    lines.push(
+      `  headless mode: ${engine === "deterministic" && headlessEnabled ? "opt-in pass" : "fail-closed"}`,
+    );
   }
-  lines.push(`  power tool mode: ${powerToolStatus(powerTool)}`);
-  if (operatorAutoApproveEnabled) {
+  lines.push(
+    `  power tool mode: ${engine === "jev" ? "disabled for Jev" : powerToolStatus(powerTool)}`,
+  );
+  if (engine === "jev") {
+    lines.push("  operator auto-approve env: disabled for Jev");
+  } else if (operatorAutoApproveEnabled) {
     lines.push("  operator auto-approve env: enabled for confirm-class decisions");
   }
 
@@ -93,7 +118,21 @@ function formatEntry(e: DecisionEntryData): string {
     ? ` org=${e.orgAlias}(${e.orgType ?? "?"}${e.orgResolutionGuessed ? ",guessed" : ""}${e.orgResolutionSource ? `,${e.orgResolutionSource}` : ""})`
     : "";
   const scopeSuffix = e.approvalScopeLabel ? ` scope=${e.approvalScopeLabel}` : "";
-  return `${when}  ${e.outcome}  ${e.ruleId}${orgSuffix}${scopeSuffix}  ${e.toolName}  ${shortSubject}`;
+  const jevSuffix = e.jev ? formatJevEvidence(e.jev) : "";
+  return `${when}  ${e.outcome}  ${e.ruleId}${orgSuffix}${scopeSuffix}  ${e.toolName}  ${shortSubject}${jevSuffix}`;
+}
+
+function formatJevEvidence(evidence: NonNullable<DecisionEntryData["jev"]>): string {
+  const fields = [`model=${evidence.model}`, `${Math.round(evidence.latencyMs)}ms`];
+  if (evidence.requestId) fields.push(`request=${evidence.requestId}`);
+  if (evidence.probabilities) {
+    fields.push(`P(allow)=${evidence.probabilities.allow.toFixed(4)}`);
+  }
+  if (evidence.confidence !== undefined)
+    fields.push(`confidence=${evidence.confidence.toFixed(4)}`);
+  if (evidence.cost !== undefined) fields.push(`cost=$${evidence.cost.toFixed(8)}`);
+  if (evidence.failure) fields.push(`failure=${evidence.failure}`);
+  return `  Jev(${fields.join("; ")})`;
 }
 
 export function renderRules(config: GuardrailConfig): string {
