@@ -21,6 +21,13 @@ Every rule has one behavior: `off`, `confirm`, or `block`:
 
 Intent flags such as `allow_mutation`, `allow_confirmed`, or `mutation=true` aid
 classification but never become approval.
+Supplied `dry_run` intent alone does not establish a preview. Metadata records
+how the actual runner handles it: `executionFlags.dryRun` is honored, ignored,
+or unknown; `effectiveDryRun` is supplied only for honored branches, and
+`planningOnly` identifies exact non-executing branches. Agent Script publication
+ignores `dry_run`; Data 360 cleanup, CSV ingest, and manifest run branches can
+execute despite it. An honored dry run skips the selected business-write branch
+while prerequisite reads may still occur. Jev evaluates these observed runner semantics.
 
 The opt-in Jev engine sends operation metadata for **every Pi `tool_call`**,
 including reads, dry runs, unfamiliar tools, and calls skipped by the native
@@ -81,7 +88,7 @@ export OPENROUTER_API_KEY_FILE="$HOME/.config/openrouter/key"
 ```
 
 The client uses Node's built-in `fetch` and the OpenRouter Decisions endpoint
-`POST https://openrouter.ai/api/alpha/decisions`. Protocol v4 asks independent
+`POST https://openrouter.ai/api/alpha/decisions`. Protocol v5 asks independent
 Choice questions in one request, each with `allow`, `confirm`, and `block`
 options. Every call asks `risk` using a rubric for its tool family: files,
 shell/Salesforce CLI, Apex, SOQL, Agent Script, Data 360, Canvas, browser, or
@@ -97,8 +104,8 @@ for at most six model-authored answers against the same state:
   patterns, flags, org types, ordering, and behaviors.
 - **Disclosure** is included for file reads, SOQL, and other possible
   data/credential transfers. It is omitted for write/edit authoring, Apex,
-  Agent Script, Canvas, browser calls, complete Data 360 `.plan`/`dry_run=true`
-  calls, and complete
+  Agent Script, Canvas, browser calls, complete Data 360 calls with proven
+  `planningOnly` or honored `effectiveDryRun=true`, and complete
   known non-disclosing shell shapes such as permission changes or local Git
   operations without file operands. Incomplete shell metadata retains it.
 - **Authority** is included only for browser tools, where fresh target roles,
@@ -110,22 +117,26 @@ for at most six model-authored answers against the same state:
 
 The risk question judges executable/operational effects and execution
 uncertainty. File, command, and org policy questions judge matching restrictions;
-disclosure and browser authority assess their own effects. A potentially
-matching block that cannot be excluded because a literal was withheld remains
-a model block criterion. In particular, any withheld scalar with an enabled
-single-word command auto-deny requires the model to block unless a visible
-enabled allow exception applies. This is interpreted by Jev, without a local
-deterministic policy vote.
+disclosure and browser authority assess their own effects. A genuinely
+unresolved restriction remains a model confirm/block criterion. Private command
+literal spelling can be withheld while its exact equality remains available
+through the token projection; omitted spelling alone does not create a match.
 
 The state carries the minimum policy and observed facts relevant to those
 questions. Known CLI metadata, trusted file-path variants, verification state,
 and bounded numeric observations such as the effective row-limit bucket help
-describe actual effects without sending private payloads. Full ordered command
-policy lists use compact pattern strings with explicit `commands.defaults`:
-ordinary patterns default to confirm, allow exceptions to allow, and auto-deny
-patterns to block. `[pattern, behavior]` tuples represent overrides, including
-off entries. List order and precedence remain intact. These structural projections do not supply a local risk or policy
-decision; Jev remains the sole decision authority. This follows TypeSafe's separation of supporting
+describe actual effects without sending private payloads. Command policy uses
+mechanical integer token IDs, preserving original and wrapper-expanded command
+order, quoted-token boundaries, and exact equality of private literals. Full
+policy lists carry ordered rows with explicit behavior, token IDs, and seven
+special-pattern forms. Jev compares IDs and selects applicable rules; the host
+serializes facts and combines model answers. The projection sends no raw command,
+private-word dictionary, stable hashes, private-operand legend, matched-rule list,
+or local outcome. `publicSyntax` associates only known CLI executables,
+subcommands, and flag keys already present in semantic metadata with their IDs.
+Private operands have no explicit legend. Equality and known policy anchors can
+still reveal membership; this is no cryptographic secrecy
+or deterministic matching guarantee. This follows TypeSafe's separation of supporting
 [state](https://docs.typesafe.ai/concepts/state) from independently evaluated
 [questions](https://docs.typesafe.ai/primitives/choice).
 
@@ -202,6 +213,10 @@ coverage, extra confirmations, failures, latency, and reported cost. They do
 not establish held-out qualification or live Salesforce/browser acceptance.
 Protocol revisions are recorded separately from this frozen input/gold set;
 an earlier protocol's result does not establish the revised protocol's behavior.
+Coverage-first diagnostic experiments may use a recorded 10-second transport
+deadline while keeping operations inert. Report that profile separately from
+the enforced 1,500 ms runtime deadline and its 500 ms p95 target. Qualification
+still requires the normal runtime profile and its safety/performance gates.
 
 OpenRouter's [coding-agent approval cookbook](https://openrouter.ai/docs/cookbook/coding-agents/auto-approve-permission-prompts-with-jev)
 uses static host restrictions before consulting Jev, and its

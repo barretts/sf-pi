@@ -180,6 +180,72 @@ const DATA360_PARAM_FIELDS = new Set(
   ),
 );
 
+// Exact dispatch identities only. No safety classifications from the action catalog.
+const DATA360_STREAM_DRY_RUN_ACTIONS = new Set([
+  "stream.create",
+  "stream.create_ingest_api",
+  "stream.create_third_party_connector",
+  "stream.delete",
+  "stream.get",
+  "stream.list",
+  "stream.list.data_streams_list",
+  "stream.run",
+  "stream.update",
+  "d360_datastream_create",
+  "d360_datastream_create_ingest_api",
+  "data_stream.create_ingest_api",
+  "d360_datastream_create_third_party_connectors",
+  "data_stream.create_third_party_connector",
+  "d360_datastream_delete",
+  "d360_datastream_get",
+  "d360_datastream_list",
+  "d360_data_streams_list",
+  "d360_datastream_run",
+  "d360_datastream_update",
+]);
+const DATA360_JOURNEY_RUN_ACTIONS = new Set([
+  "cleanup.run",
+  "ingest_csv.run",
+  "manifest.run",
+  "journey.cleanup.run",
+  "journey.ingest_csv.run",
+  "journey.manifest.run",
+]);
+const DATA360_JOURNEY_PLAN_ACTIONS = new Set([
+  "cleanup.plan",
+  "ingest_csv.plan",
+  "manifest.plan",
+  "journey.cleanup.plan",
+  "journey.ingest_csv.plan",
+  "journey.manifest.plan",
+]);
+
+/** How the current runner treats this flag; it says nothing about policy or permission. */
+function executionFlags(toolName: string, input: Record<string, unknown>) {
+  const action = input.action as string;
+  if (toolName === "agentscript_lifecycle") {
+    // lifecycle/actions/agent-user.ts forwards this flag only to runProvision,
+    // whose omitted flag defaults to true. Publication and other actions ignore it.
+    if (action === "provision_agent_user")
+      return { dryRun: "honored", effectiveDryRun: input.dry_run !== false };
+    return { dryRun: AGENT_ACTIONS.has(action) ? "ignored" : "unknown" };
+  }
+  if (
+    (toolName === "data360_api" && action === "rest.request") ||
+    (toolName === "data360_prepare" && DATA360_STREAM_DRY_RUN_ACTIONS.has(action))
+  )
+    // Direct REST and these capability-backed stream actions return their plans
+    // before the operation request when dry_run is true; omission defaults to false.
+    return { dryRun: "honored", effectiveDryRun: input.dry_run === true };
+  if (toolName === "data360_orchestrate") {
+    // Journey branches precede the facade flag guard. Their confirmed run paths
+    // do not forward dry_run to the child writes; exact plan branches never run them.
+    if (DATA360_JOURNEY_PLAN_ACTIONS.has(action)) return { dryRun: "ignored", planningOnly: true };
+    if (DATA360_JOURNEY_RUN_ACTIONS.has(action)) return { dryRun: "ignored" };
+  }
+  return { dryRun: "unknown" };
+}
+
 function invalid(): never {
   throw new Error(INVALID);
 }
@@ -481,6 +547,8 @@ function buildMetadata(
             ? new Set(["read", "create", "edit"])
             : undefined;
   if (actions && !actions.has(input.action as string)) omit("unrecognized_action_effects", true);
+  if (toolName === "agentscript_lifecycle" || DATA360_TOOLS.has(toolName))
+    result.metadata.executionFlags = executionFlags(toolName, input);
   if (["sf_browser_click", "sf_browser_press"].includes(toolName)) {
     if (!consumed.has(toolName === "sf_browser_click" ? "ref" : "key")) invalid();
   }
@@ -712,6 +780,7 @@ const SF_OPERATIONS = new Set([
   "data export tree",
   "data query",
   "data get record",
+  "force:data:record:get",
   "api request rest",
   "org delete scratch",
   "org delete sandbox",
@@ -735,6 +804,8 @@ const SF_OPERATIONS = new Set([
   "package push-upgrade schedule",
   "package push-upgrade abort",
   "package install",
+  "package install report",
+  "force:package:install:report",
   "org logout",
   "org generate password",
   "org delete",
@@ -1164,6 +1235,16 @@ function optionKind(executable: string, operation: string, flag: string): string
   }
   if (["sf", "sfdx"].includes(executable) && SF_OPERATIONS.has(operation)) {
     if (ORG_FLAGS.has(flag)) return "org";
+    if (["data get record", "force:data:record:get"].includes(operation)) {
+      if (includes("--sobject --sobjecttype -s --record-id --sobjectid -i")) return "identifier";
+      if (includes("--where -w")) return "payload";
+      if (includes("--use-tooling-api --usetoolingapi -t")) return "boolean";
+      if (flag === "--api-version") return "numeric";
+    }
+    if (["package install report", "force:package:install:report"].includes(operation)) {
+      if (includes("--request-id --requestid -i")) return "identifier";
+      if (flag === "--api-version") return "numeric";
+    }
     if (
       BOOLEAN_FLAGS.has(flag) &&
       (includes("--json --help --version --verbose --quiet") ||
@@ -1250,11 +1331,15 @@ function optionKind(executable: string, operation: string, flag: string): string
       reset: "--hard --soft --mixed --quiet -q",
       add: "--dry-run --all --force --verbose -n -a -f -v",
       restore: "--staged",
-      diff: "--cached --staged --quiet -R",
+      diff: "--cached --staged --quiet --stat -R",
       commit: "--all --quiet --verbose -a -q -v -n",
       config: "--global --local",
     };
-    if (BOOLEAN_FLAGS.has(flag) && includes(booleans[operation] ?? "")) return "boolean";
+    if (
+      (BOOLEAN_FLAGS.has(flag) || (operation === "diff" && flag === "--stat")) &&
+      includes(booleans[operation] ?? "")
+    )
+      return "boolean";
     if (
       PATH_FLAGS.has(flag) &&
       ((operation === "config" && flag === "--file") ||
@@ -1725,7 +1810,8 @@ function shellMetadata(value: unknown): {
           (executable === "find" && !findExpression) ||
           ((executable.startsWith("mkfs") || executable === "base64") && positionalCount === 1) ||
           (executable === "git" &&
-            (["add", "restore"].includes(operation) || (operation === "diff" && optionsEnded)))
+            (["add", "restore", "clean"].includes(operation) ||
+              (operation === "diff" && optionsEnded)))
         )
           commandPaths.push(pathValue(word.value));
         else if (

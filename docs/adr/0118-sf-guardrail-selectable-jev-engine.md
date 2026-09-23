@@ -26,7 +26,7 @@ branches before deterministic normalization and classifies every Pi
 the effective policy after bundled defaults, stable-id overrides, and routine
 settings. It has no automatic deterministic fallback.
 
-Protocol v4 uses Node's built-in `fetch` to call OpenRouter Decisions with
+Protocol v5 uses Node's built-in `fetch` to call OpenRouter Decisions with
 independent Choice questions sharing one state and the options `allow`,
 `confirm`, and `block`. Always ask `risk` with tool-family guidance about
 operational effects. Available paths/file facts add file policy; parsed shell
@@ -37,8 +37,9 @@ decides full rule applicability, flags, org types, ordering, and behaviors.
 The risk question judges executable effects; matching blocks belong to the
 independent policy questions. Relevant custom non-Salesforce org AST heads
 also require fresh org observations; unknown observations remain explicit.
-Disclosure follows possible tool-specific data effects and remains included
-for incomplete shell metadata. Authority is browser-only; unknown effects on
+Disclosure follows possible tool-specific data effects and observed runner
+execution semantics, and remains included for incomplete shell metadata.
+Authority is browser-only; unknown effects on
 other tools stay in risk/disclosure and the completeness gate. Exact
 `sf_browser_press` key `Escape` is target-independent cancellation, still
 evaluated by risk and authority without requiring org or fresh target/focus
@@ -59,10 +60,18 @@ requests.
 Send bounded operation metadata, the minimum effective policy relevant to the
 questions, and independently resolved facts. Known CLI metadata, trusted
 file-path variants, verification state, and numeric buckets describe effects
-without supplying a local policy decision. Full ordered command lists use
-compact strings with explicit `commands.defaults`: confirm for ordinary
-patterns, allow for exceptions, and block for auto-deny. `[pattern, behavior]`
-tuples encode overrides, including off, while preserving ordering/precedence.
+without supplying a local policy decision. Mechanical request-local integer
+IDs preserve original, wrapper-expanded, and flat command tokens, quoted-token
+boundaries, typed prefix classes, and Pi argument sequences. Full ordered
+command policy rows contain explicit behavior, token IDs, and seven special
+forms. Jev compares the facts and selects rules; the host serializes them and
+combines independent answers without a policy vote. `publicSyntax` associates
+only known CLI executables, subcommands, and flag keys already exposed in
+semantic metadata with the same IDs. Private operands receive no explicit
+legend. Raw commands, private-word dictionaries, stable hashes, matched rules,
+and local outcomes are excluded. Equality and known policy anchors can still
+reveal membership; this does not provide
+cryptographic secrecy or a deterministic model-matching guarantee.
 This separates supporting
 [state](https://docs.typesafe.ai/concepts/state) from independently evaluated
 [questions](https://docs.typesafe.ai/primitives/choice). Keep raw tool
@@ -71,11 +80,19 @@ contents, credentials, transcripts, fetched contents, and full browser pages
 or forms local. Missing descriptions, unsupported shell grammar, dynamic
 paths, omitted literals, and unresolved effects remain explicit uncertainty.
 Tool descriptions and input-derived metadata cannot establish approval
-authority. Omitted content does not prove that a custom pattern is absent.
-Potentially matching block restrictions remain model block criteria. For
-command auto-deny, any withheld scalar under an enabled single-word deny
-requires the model to block unless a visible enabled allow matches; no local
-deterministic policy decision enforces that interpretation.
+authority. Omitted effect content does not prove that a custom pattern is
+absent. Private command values/comments retain exact policy equality through
+token IDs; withholding their spelling does not create a match. Genuinely
+unresolved policy restrictions remain model confirm/block criteria.
+
+Observe execution flags from exact dispatch branches: `dryRun` is honored,
+ignored, or unknown; `effectiveDryRun` is supplied only for an honored branch;
+and `planningOnly` identifies exact non-executing branches. Agent Script
+publication and Data 360 cleanup, CSV ingest, and manifest runs ignore supplied
+dry-run intent and can execute despite it. Jev evaluates these mechanical
+runner facts. An honored dry run skips the selected business-write branch
+while prerequisite reads may still occur; supplied intent or an action-name suffix alone cannot prove a
+preview or grant permission.
 
 Automatically execute only with complete context and every requested answer
 choosing `allow` with `P(allow) >= 0.99`. Any model `block` is an unapprovable
@@ -123,6 +140,11 @@ and audit recording succeed; failures cannot leave reusable approval behind.
 - Measure end-to-end p50/p95 latency, failures, extra confirmations, and billed
   cost against the 500 ms p95 target. Safety or performance gate failures leave
   normal use on the deterministic engine.
+- Coverage-first diagnostic experiments may record a 10-second transport
+  deadline while leaving operations inert. Report their safety/coverage evidence
+  separately from runtime acceptance under the enforced 1,500 ms deadline and
+  500 ms p95 target. The diagnostic profile does not alter runtime settings or
+  establish qualification.
 - The frozen 175-case DEV fixture covers all 74 bundled rule IDs, six
   native-tool families, and ten additional risk cases. Its inputs/gold were
   frozen before predictions (`81d8199c` hash prefix): 32 allow, 132 confirm,

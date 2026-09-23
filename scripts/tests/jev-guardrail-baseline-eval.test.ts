@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -195,6 +196,57 @@ describe("current deterministic baseline development evaluation", () => {
     expect(results[2].baselineRuleId).toBe("sf-deploy-prod");
     expect(results[4].baselineRuleId).toBe("native-sf-browser-commit");
     expect(summarizeBaselineDev(results).gates.everyAttemptDecided).toBe(false);
+  });
+
+  it("captures a separate request copy only during preparation without changing dummy answer IDs or invoking transport", async () => {
+    const request = vi.fn(async () => prediction());
+    const fetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected fetch."));
+    let encoded = "";
+    let questionIds: string[] = [];
+    const onRequestPrepared = vi.fn((copy, caseId) => {
+      expect(caseId).toBe("request-copy-preparation");
+      expect(typeof caseId).toBe("string");
+      encoded = JSON.stringify(copy);
+      questionIds = Object.keys(copy.questions);
+      expect(questionIds).toContain("risk");
+      expect(questionIds).toContain("file_policy");
+      for (const id of questionIds) delete copy.questions[id];
+      copy.state.facts.files[0].exists = "unknown";
+      copy.model = "mutated-copy";
+    });
+    try {
+      const [prepared] = await evaluator.runCases(
+        [
+          {
+            ...probe("request-copy-preparation", "read", { path: ".env" }),
+            files: [".env"],
+          },
+        ],
+        { prepareOnly: true, request, onRequestPrepared },
+      );
+      expect(onRequestPrepared).toHaveBeenCalledOnce();
+      expect(prepared).toMatchObject({
+        stage: "prepared",
+        candidateAction: null,
+        requestInvoked: false,
+        requestHash: createHash("sha256").update(encoded).digest("hex"),
+        requestBytes: Buffer.byteLength(encoded),
+      });
+      expect(Object.keys(prepared.answers ?? {}).sort()).toEqual(questionIds.sort());
+      expect(prepared.answers?.risk?.choice).toBe("confirm");
+      expect(request).not.toHaveBeenCalled();
+
+      const [live] = await evaluator.runCases(
+        [probe("live-copy-hook-gating", "read", { path: "guide.md" }, "allow")],
+        { request, onRequestPrepared },
+      );
+      expect(live.stage).toBe("decided");
+      expect(request).toHaveBeenCalledOnce();
+      expect(onRequestPrepared).toHaveBeenCalledOnce();
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      fetch.mockRestore();
+    }
   });
 
   it("uses real isolated file existence and preserves explicit blocks in the actual baseline", async () => {

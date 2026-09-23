@@ -22,6 +22,7 @@ One-file-per-concern split:
 | Safety decision seam                 | `lib/safety-kernel.ts`                              |
 | OpenRouter Decisions transport       | `lib/jev-client.ts`                                 |
 | Jev metadata and local facts         | `lib/jev-metadata.ts` + `lib/jev-facts.ts`          |
+| Mechanical command token projection  | `lib/jev-command-tokens.ts`                         |
 | Jev request and decision adapter     | `lib/jev-risk.ts`                                   |
 | Jev exact-call identity              | `lib/jev-identity.ts`                               |
 | Safety subject normalization         | `lib/safety-subject.ts`                             |
@@ -86,10 +87,17 @@ One-file-per-concern split:
   or second risk vote.
 - Send operation metadata and the minimum effective policy relevant to the
   questions. Known CLI structure, trusted file-path facts, and bounded numeric
-  observations describe effects without deciding policy locally. Compress
-  full ordered command lists to compact strings using explicit
-  `commands.defaults`; encode only behavior overrides as `[pattern, behavior]`
-  tuples, including off entries. Preserve list order and precedence. Filter
+  observations describe effects without deciding policy locally. Mechanically
+  project command tokens to request-local integer IDs: original, expanded, flat,
+  typed prefix classes, and Pi argument sequences. Send every ordered command
+  policy row with explicit behavior and token IDs or a special-pattern form.
+  Jev compares IDs and chooses matches; the host must not send matched rules,
+  outcomes, raw commands, private-word dictionaries, stable hashes, or private
+  operand legends. `publicSyntax` may map only known executables/subcommands/
+  flag keys already exposed in semantic metadata to the same IDs.
+  Preserve equality and quoted-token boundaries. IDs reveal equality and policy
+  vocabulary membership; do not describe them as cryptographic protection or
+  guaranteed model matching. Filter
   org AST entries by complete known executable/wrapper heads;
   retain all org entries for incomplete/opaque heads, withheld comments, or
   missing commands. Jev still decides full rule applicability and behavior.
@@ -104,7 +112,13 @@ One-file-per-concern split:
   Unknown facts stay explicit. Exact `sf_browser_press` key `Escape` requires
   neither org nor fresh target/focus facts; retain risk and authority questions
   without fabricating a fresh snapshot. No live request during factory/startup.
-- Use the built-in `fetch` client and protocol v4 independent Choice questions
+- Model execution metadata from exact runner branches: dryRun honored/ignored/
+  unknown, effectiveDryRun only when honored, planningOnly only for exact
+  non-executing branches. Agent Script publication and Data 360 cleanup, CSV
+  ingest, and manifest runs ignore supplied dry-run intent. Do not infer a
+  preview from that intent or a suffix alone; prerequisite reads can still occur
+  under an honored business-write dry run. These facts do not decide risk.
+- Use the built-in `fetch` client and protocol v5 independent Choice questions
   in one Decisions request. Always ask operational `risk` with tool-family
   guidance about executable effects; policy questions decide matching blocks.
   Add file policy for available paths/facts, command policy for shell
@@ -113,12 +127,15 @@ One-file-per-concern split:
   Authority is browser-only; other unknown effects stay in risk/disclosure and
   the completeness gate. At most six model-authored answers supply all risk
   and policy judgments. Structural applicability must not decide an outcome.
-  Keep model block criteria for withheld potentially denied operands, including
-  any withheld scalar under an enabled single-word auto-deny unless a visible
-  enabled allow applies. Do not implement those criteria as a host policy vote.
+  Genuinely unresolved policy restrictions remain model confirm/block criteria.
+  Private command values/comments retain policy equality through token IDs;
+  withheld spelling alone is not missing policy evidence or a match.
   Preserve the bounded request,
   total 1,500 ms deadline, cancellation, and no retries. Pin routing to TypeSafe
   only with fallbacks disabled; require the configured model/provider identity.
+  Coverage-first diagnostic harnesses may record an authorized 10-second
+  transport deadline with inert operations; keep that evidence separate from
+  runtime qualification under the enforced 1,500 ms deadline/500 ms p95 target.
 - Automatically execute only with complete context and every requested answer
   choosing `allow` with `P(allow) >= 0.99`. Any model `block` is a hard block;
   any `confirm`, insufficient allow probability, or incomplete context requires

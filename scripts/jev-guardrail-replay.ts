@@ -299,7 +299,9 @@ export async function runReplayCases(
         row.input,
         row.descriptor ?? DESCRIPTORS[row.tool],
       );
-      const request = buildJevRequest(metadata, facts, config);
+      const request = buildJevRequest(metadata, facts, config, {
+        command: typeof row.input.command === "string" ? row.input.command : undefined,
+      });
       result.factGaps = [
         ...(facts.org && !facts.org.verified ? ["org-unverified"] : []),
         ...(facts.files?.some((file) => file.exists === "unknown")

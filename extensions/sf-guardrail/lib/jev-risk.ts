@@ -5,6 +5,7 @@ import { buildJevMetadata, extractJevTargetOrg, jevShellExecutableHeads } from "
 import { resolveJevFacts } from "./jev-facts.ts";
 import { jevHash } from "./jev-identity.ts";
 import { resolveRuleBehavior } from "./rule-behavior.ts";
+import { buildJevCommandTokenContext } from "./jev-command-tokens.ts";
 import type { SafetyKernelInput } from "./safety-kernel.ts";
 import type {
   ClassifiedDecision,
@@ -70,11 +71,28 @@ const NO_DISCLOSURE_GIT_OPERATIONS = [
   "rev-parse",
   "ls-files",
 ];
-const COMMAND_DEFAULTS = {
-  patterns: "confirm",
-  allowedPatterns: "allow",
-  autoDenyPatterns: "block",
-};
+const SESSION_TRANSPORT_EXECUTABLES = [
+  "curl",
+  "wget",
+  "npm",
+  "npx",
+  "pi",
+  "kubectl",
+  "redis-cli",
+  "docker",
+  "terraform",
+  "agent-browser",
+  "dropdb",
+];
+const SESSION_UNBOUND_SF_OPERATIONS = [
+  "api request rest",
+  "org api",
+  "package delete",
+  "package version delete",
+  "package version promote",
+  "package push-upgrade schedule",
+  "package push-upgrade abort",
+];
 const RISK_DOMAINS = {
   file: {
     rules: [
@@ -86,7 +104,7 @@ const RISK_DOMAINS = {
   shell: {
     rules: [
       "Local status/diff/log, staging/commit, soft reset, test/build and genuine dry runs are routine. Delete, destructive overwrite, privilege/permission/ownership change, termination, force push, upload and durable/external writes require approval. Wrappers keep nested effects; opaque scripts/eval/substitution are unknown.",
-      "Exact enabled command allow exceptions and off ordinary rules waive that configured effect only; assess uncovered effects. Strings use policy.commands.defaults; [pattern,behavior] overrides. Local Git metadata needs no org/browser facts.",
+      "Command rows have explicit behavior and opaque equality tokens. Exact enabled allow exceptions and off ordinary rules waive that configured effect only; assess uncovered effects. Local Git metadata needs no org/browser facts.",
     ],
     allow: ["git status/diff", "git reset --soft"],
     confirm: ["destructive change", "opaque execution"],
@@ -94,7 +112,7 @@ const RISK_DOMAINS = {
   salesforce_shell: {
     rules: [
       "Status/query/describe, validation/preview and genuine check-only/dry-run rehearsals are routine. Verified nonproduction deploy/data changes can be routine. Production/unknown-org mutation, every org create/delete, package uninstall and anonymous Apex require approval; so do separate destructive local/release effects or opaque execution.",
-      "Exact enabled command allow exceptions/off ordinary rules waive that configured effect, not uncovered effects. Strings use policy.commands.defaults; tuples override.",
+      "Exact enabled command allow exceptions/off ordinary rules waive that configured effect, not uncovered effects. Command rows have explicit behavior and opaque equality tokens.",
     ],
     allow: ["validation/preview", "verified scratch deploy"],
     confirm: ["production deploy", "Apex execution"],
@@ -115,14 +133,14 @@ const RISK_DOMAINS = {
   },
   agentscript: {
     rules: [
-      "Publish/activate/deactivate and live provision_agent_user are durable writes requiring approval. Status/diagnosis/version lookup and provision_agent_user dry_run=true are routine previews. Intent flags never grant permission.",
+      "Publish/activate/deactivate and live provision_agent_user are durable writes requiring approval. Only provisioning honors dry_run; publish/activate/deactivate ignore it. Status/diagnosis/version lookup and provisioning with executionFlags.effectiveDryRun=true are routine previews. Intent flags never grant permission.",
     ],
     allow: ["status", "dry-run provisioning"],
     confirm: ["publish/activation", "live provisioning"],
   },
   data360: {
     rules: [
-      "Known dispatcher dry_run=true prevents execution even with allow_confirmed=true. Plans/validation/preview and schema/status/GET reads are routine. When live, confirmed execution or POST/PUT/PATCH/DELETE/mutation requires approval. Missing necessary live intent is unknown; intent is never permission.",
+      "Use mechanical executionFlags, not supplied dry_run intent: honored with effectiveDryRun=true skips the selected business-write branch, not prerequisite reads; ignored/unknown does not prove a preview. cleanup.run, ingest_csv.run and manifest.run can execute even with dry_run=true. Proven planningOnly branches and schema/status/GET reads are routine. Live confirmed execution or POST/PUT/PATCH/DELETE/mutation requires approval. Missing essential effects are unknown; intent is never permission.",
     ],
     allow: ["nonexecuting plan/dry-run"],
     confirm: ["live create/delete", "unknown live effects"],
@@ -155,7 +173,7 @@ const DISCLOSURE_DOMAINS = {
   ],
   shell: [
     "Credential output/secret-file export or unknown transfer effects require approval. This includes pi auth print-api-key/print-bearer-token/check --credentials; SF org auth show-access-token/show-sfdx-auth-url/show-user-password, generate password or SF_TEMP_SHOW_SECRETS=true. Ordinary status/metadata/nonsecret reads are routine.",
-    "An exact enabled command allow exception/off ordinary rule waives that configured disclosure only. Strings use commands.defaults; tuples override.",
+    "An exact enabled command allow exception/off ordinary rule waives that configured disclosure only. Command rows carry explicit behavior and opaque equality tokens.",
   ],
   soql: [
     "queryAll/export/history.rerun, allow_unbounded=true or host rowLimit.bucket=large require approval. Cap is 2000: use host effectiveMaximum, no invented uncapped rows. Withheld query leaves ALL ROWS/sensitivity unknown. Schema/status/small bounded reads are routine.",
@@ -206,22 +224,27 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
     instructions: {
       question: "What does command policy require?",
       boundary: DATA_BOUNDARY,
-      encoding: "Strings use commands.defaults; [pattern,behavior] overrides. Keep ordered lists.",
+      encoding:
+        "operation.metadata.commandTokens contains complete mechanical token views; policy.commands has ordered rows with explicit behavior. Integer IDs mean exact equality, not similarity or shell prose. Whole-token and each prefix namespace are separate.",
       match:
-        "Singleword=ANY exact token; multiword=consecutive exact tokens flattened across commands/wrappers. Individually echoed/quoted words count; no substring inside ONE multiword literal. No command regex. --soft is not --hard: do not generalize flag matches.",
+        "kind=tokens: one token matches ANY equal ID in flat; multiple tokens match consecutive equal IDs in flat. flat preserves command/wrapper expansion order and quoted-token boundaries. kind=empty never matches. No substring, fuzzy match or command regex; distinct IDs never match.",
       order:
         "Skip off. First allow match waives; else first auto-deny blocks; else first ordinary match uses behavior; no match allows.",
       unknown:
-        "ANY withheld scalar + enabled SINGLEWORD autoDeny cannot be excluded: BLOCK unless visible enabled allow matches. Echo/printf, org/identifier/credential placeholders count. Other unresolved block operands also block; unresolved ask operands confirm.",
+        "Private values and comments are present as opaque token IDs. shell_values_withheld does not mean missing policy tokens. Do not invent a match from executable danger or missing literal spelling. Effect uncertainty belongs to risk/disclosure, not command matching.",
       specials: {
-        "dd of=": "dd output operand",
-        "mkfs.*": "any token mkfs or prefix mkfs.",
-        "find -delete": "find delete action",
-        "find -exec rm": "find exec rm",
-        "remote-script-to-shell": "adjacent curl/wget then bash/sh/zsh, any separator",
-        "base64-decode-to-shell": "adjacent base64 -d/--decode then shell, any separator",
-        "pi-auth-credential-output":
-          "pi auth print-api-key/print-bearer-token/check --credentials; wrappers/npx count",
+        dd_output:
+          "An expanded command head equals row.head and an argument class has equalsPrefix equal row.equalsPrefix.",
+        mkfs: "A flat token equals row.exact or its class dotPrefix equals row.dotPrefix.",
+        find_delete: "An expanded command head equals row.head and an argument equals row.arg.",
+        find_exec_rm:
+          "An expanded command head equals row.head and an argument row.rm occurs after the first row.exec argument.",
+        remote_script_to_shell:
+          "Two adjacent original commands have heads in row.downloaders then row.shells; any separator counts.",
+        base64_decode_to_shell:
+          "Two adjacent original commands have heads row.head then one of row.shells, and the first has an argument in row.decodeArgs.",
+        pi_credential_output:
+          "A piArgs sequence starts row.auth then a row.printActions ID, or starts row.auth,row.check and contains row.credentials.",
       },
     },
     criteria: {
@@ -237,7 +260,7 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
       question: "What does org-aware AST policy require?",
       boundary: DATA_BOUNDARY,
       rules: [
-        "Enabled command allow match waives org restrictions; strings use commands.defaults, tuples override. Otherwise inspect commands in order; skip enabled=false, select first rule whose ast cmd/subCmd/flagIn and whenOrgType match. off stops later rules for that command; return first active command outcome.",
+        "An enabled command allow row whose opaque tokens match commandTokens waives org restrictions. Otherwise inspect commands in order; skip enabled=false, select first rule whose ast cmd/subCmd/flagIn and whenOrgType match. off stops later rules for that command; return first active command outcome.",
         "AST cmd exact; subCmd positional prefix with listed alternatives; flagIn requires every listed flag/value (inline equivalent). sf-deploy-prod excludes --check-only/--checkonly/--dry-run. No exemption for other rules.",
         "Verified nonproduction is not production. Missing/unverified org cannot exclude a production restriction, including custom non-SF commands such as git; mutation is not required.",
       ],
@@ -283,18 +306,21 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
   },
 };
 export const JEV_PROTOCOL_HASH = jevHash({
-  version: 4,
+  version: 5,
   questions: QUESTION_PROTOCOL,
   riskDomains: RISK_DOMAINS,
   disclosureDomains: DISCLOSURE_DOMAINS,
   applicability: {
-    version: 4,
+    version: 5,
     fileTools: FILE_TOOLS,
     noDisclosureExecutables: NO_DISCLOSURE_EXECUTABLES,
     noDisclosureGitOperations: NO_DISCLOSURE_GIT_OPERATIONS,
   },
-  policyProjectionVersion: 4,
-  commandDefaults: COMMAND_DEFAULTS,
+  policyProjectionVersion: 5,
+  commandTokenProjectionVersion: 1,
+  sessionGrantTransportVersion: 2,
+  sessionGrantTransportExecutables: SESSION_TRANSPORT_EXECUTABLES,
+  sessionGrantUnboundSfOperations: SESSION_UNBOUND_SF_OPERATIONS,
   routing: ROUTING,
   minAllowProbability: JEV_MIN_ALLOW_PROBABILITY,
 });
@@ -317,19 +343,6 @@ export function jevPolicyContext(
       onlyIfExists: Boolean(rule.onlyIfExists),
       behavior: resolveRuleBehavior(rule),
     })),
-    commands: {
-      defaults: { ...COMMAND_DEFAULTS },
-      patterns: config.commandGate.patterns.map((rule) => {
-        const behavior = resolveRuleBehavior(rule);
-        return behavior === "confirm" ? rule.pattern : [rule.pattern, behavior];
-      }),
-      allowedPatterns: config.commandGate.allowedPatterns.map((rule) =>
-        resolveRuleBehavior(rule) === "off" ? [rule.pattern, "off"] : rule.pattern,
-      ),
-      autoDenyPatterns: config.commandGate.autoDenyPatterns.map((rule) =>
-        resolveRuleBehavior(rule) === "off" ? [rule.pattern, "off"] : rule.pattern,
-      ),
-    },
     orgAware: config.orgAwareGate.rules
       .filter((rule) => !executableHeads || executableHeads.has(rule.match.ast.cmd))
       .map((rule) => ({
@@ -422,12 +435,15 @@ function needsDisclosure(metadata: JevToolMetadata): boolean {
       )
     );
   }
-  if (
-    metadata.toolName.startsWith("data360_") &&
-    metadata.complete &&
-    (metadata.metadata.dry_run === true || String(metadata.metadata.action).endsWith(".plan"))
-  )
-    return false;
+  if (metadata.toolName.startsWith("data360_") && metadata.complete) {
+    const flags = metadata.metadata.executionFlags as
+      { dryRun?: string; effectiveDryRun?: boolean; planningOnly?: boolean } | undefined;
+    if (
+      flags?.planningOnly === true ||
+      (flags?.dryRun === "honored" && flags.effectiveDryRun === true)
+    )
+      return false;
+  }
   return !metadata.toolName.startsWith("sf_browser_");
 }
 
@@ -435,6 +451,7 @@ export function buildJevRequest(
   metadata: JevToolMetadata,
   facts: JevFacts,
   config: GuardrailConfig,
+  options: { command?: string } = {},
 ): JevRequest {
   // Select applicable dimensions by metadata shape, never by a local risk/policy match.
   const shell = metadata.metadata.shell;
@@ -443,6 +460,32 @@ export function buildJevRequest(
     typeof metadata.metadata.path === "string" ||
     (Array.isArray(metadata.metadata.paths) && metadata.metadata.paths.length > 0);
   const policy = jevPolicyContext(config, shell ? jevShellExecutableHeads(metadata) : undefined);
+  let commandTokens: Record<string, unknown> | undefined;
+  if (shell) {
+    if (typeof options.command !== "string") throw new Error("missing-command-token-source");
+    const commands =
+      (
+        shell as {
+          commands?: Array<{
+            executable?: string;
+            subcommands?: string[];
+            flags?: Array<{ name: string }>;
+          }>;
+        }
+      ).commands ?? [];
+    const publicWords = [
+      ...new Set(
+        commands.flatMap((command) => [
+          ...(command.executable && command.executable !== "opaque" ? [command.executable] : []),
+          ...(command.subcommands ?? []),
+          ...(command.flags ?? []).map((flag) => flag.name),
+        ]),
+      ),
+    ];
+    commandTokens = buildJevCommandTokenContext(options.command, config.commandGate, {
+      publicWords,
+    });
+  }
   const hasOrgPolicy = !!shell && (policy.orgAware as unknown[]).length > 0;
   const questions: JevRequest["questions"] = { risk: operationalQuestion(metadata) };
   if (hasFiles) questions.file_policy = QUESTION_PROTOCOL.file_policy;
@@ -457,12 +500,18 @@ export function buildJevRequest(
     model: JEV_MODEL,
     provider: ROUTING,
     state: {
-      version: 4,
-      operation,
+      version: 5,
+      operation: {
+        ...operation,
+        metadata: {
+          ...operation.metadata,
+          ...(commandTokens ? { commandTokens: commandTokens.operation } : {}),
+        },
+      },
       facts,
       policy: {
         ...(hasFiles ? { files: policy.files } : {}),
-        ...(shell ? { commands: policy.commands } : {}),
+        ...(commandTokens ? { commands: commandTokens.policy } : {}),
         ...(hasOrgPolicy ? { orgAware: policy.orgAware } : {}),
       },
       observations: {
@@ -581,9 +630,14 @@ export async function evaluateJevSafety(
       model: JEV_RESOLVED_MODEL,
     });
     const prediction = await withinDeadline(
-      (options.request ?? requestJev)(buildJevRequest(metadata, resolved.facts, input.config), {
-        signal,
-      }),
+      (options.request ?? requestJev)(
+        buildJevRequest(metadata, resolved.facts, input.config, {
+          ...(typeof input.input.command === "string" ? { command: input.input.command } : {}),
+        }),
+        {
+          signal,
+        },
+      ),
       signal,
     );
     signal.throwIfAborted();
@@ -593,10 +647,11 @@ export async function evaluateJevSafety(
       !!resolved.orgIdentity &&
       resolved.facts.org?.verified === true &&
       ["sandbox", "scratch", "developer", "trial"].includes(resolved.facts.org.type) &&
+      jevSessionTransportBounded(metadata) &&
       !input.toolName.startsWith("sf_browser_") &&
       input.toolName !== "slack_canvas";
     return {
-      ruleId: "jev-risk-v4",
+      ruleId: "jev-risk-v5",
       feature: "jevGate",
       action,
       fingerprint,
@@ -647,7 +702,7 @@ export async function evaluateJevSafety(
         ? code
         : "invalid-input-or-context";
     return {
-      ruleId: "jev-risk-v4",
+      ruleId: "jev-risk-v5",
       feature: "jevGate",
       action: "block",
       fingerprint,
@@ -656,6 +711,41 @@ export async function evaluateJevSafety(
       jev: { ...evidence(), failure },
     };
   }
+}
+
+/** Approval memory must not use an unrelated verified org to cover another transport. */
+function jevSessionTransportBounded(metadata: JevToolMetadata): boolean {
+  const nested = metadata.metadata.params as Record<string, unknown> | undefined;
+  for (const fields of [metadata.metadata, nested]) {
+    if (!fields) continue;
+    if (["url", "destination", "endpoint"].some((key) => typeof fields[key] === "string"))
+      return false;
+  }
+  if (metadata.toolName === "data360_api" && metadata.metadata.action === "rest.request")
+    return false;
+  const shell = metadata.metadata.shell as
+    | {
+        commands?: Array<{
+          executable?: string;
+          subcommands?: string[];
+          destinations?: string[];
+          flags?: Array<{ name: string }>;
+        }>;
+      }
+    | undefined;
+  return !(shell?.commands ?? []).some(
+    (command) =>
+      !!command.destinations?.length ||
+      SESSION_TRANSPORT_EXECUTABLES.includes(command.executable ?? "") ||
+      (command.executable === "git" &&
+        ["push", "pull", "fetch", "clone", "ls-remote"].includes(command.subcommands?.[0] ?? "")) ||
+      (["sf", "sfdx"].includes(command.executable ?? "") &&
+        (SESSION_UNBOUND_SF_OPERATIONS.includes((command.subcommands ?? []).join(" ")) ||
+          command.subcommands?.[0] === "plugins" ||
+          command.flags?.some((flag) => flag.name === "--target-dev-hub") ||
+          ((command.subcommands ?? []).join(" ") === "org logout" &&
+            command.flags?.some((flag) => flag.name === "--all")))),
+  );
 }
 
 function jevDisplaySubject(metadata: JevToolMetadata, facts: JevFacts): string {

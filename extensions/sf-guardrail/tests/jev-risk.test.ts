@@ -97,7 +97,7 @@ describe("Jev risk adapter", () => {
     );
     expect(Object.keys(request.questions)).toEqual(["risk", "file_policy"]);
     expect(request.state).toMatchObject({
-      version: 4,
+      version: 5,
       observations: { contextComplete: true },
       policy: { files: expect.any(Array) },
     });
@@ -181,27 +181,175 @@ describe("Jev risk adapter", () => {
       new Set([first, second, third, fourth, fifth, sixth].map((value) => value.fingerprint)).size,
     ).toBe(6);
   });
+  it.each([
+    {
+      toolName: "bash",
+      input: {
+        command:
+          "curl --request POST https://example.test/resource && sf org display --target-org ScratchExample",
+      },
+    },
+    ...[
+      "kubectl delete pods --all --context ClusterExample",
+      "redis-cli --host RedisExample FLUSHALL",
+      "docker --context ContextExample system prune --force",
+      "terraform destroy -auto-approve",
+      "agent-browser reload",
+      "dropdb --host DatabaseExample --if-exists",
+    ].map((command) => ({
+      toolName: "bash",
+      input: { command: `${command} && sf org display --target-org ScratchExample` },
+    })),
+    ...[
+      "sf plugins reset --hard",
+      "sf package delete --package PackageExample --target-dev-hub DevHubExample",
+      "sf package version delete --package PackageVersionExample --target-dev-hub DevHubExample",
+      "sf package version promote --package PackageVersionExample --target-dev-hub DevHubExample",
+      "sf package push-upgrade schedule --package PackageVersionExample --target-dev-hub DevHubExample",
+      "sf package push-upgrade abort --push-request-id RequestExample --target-dev-hub DevHubExample",
+      "sf package install --package PackageVersionExample --target-dev-hub DevHubExample",
+      "sf org logout --all",
+    ].map((command) => ({ toolName: "bash", input: { command } })),
+    {
+      toolName: "bash",
+      input: {
+        command:
+          "sf api request rest /services/data/v64.0/example --method POST --target-org ScratchExample",
+      },
+    },
+    {
+      toolName: "data360_api",
+      input: {
+        action: "rest.request",
+        dry_run: false,
+        target_org: "ScratchExample",
+        params: { method: "POST", path: "/services/data/v64.0/example" },
+      },
+    },
+  ])(
+    "keeps outbound/raw transports allow-once despite unrelated verified org facts",
+    async (operation) => {
+      expect(buildJevMetadata(operation.toolName, operation.input).complete).toBe(true);
+      const request = vi.fn(async () => prediction("confirm", 0));
+      const decision = await evaluateJevSafety(
+        { ...call(), ...operation },
+        {
+          request,
+          resolveFacts: async () => ({
+            facts: { org: { type: "scratch", verified: true, explicit: true } },
+            orgIdentity: "synthetic-scratch",
+          }),
+        },
+      );
+      expect(request).toHaveBeenCalledOnce();
+      expect(decision.jev?.failure).toBeUndefined();
+      expect(decision.action).toBe("confirm");
+      expect(decision.approvalScope?.allowSession).toBe(false);
+    },
+  );
+  it("binds existing public CLI flag names to their actual token IDs", () => {
+    const request = buildJevRequest(
+      buildJevMetadata("bash", { command: "git reset --soft" }),
+      {},
+      readBundledConfig(),
+      { command: "git reset --soft" },
+    );
+    const tokens = (
+      request.state as {
+        operation: {
+          metadata: {
+            commandTokens: {
+              publicSyntax: Array<{ word: string; id: number }>;
+              original: Array<{ head: number; args: number[] }>;
+            };
+          };
+        };
+      }
+    ).operation.metadata.commandTokens;
+    expect(tokens.publicSyntax.map((item) => item.word)).toEqual(["git", "reset", "--soft"]);
+    expect(tokens.publicSyntax.find((item) => item.word === "--soft")?.id).toBe(
+      tokens.original[0].args[1],
+    );
+  });
   it("preserves disabled special command entries in the policy sent to Jev", () => {
     const config = readBundledConfig();
     config.commandGate.allowedPatterns = [
       { id: "disabled-allow", pattern: "git push", behavior: "off" },
     ];
     config.commandGate.autoDenyPatterns = [{ id: "disabled-deny", pattern: "rm", behavior: "off" }];
-    const policy = jevPolicyContext(config);
-    expect(policy.commands).toMatchObject({
-      allowedPatterns: [["git push", "off"]],
-      autoDenyPatterns: [["rm", "off"]],
+    const request = buildJevRequest(
+      buildJevMetadata("bash", { command: "git status" }),
+      {},
+      config,
+      {
+        command: "git status",
+      },
+    );
+    expect(request.state).toMatchObject({
+      policy: {
+        commands: {
+          allowedPatterns: [{ kind: "tokens", tokens: expect.any(Array), behavior: "off" }],
+          autoDenyPatterns: [{ kind: "tokens", tokens: expect.any(Array), behavior: "off" }],
+        },
+      },
     });
   });
-  it("projects enabled special lists using their effective allow/block semantics", () => {
+  it("refuses shell request construction without its original token source", () => {
+    expect(() =>
+      buildJevRequest(buildJevMetadata("bash", { command: "git status" }), {}, readBundledConfig()),
+    ).toThrow("missing-command-token-source");
+  });
+  it("projects effective runner flag observations without mistaking ignored intent for a preview", () => {
+    for (const [tool, action, expectedDisclosure] of [
+      ["data360_prepare", "stream.delete", false],
+      ["data360_orchestrate", "cleanup.run", true],
+      ["data360_orchestrate", "cleanup.plan", false],
+      ["data360_orchestrate", "unregistered.plan", true],
+    ] as const) {
+      const metadata = buildJevMetadata(tool, { action, dry_run: true });
+      const request = buildJevRequest(metadata, {}, readBundledConfig());
+      expect(request.questions.disclosure !== undefined).toBe(expectedDisclosure);
+      expect(JSON.stringify(request.questions.risk.instructions)).toContain(
+        "ignored/unknown does not prove a preview",
+      );
+    }
+    const publish = buildJevRequest(
+      buildJevMetadata("agentscript_lifecycle", {
+        action: "publish",
+        dry_run: true,
+        agent_file: "agent.json",
+      }),
+      {},
+      readBundledConfig(),
+    );
+    expect(publish.state).toMatchObject({
+      operation: { metadata: { executionFlags: { dryRun: "ignored" } } },
+    });
+    expect(JSON.stringify(publish.questions.risk.instructions)).toContain(
+      "publish/activate/deactivate ignore it",
+    );
+  });
+  it("uses explicit allow and block behavior for enabled special lists", () => {
     const config = readBundledConfig();
     config.commandGate.allowedPatterns = [{ id: "allow-exception", pattern: "git status" }];
     config.commandGate.autoDenyPatterns = [{ id: "hard-deny", pattern: "rm" }];
-    expect(jevPolicyContext(config).commands).toMatchObject({
-      defaults: { patterns: "confirm", allowedPatterns: "allow", autoDenyPatterns: "block" },
-      allowedPatterns: ["git status"],
-      autoDenyPatterns: ["rm"],
+    const request = buildJevRequest(
+      buildJevMetadata("bash", { command: "git status" }),
+      {},
+      config,
+      {
+        command: "git status",
+      },
+    );
+    expect(request.state).toMatchObject({
+      policy: {
+        commands: {
+          allowedPatterns: [{ kind: "tokens", tokens: expect.any(Array), behavior: "allow" }],
+          autoDenyPatterns: [{ kind: "tokens", tokens: expect.any(Array), behavior: "block" }],
+        },
+      },
     });
+    expect(JSON.stringify(request.state)).not.toContain('"defaults"');
   });
   it("keeps every command pattern and its order when an argument can match a different executable", () => {
     const config = readBundledConfig();
@@ -211,23 +359,30 @@ describe("Jev risk adapter", () => {
       pattern: "custom-token",
       behavior: "block",
     });
-    const request = buildJevRequest(buildJevMetadata("bash", { command: "cat shred" }), {}, config);
+    const request = buildJevRequest(
+      buildJevMetadata("bash", { command: "cat shred" }),
+      {},
+      config,
+      { command: "cat shred" },
+    );
     expect(request.state).toMatchObject({
       policy: {
         commands: {
-          patterns: config.commandGate.patterns.map((rule) =>
-            !rule.behavior || rule.behavior === "confirm"
-              ? rule.pattern
-              : [rule.pattern, rule.behavior],
-          ),
+          patterns: expect.any(Array),
         },
       },
     });
+    const rows = (
+      request.state as { policy: { commands: { patterns: Array<{ behavior: string }> } } }
+    ).policy.commands.patterns;
+    expect(rows).toHaveLength(config.commandGate.patterns.length);
+    expect(rows[0].behavior).toBe("off");
+    expect(rows.at(-1)?.behavior).toBe("block");
     expect(JSON.stringify(request.questions.command_policy?.instructions)).toContain(
-      "Individually echoed/quoted words count",
+      "quoted-token boundaries",
     );
     expect(JSON.stringify(request.questions.command_policy?.instructions)).toContain(
-      "flattened across commands/wrappers",
+      "command/wrapper expansion order",
     );
   });
   it("asks only applicable policy dimensions for a complete ordinary Git status", () => {
@@ -235,6 +390,7 @@ describe("Jev risk adapter", () => {
       buildJevMetadata("bash", { command: "git status" }),
       {},
       readBundledConfig(),
+      { command: "git status" },
     );
     expect(Object.keys(request.questions)).toEqual(["risk", "command_policy"]);
     expect(request.state).toMatchObject({ policy: { commands: expect.any(Object) } });
@@ -261,6 +417,7 @@ describe("Jev risk adapter", () => {
       buildJevMetadata("bash", { command: "env git status" }),
       {},
       config,
+      { command: "env git status" },
     );
     expect(request.questions.org_policy).toBeDefined();
     expect(
@@ -275,7 +432,7 @@ describe("Jev risk adapter", () => {
     { command: "git status # omitted && sf project deploy start -o Production" },
   ])("retains all org rules when potentially applicable command heads are opaque", (input) => {
     const config = readBundledConfig();
-    const request = buildJevRequest(buildJevMetadata("bash", input), {}, config);
+    const request = buildJevRequest(buildJevMetadata("bash", input), {}, config, input);
     expect((request.state as { policy: { orgAware: unknown[] } }).policy.orgAware).toHaveLength(
       config.orgAwareGate.rules.length,
     );
@@ -285,6 +442,7 @@ describe("Jev risk adapter", () => {
       buildJevMetadata("bash", { command: "echo private-value" }),
       {},
       readBundledConfig(),
+      { command: "echo private-value" },
     );
     expect(request.questions.command_policy).toBeDefined();
     expect(request.questions.org_policy).toBeUndefined();
@@ -305,6 +463,7 @@ describe("Jev risk adapter", () => {
       },
       {},
       config,
+      { command: "git status # omitted && sf project deploy start -o Production" },
     );
     expect((request.state as { policy: { orgAware: unknown[] } }).policy.orgAware).toHaveLength(
       config.orgAwareGate.rules.length,
@@ -315,6 +474,7 @@ describe("Jev risk adapter", () => {
       buildJevMetadata("bash", { command: "shred archive.txt" }),
       { files: [{ path: "archive.txt", exists: false }] },
       readBundledConfig(),
+      { command: "shred archive.txt" },
     );
     expect(Object.keys(request.questions)).toEqual(["risk", "file_policy", "command_policy"]);
     expect(JSON.stringify(request.questions.risk)).not.toMatch(/Canvas|Data360|Apex|Browser/);
@@ -325,6 +485,7 @@ describe("Jev risk adapter", () => {
         buildJevMetadata("bash", { command }),
         {},
         readBundledConfig(),
+        { command },
       );
       expect(request.questions.disclosure).toBeDefined();
       expect(request.questions.authority).toBeUndefined();
@@ -337,7 +498,7 @@ describe("Jev risk adapter", () => {
     expect(request.questions.disclosure).toBeDefined();
     expect(JSON.stringify(request.questions.disclosure)).not.toMatch(/SOQL|2000|pi auth/);
   });
-  it("asks the model to prohibit a singleword auto-deny that cannot be excluded from withheld scalar values", () => {
+  it("sends private operands and custom deny words as opaque equality IDs", () => {
     const config = readBundledConfig();
     config.commandGate.autoDenyPatterns.push({
       id: "custom-literal-deny",
@@ -347,23 +508,26 @@ describe("Jev risk adapter", () => {
       buildJevMetadata("bash", { command: "echo PRIVATE_ECHO_SENTINEL" }),
       {},
       config,
+      { command: "echo PRIVATE_ECHO_SENTINEL" },
     );
     expect(JSON.stringify(request)).not.toContain("PRIVATE_ECHO_SENTINEL");
     expect(request.state).toMatchObject({
       operation: { omissions: ["tool_description_unavailable", "shell_values_withheld"] },
       policy: {
         commands: {
-          defaults: { autoDenyPatterns: "block" },
-          autoDenyPatterns: ["restricted-token"],
+          autoDenyPatterns: expect.arrayContaining([
+            { kind: "tokens", tokens: expect.any(Array), behavior: "block" },
+          ]),
         },
       },
     });
     expect(JSON.stringify(request.questions.command_policy?.instructions)).toContain(
-      "ANY withheld scalar",
+      "Private values and comments are present as opaque token IDs",
     );
     expect(JSON.stringify(request.questions.command_policy?.instructions)).toContain(
-      "SINGLEWORD autoDeny",
+      "Do not invent a match",
     );
+    expect(JSON.stringify(request)).not.toContain("restricted-token");
   });
   it("keeps browser authority separate while not asking irrelevant disclosure questions", () => {
     const request = buildJevRequest(

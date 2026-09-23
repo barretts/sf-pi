@@ -90,6 +90,35 @@ describe("Jev replay acceptance and proof boundaries", () => {
     expect(results[0].decision).toBe("block");
   });
 
+  it.each(["bash", "herdr_pane"])(
+    "prepares %s with its transient command without disclosing private operands",
+    async (tool) => {
+      const marker = "private-replay-shell-operand";
+      const row: ReplayCase = {
+        id: "shell-privacy-probe",
+        family: "shell",
+        pair: "privacy",
+        tool,
+        input: {
+          ...(tool === "herdr_pane" ? { action: "run" } : {}),
+          command: `echo ${marker}`,
+        },
+        facts: {},
+        expected: "allow",
+      };
+      let outbound: JevRequest | undefined;
+      const request = vi.fn(async (value: JevRequest) => {
+        outbound = value;
+        return prediction();
+      });
+      const results = await runReplayCases([row], { request });
+      expect(request).toHaveBeenCalledOnce();
+      expect(results[0].stage).toBe("decided");
+      expect(JSON.stringify(outbound)).not.toContain(marker);
+      expect(JSON.stringify(results)).not.toContain(marker);
+    },
+  );
+
   it("retains failed calls and downgrades high-confidence allow for incomplete metadata", async () => {
     const fixture = await readAcceptance();
     const cases = fixture.cases.filter((row) =>

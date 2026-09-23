@@ -1090,3 +1090,222 @@ describe("shared structural executable heads", () => {
     expect(jevShellExecutableHeads(metadata)).toBeUndefined();
   });
 });
+
+describe("source-backed CLI selectors and report metadata", () => {
+  it("retains Git diff statistics and its explicit pathspec", () => {
+    const metadata = buildJevMetadata("bash", { command: "git diff --stat -- docs" });
+    expect(metadata.complete).toBe(true);
+    expect(metadata.metadata.shell).toMatchObject({
+      commands: [
+        {
+          executable: "git",
+          subcommands: ["diff"],
+          flags: [{ name: "--stat" }, { name: "--" }],
+          paths: ["docs"],
+        },
+      ],
+    });
+  });
+
+  it.each(["git clean -n -d generated-cache", "git clean -n -d -- generated-cache"])(
+    "retains a known Git clean pathspec in %s",
+    (command) => {
+      const metadata = buildJevMetadata("bash", { command });
+      expect(metadata.complete).toBe(true);
+      expect(metadata.metadata.paths).toEqual(["generated-cache"]);
+      expect(metadata.metadata.shell).toMatchObject({
+        commands: [
+          {
+            subcommands: ["clean"],
+            flags: expect.arrayContaining([{ name: "-n" }, { name: "-d" }]),
+          },
+        ],
+      });
+    },
+  );
+
+  it.each([
+    ["data get record", "--sobject", "--record-id"],
+    ["data get record", "-s", "-i"],
+    ["force:data:record:get", "--sobjecttype", "--sobjectid"],
+  ])("withholds private selectors for known one-record retrieval %s", (operation, object, id) => {
+    const metadata = buildJevMetadata("bash", {
+      command: `sf ${operation} ${object} ${SECRET}_object ${id} ${SECRET}_record -o ${SECRET}_org`,
+    });
+    expect(metadata.complete).toBe(true);
+    expect(metadata.metadata.shell).toMatchObject({
+      commands: [
+        {
+          subcommands: operation.split(" "),
+          flags: [
+            { name: object, value: "specified" },
+            { name: id, value: "specified" },
+            { name: "-o", value: "explicit" },
+          ],
+        },
+      ],
+    });
+    expect(JSON.stringify(metadata)).not.toContain(SECRET);
+    expect(metadata.omissions).toContain("shell_values_withheld");
+  });
+
+  it.each([
+    "package install report --request-id",
+    "package install report -i",
+    "force:package:install:report --requestid",
+  ])("retains an exact package report operation with a private request selector: %s", (prefix) => {
+    const metadata = buildJevMetadata("bash", { command: `sf ${prefix} ${SECRET} -o Scratch` });
+    expect(metadata.complete).toBe(true);
+    const operation = prefix.split(" ").slice(0, -1);
+    expect(metadata.metadata.shell).toMatchObject({
+      commands: [
+        {
+          subcommands: operation,
+          flags: [
+            { name: prefix.split(" ").at(-1), value: "specified" },
+            { name: "-o", value: "explicit" },
+          ],
+        },
+      ],
+    });
+    expect(JSON.stringify(metadata)).not.toContain(SECRET);
+  });
+
+  it.each([
+    `sf data get record --sobject Example__c --where '${SECRET} = 1'`,
+    `sf data update record --sobject ${SECRET} --record-id ${SECRET} --values '${SECRET}=value'`,
+    `sf package install ${SECRET}`,
+    `sf package install reports --request-id ${SECRET}`,
+    `sf org api rest --method GET --url /${SECRET}`,
+    `echo --stat ${SECRET}`,
+    `git diff --stat=${SECRET}`,
+    `git clean --unknown ${SECRET} generated-cache`,
+    `git clean -n $UNKNOWN_ARGS ${SECRET}`,
+    `sf data get record --record-id $UNKNOWN_ARGS ${SECRET}`,
+    `/tmp/untrusted/git clean -n ${SECRET}`,
+  ])("keeps unproven or ambiguous values private for %s", (command) => {
+    const metadata = buildJevMetadata("bash", { command });
+    expect(metadata.complete).toBe(false);
+    expect(JSON.stringify(metadata)).not.toContain(SECRET);
+  });
+});
+
+describe("actual runner execution-flag behavior", () => {
+  it.each([
+    [undefined, true],
+    [true, true],
+    [false, false],
+  ])(
+    "projects the provisioning default separately from supplied intent %s",
+    (dryRun, effective) => {
+      const input: Record<string, unknown> = {
+        action: "provision_agent_user",
+        agent_file: "agent.agent",
+      };
+      if (dryRun !== undefined) input.dry_run = dryRun;
+      const metadata = buildJevMetadata("agentscript_lifecycle", input);
+      expect(metadata.metadata.executionFlags).toEqual({
+        dryRun: "honored",
+        effectiveDryRun: effective,
+      });
+      expect(metadata.metadata.dry_run).toBe(dryRun);
+    },
+  );
+
+  it.each([
+    "publish",
+    "activate",
+    "deactivate",
+    "list_versions",
+    "agent_user_status",
+    "diagnose_agent_user",
+  ])("does not project the supplied flag as a guarantee for AgentScript %s", (action) => {
+    const metadata = buildJevMetadata("agentscript_lifecycle", {
+      action,
+      agent_file: "agent.agent",
+      dry_run: true,
+    });
+    expect(metadata.metadata.dry_run).toBe(true);
+    expect(metadata.metadata.executionFlags).toEqual({ dryRun: "ignored" });
+  });
+
+  it.each([
+    "cleanup.run",
+    "ingest_csv.run",
+    "manifest.run",
+    "journey.cleanup.run",
+    "journey.ingest_csv.run",
+    "journey.manifest.run",
+  ])("describes the ignored parent flag on confirmed Data360 %s", (action) => {
+    const metadata = buildJevMetadata("data360_orchestrate", {
+      action,
+      dry_run: true,
+      allow_confirmed: true,
+      params: { body: { credential: SECRET } },
+    });
+    expect(metadata.metadata).toMatchObject({
+      action,
+      dry_run: true,
+      allow_confirmed: true,
+      executionFlags: { dryRun: "ignored" },
+    });
+    expect(metadata.metadata.executionFlags).toEqual({ dryRun: "ignored" });
+    expect(metadata.complete).toBe(false);
+    expect(JSON.stringify(metadata)).not.toContain(SECRET);
+  });
+
+  it.each([
+    "cleanup.plan",
+    "ingest_csv.plan",
+    "manifest.plan",
+    "journey.cleanup.plan",
+    "journey.ingest_csv.plan",
+    "journey.manifest.plan",
+  ])("identifies only source-proved inherently planning branches: %s", (action) => {
+    const metadata = buildJevMetadata("data360_orchestrate", {
+      action,
+      dry_run: false,
+      allow_confirmed: true,
+    });
+    expect(metadata.metadata.executionFlags).toEqual({ dryRun: "ignored", planningOnly: true });
+  });
+
+  it.each([
+    ["data360_api", "rest.request"],
+    ["data360_prepare", "stream.create"],
+    ["data360_prepare", "stream.create_ingest_api"],
+    ["data360_prepare", "stream.create_third_party_connector"],
+    ["data360_prepare", "stream.delete"],
+    ["data360_prepare", "stream.get"],
+    ["data360_prepare", "stream.list"],
+    ["data360_prepare", "stream.list.data_streams_list"],
+    ["data360_prepare", "stream.run"],
+    ["data360_prepare", "stream.update"],
+    ["data360_prepare", "d360_datastream_delete"],
+    ["data360_prepare", "data_stream.create_ingest_api"],
+  ])("retains the explicit facade/API rehearsal mode for exact %s/%s", (tool, action) => {
+    const metadata = buildJevMetadata(tool, { action, dry_run: true, allow_confirmed: true });
+    expect(metadata.metadata.executionFlags).toEqual({ dryRun: "honored", effectiveDryRun: true });
+  });
+
+  it("keeps the Data360 absent-flag default distinct from provisioning", () => {
+    const metadata = buildJevMetadata("data360_prepare", { action: "stream.delete" });
+    expect(metadata.metadata.executionFlags).toEqual({ dryRun: "honored", effectiveDryRun: false });
+    expect(metadata.metadata.dry_run).toBeUndefined();
+  });
+
+  it.each([
+    ["agentscript_lifecycle", "publish.plan"],
+    ["data360_connect", "stream.list"],
+    ["data360_api", "request"],
+    ["data360_api", "rest.request.plan"],
+    ["data360_prepare", "stream.plan"],
+    ["data360_prepare", "cleanup.run"],
+    ["data360_orchestrate", "cleanup.run.extra"],
+    ["data360_orchestrate", "unfamiliar.plan"],
+    ["data360_orchestrate", "make_data_usable.run"],
+  ])("does not infer runner behavior from an unfamiliar pair or suffix: %s/%s", (tool, action) => {
+    const metadata = buildJevMetadata(tool, { action, dry_run: true, allow_confirmed: true });
+    expect(metadata.metadata.executionFlags).toEqual({ dryRun: "unknown" });
+  });
+});

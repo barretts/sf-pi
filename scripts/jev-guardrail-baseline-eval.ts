@@ -317,6 +317,7 @@ export async function createBaselineDevEvaluator() {
     options: {
       prepareOnly?: boolean;
       request?: typeof client.requestJev;
+      onRequestPrepared?: (request: JevRequest, caseId: string) => void;
       config?: GuardrailConfig;
       onProgress?: (result: { attempted: number; total: number; failures: number }) => void;
       onResult?: (result: BaselineDevResult) => Promise<void> | void;
@@ -500,6 +501,7 @@ export async function createBaselineDevEvaluator() {
             result.requestHash = sha256(encoded);
             result.requestBytes = Buffer.byteLength(encoded);
             result.requestInvoked = !options.prepareOnly;
+            if (options.prepareOnly) options.onRequestPrepared?.(JSON.parse(encoded), row.id);
             const prediction = options.prepareOnly
               ? {
                   choice: "confirm" as const,
