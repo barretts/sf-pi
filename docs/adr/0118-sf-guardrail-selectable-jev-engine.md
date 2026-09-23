@@ -26,7 +26,7 @@ branches before deterministic normalization and classifies every Pi
 the effective policy after bundled defaults, stable-id overrides, and routine
 settings. It has no automatic deterministic fallback.
 
-Protocol v5 uses Node's built-in `fetch` to call OpenRouter Decisions with
+Protocol v6 uses Node's built-in `fetch` to call OpenRouter Decisions with
 independent Choice questions sharing one state and the options `allow`,
 `confirm`, and `block`. Always ask `risk` with tool-family guidance about
 operational effects. Available paths/file facts add file policy; parsed shell
@@ -62,9 +62,17 @@ questions, and independently resolved facts. Known CLI metadata, trusted
 file-path variants, verification state, and numeric buckets describe effects
 without supplying a local policy decision. Mechanical request-local integer
 IDs preserve original, wrapper-expanded, and flat command tokens, quoted-token
-boundaries, typed prefix classes, and Pi argument sequences. Full ordered
-command policy rows contain explicit behavior, token IDs, and seven special
-forms. Jev compares the facts and selects rules; the host serializes them and
+boundaries, typed prefix classes, and Pi argument sequences. State version 6
+uses command-token version 2: effective ordered command lists contain only
+active rows with explicit behavior, token IDs, and seven special forms. Validate
+and bound every configured row before omission; off allow/deny entries allocate
+no token classes. Off ordinary entries become separate `effectWaivers` for exact
+model risk/disclosure matching of that configured effect. They never override
+active file, command, or org restrictions or become allow exceptions. Preserve
+the file rule's enabled off-winner precedence and org rule's matching off
+outcome stopping later rules for that command. Static token/namespace/special
+definitions live in shared `policy.commands.matchGrammar`, directly visible to
+every independent question. Jev compares the facts and selects rules; the host serializes them and
 combines independent answers without a policy vote. `publicSyntax` associates
 only known CLI executables, subcommands, and flag keys already exposed in
 semantic metadata with the same IDs. Private operands receive no explicit

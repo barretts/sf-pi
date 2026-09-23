@@ -88,7 +88,7 @@ export OPENROUTER_API_KEY_FILE="$HOME/.config/openrouter/key"
 ```
 
 The client uses Node's built-in `fetch` and the OpenRouter Decisions endpoint
-`POST https://openrouter.ai/api/alpha/decisions`. Protocol v5 asks independent
+`POST https://openrouter.ai/api/alpha/decisions`. Protocol v6 asks independent
 Choice questions in one request, each with `allow`, `confirm`, and `block`
 options. Every call asks `risk` using a rubric for its tool family: files,
 shell/Salesforce CLI, Apex, SOQL, Agent Script, Data 360, Canvas, browser, or
@@ -127,9 +127,15 @@ questions. Known CLI metadata, trusted file-path variants, verification state,
 and bounded numeric observations such as the effective row-limit bucket help
 describe actual effects without sending private payloads. Command policy uses
 mechanical integer token IDs, preserving original and wrapper-expanded command
-order, quoted-token boundaries, and exact equality of private literals. Full
-policy lists carry ordered rows with explicit behavior, token IDs, and seven
-special-pattern forms. Jev compares IDs and selects applicable rules; the host
+order, quoted-token boundaries, and exact equality of private literals. Effective
+command lists carry only active ordered rows with explicit behavior, token IDs,
+and seven special-pattern forms. Off allow/deny entries are omitted after every
+configured row is validated and bounded. Off ordinary entries are separate
+`effectWaivers`, used only for exact model matching of that configured operational
+or disclosure effect; they cannot suppress active file, command, or org
+restrictions or act as allow exceptions. File/org rules retain their own Off
+winner semantics. Shared `policy.commands.matchGrammar` gives each independent
+question the same token/namespace/special definitions. Jev compares IDs and selects applicable rules; the host
 serializes facts and combines model answers. The projection sends no raw command,
 private-word dictionary, stable hashes, private-operand legend, matched-rule list,
 or local outcome. `publicSyntax` associates only known CLI executables,

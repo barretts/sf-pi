@@ -16,6 +16,18 @@ const MAX_POSITIONS = 4096;
 const MAX_CLASSES = 2048;
 const MAX_ROWS = 256;
 const MAX_CONTEXT_BYTES = 24 * 1024;
+const SPECIAL_TOKENS = new Map<string, readonly string[]>([
+  ["dd of=", ["dd"]],
+  ["mkfs.*", ["mkfs"]],
+  ["remote-script-to-shell", ["curl", "wget", "bash", "sh", "zsh"]],
+  ["base64-decode-to-shell", ["base64", "-d", "--decode", "bash", "sh", "zsh"]],
+  [
+    "pi-auth-credential-output",
+    ["auth", "check", "--credentials", "print-api-key", "print-bearer-token"],
+  ],
+  ["find -delete", ["find", "-delete"]],
+  ["find -exec rm", ["find", "-exec", "rm"]],
+]);
 const SHELLS = new Set(["bash", "sh", "zsh"]);
 const WRAPPERS = new Set(["sudo", "env", "timeout", "nohup", "nice", "time", "watch"]);
 const PI_WRAPPERS = {
@@ -214,6 +226,9 @@ export function buildJevCommandTokenContext(
     const descriptors = Object.getOwnPropertyDescriptors(gate);
     let rowCount = 0;
     let patternChars = 0;
+    let configuredPositions = positions;
+    const configuredClasses = new Set(whole.keys());
+    const effectWaivers: Record<string, unknown>[] = [];
     const rows = (key: keyof CommandGateConfig) => {
       const source = descriptors[key]?.value;
       if (!Array.isArray(source)) throw new Error();
@@ -227,9 +242,14 @@ export function buildJevCommandTokenContext(
         }
         candidates.push(item.value);
       }
-      return candidates.map((candidate) => {
+      return candidates.flatMap((candidate) => {
+        const prototype = Object.getPrototypeOf(candidate);
+        if (prototype !== Object.prototype && prototype !== null) throw new Error();
         const fields = Object.getOwnPropertyDescriptors(candidate);
-        if (Object.values(fields).some((field) => field.get || field.set)) throw new Error();
+        for (const key of Reflect.ownKeys(candidate)) {
+          const field = Object.getOwnPropertyDescriptor(candidate, key);
+          if (field?.get || field?.set) throw new Error();
+        }
         const pattern = fields.pattern?.value;
         if (typeof pattern !== "string") throw new Error();
         patternChars += pattern.length;
@@ -244,6 +264,15 @@ export function buildJevCommandTokenContext(
         )
           throw new Error();
         const resolved = resolveRuleBehavior({ enabled, behavior, action });
+        const trimmed = pattern.trim();
+        const words = trimmed.split(/\s+/).filter(Boolean);
+        const grammarTokens = SPECIAL_TOKENS.get(trimmed) ?? words;
+        configuredPositions += grammarTokens.length;
+        if (configuredPositions > MAX_POSITIONS) throw new Error();
+        for (const word of grammarTokens) configuredClasses.add(word);
+        if (configuredClasses.size > MAX_CLASSES) throw new Error();
+        // Config-only omission. Inactive allow/deny rows create no token labels.
+        if (resolved === "off" && key !== "patterns") return [];
         const effective =
           resolved === "off"
             ? "off"
@@ -252,68 +281,80 @@ export function buildJevCommandTokenContext(
               : key === "autoDenyPatterns"
                 ? "block"
                 : resolved;
-        const trimmed = pattern.trim();
         const base = { behavior: effective };
         // EXACT sentinels, before ordinary whitespace splitting. No input matching.
-        switch (trimmed) {
-          case "":
-            return { ...base, kind: "empty" };
-          case "dd of=":
-            return {
-              ...base,
-              kind: "dd_output",
-              head: token("dd"),
-              equalsPrefix: label(equals, "of="),
-            };
-          case "mkfs.*":
-            return { ...base, kind: "mkfs", exact: token("mkfs"), dotPrefix: label(dot, "mkfs.") };
-          case "remote-script-to-shell":
-            return {
-              ...base,
-              kind: "remote_script_to_shell",
-              downloaders: ["curl", "wget"].map(token),
-              shells: [...SHELLS].map(token),
-            };
-          case "base64-decode-to-shell":
-            return {
-              ...base,
-              kind: "base64_decode_to_shell",
-              head: token("base64"),
-              decodeArgs: ["-d", "--decode"].map(token),
-              shells: [...SHELLS].map(token),
-            };
-          case "pi-auth-credential-output":
-            return {
-              ...base,
-              kind: "pi_credential_output",
-              auth: token("auth"),
-              check: token("check"),
-              credentials: token("--credentials"),
-              printActions: ["print-api-key", "print-bearer-token"].map(token),
-            };
-          case "find -delete":
-            return { ...base, kind: "find_delete", head: token("find"), arg: token("-delete") };
-          case "find -exec rm":
-            return {
-              ...base,
-              kind: "find_exec_rm",
-              head: token("find"),
-              exec: token("-exec"),
-              rm: token("rm"),
-            };
-          default:
-            return {
-              ...base,
-              kind: "tokens",
-              tokens: trimmed.split(/\s+/).filter(Boolean).map(token),
-            };
+        const encoded = (() => {
+          switch (trimmed) {
+            case "":
+              return { ...base, kind: "empty" };
+            case "dd of=":
+              return {
+                ...base,
+                kind: "dd_output",
+                head: token("dd"),
+                equalsPrefix: label(equals, "of="),
+              };
+            case "mkfs.*":
+              return {
+                ...base,
+                kind: "mkfs",
+                exact: token("mkfs"),
+                dotPrefix: label(dot, "mkfs."),
+              };
+            case "remote-script-to-shell":
+              return {
+                ...base,
+                kind: "remote_script_to_shell",
+                downloaders: ["curl", "wget"].map(token),
+                shells: [...SHELLS].map(token),
+              };
+            case "base64-decode-to-shell":
+              return {
+                ...base,
+                kind: "base64_decode_to_shell",
+                head: token("base64"),
+                decodeArgs: ["-d", "--decode"].map(token),
+                shells: [...SHELLS].map(token),
+              };
+            case "pi-auth-credential-output":
+              return {
+                ...base,
+                kind: "pi_credential_output",
+                auth: token("auth"),
+                check: token("check"),
+                credentials: token("--credentials"),
+                printActions: ["print-api-key", "print-bearer-token"].map(token),
+              };
+            case "find -delete":
+              return { ...base, kind: "find_delete", head: token("find"), arg: token("-delete") };
+            case "find -exec rm":
+              return {
+                ...base,
+                kind: "find_exec_rm",
+                head: token("find"),
+                exec: token("-exec"),
+                rm: token("rm"),
+              };
+            default:
+              return {
+                ...base,
+                kind: "tokens",
+                tokens: words.map(token),
+              };
+          }
+        })();
+        if (resolved === "off") {
+          effectWaivers.push(encoded);
+          return [];
         }
+        return [encoded];
       });
     };
     const policy = {
       patterns: rows("patterns"),
       allowedPatterns: rows("allowedPatterns"),
       autoDenyPatterns: rows("autoDenyPatterns"),
+      effectWaivers,
     };
     // Caller supplies only words already public in known CLI metadata. This
     // validates shape, not secrecy; raw tool arguments must never supply it.
@@ -322,11 +363,15 @@ export function buildJevCommandTokenContext(
     if (publicField?.get || publicField?.set) throw new Error();
     const publicWords = publicField?.value === undefined ? [] : publicField.value;
     if (!Array.isArray(publicWords) || publicWords.length > 256) throw new Error();
-    const publicFields = Object.getOwnPropertyDescriptors(publicWords);
-    if (Object.values(publicFields).some((field) => field.get || field.set)) throw new Error();
+    for (const key of Reflect.ownKeys(publicWords)) {
+      const field = Object.getOwnPropertyDescriptor(publicWords, key);
+      if (field?.get || field?.set) throw new Error();
+    }
     const publicSeen = new Set<string>();
     const publicSyntax: { word: string; id: number }[] = [];
-    for (const word of publicWords) {
+    for (let index = 0; index < publicWords.length; index += 1) {
+      const field = Object.getOwnPropertyDescriptor(publicWords, index);
+      const word = field?.value;
       if (typeof word !== "string" || word.length > 128 || !/^[a-zA-Z0-9_.:-]+$/.test(word)) {
         throw new Error();
       }
@@ -336,7 +381,7 @@ export function buildJevCommandTokenContext(
     }
     const result = {
       operation: {
-        version: 1,
+        version: 2,
         original: originalLabels,
         expanded: expandedLabels,
         flat: expandedLabels.flatMap((item) => [item.head, ...item.args]),

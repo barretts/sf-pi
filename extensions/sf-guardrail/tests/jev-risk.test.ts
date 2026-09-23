@@ -97,7 +97,7 @@ describe("Jev risk adapter", () => {
     );
     expect(Object.keys(request.questions)).toEqual(["risk", "file_policy"]);
     expect(request.state).toMatchObject({
-      version: 5,
+      version: 6,
       observations: { contextComplete: true },
       policy: { files: expect.any(Array) },
     });
@@ -271,7 +271,7 @@ describe("Jev risk adapter", () => {
       tokens.original[0].args[1],
     );
   });
-  it("preserves disabled special command entries in the policy sent to Jev", () => {
+  it("omits inactive allow and deny rows from effective command policy", () => {
     const config = readBundledConfig();
     config.commandGate.allowedPatterns = [
       { id: "disabled-allow", pattern: "git push", behavior: "off" },
@@ -288,8 +288,9 @@ describe("Jev risk adapter", () => {
     expect(request.state).toMatchObject({
       policy: {
         commands: {
-          allowedPatterns: [{ kind: "tokens", tokens: expect.any(Array), behavior: "off" }],
-          autoDenyPatterns: [{ kind: "tokens", tokens: expect.any(Array), behavior: "off" }],
+          allowedPatterns: [],
+          autoDenyPatterns: [],
+          effectWaivers: [],
         },
       },
     });
@@ -351,7 +352,7 @@ describe("Jev risk adapter", () => {
     });
     expect(JSON.stringify(request.state)).not.toContain('"defaults"');
   });
-  it("keeps every command pattern and its order when an argument can match a different executable", () => {
+  it("keeps active pattern order and separates ordinary effect waivers without executable filtering", () => {
     const config = readBundledConfig();
     config.commandGate.patterns[0].behavior = "off";
     config.commandGate.patterns.push({
@@ -375,15 +376,55 @@ describe("Jev risk adapter", () => {
     const rows = (
       request.state as { policy: { commands: { patterns: Array<{ behavior: string }> } } }
     ).policy.commands.patterns;
-    expect(rows).toHaveLength(config.commandGate.patterns.length);
-    expect(rows[0].behavior).toBe("off");
+    expect(rows).toHaveLength(config.commandGate.patterns.length - 1);
+    expect(rows.every((row) => row.behavior !== "off")).toBe(true);
+    expect(request.state).toMatchObject({
+      policy: {
+        commands: {
+          effectWaivers: [
+            {
+              kind: "find_delete",
+              behavior: "off",
+              head: expect.any(Number),
+              arg: expect.any(Number),
+            },
+          ],
+        },
+      },
+    });
     expect(rows.at(-1)?.behavior).toBe("block");
-    expect(JSON.stringify(request.questions.command_policy?.instructions)).toContain(
-      "quoted-token boundaries",
+    expect(JSON.stringify(request.state)).toContain("quoted-token boundaries");
+    expect(JSON.stringify(request.state)).toContain("command/wrapper expansion order");
+  });
+  it("shares exact matching grammar with independently evaluated waiver questions", () => {
+    const command = "sf org auth show-access-token --target-org ScratchExample";
+    const request = buildJevRequest(
+      buildJevMetadata("bash", { command }),
+      { org: { type: "scratch", verified: true, explicit: true } },
+      readBundledConfig(),
+      { command },
     );
-    expect(JSON.stringify(request.questions.command_policy?.instructions)).toContain(
-      "command/wrapper expansion order",
-    );
+    expect(Object.keys(request.questions)).toEqual([
+      "risk",
+      "command_policy",
+      "org_policy",
+      "disclosure",
+    ]);
+    expect(request.state).toMatchObject({
+      policy: {
+        commands: {
+          matchGrammar: {
+            encoding: expect.stringContaining("separate namespaces"),
+            tokens: expect.stringContaining("consecutive equal IDs"),
+            pi_credential_output: expect.stringContaining("piArgs"),
+          },
+        },
+      },
+    });
+    for (const id of ["risk", "command_policy", "org_policy", "disclosure"])
+      expect(JSON.stringify(request.questions[id].instructions)).toContain(
+        "policy.commands.matchGrammar",
+      );
   });
   it("asks only applicable policy dimensions for a complete ordinary Git status", () => {
     const request = buildJevRequest(

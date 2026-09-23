@@ -89,8 +89,15 @@ One-file-per-concern split:
   questions. Known CLI structure, trusted file-path facts, and bounded numeric
   observations describe effects without deciding policy locally. Mechanically
   project command tokens to request-local integer IDs: original, expanded, flat,
-  typed prefix classes, and Pi argument sequences. Send every ordered command
-  policy row with explicit behavior and token IDs or a special-pattern form.
+  typed prefix classes, and Pi argument sequences. Command-token version 2 sends
+  effective active-only ordered restrictions/allow exceptions with explicit
+  behavior and token IDs or a special-pattern form. Validate and bound every
+  configured row before omission; off allow/deny entries allocate no token
+  classes. Project off ordinary rows separately as effectWaivers, for exact model
+  risk/disclosure effect matching only. They never waive active command/org/file
+  restrictions or act as allow exceptions. Preserve file/org off-winner
+  semantics. Put static token/namespace/special definitions in shared
+  policy.commands.matchGrammar so each independent question sees them directly.
   Jev compares IDs and chooses matches; the host must not send matched rules,
   outcomes, raw commands, private-word dictionaries, stable hashes, or private
   operand legends. `publicSyntax` may map only known executables/subcommands/
@@ -118,7 +125,7 @@ One-file-per-concern split:
   ingest, and manifest runs ignore supplied dry-run intent. Do not infer a
   preview from that intent or a suffix alone; prerequisite reads can still occur
   under an honored business-write dry run. These facts do not decide risk.
-- Use the built-in `fetch` client and protocol v5 independent Choice questions
+- Use the built-in `fetch` client and protocol v6/state version 6 independent Choice questions
   in one Decisions request. Always ask operational `risk` with tool-family
   guidance about executable effects; policy questions decide matching blocks.
   Add file policy for available paths/facts, command policy for shell

@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { evaluateCommand } from "../lib/command-gate.ts";
 import { buildJevCommandTokenContext } from "../lib/jev-command-tokens.ts";
+import { evaluateSafety } from "../lib/safety-kernel.ts";
 import type { CommandGateConfig, CommandPattern } from "../lib/types.ts";
 
 const gate = (patch: Partial<CommandGateConfig> = {}): CommandGateConfig => ({
@@ -19,6 +20,32 @@ const project = (command: string, config: CommandGateConfig) =>
   buildJevCommandTokenContext(command, config) as any;
 const classFor = (context: any, id: number) =>
   context.operation.classes.find((row: any) => row.id === id);
+vi.mock("../../../lib/common/sf-environment/shared-runtime.ts", () => ({
+  getCachedSfEnvironment: () => null,
+}));
+vi.mock("../../../lib/common/sf-environment/detect.ts", () => ({
+  detectConfig: async () => {
+    throw new Error("unexpected-org-lookup");
+  },
+  detectOrg: async () => {
+    throw new Error("unexpected-org-lookup");
+  },
+}));
+const deterministic = (command: string, commandGate: CommandGateConfig) =>
+  evaluateSafety({
+    toolName: "bash",
+    input: { command },
+    cwd: "/fixture-project",
+    config: {
+      version: 1,
+      productionAliases: [],
+      headlessEscapeHatchEnv: "FIXTURE_ALLOW",
+      confirmTimeoutMs: 120000,
+      policies: { rules: [] },
+      orgAwareGate: { rules: [] },
+      commandGate,
+    },
+  });
 
 describe("privacy-preserving legacy command token context", () => {
   it("separates the withheld-operand collision through within-request equality", () => {
@@ -172,7 +199,7 @@ describe("privacy-preserving legacy command token context", () => {
     // The row field name "credentials" is public schema, not a literal value.
   });
 
-  it("preserves policy order, disabled rows and each array's effective behavior", () => {
+  it("preserves active policy order and moves ordinary off rows into effect waivers", () => {
     const config = gate({
       allowedPatterns: [rule("alpha", { behavior: "block" }), rule("beta", { enabled: false })],
       autoDenyPatterns: [
@@ -187,22 +214,159 @@ describe("privacy-preserving legacy command token context", () => {
     });
     expect(evaluateCommand("echo alpha", config)?.action).toBe("allow");
     const context = project("echo alpha beta gamma", config);
-    expect(context.policy.allowedPatterns.map((row: any) => row.behavior)).toEqual([
-      "allow",
-      "off",
-    ]);
-    expect(context.policy.autoDenyPatterns.map((row: any) => row.behavior)).toEqual([
-      "block",
-      "off",
-    ]);
-    expect(context.policy.patterns.map((row: any) => row.behavior)).toEqual([
-      "block",
-      "confirm",
-      "off",
-    ]);
+    expect(context.operation.version).toBe(2);
+    expect(context.policy.allowedPatterns.map((row: any) => row.behavior)).toEqual(["allow"]);
+    expect(context.policy.autoDenyPatterns.map((row: any) => row.behavior)).toEqual(["block"]);
+    expect(context.policy.patterns.map((row: any) => row.behavior)).toEqual(["block", "confirm"]);
     expect(context.policy.patterns.map((row: any) => row.tokens[0])).toEqual(
-      context.operation.flat.slice(1),
+      context.operation.flat.slice(1, 3),
     );
+    expect(context.policy.effectWaivers.map((row: any) => row.behavior)).toEqual(["off"]);
+    expect(context.policy.effectWaivers[0].tokens).toEqual(context.operation.flat.slice(3));
+  });
+
+  it("omits disabled allow exceptions so an active auto-deny remains a baseline block", async () => {
+    const command = "echo fixture_private_restricted_operand";
+    const config = gate({
+      allowedPatterns: [rule("fixture_private_restricted_operand", { enabled: false })],
+      autoDenyPatterns: [rule("fixture_private_restricted_operand")],
+    });
+    expect((await deterministic(command, config))?.action).toBe("block");
+    const context = project(command, config);
+    expect(context.policy.allowedPatterns).toEqual([]);
+    expect(context.policy.effectWaivers).toEqual([]);
+    expect(context.policy.autoDenyPatterns[0].behavior).toBe("block");
+    expect(context.policy.autoDenyPatterns[0].tokens[0]).toBe(context.operation.flat[1]);
+  });
+
+  it("omits disabled auto-deny rows so the actual baseline allows", async () => {
+    const command = "git status";
+    const config = gate({ autoDenyPatterns: [rule("git status", { behavior: "off" })] });
+    expect((await deterministic(command, config))?.action ?? "allow").toBe("allow");
+    const context = project(command, config);
+    expect(context.policy.autoDenyPatterns).toEqual([]);
+    expect(context.policy.effectWaivers).toEqual([]);
+    expect(context).toEqual(project(command, gate()));
+  });
+
+  it.each([
+    ["block", "confirm"],
+    ["confirm", "block"],
+  ] as const)(
+    "keeps an off ordinary row from masking first-active %s before %s",
+    async (first, second) => {
+      const command = "echo fixture_private_operand";
+      const config = gate({
+        patterns: [
+          rule("fixture_private_operand", { behavior: "off" }),
+          rule("fixture_private_operand", { behavior: first }),
+          rule("fixture_private_operand", { behavior: second }),
+        ],
+      });
+      expect((await deterministic(command, config))?.action).toBe(first);
+      const context = project(command, config);
+      expect(context.policy.patterns.map((row: any) => row.behavior)).toEqual([first, second]);
+      expect(context.policy.effectWaivers.map((row: any) => row.behavior)).toEqual(["off"]);
+      expect(context.policy.effectWaivers[0].tokens).toEqual(context.policy.patterns[0].tokens);
+      expect(context.policy.patterns[0].tokens[0]).toBe(context.operation.flat[1]);
+    },
+  );
+
+  it("omits inactive allow/deny words and special constants from every outbound class", () => {
+    const command = "git status";
+    const config = gate({
+      allowedPatterns: [
+        rule("fixture_private_disabled_allow=value.ext@version", { behavior: "off" }),
+        rule("dd of=", { enabled: false }),
+      ],
+      autoDenyPatterns: [
+        rule("fixture_private_disabled_deny=value.ext@version", { enabled: false }),
+        rule("remote-script-to-shell", { behavior: "off" }),
+      ],
+    });
+    const context = project(command, config);
+    expect(context).toEqual(project(command, gate()));
+    expect(JSON.stringify(context)).toBe(JSON.stringify(project(command, gate())));
+    expect(JSON.stringify(context)).not.toMatch(/fixture_private|dd_output|remote_script_to_shell/);
+  });
+
+  it("preserves exact special syntax for off ordinary effect-waiver rows", () => {
+    const command = "dd of=fixture_private_output";
+    const config = gate({
+      patterns: [rule("dd of=", { behavior: "off" }), rule("dd   of=", { enabled: false })],
+    });
+    const context = project(command, config);
+    expect(context.policy.patterns).toEqual([]);
+    expect(context.policy.effectWaivers.map((row: any) => row.kind)).toEqual([
+      "dd_output",
+      "tokens",
+    ]);
+    expect(classFor(context, context.operation.expanded[0].args[0]).equalsPrefix).toBe(
+      context.policy.effectWaivers[0].equalsPrefix,
+    );
+    expect(JSON.stringify(context)).not.toContain("fixture_private_output");
+  });
+
+  it("validates inactive rows and aggregate bounds before omitting them", () => {
+    for (const key of ["allowedPatterns", "autoDenyPatterns", "patterns"] as const) {
+      const bad = [
+        rule("safe", { enabled: false, behavior: "invalid" as any }),
+        rule("safe", { behavior: "off", action: "invalid" as any }),
+        rule(42 as any, { enabled: false }),
+        rule("fixture_private_large".repeat(7000), { enabled: false }),
+        rule(Array.from({ length: 4100 }, () => "safe").join(" "), { enabled: false }),
+        rule(Array.from({ length: 2050 }, (_, index) => `private_token_${index}`).join(" "), {
+          enabled: false,
+        }),
+      ];
+      for (const candidate of bad)
+        expect(() => project("git status", gate({ [key]: [candidate] }))).toThrowError(
+          "unsupported-command-token-context",
+        );
+      expect(() =>
+        project(
+          "git status",
+          gate({ [key]: Array.from({ length: 257 }, () => rule("safe", { enabled: false })) }),
+        ),
+      ).toThrowError("unsupported-command-token-context");
+      expect(() =>
+        project(
+          "git status",
+          gate({
+            [key]: Array.from({ length: 128 }, () =>
+              rule(`fixture_private_${"x".repeat(1024)}`, { enabled: false }),
+            ),
+          }),
+        ),
+      ).toThrowError("unsupported-command-token-context");
+      let invoked = false;
+      const candidate = rule("safe", { enabled: false });
+      Object.defineProperty(candidate, "description", {
+        get: () => {
+          invoked = true;
+          return "fixture_private_getter";
+        },
+      });
+      expect(() => project("git status", gate({ [key]: [candidate] }))).toThrowError(
+        "unsupported-command-token-context",
+      );
+      expect(invoked).toBe(false);
+      const symbolic = rule("safe", { enabled: false });
+      Object.defineProperty(symbolic, Symbol("private"), {
+        get: () => {
+          invoked = true;
+          return "fixture_private_getter";
+        },
+      });
+      expect(() => project("git status", gate({ [key]: [symbolic] }))).toThrowError(
+        "unsupported-command-token-context",
+      );
+      expect(invoked).toBe(false);
+      const inherited = Object.assign(Object.create({ enabled: false }), rule("safe"));
+      expect(() => project("git status", gate({ [key]: [inherited] }))).toThrowError(
+        "unsupported-command-token-context",
+      );
+    }
   });
 
   it("uses request-local first-seen labels without Unicode hash collisions", () => {
@@ -259,6 +423,31 @@ describe("privacy-preserving legacy command token context", () => {
     expect(() => buildJevCommandTokenContext("git status", gate(), options)).toThrowError(
       "unsupported-command-token-context",
     );
+    expect(invoked).toBe(false);
+    const words = ["git"];
+    Object.defineProperty(words, Symbol.iterator, {
+      get: () => {
+        invoked = true;
+        throw new Error("private-iterator");
+      },
+    });
+    expect(() =>
+      buildJevCommandTokenContext("git status", gate(), { publicWords: words }),
+    ).toThrowError("unsupported-command-token-context");
+    expect(invoked).toBe(false);
+    const custom = ["git"];
+    Object.defineProperty(custom, Symbol.iterator, {
+      value: () => {
+        invoked = true;
+        throw new Error("private-iterator");
+      },
+    });
+    const bounded = buildJevCommandTokenContext("git status", gate(), {
+      publicWords: custom,
+    }) as any;
+    expect(bounded.operation.publicSyntax).toEqual([
+      { word: "git", id: bounded.operation.flat[0] },
+    ]);
     expect(invoked).toBe(false);
   });
 

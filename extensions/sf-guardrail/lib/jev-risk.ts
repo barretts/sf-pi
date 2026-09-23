@@ -104,7 +104,7 @@ const RISK_DOMAINS = {
   shell: {
     rules: [
       "Local status/diff/log, staging/commit, soft reset, test/build and genuine dry runs are routine. Delete, destructive overwrite, privilege/permission/ownership change, termination, force push, upload and durable/external writes require approval. Wrappers keep nested effects; opaque scripts/eval/substitution are unknown.",
-      "Command rows have explicit behavior and opaque equality tokens. Exact enabled allow exceptions and off ordinary rules waive that configured effect only; assess uncovered effects. Local Git metadata needs no org/browser facts.",
+      "Use policy.commands.matchGrammar for exact matches against commandTokens. Matching allowedPatterns and effectWaivers waive that configured effect only; assess uncovered effects. effectWaivers are disabled ordinary rules, never command restrictions, allow exceptions or overrides of active policy. Local Git metadata needs no org/browser facts.",
     ],
     allow: ["git status/diff", "git reset --soft"],
     confirm: ["destructive change", "opaque execution"],
@@ -112,7 +112,7 @@ const RISK_DOMAINS = {
   salesforce_shell: {
     rules: [
       "Status/query/describe, validation/preview and genuine check-only/dry-run rehearsals are routine. Verified nonproduction deploy/data changes can be routine. Production/unknown-org mutation, every org create/delete, package uninstall and anonymous Apex require approval; so do separate destructive local/release effects or opaque execution.",
-      "Exact enabled command allow exceptions/off ordinary rules waive that configured effect, not uncovered effects. Command rows have explicit behavior and opaque equality tokens.",
+      "Use policy.commands.matchGrammar for exact matches against commandTokens. Matching allowedPatterns/effectWaivers waive that configured effect, not uncovered effects. effectWaivers are disabled ordinary rules, never command restrictions, allow exceptions or overrides of active policy.",
     ],
     allow: ["validation/preview", "verified scratch deploy"],
     confirm: ["production deploy", "Apex execution"],
@@ -173,7 +173,7 @@ const DISCLOSURE_DOMAINS = {
   ],
   shell: [
     "Credential output/secret-file export or unknown transfer effects require approval. This includes pi auth print-api-key/print-bearer-token/check --credentials; SF org auth show-access-token/show-sfdx-auth-url/show-user-password, generate password or SF_TEMP_SHOW_SECRETS=true. Ordinary status/metadata/nonsecret reads are routine.",
-    "An exact enabled command allow exception/off ordinary rule waives that configured disclosure only. Command rows carry explicit behavior and opaque equality tokens.",
+    "Use policy.commands.matchGrammar for exact matches against commandTokens. Matching allowedPatterns/effectWaivers waive that configured disclosure only. effectWaivers are disabled ordinary rules, never command restrictions, allow exceptions or overrides of active policy.",
   ],
   soql: [
     "queryAll/export/history.rerun, allow_unbounded=true or host rowLimit.bucket=large require approval. Cap is 2000: use host effectiveMaximum, no invented uncapped rows. Withheld query leaves ALL ROWS/sensitivity unknown. Schema/status/small bounded reads are routine.",
@@ -185,6 +185,25 @@ const DISCLOSURE_DOMAINS = {
     "Unknown data/transfer effects require approval; supplied read-only claims are not evidence.",
   ],
 } as const;
+const COMMAND_MATCH_GRAMMAR = {
+  encoding:
+    "original/expanded/flat/piArgs contain whole-token IDs. Look up classes by id for equalsPrefix/dotPrefix. Whole-token, equalsPrefix and dotPrefix are separate namespaces; compare within the required namespace only. An absent prefix never matches.",
+  tokens:
+    "Compare operation.metadata.commandTokens: one row token matches ANY equal ID in flat; multiple row tokens match consecutive equal IDs in flat. flat preserves command/wrapper expansion order and quoted-token boundaries. Distinct IDs never match; no substring, fuzzy matching or command regex.",
+  empty: "Never matches.",
+  dd_output:
+    "An expanded command head equals row.head and an argument class has equalsPrefix equal row.equalsPrefix.",
+  mkfs: "A flat token equals row.exact or its class dotPrefix equals row.dotPrefix.",
+  find_delete: "An expanded command head equals row.head and an argument equals row.arg.",
+  find_exec_rm:
+    "An expanded command head equals row.head and an argument row.rm occurs after the first row.exec argument.",
+  remote_script_to_shell:
+    "Two adjacent original commands have heads in row.downloaders then row.shells; any separator counts.",
+  base64_decode_to_shell:
+    "Two adjacent original commands have heads row.head then one of row.shells, and the first has an argument in row.decodeArgs.",
+  pi_credential_output:
+    "A piArgs sequence starts row.auth then a row.printActions ID, or starts row.auth,row.check and contains row.credentials.",
+};
 const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
   risk: {
     type: "choice",
@@ -225,33 +244,29 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
       question: "What does command policy require?",
       boundary: DATA_BOUNDARY,
       encoding:
-        "operation.metadata.commandTokens contains complete mechanical token views; policy.commands has ordered rows with explicit behavior. Integer IDs mean exact equality, not similarity or shell prose. Whole-token and each prefix namespace are separate.",
+        "Read operation.metadata.commandTokens and policy.commands. The three effective ordered lists are allowedPatterns, autoDenyPatterns and patterns; all their rows are active. Disabled allow/deny rules are absent. effectWaivers is outside command policy: ignore it here. Integer IDs mean exact equality, not similarity or shell prose. Whole-token and each prefix namespace are separate.",
       match:
-        "kind=tokens: one token matches ANY equal ID in flat; multiple tokens match consecutive equal IDs in flat. flat preserves command/wrapper expansion order and quoted-token boundaries. kind=empty never matches. No substring, fuzzy match or command regex; distinct IDs never match.",
+        "For each row.kind, apply the exact definition in policy.commands.matchGrammar against operation.metadata.commandTokens. Match equality only; missing literal spelling is not missing token context.",
       order:
-        "Skip off. First allow match waives; else first auto-deny blocks; else first ordinary match uses behavior; no match allows.",
+        "First check allowedPatterns: any exact match returns allow. Otherwise check autoDenyPatterns: any exact match returns block. Otherwise the FIRST exact matching patterns row returns its explicit behavior confirm or block. If none match, return allow. No effectWaivers row participates.",
       unknown:
         "Private values and comments are present as opaque token IDs. shell_values_withheld does not mean missing policy tokens. Do not invent a match from executable danger or missing literal spelling. Effect uncertainty belongs to risk/disclosure, not command matching.",
-      specials: {
-        dd_output:
-          "An expanded command head equals row.head and an argument class has equalsPrefix equal row.equalsPrefix.",
-        mkfs: "A flat token equals row.exact or its class dotPrefix equals row.dotPrefix.",
-        find_delete: "An expanded command head equals row.head and an argument equals row.arg.",
-        find_exec_rm:
-          "An expanded command head equals row.head and an argument row.rm occurs after the first row.exec argument.",
-        remote_script_to_shell:
-          "Two adjacent original commands have heads in row.downloaders then row.shells; any separator counts.",
-        base64_decode_to_shell:
-          "Two adjacent original commands have heads row.head then one of row.shells, and the first has an argument in row.decodeArgs.",
-        pi_credential_output:
-          "A piArgs sequence starts row.auth then a row.printActions ID, or starts row.auth,row.check and contains row.credentials.",
-      },
     },
     criteria: {
-      allow: "Enabled allow match, or every active restriction is excluded.",
-      confirm: "First ordinary match asks, or a relevant ask cannot be excluded.",
-      block:
-        "Auto-deny/ordinary block matches or cannot be excluded, without enabled matching allow.",
+      allow: {
+        when: "An allowedPatterns row matches, OR no autoDenyPatterns or patterns row matches.",
+        exclude: "A matching active deny or first ordinary restriction without a matching allow.",
+      },
+      confirm: {
+        when: "No allow or auto-deny matches, and the first matching patterns row has behavior confirm.",
+        exclude:
+          "No match, a matching allow, any matching auto-deny, or first ordinary match block.",
+      },
+      block: {
+        when: "No allowedPatterns row matches. Either an autoDenyPatterns row matches, or the first matching patterns row has behavior block.",
+        exclude:
+          "A matching allow; an absent/disabled rule; effectWaivers; executable danger without an exact active policy match.",
+      },
     },
   },
   org_policy: {
@@ -260,7 +275,7 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
       question: "What does org-aware AST policy require?",
       boundary: DATA_BOUNDARY,
       rules: [
-        "An enabled command allow row whose opaque tokens match commandTokens waives org restrictions. Otherwise inspect commands in order; skip enabled=false, select first rule whose ast cmd/subCmd/flagIn and whenOrgType match. off stops later rules for that command; return first active command outcome.",
+        "Use policy.commands.matchGrammar for exact matches against commandTokens. Only a matching allowedPatterns row waives org restrictions; effectWaivers never waive org policy. Otherwise inspect commands in order; skip enabled=false, select first rule whose ast cmd/subCmd/flagIn and whenOrgType match. off stops later rules for that command; return first active command outcome.",
         "AST cmd exact; subCmd positional prefix with listed alternatives; flagIn requires every listed flag/value (inline equivalent). sf-deploy-prod excludes --check-only/--checkonly/--dry-run. No exemption for other rules.",
         "Verified nonproduction is not production. Missing/unverified org cannot exclude a production restriction, including custom non-SF commands such as git; mutation is not required.",
       ],
@@ -306,18 +321,19 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
   },
 };
 export const JEV_PROTOCOL_HASH = jevHash({
-  version: 5,
+  version: 6,
   questions: QUESTION_PROTOCOL,
   riskDomains: RISK_DOMAINS,
   disclosureDomains: DISCLOSURE_DOMAINS,
   applicability: {
-    version: 5,
+    version: 6,
     fileTools: FILE_TOOLS,
     noDisclosureExecutables: NO_DISCLOSURE_EXECUTABLES,
     noDisclosureGitOperations: NO_DISCLOSURE_GIT_OPERATIONS,
   },
-  policyProjectionVersion: 5,
-  commandTokenProjectionVersion: 1,
+  policyProjectionVersion: 6,
+  commandTokenProjectionVersion: 2,
+  commandMatchGrammar: COMMAND_MATCH_GRAMMAR,
   sessionGrantTransportVersion: 2,
   sessionGrantTransportExecutables: SESSION_TRANSPORT_EXECUTABLES,
   sessionGrantUnboundSfOperations: SESSION_UNBOUND_SF_OPERATIONS,
@@ -500,7 +516,7 @@ export function buildJevRequest(
     model: JEV_MODEL,
     provider: ROUTING,
     state: {
-      version: 5,
+      version: 6,
       operation: {
         ...operation,
         metadata: {
@@ -511,7 +527,14 @@ export function buildJevRequest(
       facts,
       policy: {
         ...(hasFiles ? { files: policy.files } : {}),
-        ...(commandTokens ? { commands: commandTokens.policy } : {}),
+        ...(commandTokens
+          ? {
+              commands: {
+                ...(commandTokens.policy as Record<string, unknown>),
+                matchGrammar: COMMAND_MATCH_GRAMMAR,
+              },
+            }
+          : {}),
         ...(hasOrgPolicy ? { orgAware: policy.orgAware } : {}),
       },
       observations: {
@@ -651,7 +674,7 @@ export async function evaluateJevSafety(
       !input.toolName.startsWith("sf_browser_") &&
       input.toolName !== "slack_canvas";
     return {
-      ruleId: "jev-risk-v5",
+      ruleId: "jev-risk-v6",
       feature: "jevGate",
       action,
       fingerprint,
@@ -702,7 +725,7 @@ export async function evaluateJevSafety(
         ? code
         : "invalid-input-or-context";
     return {
-      ruleId: "jev-risk-v5",
+      ruleId: "jev-risk-v6",
       feature: "jevGate",
       action: "block",
       fingerprint,
