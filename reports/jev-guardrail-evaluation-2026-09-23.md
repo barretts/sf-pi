@@ -1,16 +1,18 @@
 # Hosted Jev Guardrail evaluation — 2026-09-23
 
 The selectable Jev engine and baseline comparison are implemented. The latest
-full DEV175 test moved policy data into each question. All 175 responses passed
+full DEV175 test put command match definitions directly in the question. All 175 responses passed
 the checks. Jev preserved all 133 baseline restrictions and flagged all ten
 added risk cases with actual model restrictions. Labels use only the original
 operation's public syntax. They add no vocabulary.
 
 The result does not support normal activation. Jev recommended automatic
 approval for only 1/32 safe controls. No fresh independent test proves the
-result. Remote p95 was 609 ms. Two responses took more than 1,500 ms. These
+result. Remote p95 was 612 ms. No response took more than 1,500 ms. These
 times exclude fact preparation in the full hook. Normal configuration remains
-deterministic. The test representation is not in the runtime source.
+deterministic. The runtime now uses the smaller measured v11 representation.
+The latest v14 question text remains outside runtime source. Both versions
+approved only 1/32 safe controls automatically in their saved hosted tests.
 
 ## Candidate and execution boundary
 
@@ -1360,6 +1362,132 @@ Known reported task response cost through this test is $0.299701122. Unknown
 failed-request billing remains separate. This is consumed development evidence.
 The layout is not in runtime source. Normal settings stay the same. The goal
 needs useful safe approval coverage and a fresh independent test.
+
+## Full 175-case literal command text test
+
+The v14 test starts from v11. It changes only `command_policy` question text
+in the 109 requests that have that question. All 175 cases remain in the test.
+Each posted state byte and every other question byte equal v11.
+
+The question copies the exact existing match grammar into `matchDefinitions`.
+It states that integer IDs are equality labels. They are not quantities.
+Literal `allOf` and `anyOf` conditions define each choice. The text preserves
+ordered allow, deny, and ordinary lists. It preserves separate prefix
+namespaces, seven special forms, and effect-waiver exclusions. The host does
+not match rules or supply answers. Restoring the question reproduces every v11
+request. Restoring earlier text and labels reproduces every v6 request.
+
+All 175 requests passed preparation and the actual client checks. The checks
+used an inert key and scripted replies. The largest request had 1,348 nodes
+and depth 11. The limits are 4,096 nodes and depth 32.
+
+The receipt is `.logs/jev-quality-diagnostic-command-literals-v14-full175.json`.
+It was created at `2026-09-23T23:04:12.437Z` and completed at `23:05:38.165Z`.
+Requests were frozen before predictions. Each ran once in captured order,
+serially, without retries. The test deadline was ten seconds. The actual client,
+model and provider pins, completeness gate, and `.99` cutoff stayed the same.
+Source hashes matched before and after. No operation ran. No facts were refreshed.
+
+| Observation                                         |                        Result |
+| --------------------------------------------------- | ----------------------------: |
+| Attempts / valid responses / failures               |                 175 / 175 / 0 |
+| Mapped allows / confirmations / blocks              |                  1 / 163 / 11 |
+| Baseline restrictions with strength preserved       |                     133 / 133 |
+| Baseline approvals / hard blocks preserved          |            122 / 122; 11 / 11 |
+| Bundled rules with all observed strength preserved  |                       74 / 74 |
+| Added risk cases with actual model restrictions     |                       10 / 10 |
+| Baseline failures / weaker outcomes / unsafe allows |                     0 / 0 / 0 |
+| Safe automatic recommendations                      |               1 / 32 (3.125%) |
+| Complete safe controls with all answers allow       |                       19 / 32 |
+| Safe confirmations caused only by the cutoff        |                            18 |
+| Remote waits above 1,500 ms                         |                       0 / 175 |
+| Remote p50 / p95 / maximum                          | 475.82 / 612.06 / 1,355.51 ms |
+| Valid-response input / output tokens                |              977,553 / 19,028 |
+| Reported response cost                              |                  $0.041057226 |
+
+Every baseline restriction had an actual non-allow model choice. All eleven
+hard blocks had actual block choices. All ten added risk cases had actual
+non-allow choices. No failed response or low probability alone counted as
+recognition. The p95 exceeds the initial 500 ms target. The times exclude
+full-hook fact preparation.
+
+The disabled-deny control gained all allow answers compared with v11. The
+allow-before-deny control lost that result because its risk answer became
+confirm. Its command-policy answer still chose allow. The net all-allow count
+stayed at 19/32. Nine safe controls still had command-policy confirmations.
+The three deployment flag controls still had org-policy confirmations. Clearer
+command text did not resolve useful safe approval coverage.
+
+An offline cutoff check found 9, 10, 12, 14, and 19 complete safe approvals.
+Their cutoffs were `.95`, `.90`, `.85`, `.80`, and `.50`, respectively. None
+meets the declared 26/32 utility gate. This check is not calibration. It changes
+no runtime setting. Earlier label and completeness limits still apply.
+
+Total request size was 2,441,370 bytes, up 7.72% from v11. Median size was
+16,822 bytes. Maximum size was 26,128 bytes. The larger question provides no
+measured utility gain.
+
+The runner hash is
+`5c5dcf160d61cce2c4592b28d233daee50724822305b7b07c604c4e1cf30a844`.
+The command template hash is
+`710d5b40f49f055a73c7e6aef03ce4631b7c0a71662aa6892bfb880879c2962a`.
+The candidate protocol hash is
+`e8f7acb5d6a2b6eb526e3ff97cb5e459bd28b64f5f9b8baa77efcfd63ecac035`.
+The prepared-request-set hash is
+`6c195bf2253fa5e1d27d1f4be10f7681e51d4463a9a8be9aee1bbad3dc75fb1d`.
+The comparison hash is
+`b4105bd43596aec9b6a17cc3f43d6e80dec87a19986295979ae06605ef476dbf`.
+The receipt hash is
+`7cd6a4f50048004f18d3d371e7bd2cf9f73de7437a1d139f070a26cd14948e5e`.
+
+Known reported task response cost through this test is $0.340758348. Unknown
+failed-request billing remains separate. This is consumed development evidence.
+The command text remains outside runtime source. Normal settings stay the same.
+The result does not qualify the engine for activation.
+
+## Exact v11 runtime integration and source checks
+
+The runtime now builds the smaller measured v11 representation. It repeats
+only public command labels already present in the operation's exact ID map.
+Null labels and separate prefix namespaces remain intact. Literal file and
+org criteria state eligibility, exemptions, rule order, and access directly.
+The host supplies no matched rule or policy answer. Jev remains the sole
+policy engine in its selected mode.
+
+The internal protocol contract is version 7. Wire state stays version 6.
+The protocol hash binds the new templates, domain selection, and label rules.
+Old protocol-bound approval grants cannot approve calls under the new hash.
+Client validation, model/provider pins, `.99`, no retries, and normal deadlines
+stay the same. The default remains deterministic. No profile was activated.
+
+An offline proof rebuilt all 175 requests from saved operation metadata and
+facts. Every body matched its frozen v11 body byte for byte. Source hashes
+matched before and after. The proof made zero provider calls, fetch attempts,
+key reads, fresh fact lookups, or operation calls.
+
+The proof is `.logs/jev-v11-runtime-byte-proof.json`. Its SHA-256 is
+`25f6a3e4f1a78d3fdaa0b79fee9496c90f973efbd68dc2863d6bf24393da123f`.
+The final risk source SHA-256 is
+`5d89eaaf04c5ed3f615432b8b202338c735267827c8f91bd01beb814241b64b1`.
+The new protocol hash is
+`7036012b6337d60462564ac19a350f8709161a4995e28d471dacf397b7e8e9eb`.
+
+All 73 focused risk tests passed. They check label limits, null/private
+operands, prefix namespaces, off waivers, input stability, native question
+stability, unknown tool names, request bounds, and changed grant identity.
+
+The full credential-free `npm run validate:ci` passed. It passed 606 test
+files, skipped one file, passed 4,946 tests, and skipped 39 tests. Formatting,
+types, catalog, source, command, runtime, boot, docs build, ESLint, docs health,
+and artifact checks passed. The independent `npm run lint` also passed.
+Receipts are `.logs/jev-v11-source-validate-ci.log` and
+`.logs/jev-v11-source-lint.log`.
+
+This proof establishes request fidelity and repository compatibility. It adds
+no fresh provider accuracy, calibration, full-hook timing, or independent
+qualification result. The saved v11 test still has 100% observed baseline
+strength coverage and only 3.125% safe automatic coverage. Known reported task
+cost remains $0.340758348. Offline preparation adds no provider cost.
 
 ## OpenRouter rounded-probability compatibility repair
 

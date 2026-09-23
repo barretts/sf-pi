@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { readBundledConfig } from "../lib/config.ts";
 import {
@@ -7,6 +8,7 @@ import {
   evaluateJevSafety,
   jevContextComplete,
   jevPolicyContext,
+  JEV_PROTOCOL_HASH,
 } from "../lib/jev-risk.ts";
 import { jevHash } from "../lib/jev-identity.ts";
 import { buildJevMetadata } from "../lib/jev-metadata.ts";
@@ -557,7 +559,12 @@ describe("Jev risk adapter", () => {
       policy: {
         commands: {
           autoDenyPatterns: expect.arrayContaining([
-            { kind: "tokens", tokens: expect.any(Array), behavior: "block" },
+            {
+              kind: "tokens",
+              tokens: expect.any(Array),
+              behavior: "block",
+              publicNames: { tokens: [null] },
+            },
           ]),
         },
       },
@@ -569,6 +576,172 @@ describe("Jev risk adapter", () => {
       "Do not invent a match",
     );
     expect(JSON.stringify(request)).not.toContain("restricted-token");
+  });
+  it("uses operation names for whole-token labels and keeps off waivers and private IDs", () => {
+    const config = readBundledConfig();
+    config.commandGate.patterns = [
+      { id: "private-policy", pattern: "git status PRIVATE_POLICY_WORD", behavior: "confirm" },
+      { id: "effect-only", pattern: "git status", behavior: "off" },
+    ];
+    config.commandGate.allowedPatterns = [];
+    config.commandGate.autoDenyPatterns = [];
+    const command = "git status --short PRIVATE_ARG";
+    const metadata = buildJevMetadata("bash", { command });
+    const before = JSON.stringify({ config, metadata });
+    const request = buildJevRequest(metadata, {}, config, { command });
+    expect(request.state).toMatchObject({
+      operation: {
+        metadata: {
+          commandTokens: {
+            publicSyntax: [
+              { id: expect.any(Number), word: "git" },
+              { id: expect.any(Number), word: "status" },
+              { id: expect.any(Number), word: "--short" },
+            ],
+          },
+        },
+      },
+      policy: {
+        commands: {
+          patterns: [
+            {
+              behavior: "confirm",
+              tokens: expect.any(Array),
+              publicNames: { tokens: ["git", "status", null] },
+            },
+          ],
+          effectWaivers: [
+            {
+              behavior: "off",
+              tokens: expect.any(Array),
+              publicNames: { tokens: ["git", "status"] },
+            },
+          ],
+        },
+      },
+    });
+    const wire = JSON.stringify(request);
+    expect(wire).not.toContain("PRIVATE_POLICY_WORD");
+    expect(wire).not.toContain("PRIVATE_ARG");
+    expect(JSON.stringify({ config, metadata })).toBe(before);
+  });
+  it("keeps equals and dot prefixes separate from whole-token labels", () => {
+    const config = readBundledConfig();
+    config.commandGate.patterns = [
+      { id: "output", pattern: "dd of=", behavior: "confirm" },
+      { id: "format", pattern: "mkfs.*", behavior: "block" },
+    ];
+    config.commandGate.allowedPatterns = [];
+    config.commandGate.autoDenyPatterns = [];
+    const command = "dd of=PRIVATE_TARGET";
+    const request = buildJevRequest(buildJevMetadata("bash", { command }), {}, config, { command });
+    const rows = (
+      request.state as { policy: { commands: { patterns: Record<string, unknown>[] } } }
+    ).policy.commands.patterns;
+    expect(rows).toMatchObject([
+      { equalsPrefix: expect.any(Number), publicNames: { head: "dd" } },
+      { dotPrefix: expect.any(Number), publicNames: { exact: null } },
+    ]);
+    for (const row of rows) {
+      expect(Object.hasOwn(row.publicNames as object, "equalsPrefix")).toBe(false);
+      expect(Object.hasOwn(row.publicNames as object, "dotPrefix")).toBe(false);
+    }
+    const state = request.state as {
+      operation: { metadata: { commandTokens: unknown } };
+      policy: { commands: unknown };
+    };
+    expect(JSON.stringify(state.operation.metadata.commandTokens)).not.toContain("PRIVATE_TARGET");
+    expect(JSON.stringify(state.policy.commands)).not.toContain("PRIVATE_TARGET");
+  });
+  // These hashes record the prior native question bytes.
+  it.each([
+    ["sf_apex", "7101702f8502bcb31b19bb50e52a6b67f99b0b29e72205b97d378c4dc3e9d6fe"],
+    ["sf_soql", "70ad9ea61cdd06a7cf6deb65c177de3f0549fa867708b290e1c6437bf7b3708c"],
+    ["agentscript_lifecycle", "c5f7084da7a2906893801b49438bc5b4ffca28c66484d6238a6e6274647d3cfc"],
+    ["data360_prepare", "12a2ab8081d05421bcd509c8aabf3abda204395b8bb4f412448f5af550782ae7"],
+    ["slack_canvas", "ab48204c6ad9de54233d9fc78e76d642487d2d101e1527f48bd5c2b85844e0d9"],
+    ["sf_browser_press", "dc79f9ea16888014244b015ab53434a5c58e4d45413e0ad3d1a6aaf8b73b819e"],
+  ])("keeps the prior native risk question for %s", (toolName, expectedHash) => {
+    const request = buildJevRequest(
+      { toolName, metadata: {}, omissions: [], complete: true },
+      {},
+      readBundledConfig(),
+    );
+    expect(createHash("sha256").update(JSON.stringify(request.questions.risk)).digest("hex")).toBe(
+      expectedHash,
+    );
+  });
+  it.each([
+    ["sf_soql", "disclosure", "2fcee0f715ae1ddddddc69913969b27250495101cc9d8ed229e5930d01cb026c"],
+    [
+      "data360_prepare",
+      "disclosure",
+      "5eb4e1d5c765831037da1c878eea5fd58709c1a62eaede165b2599ac35f79774",
+    ],
+    [
+      "sf_browser_press",
+      "authority",
+      "eb4014bca1154165eb86084c8fc0c4923f1c8847621cc30b62c990f833942fe8",
+    ],
+  ] as const)("keeps the prior %s %s question", (toolName, question, expectedHash) => {
+    const request = buildJevRequest(
+      { toolName, metadata: {}, omissions: [], complete: true },
+      {},
+      readBundledConfig(),
+    );
+    expect(
+      createHash("sha256").update(JSON.stringify(request.questions[question])).digest("hex"),
+    ).toBe(expectedHash);
+  });
+  it("uses the unknown domain for a tool name that is an object prototype key", () => {
+    const request = buildJevRequest(
+      { toolName: "constructor", metadata: {}, omissions: [], complete: false },
+      {},
+      readBundledConfig(),
+    );
+    expect(JSON.stringify(request.questions.risk.instructions)).toContain("Unfamiliar/opaque");
+  });
+  it("applies the full request bound after it adds public names", () => {
+    const config = readBundledConfig();
+    config.commandGate.patterns = Array.from({ length: 100 }, (_, index) => ({
+      id: `repeated-${index}`,
+      pattern: Array(20).fill("git status").join(" "),
+      behavior: "confirm" as const,
+    }));
+    config.commandGate.allowedPatterns = [];
+    config.commandGate.autoDenyPatterns = [];
+    const command = "git status";
+    expect(() =>
+      buildJevRequest(buildJevMetadata("bash", { command }), {}, config, { command }),
+    ).toThrow("request-too-large");
+  });
+  it("changes the grant key for the new contract and keeps local authoring session approval", async () => {
+    const input = call();
+    const decision = await evaluateJevSafety(input, {
+      descriptor,
+      request: async () => prediction("confirm", 0),
+      resolveFacts: async () => ({
+        facts: { org: { type: "sandbox" as const, verified: true, explicit: true } },
+        orgIdentity: "synthetic-org",
+      }),
+    });
+    const priorProtocol = "fe49ed0f497a0ef2820225d9006647c8c17c3dde2561dcfb99580c5976c73a6d";
+    expect(JEV_PROTOCOL_HASH).not.toBe(priorProtocol);
+    expect(decision.jev?.protocolHash).toBe(JEV_PROTOCOL_HASH);
+    expect(decision.approvalScope?.allowSession).toBe(true);
+    const priorFingerprint = jevHash({
+      toolName: input.toolName,
+      originalHash: decision.jev?.inputHash,
+      descriptorHash: decision.jev?.descriptorHash,
+      cwd: input.cwd,
+      sessionId: null,
+      factsHash: decision.jev?.factsHash,
+      policyHash: decision.jev?.policyHash,
+      protocolHash: priorProtocol,
+      engine: "jev",
+      model: JEV_RESOLVED_MODEL,
+    });
+    expect(decision.fingerprint).not.toBe(priorFingerprint);
   });
   it("keeps browser authority separate while not asking irrelevant disclosure questions", () => {
     const request = buildJevRequest(

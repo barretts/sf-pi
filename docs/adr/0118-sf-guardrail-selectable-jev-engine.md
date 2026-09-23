@@ -26,9 +26,9 @@ branches before deterministic normalization and classifies every Pi
 the effective policy after bundled defaults, stable-id overrides, and routine
 settings. It has no automatic deterministic fallback.
 
-Protocol v6 uses Node's built-in `fetch` to call OpenRouter Decisions with
-independent Choice questions sharing one state and the options `allow`,
-`confirm`, and `block`. Always ask `risk` with tool-family guidance about
+Protocol version 7 uses Node's built-in `fetch` to call OpenRouter Decisions.
+Independent Choice questions share one state. Their options are `allow`,
+`confirm`, and `block`. Wire state version stays 6. Always ask `risk` with tool-family guidance about
 operational effects. Available paths/file facts add file policy; parsed shell
 calls add command policy and structurally possible org policy. Complete known
 executable/wrapper heads narrow the projected org rules; incomplete/opaque
@@ -92,6 +92,13 @@ authority. Omitted effect content does not prove that a custom pattern is
 absent. Private command values/comments retain exact policy equality through
 token IDs; withholding their spelling does not create a match. Genuinely
 unresolved policy restrictions remain model confirm/block criteria.
+
+Command rows repeat selector labels in `publicNames`. Use only the operation's
+exact `publicSyntax` ID map. Keep null labels and separate prefix namespaces.
+Add no vocabulary or matched-rule facts. File and org criteria state
+eligibility, exemptions, order, and tool access directly. Bind the templates
+and label rules in the protocol hash. Old protocol grants cannot approve a
+call under the new hash. These changes preserve sole model authority.
 
 Observe execution flags from exact dispatch branches: `dryRun` is honored,
 ignored, or unknown; `effectiveDryRun` is supplied only for an honored branch;

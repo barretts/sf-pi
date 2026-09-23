@@ -102,6 +102,10 @@ One-file-per-concern split:
   outcomes, raw commands, private-word dictionaries, stable hashes, or private
   operand legends. `publicSyntax` may map only known executables/subcommands/
   flag keys already exposed in semantic metadata to the same IDs.
+  Command rows may repeat these labels in `publicNames`. Use the exact
+  operation ID map. Keep null labels and separate prefix namespaces. Add no
+  vocabulary. File and org criteria state eligibility, exemptions, order,
+  and tool access directly. Jev still selects every rule outcome.
   Preserve equality and quoted-token boundaries. IDs reveal equality and policy
   vocabulary membership; do not describe them as cryptographic protection or
   guaranteed model matching. Filter
@@ -125,8 +129,9 @@ One-file-per-concern split:
   ingest, and manifest runs ignore supplied dry-run intent. Do not infer a
   preview from that intent or a suffix alone; prerequisite reads can still occur
   under an honored business-write dry run. These facts do not decide risk.
-- Use the built-in `fetch` client and protocol v6/state version 6 independent Choice questions
-  in one Decisions request. Always ask operational `risk` with tool-family
+- Use the built-in `fetch` client. Protocol version 7 sends independent Choice
+  questions in one Decisions request. Wire state version stays 6.
+  Always ask operational `risk` with tool-family
   guidance about executable effects; policy questions decide matching blocks.
   Add file policy for available paths/facts, command policy for shell
   calls, and org policy for structurally possible org AST entries. Disclosure

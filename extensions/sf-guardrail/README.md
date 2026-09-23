@@ -146,6 +146,14 @@ or deterministic matching guarantee. This follows TypeSafe's separation of suppo
 [state](https://docs.typesafe.ai/concepts/state) from independently evaluated
 [questions](https://docs.typesafe.ai/primitives/choice).
 
+Command rows also repeat selector labels in `publicNames`. Each label comes
+from the operation's exact `publicSyntax` ID map. Selectors with no public name
+have null labels. Prefix IDs keep separate namespaces. These labels add no
+words and decide no matches. File and org criteria state eligibility,
+exemptions, rule order, and tool access directly. The instructions remain
+experimental. Independent acceptance and useful safe approval coverage remain
+unproved.
+
 The request pins routing to `only: ["typesafe"]` with
 `allow_fallbacks: false`, requests `typesafe/jev-1.13`, and requires the resolved
 identity `typesafe/jev-1.13-20260917` from provider `TypeSafe`. An unexpected
