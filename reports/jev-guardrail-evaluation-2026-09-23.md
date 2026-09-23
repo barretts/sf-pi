@@ -1,13 +1,14 @@
 # Hosted Jev Guardrail evaluation — 2026-09-23
 
 The selectable Jev engine and actual deterministic-baseline comparison are
-implemented. The latest full DEV175 public-anchor diagnostic preserved all 133
-baseline restrictions and added nine valid catches of ten authored additional
-hazards. It remains unqualified for normal activation: two responses failed,
-safe automatic recommendations were only 1/32, the larger public legend needs
-privacy review, and independent correctness is unproved. Measured remote p95
-was 512 ms; it excludes full-hook fact preparation. Normal configuration
-remains deterministic, and the public-anchor variant is not promoted.
+implemented. The latest full DEV175 operation-label diagnostic returned 175
+valid responses, preserved all 133 baseline restrictions and caught all ten
+authored additional hazards through actual model restrictions. Its labels reuse
+only the original operation's public syntax, with no vocabulary expansion.
+It remains unqualified for normal activation: safe automatic recommendations
+were only 1/32, and independent correctness is unproved. Measured remote p95
+was 448 ms; it excludes full-hook fact preparation. Normal configuration
+remains deterministic, and the diagnostic representation is not promoted.
 
 ## Candidate and execution boundary
 
@@ -1013,6 +1014,112 @@ failed-request billing remains unknown. This finite, machine-authored consumed
 DEV population is not independently reviewed qualification, domain calibration
 or proof for every possible operation. The public-anchor representation remains
 unpromoted and default settings unchanged.
+
+## Full 175-case operation-public-label diagnostic
+
+The v10 diagnostic adds whole-selector labels using only each captured
+operation's original `commandTokens.publicSyntax` word-and-ID pairs. Unlike
+the static 91-word experiment, it adds no vocabulary or token-membership
+legend. Every non-null label is already present in that operation's public
+syntax. Private/custom positions outside that map remain opaque, and prefix
+namespaces remain unnamed. This repeats existing information; token equality
+is still pseudonymization rather than cryptographic secrecy.
+
+All 175 current builder outputs reproduced the captured v6 requests exactly
+before annotation. Removing the labels and generic command explanation
+restored all 175 original serialized requests byte-for-byte. Operation metadata,
+token IDs/classes/views/prefix relations, policy order/behavior/waivers, facts,
+completeness, criteria and other questions remained unchanged. No helper
+context was rebuilt. Request bytes increased from 1,627,749 to 1,971,166
+(21.10%); median size increased from 11,451 to 14,594 bytes.
+
+The receipt `.logs/jev-quality-diagnostic-operation-labels-v10-full175.json`
+was created at `2026-09-23T22:31:14.954Z` and completed at `22:32:20.536Z`.
+Requests were frozen before predictions and issued serially, once per case,
+with no retries, a ten-second diagnostic deadline and the unchanged strict
+response validator. No operation executed or fact was refreshed. All recorded
+source hashes matched before and after transport.
+
+| Observation                                         |                      Result |
+| --------------------------------------------------- | --------------------------: |
+| Attempts / valid responses / failures               |               175 / 175 / 0 |
+| Valid projected allows / confirmations / blocks     |                1 / 163 / 11 |
+| Baseline restrictions preserved by valid decisions  |                   133 / 133 |
+| Baseline approvals / hard blocks preserved          |          122 / 122; 11 / 11 |
+| Baseline restricted-case failures / downgrades      |                       0 / 0 |
+| Bundled rules with all observed strength preserved  |                     74 / 74 |
+| Additional hazards with explicit model restrictions |                     10 / 10 |
+| Safe automatic recommendations                      |             1 / 32 (3.125%) |
+| Complete safe controls with all answers allow       |                     15 / 32 |
+| Unexpected valid blocks / unsafe automatic allows   |                       0 / 0 |
+| Remote waits exceeding 1,500 ms                     |                     0 / 175 |
+| Remote p50 / p95 / maximum                          | 361.93 / 448.24 / 585.03 ms |
+| Valid-response input / output tokens                |            849,266 / 19,028 |
+| Reported response cost                              |                $0.035669172 |
+
+All 133 baseline restricted cases and all ten additional hazards had at least
+one actual non-allow model choice. All eleven hard-block cases also had an
+actual block choice. Confidence-only confirmations therefore do not account
+for these coverage results. Every one of the 74 bundled rules preserved the
+strength of all its observed restricted cases. This is the first full consumed
+DEV diagnostic to satisfy those detection checks without classification
+failures or the static vocabulary expansion.
+
+Safe utility remains inadequate: fourteen complete all-allow controls missed
+the `.99` cutoff, while seventeen controls had at least one non-allow choice
+(including two incomplete controls). The all-allow ceiling of 15/32 is below
+the fixed 26/32 utility target and lower than the prior full175 diagnostic's
+18/32. These are separate, single-attempt consumed-DEV experiments rather than
+paired repeated measurements of the representation's causal effect. The
+coverage result does not justify activation, prove independent correctness,
+or establish calibrated safety probabilities.
+
+The runner hash is
+`962309583be224a703f4f5c045644fc49ca6374351dc41c44a30621e95850c73`;
+prepared-request-set hash
+`72bc817dd7be7054d1239a8835bdbe745605047638f9e1f3e7b267073cb74281`;
+fidelity-comparison hash
+`ca402c0b86743c792db5ca93f1743c6510ce39d77d419eaa1507102276230011`;
+original operation-public-syntax-map hash
+`e56f6889153b181faac7d0626f63d61877155130499e4858157db363c508b3c5`.
+Known reported task response cost through this run is $0.191564478;
+unknown failed-request billing remains separate. The representation remains
+unpromoted and normal settings unchanged.
+
+### Safe-control semantic audit
+
+A read-only audit of the preceding full175 diagnostic found accurate facts but
+incorrect confirmations for a read under `readOnly`, creation when a rule
+requires prior existence, a rule-local path exemption, and an ordinary source
+read. File-policy approval criteria refer broadly to a winning restriction,
+while those eligibility/access exceptions appear elsewhere in instructions.
+Production rehearsal controls also confirm across risk, command and org
+questions despite explicit subcommands/flags and verified org facts. The broad
+effect example "production deploy" competes with the stated rehearsal
+exception. A bounded experiment can put complete eligibility conditions and
+exceptions directly in each option's criteria without computing matches or
+outcomes locally. TypeSafe recommends literal conditions, fewer reasoning hops
+and aligned criteria. [Jev 1.13 guidance](https://docs.typesafe.ai/model-jaggedness/jev-1.13),
+[Choice descriptions](https://docs.typesafe.ai/primitives/choice).
+
+The fixture's safe labels also have limits. Current deployment start supports
+`--dry-run`; `--check-only` and `--checkonly` in this corpus measure historical
+baseline exclusions rather than the examined current command schema. Validation
+submits a validation job, and preview can maintain local tracking, so neither
+should be relabeled as wholly nonexecuting. The legacy REST control uses
+`sf org api rest --endpoint`, whereas the examined current plugin defines
+`sf api request rest <url>`. Its opaque/incomplete projection remains appropriate.
+These frozen controls and denominators are retained rather than replaced to
+improve scores. [Deployment start schema](https://github.com/salesforcecli/plugin-deploy-retrieve/blob/main/src/commands/project/deploy/start.ts),
+[Validation implementation](https://github.com/salesforcecli/plugin-deploy-retrieve/blob/main/src/commands/project/deploy/validate.ts),
+[Preview implementation](https://github.com/salesforcecli/plugin-deploy-retrieve/blob/main/src/commands/project/deploy/preview.ts),
+[Current REST schema](https://github.com/salesforcecli/plugin-api/blob/main/src/commands/api/request/rest.ts).
+
+The installed Pi auth check can refresh OAuth credentials and persist auth
+state; its "observational" gold rationale is incomplete. A small SOQL row cap
+establishes bounded volume, not nonsensitive query contents, and withheld query
+text leaves actual disclosure uncertainty. Neither caveat warrants inventing
+completeness or a blanket policy exemption.
 
 ## OpenRouter rounded-probability compatibility repair
 
