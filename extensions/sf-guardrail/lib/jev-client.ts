@@ -26,6 +26,8 @@ export const JEV_MODEL = "typesafe/jev-1.13";
 export const JEV_RESOLVED_MODEL = "typesafe/jev-1.13-20260917";
 export const JEV_PROVIDER = "TypeSafe";
 export const JEV_TIMEOUT_MS = 1_500;
+/** Total limit for the unused experimental command process. The hook keeps 1,500 ms. */
+export const JEV_COMMAND_PROCESS_TIMEOUT_MS = 10_000;
 export const JEV_RESPONSE_VALIDATION_CONTRACT = Object.freeze({
   version: 2,
   exactSumTolerance: 1e-6,
@@ -696,7 +698,10 @@ function cancelStageBody(value: { cancel(): Promise<unknown> } | null | undefine
 }
 
 /** Use one absolute performance.now() deadline for all stages, including waits.
- * The caller passes its existing deadline. The factory permits at most 1,500 ms.
+ * Include response reads and synchronous cleanup work.
+ * Start cancellation without awaiting its asynchronous completion.
+ * The caller passes its existing deadline. The factory permits at most 10,000 ms.
+ * This experimental process transport is not used by the current hook.
  * This transport does not select a policy action or combine probabilities.
  */
 export function createJevProcessTransport(options: {
@@ -724,7 +729,7 @@ export function createJevProcessTransport(options: {
   )
     throw new JevClientError("invalid_request");
   if (callerSignal?.aborted) throw new JevClientError("cancelled");
-  if (!Number.isFinite(deadline) || deadline > created + JEV_TIMEOUT_MS)
+  if (!Number.isFinite(deadline) || deadline > created + JEV_COMMAND_PROCESS_TIMEOUT_MS)
     throw new JevClientError("invalid_request");
   if (deadline <= created) throw new JevClientError("timeout");
   const endpoint =
@@ -756,7 +761,7 @@ export function createJevProcessTransport(options: {
   async function send(stage: Stage, request: StageRequest): Promise<StageResult> {
     const started = performance.now();
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-    let responseBody: ReadableStream<Uint8Array> | null;
+    let responseBody: ReadableStream<Uint8Array> | null | undefined;
     let abortListener: (() => void) | undefined;
     let prepared: { ids: string[]; body: string } | undefined;
     let requestSent = false;
@@ -847,7 +852,13 @@ export function createJevProcessTransport(options: {
         result.evidence.latencyMs = performance.now() - started;
         return result;
       };
-      return await Promise.race([operation(), aborted]);
+      const result = await Promise.race([operation(), aborted]);
+      cancelStageBody(reader ?? responseBody);
+      reader = undefined;
+      responseBody = undefined;
+      guard();
+      result.evidence.latencyMs = performance.now() - started;
+      return result;
     } catch (error) {
       const code = failure ?? (error instanceof JevClientError ? error.code : "transport_error");
       fail(code);

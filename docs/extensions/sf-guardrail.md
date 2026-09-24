@@ -52,7 +52,7 @@ Open its Manager detail or change its package state with:
 - **Commands:** `/sf-guardrail`
 - **LLM tools:** _none_
 - **Providers:** _none_
-- **Events/hooks:** `session_start`, `session_tree`, `before_agent_start`, `tool_call`, `context`
+- **Events/hooks:** `session_start`, `session_tree`, `session_shutdown`, `before_agent_start`, `tool_call`, `context`
 
 </details>
 

@@ -56,6 +56,13 @@
  */
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { performance } from "node:perf_hooks";
+import {
+  authorizeSoqlArtifactPlan,
+  prepareSoqlArtifactPlan,
+  revokeAllSoqlArtifactPlans,
+  revokeSoqlArtifactPlan,
+  type PreparedSoqlArtifactPlan,
+} from "../../lib/common/sf-soql-artifact-plan/store.ts";
 
 import {
   registerManagerDetailActions,
@@ -103,7 +110,7 @@ import {
   JEV_PROTOCOL_HASH,
 } from "./lib/jev-risk.ts";
 import { jevHash } from "./lib/jev-identity.ts";
-import { buildJevMetadata, extractJevTargetOrg } from "./lib/jev-metadata.ts";
+import { addJevArtifactPlan, buildJevMetadata, extractJevTargetOrg } from "./lib/jev-metadata.ts";
 import { resolveJevFacts } from "./lib/jev-facts.ts";
 import { shouldPowerToolAutoApprove } from "./lib/power-tool-mode.ts";
 import { loadPrompt } from "./lib/prompt-injection.ts";
@@ -122,6 +129,7 @@ import {
 
 export default function sfGuardrail(pi: ExtensionAPI) {
   if (!requirePiVersion(pi, "sf-guardrail")) return;
+  revokeAllSoqlArtifactPlans();
   registerLatestContextProjection(pi, [INJECTION_ENTRY_TYPE]);
 
   // Each tool call reads one validated config snapshot; Jev releases recheck its identity.
@@ -135,13 +143,19 @@ export default function sfGuardrail(pi: ExtensionAPI) {
 
   // ─── session_start: hydrate allow-memory ──────────────────────────────────
   pi.on("session_start", async (_event, ctx) => {
+    revokeAllSoqlArtifactPlans();
     restoreApprovalLedger(ctx);
   });
 
   pi.on("session_tree", async (_event, ctx) => {
     // /tree navigation rewrites the active branch — allowances on the old
     // branch should not leak. Rehydrate from the new branch only.
+    revokeAllSoqlArtifactPlans();
     restoreApprovalLedger(ctx);
+  });
+
+  pi.on("session_shutdown", async () => {
+    revokeAllSoqlArtifactPlans();
   });
 
   // ─── before_agent_start: inject current Guardrail guidance ─────────────
@@ -173,6 +187,8 @@ export default function sfGuardrail(pi: ExtensionAPI) {
 
   // ─── tool_call: the main enforcement seam ─────────────────────────────────
   pi.on("tool_call", async (event, ctx) => {
+    let artifactPlan: Readonly<PreparedSoqlArtifactPlan> | undefined;
+    let artifactReleased = false;
     try {
       const classificationStarted = performance.now();
       let snapshot: ReturnType<typeof loadGuardrailSnapshot>;
@@ -201,6 +217,15 @@ export default function sfGuardrail(pi: ExtensionAPI) {
       const capturedCwd = ctx.cwd;
       const capturedSession = ctx.sessionManager.getSessionId();
       const capturedLeaf = ctx.sessionManager.getLeafId?.();
+      if (engine === "jev" && event.toolName === "sf_soql" && event.input?.action === "query.run") {
+        artifactPlan = prepareSoqlArtifactPlan({
+          sessionId: capturedSession,
+          toolCallId: event.toolCallId,
+          toolName: "sf_soql",
+          inputHash: jevHash(event.input ?? {}),
+          cwd: capturedCwd,
+        });
+      }
       const getDescriptor = (): JevToolDescriptor | undefined => {
         const tool = pi.getAllTools().find((tool) => tool.name === event.toolName);
         return tool ? { description: tool.description, parameters: tool.parameters } : undefined;
@@ -214,7 +239,9 @@ export default function sfGuardrail(pi: ExtensionAPI) {
           cwd: ctx.cwd,
           config,
           sessionId: ctx.sessionManager.getSessionId(),
+          toolCallId: event.toolCallId,
           engine,
+          ...(artifactPlan ? { artifactPlan } : {}),
           ...(engine === "jev" ? { signal: ctx.signal, descriptor: getDescriptor() } : {}),
         });
       } catch {
@@ -243,6 +270,13 @@ export default function sfGuardrail(pi: ExtensionAPI) {
 
       const basicStateChanged = (): boolean => {
         if (engine !== "jev") return false;
+        if (
+          artifactPlan &&
+          (event.toolCallId !== artifactPlan.binding.toolCallId ||
+            event.toolName !== artifactPlan.binding.toolName ||
+            process.cwd() !== artifactPlan.plan.writerCwd)
+        )
+          return true;
         if (
           ctx.signal?.aborted ||
           ctx.cwd !== capturedCwd ||
@@ -274,11 +308,20 @@ export default function sfGuardrail(pi: ExtensionAPI) {
         const timeout = AbortSignal.timeout(Math.max(1, Math.floor(remainingMs)));
         const signal = ctx.signal ? AbortSignal.any([ctx.signal, timeout]) : timeout;
         try {
-          const metadata = buildJevMetadata(
+          const baseMetadata = buildJevMetadata(
             event.toolName,
             (event.input ?? {}) as Record<string, unknown>,
             getDescriptor(),
           );
+          const metadata = artifactPlan
+            ? addJevArtifactPlan(baseMetadata, artifactPlan, {
+                toolName: event.toolName,
+                input: (event.input ?? {}) as Record<string, unknown>,
+                cwd: capturedCwd,
+                sessionId: capturedSession,
+                toolCallId: event.toolCallId,
+              })
+            : baseMetadata;
           const latest = await withinDeadline(
             resolveJevFacts({
               toolName: event.toolName,
@@ -304,6 +347,16 @@ export default function sfGuardrail(pi: ExtensionAPI) {
           return true;
         }
       };
+      const releaseArtifacts = () => {
+        if (!artifactPlan) return;
+        authorizeSoqlArtifactPlan(
+          artifactPlan,
+          decision.fingerprint,
+          async () => !(await stateChanged(JEV_TIMEOUT_MS)),
+          () => !basicStateChanged(),
+        );
+        artifactReleased = true;
+      };
       const blockChangedState = () => {
         const changed = {
           ...decision,
@@ -325,6 +378,7 @@ export default function sfGuardrail(pi: ExtensionAPI) {
       // Audited auto-allow → no prompt.
       if (decision.action === "allow") {
         recordDecision(pi, decision, "allow_auto", event.toolName);
+        releaseArtifacts();
         return undefined;
       }
 
@@ -338,6 +392,7 @@ export default function sfGuardrail(pi: ExtensionAPI) {
       // Previously granted for this session?
       if (hasSessionApproval(decision)) {
         recordDecision(pi, decision, "allow_session", event.toolName);
+        releaseArtifacts();
         return undefined;
       }
 
@@ -369,10 +424,12 @@ export default function sfGuardrail(pi: ExtensionAPI) {
       switch (result.outcome) {
         case "allow_once":
           recordDecision(pi, decision, "allow_once", event.toolName);
+          releaseArtifacts();
           return undefined;
         case "allow_session":
           recordDecision(pi, decision, "allow_session", event.toolName);
           grantSessionApproval(pi, decision);
+          releaseArtifacts();
           return undefined;
         case "operator_auto_approve":
           recordDecision(pi, decision, "operator_auto_approve", event.toolName);
@@ -412,6 +469,8 @@ export default function sfGuardrail(pi: ExtensionAPI) {
         // There is no alternate approval authority when audit storage is unavailable.
       }
       return { block: true, reason: failed.reason };
+    } finally {
+      if (artifactPlan && !artifactReleased) revokeSoqlArtifactPlan(artifactPlan);
     }
   });
 

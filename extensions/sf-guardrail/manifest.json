@@ -9,7 +9,14 @@
   "commands": ["/sf-guardrail"],
   "providers": [],
   "tools": [],
-  "events": ["session_start", "session_tree", "before_agent_start", "tool_call", "context"],
+  "events": [
+    "session_start",
+    "session_tree",
+    "session_shutdown",
+    "before_agent_start",
+    "tool_call",
+    "context"
+  ],
   "docs": {
     "intentGroup": "Work safely",
     "editingRules": "AGENTS.md",

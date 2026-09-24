@@ -6,6 +6,18 @@ import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { connectSalesforce } from "../../../lib/common/sf-conn/index.ts";
+import { readGuardrailEngineSettings } from "../../../lib/common/guardrail-engine.ts";
+import {
+  guardrailCanonicalJson,
+  guardrailInputHash,
+} from "../../../lib/common/guardrail-identity.ts";
+import {
+  claimSoqlArtifactPlan,
+  registerSoqlArtifactPlanner,
+  wasSoqlArtifactPlanPrepared,
+  type SoqlArtifactLease,
+} from "../../../lib/common/sf-soql-artifact-plan/store.ts";
+import { planSoqlRunBundle } from "./artifacts.ts";
 import { errorResult } from "./errors.ts";
 import { renderSoqlResultMarkdown } from "./render.ts";
 import type { SfSoqlParams, SfSoqlSessionState, ToolResult } from "./types.ts";
@@ -107,6 +119,7 @@ const Params = Type.Object({
 
 export function registerSfSoqlTool(pi: ExtensionAPI): void {
   const state: SfSoqlSessionState = {};
+  registerSoqlArtifactPlanner(planSoqlRunBundle);
   pi.registerTool<typeof Params>({
     name: SF_SOQL_TOOL_NAME,
     label: "SF SOQL",
@@ -122,10 +135,39 @@ export function registerSfSoqlTool(pi: ExtensionAPI): void {
     parameters: Params,
     renderCall: (args, theme) => renderCall(args as SfSoqlParams, theme),
     renderResult: (result, opts, theme) => renderResult(result as ToolResult, opts, theme),
-    async execute(_id, rawParams, signal, _onUpdate, ctx) {
-      const params = rawParams as SfSoqlParams;
+    async execute(id, rawParams, signal, _onUpdate, ctx) {
+      let params = rawParams as SfSoqlParams;
+      let artifactLease: SoqlArtifactLease | undefined;
       try {
+        const engine = readGuardrailEngineSettings().engine;
+        if (engine === "jev") {
+          // Snapshot every action before the first await. A retained object
+          // must not change from validation to execution during connection.
+          params = JSON.parse(guardrailCanonicalJson(rawParams)) as SfSoqlParams;
+        }
+        const originalAction = params.action;
+        if (
+          engine === "deterministic" &&
+          wasSoqlArtifactPlanPrepared(ctx.sessionManager?.getSessionId(), id)
+        ) {
+          throw new Error("SOQL artifact approval context changed. Execution is blocked.");
+        }
         if (params.action === "history.last") return lastHistory(state);
+        if (params.action === "query.run") {
+          if (engine === "jev") {
+            artifactLease = await claimSoqlArtifactPlan(
+              {
+                sessionId: ctx.sessionManager.getSessionId(),
+                toolCallId: id,
+                toolName: "sf_soql",
+                inputHash: guardrailInputHash(params),
+                cwd: ctx.cwd,
+              },
+              signal,
+            );
+          }
+          artifactLease?.check();
+        }
         const conn = await connectSalesforce({
           cwd: ctx.cwd,
           targetOrg: params.target_org,
@@ -155,7 +197,10 @@ export function registerSfSoqlTool(pi: ExtensionAPI): void {
           case "query.sample":
             return sampleQuery(conn, params, state);
           case "query.run":
-            return runQuery(conn, params, state);
+            if (engine === "jev" && (originalAction !== "query.run" || !artifactLease)) {
+              throw new Error("SOQL artifact approval is missing. Execution is blocked.");
+            }
+            return await runQuery(conn, params, state, artifactLease);
           case "query.count":
             return countQuery(conn, params, state);
           case "query.queryAll":
@@ -174,6 +219,8 @@ export function registerSfSoqlTool(pi: ExtensionAPI): void {
         }
       } catch (err) {
         return errorResult(params, err);
+      } finally {
+        artifactLease?.finish();
       }
     },
   });

@@ -1082,13 +1082,19 @@ describe("Jev risk adapter", () => {
   it.each([
     [
       "risk",
-      "1834a24ec129ac6d0d32215cff78476ac4a695f5944e4785f2f8be36cbcc32e3",
-      "70ad9ea61cdd06a7cf6deb65c177de3f0549fa867708b290e1c6437bf7b3708c",
+      "f2b0713a6f7ee20df11f5f5fc73546762cfe3839e290d72921eee9c58636de92",
+      [
+        "1834a24ec129ac6d0d32215cff78476ac4a695f5944e4785f2f8be36cbcc32e3",
+        "70ad9ea61cdd06a7cf6deb65c177de3f0549fa867708b290e1c6437bf7b3708c",
+      ],
     ],
     [
       "disclosure",
-      "e978472b669c29a895a8475a231df3eeb37d19a5d4b82e827850641369416d6c",
-      "2fcee0f715ae1ddddddc69913969b27250495101cc9d8ed229e5930d01cb026c",
+      "a276472606d5e398096644fdbb943333f296b29f28da286d8acddac7d584b47a",
+      [
+        "e978472b669c29a895a8475a231df3eeb37d19a5d4b82e827850641369416d6c",
+        "2fcee0f715ae1ddddddc69913969b27250495101cc9d8ed229e5930d01cb026c",
+      ],
     ],
   ] as const)(
     "binds the SOQL %s question and rejects its prior contract",
@@ -1102,7 +1108,7 @@ describe("Jev risk adapter", () => {
         .update(JSON.stringify(request.questions[question]))
         .digest("hex");
       expect(hash).toBe(current);
-      expect(hash).not.toBe(prior);
+      for (const priorHash of prior) expect(hash).not.toBe(priorHash);
     },
   );
   it("uses the unknown domain for a tool name that is an object prototype key", () => {
@@ -1138,14 +1144,15 @@ describe("Jev risk adapter", () => {
       }),
     });
     const priorProtocols = [
-      // Prior source contracts: protocols 9, 10, 11, and reviewed protocol 12.
+      // Prior source contracts: protocols 9, 10, 11, 12, and reviewed protocol 13.
       "647d951506b4f5b3b2a9aff5dcaf411a63d0f8be7131750841077ba1013a6224",
       "9e07e666c0e1d14511135f8151cb7418dc8e93a878ec92d549258d393c48604a",
       "5754b79d085657e5cd68f37bf2fb2fe366fe936631982d9da3d572a1f8b66508",
       "b0410478d964dbf2ffe1156212e9bdd5a46bc9d666dd284c55af5959ec429254",
+      "c22e7cf3b6bd63f5a50817e086df07ac389b967cf4f528beccf76e39bbee4432",
     ];
     expect(JEV_PROTOCOL_HASH).toBe(
-      "c22e7cf3b6bd63f5a50817e086df07ac389b967cf4f528beccf76e39bbee4432",
+      "7a54152c190028086d5013380ffde8ceba53ef286239cd8b46bba56185f902db",
     );
     expect(decision.jev?.protocolHash).toBe(JEV_PROTOCOL_HASH);
     expect(decision.approvalScope?.allowSession).toBe(true);

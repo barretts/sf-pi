@@ -13,7 +13,7 @@ import {
   JEV_RESOLVED_MODEL,
   JEV_STAGE_REQUEST_BYTES,
   JEV_SYNTAX_QUESTION_LIMIT,
-  JEV_TIMEOUT_MS,
+  JEV_COMMAND_PROCESS_TIMEOUT_MS,
 } from "../lib/jev-client.ts";
 import { jevTransportBindingHash } from "../lib/jev-risk.ts";
 import type {
@@ -940,12 +940,125 @@ describe("one endpoint, key, cancellation and absolute deadline", () => {
   it("rejects an extended or expired deadline before credentials", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
     vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "invalid\nkey");
-    expect(() => createJevProcessTransport({ deadline: JEV_TIMEOUT_MS + 1 })).toThrow(
-      "invalid_request",
-    );
+    expect(() =>
+      createJevProcessTransport({ deadline: JEV_COMMAND_PROCESS_TIMEOUT_MS + 0.001 }),
+    ).toThrow("invalid_request");
     expect(() => createJevProcessTransport({ deadline: 0 })).toThrow("timeout");
     expect(() => createJevProcessTransport({ deadline: -1 })).toThrow("timeout");
   });
+  it("admits exactly 10,000 ms and uses that bound after an earlier stage and idle time", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve(new Response(JSON.stringify(wire(nonCommand())))), 4_000),
+          ),
+      )
+      .mockImplementation(() => new Promise<Response>(() => {}));
+    const client = transport(fetch, 10_000);
+    const first = client.requestNonCommand(nonCommand());
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect((await first).evidence.latencyMs).toBe(4_000);
+    await vi.advanceTimersByTimeAsync(1_000);
+    const second = client.requestSyntax(syntax());
+    const rejection = expect(second).rejects.toMatchObject({ code: "timeout" });
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(fetch.mock.calls[1][1].signal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await rejection;
+    expect(performance.now()).toBe(10_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][1].signal).toBe(fetch.mock.calls[1][1].signal);
+    await expect(client.requestCommandPolicy(command())).rejects.toMatchObject({ code: "timeout" });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it("includes stage preparation in the 10,000 ms deadline before credentials", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "invalid\nkey");
+    const request = new Proxy(nonCommand(), {
+      ownKeys(target) {
+        vi.advanceTimersByTime(10_000);
+        return Reflect.ownKeys(target);
+      },
+    });
+    const fetch = responseFetch({});
+    const error = await transport(fetch, 10_000)
+      .requestNonCommand(request)
+      .catch((caught) => caught);
+    expect(error).toMatchObject({ code: "timeout" });
+    expect(error.evidence.requestSent).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it("includes response reads in the original 10,000 ms deadline", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    const bytes = new TextEncoder().encode(JSON.stringify(wire(syntax())));
+    let reads = 0;
+    const cancel = vi.fn(async () => {});
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async () =>
+        ({
+          ok: true,
+          headers: new Headers(),
+          body: {
+            getReader: () => ({
+              read: async () => {
+                await new Promise((resolve) => setTimeout(resolve, reads++ === 0 ? 9_000 : 1_000));
+                return reads === 1 ? { done: false, value: bytes } : { done: true };
+              },
+              cancel,
+            }),
+          },
+        }) as unknown as Response,
+    );
+    const rejection = expect(
+      transport(fetch, 10_000).requestSyntax(syntax()),
+    ).rejects.toMatchObject({
+      code: "timeout",
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await rejection;
+    expect(reads).toBe(2);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it.each([9_999, 10_000])(
+    "includes a %s ms cleanup callback and retains the whole reply hash",
+    async (cleanupMs) => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      const raw = JSON.stringify(wire(syntax()));
+      const bytes = new TextEncoder().encode(raw);
+      let reads = 0;
+      const cancel = vi.fn(async () => vi.advanceTimersByTime(cleanupMs));
+      const fetch = vi.fn<typeof globalThis.fetch>(
+        async () =>
+          ({
+            ok: true,
+            headers: new Headers(),
+            body: {
+              getReader: () => ({
+                read: async () => (reads++ === 0 ? { done: false, value: bytes } : { done: true }),
+                cancel,
+              }),
+            },
+          }) as unknown as Response,
+      );
+      const actual = await transport(fetch, 10_000)
+        .requestSyntax(syntax())
+        .catch((caught) => caught);
+      if (cleanupMs === 9_999) {
+        expect(actual.stage).toBe("syntax");
+        expect(actual.answers.r_a.choice).toBe("match");
+      } else {
+        expect(actual).toMatchObject({ code: "timeout" });
+        expect(actual.evidence.responseComplete).toBe(true);
+      }
+      expect(actual.evidence).toMatchObject({ responseHash: hash(raw), latencyMs: cleanupMs });
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("keeps the earlier caller deadline across stages and idle time", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });

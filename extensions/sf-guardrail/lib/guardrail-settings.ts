@@ -6,6 +6,7 @@
  * The advanced rule override file remains the escape hatch for custom patterns
  * and full bundled-rule replacement by stable id.
  */
+import { rejectGuardrailJsonDuplicateKeys } from "../../../lib/common/guardrail-engine.ts";
 import {
   globalSettingsPath,
   readJsonFile,
@@ -150,25 +151,7 @@ function readSettingsForEngineUpdate(settingsPath: string): Record<string, unkno
   }
 }
 
-/** Called after JSON syntax validation, before a selector or policy is trusted. */
-export function rejectGuardrailJsonDuplicateKeys(text: string): void {
-  const containers: Array<Set<string> | null> = [];
-  for (const match of text.matchAll(/"(?:\\.|[^"\\])*"|[{}[\]]/g)) {
-    const token = match[0];
-    if (token === "{") containers.push(new Set());
-    else if (token === "[") containers.push(null);
-    else if (token === "}" || token === "]") containers.pop();
-    else {
-      let next = match.index + token.length;
-      while (/\s/.test(text[next] ?? "")) next += 1;
-      if (text[next] !== ":") continue;
-      const keys = containers.at(-1);
-      const key = JSON.parse(token) as string;
-      if (!keys || keys.has(key)) throw new Error("Guardrail JSON has duplicate keys.");
-      keys.add(key);
-    }
-  }
-}
+export { rejectGuardrailJsonDuplicateKeys } from "../../../lib/common/guardrail-engine.ts";
 
 /** Validate raw preferences before a Jev snapshot or explicit engine update. */
 export function validateGuardrailPiSettings(input: unknown): void {

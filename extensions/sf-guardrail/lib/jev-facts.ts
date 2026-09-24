@@ -118,6 +118,25 @@ export async function resolveJevFacts(options: {
     : typeof metadata.metadata.path === "string"
       ? [metadata.metadata.path]
       : [];
+  if (metadata.artifactPlan) {
+    const { hash, accesses } = metadata.artifactPlan;
+    if (
+      toolName !== "sf_soql" ||
+      metadata.toolName !== toolName ||
+      metadata.metadata.action !== "query.run" ||
+      !/^[a-f0-9]{64}$/.test(hash) ||
+      !Array.isArray(metadata.metadata.paths) ||
+      metadata.metadata.paths.some((value) => typeof value !== "string") ||
+      !accesses.length ||
+      accesses.length > 32 ||
+      jevHash(accesses) !== jevHash(metadata.metadata.fileAccesses) ||
+      accesses.some(
+        ({ path: file, access }) => !paths.includes(file) || !["mkdir", "write"].includes(access),
+      )
+    )
+      throw new Error("invalid-metadata");
+    result.artifactPlan = { hash, accesses };
+  }
   if (paths.length > 32) throw new Error("invalid-metadata");
   if (paths.length) {
     result.facts.files = await resolveJevFileFacts(paths, cwd);

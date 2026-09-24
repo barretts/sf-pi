@@ -61,12 +61,29 @@ The bound is 512 bytes and an 80-character ASCII source token. Only
 Fixed syntax is case-insensitive. Only ASCII space, tab, CR, and LF separate
 tokens. The current local syntax SDK must accept the original whole text.
 Raw query and source spelling stay local. Sensitivity stays unknown.
-Generated artifact paths stay unobserved, so completeness stays false.
+Without an exact Protocol 14 plan, artifact paths stay unobserved and
+completeness stays false.
 The observer does not prove source access, API response contents, artifact
 path binding, or custom file policy coverage. It cannot increase automatic
 safe coverage. Supplied `max_rows` takes precedence over a verified query
 LIMIT. The selected cap is floored and clamped to 1..2000. Input `limit`
 stays ignored. Unsupported shapes supply no query LIMIT observation.
+
+**Native Query Artifact Plan**:
+Protocol 14 records the actual native `sf_soql` `query.run` destinations
+before classification. It declares possible ancestor directory creation
+and five exact file writes. Fresh path facts and Jev file policy apply to
+each write access. The plan removes only the artifact path omission.
+Query text, source spelling, result contents, and sensitivity stay unknown
+or local. The local plan hash binds the original input and SDK call
+identity. Successful allow audit precedes authorization. One consumer
+claims the plan before connection. Context checks repeat before writing
+and around waits. Call records stay for the process lifetime, with a
+256-record bound that rejects new plans. A changed engine cannot send a
+recorded Jev call to the legacy writer. These checks do not pin physical
+filesystem ancestors against replacement. Partial owned output can remain
+after failure. Other SOQL actions do not have this plan contract.
+_Avoid_: model-supplied plan, reusable approval token, atomic filesystem proof
 
 **Command Token Projection**:
 Version 2's mechanical integer IDs for original, wrapper-expanded, and flattened command tokens, typed prefix classes, and Pi argument sequences. Effective ordered policy rows are active-only and carry explicit behavior and token IDs or one of seven special-pattern forms. Shared `policy.commands.matchGrammar` supplies token/namespace/special definitions to each independent question. Off allow/deny rows are omitted after validation/bounding and allocate no token classes; off ordinary rows become **Effect Waivers**. Jev compares these facts and chooses rules. `publicSyntax` maps only known CLI executables, subcommands, and flag keys already exposed in semantic metadata to IDs. Private operands have no explicit legend; the projection includes no raw command, private-word dictionary, stable hash, matched rules, or local outcome. Equality and known policy anchors can reveal membership; they provide neither cryptographic secrecy nor a deterministic model-matching guarantee.

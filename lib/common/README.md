@@ -29,6 +29,17 @@ This is a selected interface guide, not a hand-maintained complete file map:
 | `privacy/`                    | Telemetry-default assertion and state                                       |
 | `session/`                    | Active-branch session projection helpers                                    |
 
+The guardrail and SOQL consumer share three strict contracts:
+
+- `guardrail-engine.ts` reads the same bounded settings and rejects malformed
+  engine selection. It does not silently choose a different engine.
+- `guardrail-identity.ts` hashes bounded canonical input without calling custom
+  serializers. The guard and consumer use the same value identity.
+- `sf-soql-artifact-plan/store.ts` holds exact producer plans and one-use
+  authority in memory. It retains call records for this process lifetime.
+  New plans stop at 256 records. Session changes and reload revoke authority.
+  These records do not establish filesystem isolation or model safety.
+
 ## Complete top-level inventory
 
 <!-- GENERATED:common-modules:start -->
@@ -52,6 +63,8 @@ This complete top-level inventory is generated from `lib/common/`. Directory cou
 | `exec-adapter.ts`              | module    |                     1 |               0 |
 | `extension-toggle.ts`          | module    |                     1 |               0 |
 | `glyph-policy.ts`              | module    |                     1 |               0 |
+| `guardrail-engine.ts`          | module    |                     1 |               0 |
+| `guardrail-identity.ts`        | module    |                     1 |               0 |
 | `herdr-package-sources.ts`     | module    |                     1 |               0 |
 | `herdr-runtime.ts`             | module    |                     1 |               0 |
 | `herdr.ts`                     | module    |                     1 |               0 |
@@ -79,12 +92,13 @@ This complete top-level inventory is generated from `lib/common/`. Directory cou
 | `sf-pi-package-root.ts`        | module    |                     1 |               0 |
 | `sf-pi-package-state.ts`       | module    |                     1 |               0 |
 | `sf-pi-settings.ts`            | module    |                     1 |               0 |
+| `sf-soql-artifact-plan/`       | directory |                     1 |               0 |
 | `skill-detection/`             | directory |                     2 |               0 |
 | `skill-sources/`               | directory |                     2 |               0 |
 | `slack-status/`                | directory |                     1 |               0 |
 | `state-store.ts`               | module    |                     1 |               0 |
 | `test-fixtures.ts`             | module    |                     1 |               0 |
-| `tests/`                       | directory |                     0 |              41 |
+| `tests/`                       | directory |                     0 |              42 |
 | `tldraw-status/`               | directory |                     1 |               0 |
 | `ui-glyphs.ts`                 | module    |                     1 |               0 |
 

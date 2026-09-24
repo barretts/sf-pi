@@ -7,7 +7,7 @@ import {
   JEV_PROVIDER,
   JEV_RESOLVED_MODEL,
   JEV_RESPONSE_VALIDATION_CONTRACT,
-  JEV_TIMEOUT_MS,
+  JEV_COMMAND_PROCESS_TIMEOUT_MS,
   JevClientError,
   JevStageClientError,
 } from "./jev-client.ts";
@@ -73,6 +73,7 @@ function freeze<T>(value: T): T {
 }
 
 export const JEV_COMMAND_PROCESS_LIMITS = freeze({
+  totalTimeoutMs: JEV_COMMAND_PROCESS_TIMEOUT_MS,
   maxRows: 64,
   maxRequestBytes: 32_768,
   maxViews: 256,
@@ -105,6 +106,9 @@ export const JEV_COMMAND_ACTION_CRITERIA = freeze({
     "No allowedPatterns row selects match. Any autoDenyPatterns row selects match. Otherwise, the first patterns row that selects match declares block.",
 });
 export const JEV_COMMAND_PROCESS_PROTOCOL = freeze({
+  operatingPoint: "prospective-experimental-command-process",
+  deadline:
+    "One absolute performance.now() deadline includes preparation, all stages, waits, response reads, validation, and synchronous cleanup work. Cancellation starts without awaiting asynchronous cleanup completion. The total limit is 10,000 ms. No per-stage reset. The current hook and one-call limit stay at 1,500 ms.",
   stages: ["non_command", "syntax", "command_policy"],
   emptyManifestStages: ["non_command", "command_policy"],
   emptyManifest:
@@ -696,7 +700,9 @@ export function jevCommandProcessGate(
     : "confirm";
 }
 
-/** All construction, calls, and validation share the caller's absolute deadline. */
+/** All construction, calls, and validation share the caller's absolute deadline.
+ * Include synchronous cleanup work. Do not wait for asynchronous cancellation completion.
+ */
 export async function runJevCommandProcess(
   request: JevRequest,
   options: {
@@ -769,7 +775,7 @@ export async function runJevCommandProcess(
     if (performance.now() >= deadline) throw new JevClientError("timeout");
   };
   try {
-    if (!Number.isFinite(deadline) || deadline > started + JEV_TIMEOUT_MS) fail();
+    if (!Number.isFinite(deadline) || deadline > started + JEV_COMMAND_PROCESS_TIMEOUT_MS) fail();
     guard();
     timer = setTimeout(() => stop("timeout"), Math.max(0, deadline - performance.now()));
     timer.unref?.();
@@ -909,6 +915,12 @@ export async function runJevCommandProcess(
     if (timer) clearTimeout(timer);
     options.signal?.removeEventListener("abort", onAbort);
     closeTransport();
+  }
+  try {
+    guard();
+  } catch (error) {
+    completed = false;
+    failure ??= error instanceof JevClientError ? error.code : "transport_error";
   }
   if (cleanupFailed) {
     completed = false;

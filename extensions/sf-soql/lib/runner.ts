@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Query plan and execution operations for sf-soql. */
 
+import type { SoqlArtifactLease } from "../../../lib/common/sf-soql-artifact-plan/store.ts";
 import type { SoqlConnection as Connection } from "./api.ts";
 import { apiCall, apiVersion, explainQuery, queryAll, restQuery } from "./api.ts";
 import { writeRunBundle, writeSoqlArtifact } from "./artifacts.ts";
@@ -203,7 +204,9 @@ export async function runQuery(
   conn: Connection,
   params: SfSoqlParams,
   state: SfSoqlSessionState,
+  artifactLease?: SoqlArtifactLease,
 ): Promise<ToolResult> {
+  artifactLease?.check();
   const rawQuery = requireQuery(params);
   const shape = parseSoql(rawQuery);
   const query = shape.normalized ?? rawQuery;
@@ -249,7 +252,14 @@ export async function runQuery(
     return toolResultFromDigest(digest);
   }
   const operation: SoqlOperation = shape.all_rows ? "queryAll" : "query";
-  return executeQuery(conn, { ...params, query, max_rows: maxRows }, state, "query.run", operation);
+  return executeQuery(
+    conn,
+    { ...params, query, max_rows: maxRows },
+    state,
+    "query.run",
+    operation,
+    artifactLease,
+  );
 }
 
 export async function countQuery(
@@ -291,8 +301,10 @@ async function executeQuery(
   state: SfSoqlSessionState,
   action: SoqlRunDigest["action"],
   operation: SoqlOperation,
+  artifactLease?: SoqlArtifactLease,
 ): Promise<ToolResult> {
   try {
+    artifactLease?.check();
     const rawQuery = requireQuery(params);
     const shape = { ...parseSoql(rawQuery), operation, api: params.api ?? "rest" };
     const query = shape.normalized ?? rawQuery;
@@ -303,6 +315,7 @@ async function executeQuery(
       operation === "queryAll"
         ? await queryAll(conn, query, maxRows)
         : await restQuery(conn, query, apiMode, maxRows);
+    artifactLease?.check();
     const durationMs = Date.now() - started;
     const flattened = flattenRecords(result.records);
     const sampleRows = flattened.rows.slice(0, sampleRowLimit(params.output_mode));
@@ -315,13 +328,16 @@ async function executeQuery(
       done: result.done,
       durationMs,
     };
-    const artifacts = await writeRunBundle({
-      slug: shape.primary_object ?? operation,
-      query,
-      raw: result,
-      flattened,
-      summary,
-    });
+    const artifacts = await writeRunBundle(
+      {
+        slug: shape.primary_object ?? operation,
+        query,
+        raw: result,
+        flattened,
+        summary,
+      },
+      artifactLease,
+    );
     const digest = buildDigest({
       action,
       status: operation === "queryAll" ? "warning" : "pass",

@@ -14,6 +14,7 @@ import { evaluateOrgAwareRiskWithOrgLookup } from "./org-aware-risk-gate.ts";
 import { evaluateNativeToolRiskWithOrgLookup } from "./native-tool-risk-gate.ts";
 import { normalizeSafetySubject } from "./safety-subject.ts";
 import { evaluateJevSafety } from "./jev-risk.ts";
+import type { PreparedSoqlArtifactPlan } from "../../../lib/common/sf-soql-artifact-plan/store.ts";
 import type {
   ClassifiedDecision,
   GuardrailConfig,
@@ -27,6 +28,8 @@ export interface SafetyKernelInput {
   cwd: string;
   config: GuardrailConfig;
   sessionId?: string;
+  toolCallId?: string;
+  artifactPlan?: Readonly<PreparedSoqlArtifactPlan>;
   engine?: GuardrailEngine;
   descriptor?: JevToolDescriptor;
   signal?: AbortSignal;

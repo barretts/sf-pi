@@ -9,7 +9,12 @@ import {
   JEV_TIMEOUT_MS,
   JEV_RESPONSE_VALIDATION_CONTRACT,
 } from "./jev-client.ts";
-import { buildJevMetadata, extractJevTargetOrg, jevShellExecutableHeads } from "./jev-metadata.ts";
+import {
+  addJevArtifactPlan,
+  buildJevMetadata,
+  extractJevTargetOrg,
+  jevShellExecutableHeads,
+} from "./jev-metadata.ts";
 import { resolveJevFacts } from "./jev-facts.ts";
 import { jevHash } from "./jev-identity.ts";
 import { resolveRuleBehavior } from "./rule-behavior.ts";
@@ -76,6 +81,25 @@ const FILE_ACCESS_CRITERIA = {
     when: "A path has an eligible strongest winner AND operation.metadata.fileAccess is a member of winner.restrictedAccess AND behavior=block; or actually unknown essential path/existence facts cannot exclude such a block.",
     exclude:
       "A known failed eligibility predicate; a stronger or first-tie winner that supersedes the block row; winner.behavior=off; or operation.metadata.fileAccess not a member of winner.restrictedAccess. Body omission, a near-match, and another rule exemption do not create a block.",
+  },
+} as const;
+const NATIVE_ARTIFACT_FILE_ACCESS_RULE =
+  "Use operation.metadata.fileAccesses for each declared path. access=write is a planned file write; access=mkdir is a possible directory creation, including recursive ancestors. Both use write access in winner.restrictedAccess: noAccess and readOnly restrict write; none restricts nothing. A mkdir row does not claim that an existing ancestor is changed. Use the observed existence/kind and full row eligibility, rule-local exemption, strength, first-tie and off-winner rules above. Only a restricted winning write uses winner.behavior confirm/block. Do not use operation.toolName=sf_soql to exempt these writes. Missing essential access facts cannot prove exclusion. Query text and result sensitivity do not decide file policy.";
+const NATIVE_ARTIFACT_FILE_ACCESS_CRITERIA = {
+  allow: {
+    when: "Every relevant facts.files path has no eligible winner, OR its winner.behavior=off, OR its declared write access (write or mkdir) is not a member of winner.restrictedAccess. Use the full enabled/path-match/rule-local-exemption/existence conjunction above.",
+    exclude:
+      "A winning declared write restriction with behavior=confirm/block, or genuinely unknown essential path/existence/access facts that cannot exclude such a restriction. Missing query or result contents alone never excludes allow.",
+  },
+  confirm: {
+    when: "A path has an eligible strongest winner AND its declared write access (write or mkdir) is a member of winner.restrictedAccess AND behavior=confirm; or actually unknown essential path/existence/access facts leave such an ask possible, with no applicable or unresolved block.",
+    exclude:
+      "Known path nonmatch, enabled=false, same-row allowedPatterns match, onlyIfExists=true with exists=false, winner.behavior=off, unrestricted declared access, or a winning/potential block.",
+  },
+  block: {
+    when: "A path has an eligible strongest winner AND its declared write access (write or mkdir) is a member of winner.restrictedAccess AND behavior=block; or actually unknown essential path/existence/access facts cannot exclude such a block.",
+    exclude:
+      "A known failed eligibility predicate; a stronger or first-tie winner that supersedes the block row; winner.behavior=off; or declared write access outside winner.restrictedAccess. Query/result omission, a near-match, and another rule exemption do not create a block.",
   },
 } as const;
 const FILE_DISCLOSURE_SCOPE_RULE =
@@ -242,7 +266,7 @@ const RISK_DOMAINS = {
   },
   soql: {
     rules: [
-      "Query/schema/status operations use API reads or local analysis. query.run also writes local query/result artifacts. Generated artifact destinations are unobserved here; retain unresolved file-policy effects. Broad/export/history/withheld-query disclosure belongs to the disclosure question; do not duplicate that uncertainty as execution risk.",
+      "Query/schema/status operations use API reads or local analysis. query.run also writes local query/result artifacts. Trusted fileAccesses declares exact artifact writes and possible directory creation; file policy judges those accesses from fresh path facts. Without those rows, generated destinations are unobserved and file-policy effects remain unresolved. Broad/export/history/withheld-query disclosure belongs to the disclosure question; do not duplicate that uncertainty as execution risk.",
     ],
     allow: ["query/schema reads"],
     confirm: ["unknown additional executable effects"],
@@ -298,7 +322,7 @@ const DISCLOSURE_DOMAINS = {
     "Use policy.commands.matchGrammar for exact matches against commandTokens. Matching allowedPatterns/effectWaivers waive that configured disclosure only. effectWaivers are disabled ordinary rules, never command restrictions, allow exceptions or overrides of active policy.",
   ],
   soql: [
-    "queryAll/export/history.rerun, allow_unbounded=true or host rowLimit.bucket=large require approval. Cap is 2000: use host effectiveMaximum, no invented uncapped rows. queryShape observes only the original Id-only projection, one withheld source, positive LIMIT, and no other clauses. Source sensitivity remains unknown. Id-only projection does not mean only Id occurs in the API response: query.run writes the query and raw API results locally, including API metadata and possibly sensitive IDs. Source/API/schema access and generated artifact paths are unobserved. Without queryShape, withheld query leaves ALL ROWS/sensitivity unknown. Schema/status/small bounded reads are routine.",
+    "queryAll/export/history.rerun, allow_unbounded=true or host rowLimit.bucket=large require approval. Cap is 2000: use host effectiveMaximum, no invented uncapped rows. queryShape observes only the original Id-only projection, one withheld source, positive LIMIT, and no other clauses. Source sensitivity remains unknown. Id-only projection does not mean only Id occurs in the API response: query.run writes the query and raw API results locally, including API metadata and possibly sensitive IDs. Source/API/schema access remains unobserved. Trusted fileAccesses binds only generated artifact destinations; without it, those destinations remain unobserved. Without queryShape, withheld query leaves ALL ROWS/sensitivity unknown. Schema/status/small bounded reads are routine.",
   ],
   data360: [
     "Sensitive/broad exports or unresolved query/transfer effects require approval. Schema/status/metadata and nonexport authoring previews are routine. Withheld query/SQL is not proof of bounded disclosure.",
@@ -486,9 +510,35 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
   },
 };
 export const JEV_PROTOCOL_HASH = jevHash({
-  version: 13,
+  version: 14,
   questions: QUESTION_PROTOCOL,
   mechanicalObservations: {
+    nativeQueryArtifacts: {
+      tool: "sf_soql",
+      action: "query.run",
+      planVersion: 1,
+      provenance: "exact-live-prepared-store-object-not-tool-input",
+      binding: ["toolName", "originalInputHash", "cwd", "sessionId", "toolCallId"],
+      paths: "all-ordered-mkdir-ancestors-then-five-writes-no-truncation",
+      maximumPaths: 32,
+      accesses: ["mkdir", "write"],
+      policyAccess: "write-for-each-declared-mkdir-or-write",
+      facts: "current-supplied-path-stat-realpath-no-bodies-descendants-or-sensitivity",
+      completenessMarker: {
+        field: "artifactPathsOnlyIncomplete",
+        source: "builder-omit-calls-no-other-incomplete-reason",
+        absent: "no-completeness-promotion",
+        resolve: "remove-only-generated_artifact_paths_unobserved",
+        independentUnknowns: "unchanged",
+        hosted: "omitted",
+      },
+      localIdentity: "plan-hash-and-ordered-accesses-in-factsHash-not-hosted",
+      audit: "artifactPlanHash-and-mkdir-write-counts-no-raw-paths-or-query",
+      modelFields: "fileAccesses-path-access-and-complete-fresh-file-facts",
+      unsupported: "no-plan-projection-for-other-tools-or-actions",
+      membershipRule: NATIVE_ARTIFACT_FILE_ACCESS_RULE,
+      criteria: NATIVE_ARTIFACT_FILE_ACCESS_CRITERIA,
+    },
     fileToolAccess: {
       tools: FILE_TOOLS,
       observations: FILE_TOOL_OBSERVATIONS,
@@ -557,9 +607,11 @@ export const JEV_PROTOCOL_HASH = jevHash({
       sourceSpelling: "withheld",
       sensitivity: "unknown",
       unsupported: "no-query-shape-or-query-LIMIT-observation",
-      artifactPaths: "unobserved-no-custom-file-policy-binding",
+      artifactPaths:
+        "unobserved-unless-exact-trusted-plan-all-paths-observed-and-write-policy-projected",
       omission: "generated_artifact_paths_unobserved",
-      completeness: "false-preserved-no-automatic-safe-coverage-increase",
+      completeness:
+        "false-without-plan-only-artifact-gap-resolved-with-valid-plan-all-other-gates-preserved",
     },
     fileKind: {
       source: "supplied-path-stat-follows-symlinks",
@@ -687,15 +739,18 @@ function operationalQuestion(metadata: JevToolMetadata): JevChoiceQuestion {
 
 function filePolicyQuestion(metadata: JevToolMetadata): JevChoiceQuestion {
   const base = QUESTION_PROTOCOL.file_policy;
-  if (!FILE_TOOLS.includes(metadata.toolName)) return base;
+  if (!FILE_TOOLS.includes(metadata.toolName) && !metadata.artifactPlan) return base;
   const instructions = base.instructions as { rules: string[] };
   return {
     ...base,
     instructions: {
       ...instructions,
-      rules: [...instructions.rules.slice(0, -1), FILE_ACCESS_RULE],
+      rules: [
+        ...instructions.rules.slice(0, -1),
+        metadata.artifactPlan ? NATIVE_ARTIFACT_FILE_ACCESS_RULE : FILE_ACCESS_RULE,
+      ],
     },
-    criteria: FILE_ACCESS_CRITERIA,
+    criteria: metadata.artifactPlan ? NATIVE_ARTIFACT_FILE_ACCESS_CRITERIA : FILE_ACCESS_CRITERIA,
   };
 }
 
@@ -830,7 +885,12 @@ export function buildJevRequest(
   if (needsDisclosure(metadata)) questions.disclosure = disclosureQuestion(metadata);
   if (metadata.toolName.startsWith("sf_browser_"))
     questions.authority = QUESTION_PROTOCOL.authority;
-  const { description: _description, ...operation } = metadata;
+  const {
+    description: _description,
+    artifactPathsOnlyIncomplete: _artifactPathsOnlyIncomplete,
+    artifactPlan: _artifactPlan,
+    ...operation
+  } = metadata;
   const fileToolObservations = Object.hasOwn(FILE_TOOL_OBSERVATIONS, metadata.toolName)
     ? {
         ...FILE_TOOL_OBSERVATIONS[metadata.toolName as keyof typeof FILE_TOOL_OBSERVATIONS],
@@ -860,14 +920,15 @@ export function buildJevRequest(
       policy: {
         ...(hasFiles
           ? {
-              files: fileToolObservations
-                ? (policy.files as Array<{ protection: keyof typeof FILE_PROTECTION_ACCESS }>).map(
-                    (row) => ({
+              files:
+                fileToolObservations || metadata.artifactPlan
+                  ? (
+                      policy.files as Array<{ protection: keyof typeof FILE_PROTECTION_ACCESS }>
+                    ).map((row) => ({
                       ...row,
                       restrictedAccess: [...FILE_PROTECTION_ACCESS[row.protection]],
-                    }),
-                  )
-                : policy.files,
+                    }))
+                  : policy.files,
             }
           : {}),
         ...(commandTokens
@@ -923,6 +984,10 @@ export function jevContextComplete(metadata: JevToolMetadata, facts: JevFacts): 
     metadata.complete &&
     (!facts.org || facts.org.verified) &&
     (!facts.files || facts.files.every((file) => file.exists !== "unknown")) &&
+    (!metadata.artifactPlan ||
+      metadata.artifactPlan.accesses.every(({ path }) =>
+        facts.files?.some((file) => file.path === path),
+      )) &&
     (!facts.browser || facts.browser.status === "fresh")
   );
 }
@@ -935,6 +1000,7 @@ export function jevFactBindingHash(resolved: JevResolvedFacts): string {
     files: resolved.facts.files ?? [],
     browser,
     browserIdentity: resolved.browserIdentity ?? null,
+    ...(resolved.artifactPlan ? { artifactPlan: resolved.artifactPlan } : {}),
   });
 }
 
@@ -966,6 +1032,15 @@ export async function evaluateJevSafety(
     ...(originalHash ? { inputHash: originalHash } : {}),
     ...(descriptorHash ? { descriptorHash } : {}),
     ...(factsHash ? { factsHash } : {}),
+    ...(metadata?.artifactPlan
+      ? {
+          artifactPlanHash: metadata.artifactPlan.hash,
+          artifactAccessCounts: {
+            mkdir: metadata.artifactPlan.accesses.filter(({ access }) => access === "mkdir").length,
+            write: metadata.artifactPlan.accesses.filter(({ access }) => access === "write").length,
+          },
+        }
+      : {}),
     ...(transportHash ? { transportHash } : {}),
   });
   try {
@@ -978,6 +1053,14 @@ export async function evaluateJevSafety(
     originalHash = jevHash(input.input);
     descriptorHash = jevHash(JSON.parse(JSON.stringify(options.descriptor ?? null)));
     metadata = buildJevMetadata(input.toolName, input.input, options.descriptor);
+    if (input.artifactPlan)
+      metadata = addJevArtifactPlan(metadata, input.artifactPlan, {
+        toolName: input.toolName,
+        input: input.input,
+        cwd: input.cwd,
+        sessionId: input.sessionId,
+        toolCallId: input.toolCallId,
+      });
     const resolved = await withinDeadline(
       (options.resolveFacts ?? resolveJevFacts)({
         ...input,
@@ -987,7 +1070,15 @@ export async function evaluateJevSafety(
       }),
       signal,
     );
-    factsHash = jevFactBindingHash(resolved);
+    if (
+      resolved.artifactPlan &&
+      metadata.artifactPlan &&
+      jevHash(resolved.artifactPlan) !== jevHash(metadata.artifactPlan)
+    )
+      throw new Error("invalid-artifact-fact-binding");
+    factsHash = jevFactBindingHash(
+      metadata.artifactPlan ? { ...resolved, artifactPlan: metadata.artifactPlan } : resolved,
+    );
     const complete = jevContextComplete(metadata, resolved.facts);
     fingerprint = jevHash({
       toolName: input.toolName,
@@ -1132,7 +1223,11 @@ function jevDisplaySubject(metadata: JevToolMetadata, facts: JevFacts): string {
   for (const command of shell?.commands ?? [])
     values.push([command.executable, ...(command.subcommands ?? [])].join(" "));
   const paths = metadata.metadata.paths;
-  if (Array.isArray(paths))
+  if (metadata.artifactPlan)
+    values.push(
+      `artifacts mkdir=${metadata.artifactPlan.accesses.filter(({ access }) => access === "mkdir").length} write=${metadata.artifactPlan.accesses.filter(({ access }) => access === "write").length}`,
+    );
+  else if (Array.isArray(paths))
     values.push(...paths.filter((path): path is string => typeof path === "string").slice(0, 3));
   else if (typeof metadata.metadata.path === "string") values.push(metadata.metadata.path);
   if (typeof metadata.metadata.method === "string") values.push(metadata.metadata.method);

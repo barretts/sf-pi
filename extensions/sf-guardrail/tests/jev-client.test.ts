@@ -580,12 +580,14 @@ describe("requestJev", () => {
     expect(evaluateJevPrediction(result, true)).toBe("confirm");
   });
 
-  it("fails a fetch that ignores AbortSignal at the total deadline without retrying", async () => {
+  it("keeps the one-call 1,500 ms deadline without retrying", async () => {
     vi.useFakeTimers();
     const fetch = vi.fn<typeof globalThis.fetch>(() => new Promise<Response>(() => {}));
     const pending = requestJev(request, { fetch });
     const rejection = expect(pending).rejects.toMatchObject({ code: "timeout" });
-    await vi.advanceTimersByTimeAsync(JEV_TIMEOUT_MS);
+    await vi.advanceTimersByTimeAsync(1_499);
+    expect(fetch.mock.calls[0][1].signal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
     await rejection;
     expect(fetch).toHaveBeenCalledOnce();
     expect(fetch.mock.calls[0][1].signal.aborted).toBe(true);

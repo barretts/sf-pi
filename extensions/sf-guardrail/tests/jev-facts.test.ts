@@ -189,7 +189,9 @@ describe("Jev filesystem facts", () => {
       [join(cwd, "selected.txt")],
       [join(cwd, "selected-link.txt")],
     ]);
-    expect(lookups.realpath.mock.calls).toEqual(lookups.stat.mock.calls);
+    // Parallel stat results can finish in either order. Both paths still need one lookup.
+    expect(lookups.realpath.mock.calls).toHaveLength(2);
+    expect(lookups.realpath.mock.calls).toEqual(expect.arrayContaining(lookups.stat.mock.calls));
     expect(JSON.stringify(files)).not.toContain("private-child.txt");
     expect(JSON.stringify(files)).not.toContain(BODY);
   });

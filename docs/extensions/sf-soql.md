@@ -36,6 +36,7 @@ Open its Manager detail or change its package state with:
 - query.queryAll and ALL ROWS are explicit and rendered as deleted/archived-row scope warnings.
 - query.export is confined to .sf-pi/exports/soql/ under the workspace.
 - SOQL results are read-only and artifact-first; sf-soql is not a data mutation or bulk export surface.
+- When Jev is selected, query.run requires a trusted one-use output plan and current approval before connection. Changed or missing approval blocks execution. Partial owned output can remain after a write failure.
 
 ## Exact reference
 

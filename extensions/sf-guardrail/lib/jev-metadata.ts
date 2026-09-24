@@ -1,7 +1,17 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Metadata-only boundary. This extracts effects; it never evaluates risk or approval. */
-import type { JevToolDescriptor, JevToolMetadata } from "./types.ts";
+import type {
+  JevArtifactFileAccess,
+  JevArtifactPlanContext,
+  JevToolDescriptor,
+  JevToolMetadata,
+} from "./types.ts";
 import { observeJevSoqlQueryShape } from "./jev-soql-shape.ts";
+import {
+  assertPreparedSoqlArtifactPlan,
+  type PreparedSoqlArtifactPlan,
+} from "../../../lib/common/sf-soql-artifact-plan/store.ts";
+import { jevHash } from "./jev-identity.ts";
 
 const INVALID = "Invalid Jev tool metadata.";
 const MAX_METADATA_BYTES = 32 * 1024;
@@ -379,6 +389,57 @@ export function buildJevMetadata(
   }
 }
 
+/** Add only the declared effects of the exact trusted query.run plan. */
+export function addJevArtifactPlan(
+  metadata: JevToolMetadata,
+  prepared: Readonly<PreparedSoqlArtifactPlan>,
+  context: JevArtifactPlanContext,
+): JevToolMetadata {
+  try {
+    assertPreparedSoqlArtifactPlan(prepared);
+    const { binding, plan, hash } = prepared;
+    if (
+      context.toolName !== "sf_soql" ||
+      metadata.toolName !== context.toolName ||
+      context.input.action !== "query.run" ||
+      metadata.metadata.action !== "query.run" ||
+      binding.toolName !== context.toolName ||
+      binding.inputHash !== jevHash(context.input) ||
+      binding.cwd !== context.cwd ||
+      binding.sessionId !== context.sessionId ||
+      binding.toolCallId !== context.toolCallId ||
+      hash !== jevHash({ binding, plan }) ||
+      (metadata.artifactPlan && metadata.artifactPlan.hash !== hash)
+    )
+      invalid();
+    const accesses: JevArtifactFileAccess[] = [
+      ...plan.directories.map((path) => ({ path, access: "mkdir" as const })),
+      ...plan.files.map((path) => ({ path, access: "write" as const })),
+    ];
+    const currentPaths =
+      metadata.metadata.paths ??
+      (typeof metadata.metadata.path === "string" ? [metadata.metadata.path] : []);
+    if (!Array.isArray(currentPaths) || currentPaths.some((path) => typeof path !== "string"))
+      invalid();
+    const paths = [...new Set([...currentPaths, ...accesses.map(({ path }) => path)])];
+    if (paths.length > 32) invalid();
+    const { artifactPathsOnlyIncomplete, ...base } = metadata;
+    const result: JevToolMetadata = {
+      ...base,
+      metadata: { ...metadata.metadata, paths, fileAccesses: accesses },
+      omissions: metadata.omissions.filter(
+        (reason) => reason !== "generated_artifact_paths_unobserved",
+      ),
+      complete: metadata.complete || artifactPathsOnlyIncomplete === true,
+      artifactPlan: { hash, accesses },
+    };
+    if (Buffer.byteLength(JSON.stringify(result)) > MAX_METADATA_BYTES) invalid();
+    return result;
+  } catch {
+    invalid();
+  }
+}
+
 function buildMetadata(
   toolName: string,
   input: Record<string, unknown>,
@@ -389,9 +450,13 @@ function buildMetadata(
   validate(input);
   const result: JevToolMetadata = { toolName, metadata: {}, omissions: [], complete: true };
   const consumed = new Set<string>();
+  let otherIncomplete = false;
   const omit = (category: string, incomplete = false) => {
     if (!result.omissions.includes(category)) result.omissions.push(category);
-    if (incomplete) result.complete = false;
+    if (incomplete) {
+      result.complete = false;
+      if (category !== "generated_artifact_paths_unobserved") otherIncomplete = true;
+    }
   };
   if (descriptor) {
     if (
@@ -605,6 +670,8 @@ function buildMetadata(
   if (["sf_browser_click", "sf_browser_press"].includes(toolName)) {
     if (!consumed.has(toolName === "sf_browser_click" ? "ref" : "key")) invalid();
   }
+  if (!otherIncomplete && result.omissions.includes("generated_artifact_paths_unobserved"))
+    result.artifactPathsOnlyIncomplete = true;
   if (Buffer.byteLength(JSON.stringify(result)) > MAX_METADATA_BYTES) invalid();
   return result;
 }

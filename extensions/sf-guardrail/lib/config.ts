@@ -14,20 +14,17 @@
  * Project-level overrides / project-local Guardrail weakening remain deferred
  * by ADR 0041 and ADR 0049.
  */
-import {
-  closeSync,
-  constants,
-  existsSync,
-  fstatSync,
-  openSync,
-  readFileSync,
-  readSync,
-} from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { globalAgentPath } from "../../../lib/common/pi-paths.ts";
-import { globalSettingsPath } from "../../../lib/common/sf-pi-settings.ts";
+import {
+  GuardrailConfigError,
+  readBoundedGuardrailJsonObject as readBoundedJsonObject,
+  readGuardrailEngineSettings,
+} from "../../../lib/common/guardrail-engine.ts";
+export { GuardrailConfigError } from "../../../lib/common/guardrail-engine.ts";
 import type {
   CommandGateConfig,
   CommandPattern,
@@ -42,28 +39,13 @@ import { behaviorEnabled, resolveRuleBehavior } from "./rule-behavior.ts";
 import {
   applyGuardrailPiSettings,
   hasGuardrailPiSettings,
-  guardrailSettingsValue,
   normalizeGuardrailPiSettings,
   readGuardrailPiSettings,
-  rejectGuardrailJsonDuplicateKeys,
   validateGuardrailPiSettings,
   type GuardrailPiSettings,
 } from "./guardrail-settings.ts";
 
 export type GuardrailConfigSource = "bundled" | "override" | "settings" | "override+settings";
-
-/** Error messages and categories never contain settings values, paths, or parse text. */
-export class GuardrailConfigError extends Error {
-  readonly category: string;
-
-  constructor(category: string) {
-    super(`Guardrail configuration blocked: ${category}.`);
-    this.category = category;
-    this.name = "GuardrailConfigError";
-  }
-}
-
-const CONFIG_FILE_LIMIT_BYTES = 256 * 1024;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -123,15 +105,7 @@ export function loadGuardrailSnapshot(): {
   source: GuardrailConfigSource;
   engine: GuardrailEngine;
 } {
-  const root = readBoundedJsonObject(globalSettingsPath(), "settings", true) ?? {};
-  if (root.sfPi !== undefined && !isObject(root.sfPi)) invalid("settings");
-  const rawSettings = guardrailSettingsValue(root);
-  if (rawSettings !== undefined && !isObject(rawSettings)) invalid("settings");
-  const raw = (rawSettings ?? {}) as Record<string, unknown>;
-  if (raw.engine !== undefined && raw.engine !== "deterministic" && raw.engine !== "jev") {
-    invalid("settings");
-  }
-  const engine: GuardrailEngine = raw.engine === "jev" ? "jev" : "deterministic";
+  const { engine, raw } = readGuardrailEngineSettings();
   if (engine === "jev") {
     try {
       validateGuardrailPiSettings(raw);
@@ -170,53 +144,6 @@ function effectiveConfig(
   }
 
   return { config, source };
-}
-
-function readBoundedJsonObject(
-  filePath: string,
-  source: "settings" | "override" | "bundled",
-  optional: boolean,
-): Record<string, unknown> | undefined {
-  let fd: number;
-  try {
-    fd = openSync(filePath, constants.O_RDONLY | constants.O_NONBLOCK);
-  } catch (error) {
-    if (optional && (error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw new GuardrailConfigError(`${source}-unreadable`);
-  }
-  let text: string;
-  try {
-    const stat = fstatSync(fd);
-    if (!stat.isFile()) throw new GuardrailConfigError(`${source}-unreadable`);
-    if (stat.size > CONFIG_FILE_LIMIT_BYTES) {
-      throw new GuardrailConfigError(`${source}-too-large`);
-    }
-    const buffer = Buffer.alloc(CONFIG_FILE_LIMIT_BYTES + 1);
-    let size = 0;
-    while (size < buffer.length) {
-      const bytes = readSync(fd, buffer, size, buffer.length - size, null);
-      if (!bytes) break;
-      size += bytes;
-    }
-    if (size > CONFIG_FILE_LIMIT_BYTES) {
-      throw new GuardrailConfigError(`${source}-too-large`);
-    }
-    text = buffer.subarray(0, size).toString("utf8");
-  } catch (error) {
-    if (error instanceof GuardrailConfigError) throw error;
-    throw new GuardrailConfigError(`${source}-unreadable`);
-  } finally {
-    closeSync(fd);
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-    rejectGuardrailJsonDuplicateKeys(text);
-  } catch {
-    throw new GuardrailConfigError(`${source}-invalid-json`);
-  }
-  if (!isObject(parsed)) invalid(source);
-  return parsed as Record<string, unknown>;
 }
 
 function invalid(source: string): never {

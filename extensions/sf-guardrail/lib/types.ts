@@ -38,6 +38,26 @@ export interface JevSoqlQueryShape {
   sensitivity: "unknown";
 }
 
+export interface JevArtifactFileAccess {
+  path: string;
+  access: "mkdir" | "write";
+}
+
+/** Trusted local call context. It is not a tool argument or hosted fact. */
+export interface JevArtifactPlanContext {
+  toolName: string;
+  input: Record<string, unknown>;
+  cwd: string;
+  sessionId?: string;
+  toolCallId?: string;
+}
+
+/** Local-only plan identity and ordered effects for fresh fact binding. */
+export interface JevArtifactPlanFacts {
+  hash: string;
+  accesses: readonly JevArtifactFileAccess[];
+}
+
 /** Values here have crossed the metadata-only privacy boundary. */
 export interface JevToolMetadata {
   toolName: string;
@@ -45,6 +65,10 @@ export interface JevToolMetadata {
   metadata: Record<string, unknown>;
   omissions: string[];
   complete: boolean;
+  /** Local-only marker from the builder. No other incomplete reason is present. */
+  artifactPathsOnlyIncomplete?: true;
+  /** Local-only trusted plan binding. Never send its hash or call identity. */
+  artifactPlan?: Readonly<JevArtifactPlanFacts>;
 }
 
 export interface JevFacts {
@@ -68,6 +92,8 @@ export interface JevResolvedFacts {
   /** Local-only approval binding; never serialized into a hosted request. */
   orgIdentity?: string;
   browserIdentity?: string;
+  /** Local-only. The hosted request receives only the observed file facts. */
+  artifactPlan?: Readonly<JevArtifactPlanFacts>;
 }
 
 export interface JevEvidence {
@@ -86,6 +112,9 @@ export interface JevEvidence {
   inputHash?: string;
   descriptorHash?: string;
   factsHash?: string;
+  /** Bounded local artifact identity and access counts. No raw paths or query. */
+  artifactPlanHash?: string;
+  artifactAccessCounts?: { mkdir: number; write: number };
   /** Local endpoint, model, provider, and routing binding. No endpoint text is stored. */
   transportHash?: string;
 }

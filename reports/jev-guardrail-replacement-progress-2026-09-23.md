@@ -5,7 +5,7 @@ deterministic engine remains the default. The selected new target measures at le
 coverage against the old guardrail and useful automatic approval on valid safe
 inputs. The old exact-agreement gates remain visible as historical gates.
 
-The current product source uses protocol version 13, wire state version 6, and
+The current product source uses protocol version 14, wire state version 6, and
 the pinned model `typesafe/jev-1.13-20260917`. It requires complete global
 operation context. Every requested answer must choose `allow` with
 `P(allow) >= 0.99` before automatic execution. A model `block` prevents
@@ -712,9 +712,11 @@ connected to the current product decision path. Their source checks do not
 prove model coverage or automatic use.
 
 The council completed its source review of an exact artifact path plan for
-native query execution. The plan is under test in a separate worktree. A supported Id query stays in the valid-input score. Its current
-unobserved output paths are an implementation gap. Planning paths alone
-does not prove low data sensitivity or atomic binding to physical files.
+native query execution. Protocol 14 now has the tested producer, guard, and
+consumer path. A supported Id query stays in the valid-input score. The
+registered SDK tests use synthetic Decisions and API replies. They do not
+prove current live model acceptance, low data sensitivity, or atomic physical
+file binding.
 
 The next decision depends on observed safety, policy recognition, safe-call
 coverage, failures, latency, and cost under the frozen score rules.
@@ -752,5 +754,76 @@ Combined source patch SHA-256:
 
 The live v39 small disclosure pass stays separate from the source checks.
 Neither result proves the full replacement target or an independent TEST pass.
-The default engine remains deterministic. The new native artifact plan is
-still under test in a separate worktree.
+The default engine remains deterministic. The checked protocol 14 source update below supersedes that artifact gap.
+
+## Checked source update: protocol 14 and experimental command deadline
+
+The new query path plans the actual output destinations before classification.
+It declares every possible ancestor directory creation and all five file writes.
+The guard observes those paths and asks Jev to apply file policy to each declared
+write access. The local hash binds the plan to the original input, SDK call,
+session, tool, and working directory. Query and result contents stay local.
+The plan removes only the artifact path omission. Other unknowns stay in place.
+
+Successful allow audit precedes authorization. The consumer claims the plan
+once before connection. It copies every Jev action before its first wait and
+checks context before writing and around waits. The run directory is exclusive.
+All five files use exclusive creation and mode `0600`; new directories use
+mode `0700`. Partial owned output stays in place after failure. Path facts from
+`stat` and `realpath` do not prevent ancestor replacement races.
+
+The source review found two contract gaps before integration. The first could
+delete an old call record when another plan started. The second could let a
+retained validation input change into query execution during connection.
+Both were fixed. Records now stay for the process lifetime. The store rejects
+new plans at 256 records. A recorded Jev call cannot use the legacy writer after
+an engine change. Tests cover completed, revoked, and expired calls, the store
+limit, input mutation, parallel claims, cancellation, collisions, failed audit,
+invalid replies, and extension reload. The store and registered SDK modules
+passed all 44 focused tests. The SDK path uses a synthetic API and synthetic
+Decisions replies. It is not real org acceptance.
+
+The unused command process and its strict stage transport now have one
+prospective 10,000 ms total deadline. Construction, calls, response reads,
+validation, and synchronous cleanup share that bound. Cancellation starts
+without waiting for asynchronous cleanup completion. The one-call hook keeps
+its 1,500 ms limit, current syntax text, and `0.99` cutoff. The four deadline
+modules passed 424 focused tests. This changes no engine preference or old
+screen gate. JavaScript cannot preempt synchronous work; the next check rejects
+success after expiry.
+
+The combined source passed full `validate:ci` and `lint`. The main suite had
+5,502 passed tests and 65 skipped tests across 615 passed files and one skipped
+file. The Manager check passed 20 tests. A private test profile had no Pi path
+override and no Decisions provider configuration. Source hashes stayed unchanged.
+Root checked that all 35 changed source files match that tree exactly.
+
+The first combined CI run retained one failed assertion and 5,501 passed tests.
+An old file-facts test required parallel lookups to finish in the same order.
+Its successor requires both exact calls and their exact count. Production lookup
+behavior stayed unchanged. The first failed result remains retained.
+
+Protocol identity:
+`7a54152c190028086d5013380ffde8ceba53ef286239cd8b46bba56185f902db`.
+Combined source patch SHA-256:
+`bbfca9f0f6a08ac74f55ea835711b27b87798df8aa8f256022407cce46c4d9de`.
+Full CI log SHA-256:
+`782f39616270c68f7b49c5c228bb5545f1432580c90c1c7e0b6cdab84225f754`.
+
+The separate valid-input scorer has a prospective version 2 for the three
+changed SOQL source hashes. It preserves the first proposal, all 175 cases,
+all labels, the four unsupported controls, and all 28 valid safe controls.
+The supported native Id query stays in the denominator. The scorer and new
+syntax harness passed 43 inert tests against the current source. These tests
+use synthetic raw replies and do not prove provider coverage.
+
+The next syntax hypothesis gives each question its literal selector rule and
+clarifies the actual `selector` and `commandTokens` references. This is an
+inference from the two old syntax errors and primary guidance about literal
+criteria and indirection. The model documentation identifies those limits;
+it does not prove this change will pass. See the
+[Choice contract](https://docs.typesafe.ai/primitives/choice) and
+[Jev 1.13 limits](https://docs.typesafe.ai/model-jaggedness/jev-1.13).
+
+The full current 175-case model result and independent TEST remain unproved.
+The default engine remains deterministic. The goal remains active.

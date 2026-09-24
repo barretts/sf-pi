@@ -110,10 +110,27 @@ One-file-per-concern split:
   query. Bound it to 512 bytes and an 80-character ASCII source. Admit only
   case-insensitive `SELECT Id FROM source LIMIT 1..2000`, with ASCII space,
   tab, CR, or LF. Require the current local syntax SDK to accept it. Keep
-  raw query and source spelling local. Sensitivity stays unknown. Generated
-  artifact paths stay unobserved, so completeness stays false. This observer
-  does not bind artifact paths or custom file policy. It cannot increase
-  automatic safe coverage. Keep all independent unknowns and policy decisions.
+  raw query and source spelling local. Sensitivity stays unknown. Without an exact Protocol 14 plan, generated artifact paths stay
+  unobserved and completeness stays false. The query observer alone cannot
+  bind artifact paths or custom file policy. Keep all independent unknowns
+  and policy decisions.
+- Protocol 14 binds a native `sf_soql` `query.run` to the actual writer plan.
+  The shared producer declares all possible ancestor directory creations
+  and five exact file writes before classification. Fresh facts cover every
+  path. Jev judges file policy for each declared write access. The local
+  hash binds session, call ID, tool, original input, working directory, and
+  plan. Keep that identity and the query local. Do not accept a plan or
+  approval token from tool arguments. Remove only the resolved artifact
+  omission; preserve other unknowns. Audit allow before authorization.
+  Claim the plan once before connection, then check context before writing
+  and around each wait. Keep all Jev call records for the process lifetime.
+  At 256 records, reject new plans instead of deleting old identities.
+  Snapshot every Jev action before its first wait. An engine change cannot
+  turn a recorded Jev call into legacy execution. Session changes and
+  extension reload revoke authority. Directory and file creation is
+  exclusive where the writer creates its run and output files. Preserve
+  partial owned output after failure. `stat` and `realpath` observations
+  do not prevent operating-system ancestor replacement races.
 - Send operation metadata and the minimum effective policy relevant to the
   questions. Known CLI structure, trusted file-path facts, and bounded numeric
   observations describe effects without deciding policy locally. Mechanically
@@ -182,6 +199,11 @@ One-file-per-concern split:
   Coverage-first diagnostic harnesses may record an authorized 10-second
   transport deadline with inert operations; keep that evidence separate from
   runtime qualification under the enforced 1,500 ms deadline/500 ms p95 target.
+- The unused experimental command process has one total 10,000 ms deadline.
+  Preparation, all calls, response reads, validation, and synchronous cleanup
+  share that bound. Cancellation starts without a wait for asynchronous
+  cleanup completion. The current hook and one-call limit stay at 1,500 ms.
+  Do not transfer prior diagnostic scores to this new operating point.
 - Automatically execute only with complete context and every requested answer
   choosing `allow` with `P(allow) >= 0.99`. Any model `block` is a hard block;
   any `confirm`, insufficient allow probability, or incomplete context requires

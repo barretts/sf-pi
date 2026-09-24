@@ -1031,7 +1031,7 @@ describe("one absolute total deadline and cancellation", () => {
     expect(test.createTransport).toHaveBeenCalledWith({ deadline, signal: undefined });
   });
   it("rejects an extended or expired deadline before transport", async () => {
-    for (const deadline of [performance.now() - 1, performance.now() + 5000]) {
+    for (const deadline of [performance.now() - 1, performance.now() + 10_001]) {
       const test = run(request(), transport(), deadline);
       expect((await test.promise).gate).toBe("block");
       expect(test.createTransport).not.toHaveBeenCalled();
@@ -1097,13 +1097,87 @@ describe("one absolute total deadline and cancellation", () => {
     expect(completed.latencyMs).toBe(1400);
     expect(completed.stages).toHaveLength(2);
   });
-  it("admits exactly 1500 ms and rejects an extended total deadline", async () => {
+  it("admits exactly 10,000 ms and rejects an extended total deadline", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
-    const admitted = run(request(), transport(), performance.now() + 1500);
+    const admitted = run(request(), transport(), performance.now() + 10_000);
     expect((await admitted.promise).completed).toBe(true);
-    const extended = run(request(), transport(), performance.now() + 1500.001);
+    const extended = run(request(), transport(), performance.now() + 10_000.001);
     expect((await extended.promise).failure.code).toBe("invalid_request");
     expect(extended.createTransport).not.toHaveBeenCalled();
+  });
+  it.each([2_999, 3_000])("uses one 10,000 ms bound with a %s ms last stage", async (lastMs) => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    const selected = transport();
+    selected.requestNonCommand.mockImplementation(async (current) => {
+      await new Promise((resolve) => setTimeout(resolve, 4_000));
+      return result("non_command", current);
+    });
+    selected.requestSyntax.mockImplementation(async (current) => {
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      return result("syntax", current);
+    });
+    selected.requestCommandPolicy.mockImplementation(async (current) => {
+      await new Promise((resolve) => setTimeout(resolve, lastMs));
+      return result("command_policy", current);
+    });
+    const test = run(request(), selected, performance.now() + 10_000);
+    await vi.advanceTimersByTimeAsync(10_000);
+    const completed = await test.promise;
+    expect(completed.completed).toBe(lastMs === 2_999);
+    expect(completed.gate).toBe(lastMs === 2_999 ? "allow" : "block");
+    expect(completed.latencyMs).toBe(7_000 + lastMs);
+    expect(completed.stages).toHaveLength(lastMs === 2_999 ? 3 : 2);
+    expect(completed.failure).toEqual(
+      lastMs === 2_999 ? undefined : { stage: "command_policy", code: "timeout" },
+    );
+    for (const name of ["requestNonCommand", "requestSyntax", "requestCommandPolicy"] as const)
+      expect(selected[name]).toHaveBeenCalledTimes(1);
+  });
+  it("includes preparation time before transport construction", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    const original = request();
+    vi.spyOn(globalThis, "structuredClone").mockImplementationOnce((value) => {
+      vi.advanceTimersByTime(10_000);
+      return clone(value);
+    });
+    const test = run(original, transport(), performance.now() + 10_000);
+    const completed = await test.promise;
+    expect(completed.failure).toEqual({ stage: "prepare", code: "timeout" });
+    expect(completed.gate).toBe("block");
+    expect(completed.latencyMs).toBe(10_000);
+    expect(test.createTransport).not.toHaveBeenCalled();
+  });
+  it("includes the transport factory callback in the same deadline", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    const selected = transport();
+    const createTransport = vi.fn(() => {
+      vi.advanceTimersByTime(10_000);
+      return selected;
+    });
+    const completed = await runJevCommandProcess(request(), {
+      deadline: performance.now() + 10_000,
+      createTransport,
+    });
+    expect(completed.failure).toEqual({ stage: "prepare", code: "timeout" });
+    expect(completed.gate).toBe("block");
+    expect(completed.latencyMs).toBe(10_000);
+    expect(createTransport).toHaveBeenCalledTimes(1);
+    expect(selected.requestNonCommand).not.toHaveBeenCalled();
+    expect(selected.close).toHaveBeenCalledTimes(1);
+  });
+  it("blocks when final cleanup reaches the deadline and retains all actual heads", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    const selected = transport();
+    selected.close.mockImplementation(() => vi.advanceTimersByTime(10_000));
+    const completed = await run(request(), selected, performance.now() + 10_000).promise;
+    expect(completed.completed).toBe(false);
+    expect(completed.gate).toBe("block");
+    expect(completed.failure).toEqual({ stage: "command_policy", code: "timeout" });
+    expect(completed.stages).toHaveLength(3);
+    expect(completed.answers.command_policy).toEqual(allow());
+    expect(completed.cleanupFailed).toBe(false);
+    expect(completed.latencyMs).toBe(10_000);
+    expect(selected.close).toHaveBeenCalledTimes(1);
   });
   it("has no fallback request after a first-stage failure", async () => {
     const selected = transport();

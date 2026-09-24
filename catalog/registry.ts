@@ -183,7 +183,7 @@ export const SF_PI_REGISTRY: readonly SfPiExtension[] = [
     maturity: "stable",
     defaultEnabled: true,
     commands: ["/sf-guardrail"],
-    events: ["session_start","session_tree","before_agent_start","tool_call","context"],
+    events: ["session_start","session_tree","session_shutdown","before_agent_start","tool_call","context"],
     configurable: true,
     getConfigPanel: async () => {
       const mod = await import("../extensions/sf-guardrail/lib/config-panel.ts");

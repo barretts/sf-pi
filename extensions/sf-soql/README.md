@@ -43,6 +43,12 @@ row and field previews.
 - Object, field, and relationship names should be established through schema
   evidence rather than guessed.
 
+When Jev is selected, `query.run` requires a current approval for its exact
+output paths. A changed input, session, engine, or path fact stops the run.
+A call can use its approval once. Start a new call after a blocked or completed
+run. A failed write can leave partial output in the reported run directory.
+Other actions retain their current artifact behavior.
+
 ## Troubleshooting
 
 **A run returns a safety review:** Add a top-level `LIMIT`, use `query.sample` or
