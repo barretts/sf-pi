@@ -94,6 +94,8 @@ export const JEV_COMMAND_SYNTAX_TEMPLATES = freeze({
   sharedQuestion: "Does the selector in this question match?",
   inlineQuestion: "Does this selector match?",
   inlineCriteria: { match: "Exact match.", no_match: "No exact match." },
+  boundary:
+    "Token IDs are opaque alphabetic labels. Compare literal labels, not their spelling or public names. Only original, expanded, flat and piArgs record command observations. classes is a vocabulary of both command and policy labels. A vocabulary entry does not prove a label occurs in a command. Consecutive means adjacent positions with no intervening label. Selector display names are stored separately in question order. A null display name is not a wildcard. Every selector label is still literal.",
 });
 export const JEV_COMMAND_ACTION_INSTRUCTION =
   "Choose the command policy action from all three source groups. Every row contains its own binary model answer. Its selected match or no_match choice is the only syntax signal available here. For this diagnostic, take these selected choices as conditional syntax premises. Apply source order and declared behavior to those premises. The choices remain fallible model evidence. They are not authoritative host facts. Selectors and command tokens are absent. Do not invent a syntax match or redo syntax. Binary vectors and confidence are fallible estimates. They are not another match vote or action probabilities. Low binary confidence must not change a selected declared block behavior into confirm. Jev alone applies policy order. First inspect all allowedPatterns rows. If any row selects match, choose allow. Otherwise inspect all autoDenyPatterns rows. If any row selects match, choose block. Otherwise inspect patterns rows in their array order. Use the declared behavior of the FIRST row that selects match. If no patterns row selects match, choose allow. Keep every row, including shadowed matches. Effect waivers are outside these active source groups. Produce your own actual allow/confirm/block distribution conditional on the selected premises. Do not scale, multiply, or convert binary vectors into action probabilities.";
@@ -115,12 +117,27 @@ export const JEV_COMMAND_PROCESS_PROTOCOL = freeze({
     "Do not request syntax. Jev receives all three empty active source groups. No synthetic syntax reply. The selected binary confidence condition is vacuous only for this branch.",
   groups: GROUPS,
   selectorShapes: SHAPES,
-  syntaxStateVersion: 37,
+  syntaxStateVersion: 42,
+  numericSyntaxStateVersion: 37,
   originalSyntaxStateVersion: 31,
   commandStateVersion: 35,
   syntaxId: "ordered-alphabetic-r_a-through-r_bl",
   groupedRowId: "ordered-alphabetic-u_a-through-u_bl",
   grammarHash: GRAMMAR_HASH,
+  tokenIdEncoding: {
+    name: "opaque-alphabetic-v1",
+    prefix: "t_",
+    minimum: 0,
+    exclusiveMaximum: 4096,
+    conversion:
+      "Add one to the numeric ID. Use one-based base-26 digits a through z. Prefix the result with t_. The exact inverse restores the original numeric ID.",
+  },
+  syntaxProjection:
+    "Convert every original, expanded, flat and piArgs token reference, every class ID and prefix relation, every publicSyntax ID, and every selector reference. Preserve every array position, namespace, public word and shared grammar field. Move each selector publicNames field to selectorDisplayNames in exact question order. Add no match, winner or action.",
+  inlineRuleProjection:
+    "Use the selector kind's complete shared grammar rule. For tokens, keep its first sentence inline, ending before . flat. Keep all remaining conditions in the shared grammar. Replace row. with selector., row token with selector token, and operation.metadata.commandTokens with commandTokens.",
+  syntaxInverse:
+    "Validate the complete prepared source record. Restore exact numeric short syntax 37 bytes, including all ordered selector display names. The long syntax 31 inverse uses this restoration. A changed or missing field is an invalid request.",
   syntaxTemplates: JEV_COMMAND_SYNTAX_TEMPLATES,
   actionInstruction: JEV_COMMAND_ACTION_INSTRUCTION,
   actionCriteria: JEV_COMMAND_ACTION_CRITERIA,
@@ -317,6 +334,136 @@ function selectorFromRow(row: unknown, tokens: ReturnType<typeof boundTokens>, w
   };
 }
 
+export function jevCommandTokenLabel(value: unknown): string {
+  if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) >= 4096) fail();
+  let cursor = (value as number) + 1;
+  let suffix = "";
+  while (cursor) {
+    suffix = String.fromCharCode(97 + ((cursor - 1) % 26)) + suffix;
+    cursor = Math.floor((cursor - 1) / 26);
+  }
+  return `t_${suffix}`;
+}
+export function jevCommandTokenNumber(value: unknown): number {
+  if (typeof value !== "string" || !/^t_[a-z]+$/.test(value)) fail();
+  let cursor = 0;
+  for (const letter of value.slice(2)) {
+    cursor = cursor * 26 + letter.charCodeAt(0) - 96;
+    if (cursor > 4096) fail();
+  }
+  const number = cursor - 1;
+  if (jevCommandTokenLabel(number) !== value) fail();
+  return number;
+}
+function relabelTokens(
+  tokens: Record<string, unknown>,
+  convert: (value: unknown) => string | number,
+) {
+  for (const name of ["original", "expanded"])
+    for (const view of boundedArray(tokens[name], JEV_COMMAND_PROCESS_LIMITS.maxViews)) {
+      if (!object(view)) fail();
+      view.head = convert(view.head);
+      view.args = boundedArray(view.args, JEV_COMMAND_PROCESS_LIMITS.maxTokens).map(convert);
+    }
+  tokens.flat = boundedArray(tokens.flat, JEV_COMMAND_PROCESS_LIMITS.maxTokens).map(convert);
+  tokens.piArgs = boundedArray(tokens.piArgs, JEV_COMMAND_PROCESS_LIMITS.maxViews).map((sequence) =>
+    boundedArray(sequence, JEV_COMMAND_PROCESS_LIMITS.maxTokens).map(convert),
+  );
+  for (const entry of boundedArray(tokens.classes, JEV_COMMAND_PROCESS_LIMITS.maxClasses)) {
+    if (!object(entry)) fail();
+    for (const field of Object.keys(entry)) entry[field] = convert(entry[field]);
+  }
+  for (const entry of boundedArray(
+    tokens.publicSyntax,
+    JEV_COMMAND_PROCESS_LIMITS.maxPublicNames,
+  )) {
+    if (!object(entry)) fail();
+    entry.id = convert(entry.id);
+  }
+}
+function relabelSelector(
+  selector: Record<string, unknown>,
+  convert: (value: unknown) => string | number,
+) {
+  for (const [field, value] of Object.entries(selector))
+    if (!["kind", "publicNames"].includes(field))
+      selector[field] = Array.isArray(value) ? value.map(convert) : convert(value);
+}
+function numericSyntaxRequest(
+  original: JevRequest,
+  tokens: unknown,
+  grammar: unknown,
+  manifest: readonly { questionId: JevSyntaxQuestionId; selector: Record<string, unknown> }[],
+): JevSyntaxRequest {
+  return {
+    model: original.model,
+    provider: jsonCopy(original.provider),
+    state: {
+      version: 37,
+      commandTokens: jsonCopy(tokens),
+      matchGrammar: jsonCopy(grammar),
+      syntaxInstruction: {
+        question: JEV_COMMAND_SYNTAX_TEMPLATES.sharedQuestion,
+        rule: JEV_COMMAND_SYNTAX_TEMPLATES.rule,
+        criteria: jsonCopy(JEV_COMMAND_SYNTAX_TEMPLATES.originalCriteria),
+      },
+    },
+    questions: Object.fromEntries(
+      manifest.map((row) => [
+        row.questionId,
+        {
+          type: "choice",
+          instructions: {
+            question: JEV_COMMAND_SYNTAX_TEMPLATES.inlineQuestion,
+            selector: jsonCopy(row.selector),
+          },
+          criteria: jsonCopy(JEV_COMMAND_SYNTAX_TEMPLATES.inlineCriteria),
+        },
+      ]),
+    ),
+  };
+}
+function syntax42Request(numeric: JevSyntaxRequest): JevSyntaxRequest {
+  const request = jsonCopy(numeric);
+  const state = request.state;
+  if (
+    !object(state) ||
+    state.version !== 37 ||
+    !object(state.commandTokens) ||
+    !object(state.matchGrammar) ||
+    !object(state.syntaxInstruction)
+  )
+    fail();
+  state.version = 42;
+  state.tokenIdEncoding = "opaque-alphabetic-v1";
+  state.syntaxInstruction.boundary = JEV_COMMAND_SYNTAX_TEMPLATES.boundary;
+  relabelTokens(state.commandTokens, jevCommandTokenLabel);
+  const displayNames: unknown[] = [];
+  state.selectorDisplayNames = displayNames;
+  for (const question of Object.values(request.questions)) {
+    const instructions = question.instructions;
+    if (!object(instructions) || !object(instructions.selector)) fail();
+    const selector = instructions.selector;
+    const kind = String(selector.kind);
+    const sharedRule = state.matchGrammar[kind];
+    if (typeof sharedRule !== "string" || !Object.hasOwn(SHAPES, kind)) fail();
+    let rule = sharedRule;
+    if (kind === "tokens") {
+      const split = rule.indexOf(". flat");
+      if (split < 0) fail();
+      rule = rule.slice(0, split) + ".";
+    }
+    instructions.rule = rule
+      .replaceAll("row.", "selector.")
+      .replaceAll("row token", "selector token")
+      .replaceAll("operation.metadata.commandTokens", "commandTokens");
+    relabelSelector(selector, jevCommandTokenLabel);
+    displayNames.push(selector.publicNames);
+    delete selector.publicNames;
+  }
+  return request;
+}
+
 /** This projection changes no original operation, facts, policy, or non-command question. */
 export function prepareJevCommandProcess(request: JevRequest) {
   const original = jsonCopy(request);
@@ -374,7 +521,6 @@ export function prepareJevCommandProcess(request: JevRequest) {
     selector: Record<string, unknown>;
     originalRowHash: string;
   }> = [];
-  const questions: JevSyntaxRequest["questions"] = {};
   for (const group of GROUPS) {
     for (const [index, row] of boundedArray(
       commands[group],
@@ -390,32 +536,15 @@ export function prepareJevCommandProcess(request: JevRequest) {
         ...selected,
         projectedRow: jsonCopy(row),
       });
-      questions[rowId] = {
-        type: "choice",
-        instructions: {
-          question: JEV_COMMAND_SYNTAX_TEMPLATES.inlineQuestion,
-          selector: selected.selector,
-        },
-        criteria: jsonCopy(JEV_COMMAND_SYNTAX_TEMPLATES.inlineCriteria),
-      };
     }
   }
   const syntax = manifest.length
-    ? body<JevSyntaxRequest>({
-        model: original.model,
-        provider: jsonCopy(original.provider),
-        state: {
-          version: 37,
-          commandTokens: jsonCopy(context.tokens),
-          matchGrammar: jsonCopy(commands.matchGrammar),
-          syntaxInstruction: {
-            question: JEV_COMMAND_SYNTAX_TEMPLATES.sharedQuestion,
-            rule: JEV_COMMAND_SYNTAX_TEMPLATES.rule,
-            criteria: jsonCopy(JEV_COMMAND_SYNTAX_TEMPLATES.originalCriteria),
-          },
-        },
-        questions,
-      })
+    ? body(
+        syntax42Request(
+          body(numericSyntaxRequest(original, context.tokens, commands.matchGrammar, manifest))
+            .request,
+        ),
+      )
     : undefined;
   // Bound the final body before transport creation. Finite JSON numbers use at most 24 bytes.
   const reserve = manifest.length * 4 * 24 + 512;
@@ -474,14 +603,46 @@ export function restoreJevNonCommandRequest(
   if (json !== prepared.original.json) fail();
   return json;
 }
-/** Restore the exact long syntax body. This inverse makes no model match. */
-export function restoreJevOriginalSyntax(
-  prepared: ReturnType<typeof prepareJevCommandProcess>,
-): string {
+/** Restore exact numeric short syntax 37 bytes. This inverse makes no model match. */
+export function restoreJevSyntax37(prepared: ReturnType<typeof prepareJevCommandProcess>): string {
   const rebuilt = prepareJevCommandProcess(prepared.original.request);
   if (!isDeepStrictEqual(prepared, rebuilt)) fail();
   if (!prepared.syntax) fail();
   const request = jsonCopy(prepared.syntax.request);
+  const state = request.state as Record<string, unknown>;
+  state.version = 37;
+  delete state.tokenIdEncoding;
+  const instruction = state.syntaxInstruction as Record<string, unknown>;
+  delete instruction.boundary;
+  relabelTokens(state.commandTokens as Record<string, unknown>, jevCommandTokenNumber);
+  const displayNames = state.selectorDisplayNames as unknown[];
+  for (const [index, question] of Object.values(request.questions).entries()) {
+    const instructions = question.instructions as Record<string, unknown>;
+    delete instructions.rule;
+    const selector = instructions.selector as Record<string, unknown>;
+    selector.publicNames = displayNames[index];
+    relabelSelector(selector, jevCommandTokenNumber);
+  }
+  delete state.selectorDisplayNames;
+  const source = prepared.original.request.state as {
+    operation: { metadata: { commandTokens: unknown } };
+    policy: { commands: { matchGrammar: unknown } };
+  };
+  const expected = numericSyntaxRequest(
+    prepared.original.request,
+    source.operation.metadata.commandTokens,
+    source.policy.commands.matchGrammar,
+    prepared.manifest,
+  );
+  const json = JSON.stringify(request);
+  if (json !== JSON.stringify(expected)) fail();
+  return json;
+}
+/** Restore the exact long syntax body. This inverse makes no model match. */
+export function restoreJevOriginalSyntax(
+  prepared: ReturnType<typeof prepareJevCommandProcess>,
+): string {
+  const request = JSON.parse(restoreJevSyntax37(prepared)) as JevSyntaxRequest;
   const state = request.state as Record<string, unknown>;
   delete state.syntaxInstruction;
   state.version = 31;

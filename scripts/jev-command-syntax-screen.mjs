@@ -9,7 +9,10 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { isDeepStrictEqual as same } from "node:util";
 import { buildJevMetadata } from "../extensions/sf-guardrail/lib/jev-metadata.ts";
 import { buildJevRequest } from "../extensions/sf-guardrail/lib/jev-risk.ts";
-import { prepareJevCommandProcess } from "../extensions/sf-guardrail/lib/jev-command-process.ts";
+import {
+  prepareJevCommandProcess,
+  restoreJevSyntax37,
+} from "../extensions/sf-guardrail/lib/jev-command-process.ts";
 import {
   createJevProcessTransport,
   resolveJevEndpoint,
@@ -200,7 +203,7 @@ export async function prepare() {
       command: c.input.command,
     });
     const process = prepareJevCommandProcess(r);
-    const original = process.syntax?.request;
+    const original = process.syntax ? JSON.parse(restoreJevSyntax37(process)) : undefined;
     const fields = process.manifest.map((r) =>
       Object.fromEntries(
         ["rowId", "questionId", "group", "ordinal", "behavior", "selector"].map((k) => [k, r[k]]),
@@ -227,6 +230,7 @@ export async function prepare() {
     const posted = project(original);
     inverse(posted, original);
     const json = JSON.stringify(posted);
+    if (json !== process.syntax.json) fail("source-syntax-body-changed");
     cases.push({
       caseId: c.caseId,
       json,

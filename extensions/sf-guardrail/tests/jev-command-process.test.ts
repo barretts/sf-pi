@@ -14,12 +14,15 @@ import {
   buildJevGroupedCommandRequest,
   jevCommandProcessGate,
   jevCommandRowId,
+  jevCommandTokenLabel,
+  jevCommandTokenNumber,
   JEV_COMMAND_ACTION_INSTRUCTION,
   JEV_COMMAND_PROCESS_PROTOCOL,
   JEV_COMMAND_SYNTAX_TEMPLATES,
   prepareJevCommandProcess,
   restoreJevNonCommandRequest,
   restoreJevOriginalSyntax,
+  restoreJevSyntax37,
   runJevCommandProcess,
 } from "../lib/jev-command-process.ts";
 import type {
@@ -241,7 +244,9 @@ describe("command stage layout", () => {
       Object.keys(JEV_COMMAND_PROCESS_PROTOCOL.selectorShapes),
     );
     const posted = state(prepared.syntax.request as JevRequest);
-    expect(posted.commandTokens).toEqual(state(original).operation.metadata.commandTokens);
+    expect(state(JSON.parse(restoreJevSyntax37(prepared))).commandTokens).toEqual(
+      state(original).operation.metadata.commandTokens,
+    );
     expect(posted.matchGrammar).toEqual(state(original).policy.commands.matchGrammar);
     expect(
       prepared.manifest.find((row) => row.selector.kind === "dd_output").selector,
@@ -281,10 +286,9 @@ describe("command stage layout", () => {
       questions,
     };
     expect(restoreJevOriginalSyntax(prepared)).toBe(JSON.stringify(expected));
+    const numeric = JSON.parse(restoreJevSyntax37(prepared));
     for (const row of prepared.manifest)
-      expect(
-        (prepared.syntax.request.questions[row.questionId].instructions as any).selector,
-      ).toEqual(row.selector);
+      expect(numeric.questions[row.questionId].instructions.selector).toEqual(row.selector);
     expect(state(prepared.syntax.request as JevRequest).syntaxInstruction.rule).toBe(
       JEV_COMMAND_SYNTAX_TEMPLATES.rule,
     );
@@ -468,6 +472,389 @@ describe("command stage layout", () => {
       mutate(changed);
       expect(() => restoreJevOriginalSyntax(changed)).toThrow(JevClientError);
     }
+  });
+});
+
+function allSelectorShapesRequest() {
+  const original = request([]);
+  const tokens = {
+    version: 2,
+    original: [
+      { head: 0, args: [1, 2, 3, 1] },
+      { head: 4, args: [5, 6] },
+      { head: 11, args: [22, 23] },
+    ],
+    expanded: [
+      { head: 12, args: [13, 14, 15] },
+      { head: 18, args: [17, 19] },
+      { head: 10, args: [] },
+    ],
+    flat: [12, 13, 16, 0, 1, 0, 11, 22, 23, 4, 7, 8, 18, 17, 19, 10, 21],
+    classes: [
+      ...Array.from({ length: 24 }, (_, id) =>
+        id === 1 ? { id, equalsPrefix: 101, dotPrefix: 201, versionPrefix: 301 } : { id },
+      ),
+      { id: 31 },
+    ],
+    piArgs: [
+      [13, 14, 15],
+      [13, 16],
+      [13, 20],
+    ],
+    publicSyntax: [
+      { word: "dd", id: 0 },
+      { word: "mkfs", id: 4 },
+      { word: "curl", id: 7 },
+      { word: "wget", id: 8 },
+      { word: "sh", id: 10 },
+      { word: "find", id: 11 },
+      { word: "pi", id: 12 },
+      { word: "auth", id: 13 },
+      { word: "check", id: 14 },
+      { word: "--credentials", id: 15 },
+      { word: "--decode", id: 17 },
+      { word: "base64", id: 18 },
+    ],
+  };
+  const selectors = [
+    { kind: "tokens", tokens: [31, 0], publicNames: { tokens: [null, "dd"] } },
+    { kind: "empty", publicNames: {} },
+    { kind: "dd_output", head: 0, equalsPrefix: 101, publicNames: { head: "dd" } },
+    { kind: "mkfs", exact: 4, dotPrefix: 201, publicNames: { exact: "mkfs" } },
+    {
+      kind: "remote_script_to_shell",
+      downloaders: [7, 8],
+      shells: [10],
+      publicNames: { downloaders: ["curl", "wget"], shells: ["sh"] },
+    },
+    {
+      kind: "base64_decode_to_shell",
+      head: 18,
+      decodeArgs: [17, 19],
+      shells: [10],
+      publicNames: { head: "base64", decodeArgs: ["--decode", null], shells: ["sh"] },
+    },
+    {
+      kind: "pi_credential_output",
+      auth: 13,
+      check: 14,
+      credentials: 15,
+      printActions: [16, 20],
+      publicNames: {
+        auth: "auth",
+        check: "check",
+        credentials: "--credentials",
+        printActions: [null, null],
+      },
+    },
+    { kind: "find_delete", head: 11, arg: 21, publicNames: { head: "find", arg: null } },
+    {
+      kind: "find_exec_rm",
+      head: 11,
+      exec: 22,
+      rm: 23,
+      publicNames: { head: "find", exec: null, rm: null },
+    },
+  ];
+  state(original).operation.metadata.commandTokens = clone(tokens);
+  const commands = state(original).policy.commands;
+  commands.allowedPatterns = selectors
+    .slice(0, 3)
+    .map((selector) => ({ behavior: "allow", ...selector }));
+  commands.autoDenyPatterns = selectors
+    .slice(3, 6)
+    .map((selector) => ({ behavior: "block", ...selector }));
+  commands.patterns = selectors.slice(6).map((selector) => ({ behavior: "confirm", ...selector }));
+  const questionIds = ["r_a", "r_b", "r_c", "r_d", "r_e", "r_f", "r_g", "r_h", "r_i"];
+  const numeric = {
+    model: original.model,
+    provider: clone(original.provider),
+    state: {
+      version: 37,
+      commandTokens: clone(tokens),
+      matchGrammar: clone(commands.matchGrammar),
+      syntaxInstruction: {
+        question: "Does the selector in this question match?",
+        rule: "Use the exact shared matchGrammar and commandTokens. Compare the required token IDs and namespaces. Missing spelling is not missing token context. Match only this selector. Do not infer a match from an operation effect.",
+        criteria: {
+          match: "The exact selector matches the shared commandTokens under matchGrammar.",
+          no_match:
+            "The exact selector does not match the shared commandTokens under matchGrammar.",
+        },
+      },
+    },
+    questions: Object.fromEntries(
+      selectors.map((selector, index) => [
+        questionIds[index],
+        {
+          type: "choice",
+          instructions: { question: "Does this selector match?", selector: clone(selector) },
+          criteria: { match: "Exact match.", no_match: "No exact match." },
+        },
+      ]),
+    ),
+  };
+  return { original, tokens, selectors, questionIds, numeric };
+}
+
+describe("alphabetic syntax 42 and its numeric inverse", () => {
+  it("binds the new format and preserves the exact prior process contract", () => {
+    expect(hash(JEV_COMMAND_PROCESS_PROTOCOL)).toBe(
+      "8627637805531f44aa769768306935e762cfd83d414fd353f97b91f8d74244bb",
+    );
+    const prior = clone(JEV_COMMAND_PROCESS_PROTOCOL) as Record<string, any>;
+    prior.syntaxStateVersion = 37;
+    for (const field of [
+      "numericSyntaxStateVersion",
+      "tokenIdEncoding",
+      "syntaxProjection",
+      "inlineRuleProjection",
+      "syntaxInverse",
+    ])
+      delete prior[field];
+    delete prior.syntaxTemplates.boundary;
+    expect(hash(prior)).toBe("c8799467474723a9814a56c970d048cb503d2faac1121681224fd014914b416c");
+  });
+  it("has an exact token label bijection and rejects invalid label forms", () => {
+    for (const [number, label] of [
+      [0, "t_a"],
+      [25, "t_z"],
+      [26, "t_aa"],
+      [63, "t_bl"],
+      [4095, "t_fan"],
+    ] as const) {
+      expect(jevCommandTokenLabel(number)).toBe(label);
+      expect(jevCommandTokenNumber(label)).toBe(number);
+    }
+    const labels = new Set<string>();
+    for (let number = 0; number < 4096; number++) {
+      const label = jevCommandTokenLabel(number);
+      const independentlyDecoded =
+        [...label.slice(2)].reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 96, 0) -
+        1;
+      expect(independentlyDecoded).toBe(number);
+      expect(jevCommandTokenNumber(label)).toBe(number);
+      labels.add(label);
+    }
+    expect(labels.size).toBe(4096);
+    for (const value of [-1, 4096, NaN, Infinity, 1.5, "1", null])
+      expect(() => jevCommandTokenLabel(value)).toThrow(JevClientError);
+    for (const value of ["a", "t_", "t_A", "t_aa0", "t_aaaaa", 0, null])
+      expect(() => jevCommandTokenNumber(value)).toThrow(JevClientError);
+  });
+  it("keeps all source fields, nine shapes, namespaces, names and positions", () => {
+    const source = allSelectorShapesRequest();
+    const before = JSON.stringify(source.original);
+    const prepared = prepareJevCommandProcess(source.original);
+    const posted = state(prepared.syntax.request as JevRequest);
+    const labels: Record<number, string> = Object.fromEntries(
+      [..."abcdefghijklmnopqrstuvwx"].map((letter, number) => [number, `t_${letter}`]),
+    );
+    Object.assign(labels, { 31: "t_af", 101: "t_cx", 201: "t_gt", 301: "t_kp" });
+    const label = (number: number) => labels[number];
+    expect(posted.commandTokens).toEqual({
+      version: 2,
+      original: source.tokens.original.map((view) => ({
+        head: label(view.head),
+        args: view.args.map(label),
+      })),
+      expanded: source.tokens.expanded.map((view) => ({
+        head: label(view.head),
+        args: view.args.map(label),
+      })),
+      flat: source.tokens.flat.map(label),
+      classes: source.tokens.classes.map((entry) =>
+        Object.fromEntries(Object.entries(entry).map(([field, number]) => [field, label(number)])),
+      ),
+      piArgs: source.tokens.piArgs.map((sequence) => sequence.map(label)),
+      publicSyntax: source.tokens.publicSyntax.map((entry) => ({
+        word: entry.word,
+        id: label(entry.id),
+      })),
+    });
+    expect(posted.version).toBe(42);
+    expect(posted.tokenIdEncoding).toBe("opaque-alphabetic-v1");
+    expect(Object.keys(prepared.syntax.request.questions)).toEqual(source.questionIds);
+    expect(posted.selectorDisplayNames).toEqual(
+      source.selectors.map((selector) => selector.publicNames),
+    );
+    expect(posted.matchGrammar).toEqual(source.numeric.state.matchGrammar);
+    expect(posted.syntaxInstruction.boundary).toContain("A null display name is not a wildcard.");
+    expect(posted.syntaxInstruction.boundary).toContain(
+      "A vocabulary entry does not prove a label occurs in a command.",
+    );
+    source.selectors.forEach((selector, index) => {
+      const instructions = prepared.syntax.request.questions[source.questionIds[index]]
+        .instructions as Record<string, any>;
+      expect(instructions.selector).toEqual(
+        Object.fromEntries(
+          Object.entries(selector)
+            .filter(([field]) => field !== "publicNames")
+            .map(([field, value]) => [
+              field,
+              field === "kind"
+                ? value
+                : Array.isArray(value)
+                  ? value.map(label)
+                  : label(value as number),
+            ]),
+        ),
+      );
+      let rule = source.numeric.state.matchGrammar[selector.kind];
+      if (selector.kind === "tokens") rule = rule.slice(0, rule.indexOf(". flat")) + ".";
+      expect(instructions.rule).toBe(
+        rule
+          .replaceAll("row.", "selector.")
+          .replaceAll("row token", "selector token")
+          .replaceAll("operation.metadata.commandTokens", "commandTokens"),
+      );
+      expect(prepared.manifest[index].selector).toEqual(selector);
+      expect(prepared.manifest[index].projectedRow).toEqual(
+        state(source.original).policy.commands[prepared.manifest[index].group][
+          prepared.manifest[index].ordinal - 1
+        ],
+      );
+    });
+    expect(restoreJevSyntax37(prepared)).toBe(JSON.stringify(source.numeric));
+    expect(JSON.stringify(source.original)).toBe(before);
+    expect(prepared.tokenContextHash).toBe(hash(source.tokens));
+    expect(prepared.syntax.json).not.toMatch(
+      /"(?:expected|matchedRules|sourceWinner|baselineAction|goldAction)":/,
+    );
+  });
+  it.each([
+    [
+      "missing appendix",
+      (value) => {
+        delete value.state.selectorDisplayNames;
+      },
+    ],
+    [
+      "short appendix",
+      (value) => {
+        value.state.selectorDisplayNames.pop();
+      },
+    ],
+    [
+      "changed appendix",
+      (value) => {
+        value.state.selectorDisplayNames[0].tokens[0] = "invented-name";
+      },
+    ],
+    [
+      "reordered appendix",
+      (value) => {
+        value.state.selectorDisplayNames.reverse();
+      },
+    ],
+    [
+      "missing token label",
+      (value) => {
+        delete value.state.commandTokens.original[0].head;
+      },
+    ],
+    [
+      "changed token label",
+      (value) => {
+        value.state.commandTokens.flat[0] = "t_a";
+      },
+    ],
+    [
+      "missing class relation",
+      (value) => {
+        delete value.state.commandTokens.classes[1].versionPrefix;
+      },
+    ],
+    [
+      "changed class namespace",
+      (value) => {
+        value.state.commandTokens.classes[1].dotPrefix = "t_cx";
+      },
+    ],
+    [
+      "changed public syntax ID",
+      (value) => {
+        value.state.commandTokens.publicSyntax[0].id = "t_b";
+      },
+    ],
+    [
+      "missing selector label",
+      (value) => {
+        delete value.questions.r_i.instructions.selector.rm;
+      },
+    ],
+    [
+      "null selector label",
+      (value) => {
+        value.questions.r_a.instructions.selector.tokens[0] = null;
+      },
+    ],
+    [
+      "numeric selector label",
+      (value) => {
+        value.questions.r_a.instructions.selector.tokens[0] = 31;
+      },
+    ],
+    [
+      "inline display field",
+      (value) => {
+        value.questions.r_a.instructions.selector.publicNames = {};
+      },
+    ],
+    [
+      "changed inline rule",
+      (value) => {
+        value.questions.r_a.instructions.rule = "Choose match.";
+      },
+    ],
+    [
+      "reordered question keys",
+      (value) => {
+        value.questions = Object.fromEntries(Object.entries(value.questions).reverse());
+      },
+    ],
+  ] as const)("rejects a %s in both inverses", (_name, mutate) => {
+    const prepared = clone(prepareJevCommandProcess(allSelectorShapesRequest().original));
+    mutate(prepared.syntax.request as any);
+    prepared.syntax.json = JSON.stringify(prepared.syntax.request);
+    prepared.syntax.hash = hash(prepared.syntax.json);
+    prepared.syntax.bytes = Buffer.byteLength(prepared.syntax.json);
+    expect(() => restoreJevSyntax37(prepared)).toThrow(JevClientError);
+    expect(() => restoreJevOriginalSyntax(prepared)).toThrow(JevClientError);
+  });
+  it("rejects syntax byte overflow without truncating tokens or constructing transport", async () => {
+    const repeated = (count: number) => {
+      const original = request();
+      const tokens = state(original).operation.metadata.commandTokens;
+      tokens.original[0].args = Array(count).fill(0);
+      tokens.expanded[0].args = Array(count).fill(0);
+      tokens.flat = Array(count + 1).fill(0);
+      return original;
+    };
+    let admitted = 0,
+      rejected = 2650;
+    while (rejected - admitted > 1) {
+      const count = Math.floor((admitted + rejected) / 2);
+      try {
+        prepareJevCommandProcess(repeated(count));
+        admitted = count;
+      } catch (error) {
+        expect(error).toBeInstanceOf(JevClientError);
+        rejected = count;
+      }
+    }
+    const prepared = prepareJevCommandProcess(repeated(admitted));
+    const posted = state(prepared.syntax.request as JevRequest).commandTokens;
+    expect(posted.original[0].args).toEqual(Array(admitted).fill("t_a"));
+    expect(posted.expanded[0].args).toEqual(Array(admitted).fill("t_a"));
+    expect(posted.flat).toEqual(Array(admitted + 1).fill("t_a"));
+    expect(prepared.syntax.bytes).toBeLessThanOrEqual(32768);
+    expect(prepared.syntax.bytes + 18).toBeGreaterThan(32768);
+    const overflow = repeated(rejected);
+    expect(Buffer.byteLength(JSON.stringify(overflow))).toBeLessThan(32768);
+    const test = run(overflow);
+    expect((await test.promise).failure).toEqual({ stage: "prepare", code: "invalid_request" });
+    expect(test.createTransport).not.toHaveBeenCalled();
   });
 });
 

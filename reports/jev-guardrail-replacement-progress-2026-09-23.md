@@ -952,8 +952,9 @@ V42 preparation hash:
 `2ec249c442a18cb56a75fba53e41b80d5ffb3b85f413762354dcb2a8195c6871`.
 Private receipt SHA-256:
 `220c0b40e8a55591da838300d4a89659327eea8f579af4a96009310e00ec3e56`.
-The product has not yet adopted this format. Its current protocol 14, one-call
-hook, probability cutoff, and deterministic default remain unchanged.
+At the time of that screen, the product had not adopted this format. Its active
+protocol 14, one-call hook, probability cutoff, and deterministic default
+remained unchanged. The later source change is recorded below.
 
 The new private preparation path prepares all 175 old cases against current
 source. It uses the actual source fact resolver, synthetic private files, and
@@ -1003,3 +1004,27 @@ The first failed log SHA-256 is
 The second failed log SHA-256 is
 `18d0ce4ce4b41a9213b18d438eacf62463293229ee5664af587d8e531fba77f4`.
 These source checks establish no further provider coverage or tool execution.
+
+Root then applied the reviewed syntax source change. The command process now
+builds syntax state 42 with the exact tested alphabetic labels and ordered
+display names. Its local manifest and token-context hash retain the original
+numeric source data. `restoreJevSyntax37` restores exact numeric short syntax
+JSON. The existing long syntax 31 inverse uses that restoration. Neither
+function computes a match or policy result. The process protocol hash is
+`8627637805531f44aa769768306935e762cfd83d414fd353f97b91f8d74244bb`.
+
+Root compared all 26 actual source bodies with the passed provider screen;
+every body matched exactly. All 320 combined process and client tests and all
+24 public Node tests passed. Type checking, scoped lint and format, boot
+checking, documentation health, and the diff check also passed. Root refreshed
+the generated source-line count. The conservative `.99` gate and process run
+path did not change. The active hook still uses its protocol 14 one-call path.
+The staged runtime adapter remains in a separate source workspace.
+
+The private raw verifier also checked facts after the whole preparation. It
+found two old query preparations with changed ancestor facts: a later browser
+fixture write created a shared private state directory that those cases had
+recorded as absent. The failure records remain. The next preparation must
+create that shared private base before any facts are frozen, then recheck all
+175 cases. It must not refresh or reuse the old frozen preparations. No paid
+provider call used those failed preparations.
