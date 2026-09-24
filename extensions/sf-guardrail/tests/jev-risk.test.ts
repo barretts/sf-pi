@@ -57,6 +57,145 @@ const facts = vi.fn(async () => ({
   facts: { files: [{ path: "src/example.ts", exists: false }] },
 }));
 
+describe("SOQL runner facts", () => {
+  const privateQuery = "SELECT PrivateField__c FROM PrivateObject__c LIMIT 25";
+
+  it.each(
+    ["data query", "force:data:soql:query"].flatMap((operation) =>
+      ["--all-rows", "--use-tooling-api", "--usetoolingapi", "-t"].map((flag) => ({
+        operation,
+        flag,
+      })),
+    ),
+  )("retains the installed query flag $flag on $operation", ({ operation, flag }) => {
+    const metadata = buildJevMetadata("bash", {
+      command: `sf ${operation} --query '${privateQuery}' ${flag}`,
+    });
+    expect(metadata.metadata.shell).toMatchObject({
+      commands: [{ flags: [{ name: "--query" }, { name: flag }] }],
+    });
+    expect(metadata.complete).toBe(false);
+    expect(metadata.omissions).toContain("shell_effects_opaque");
+    expect(JSON.stringify(metadata)).not.toContain("PrivateField__c");
+    expect(JSON.stringify(metadata)).not.toContain("PrivateObject__c");
+  });
+
+  it.each(
+    ["data query", "force:data:soql:query"].flatMap((operation) =>
+      ["--include-deleted", "--tooling-api"].map((flag) => ({ operation, flag })),
+    ),
+  )("keeps the unsupported query flag $flag unknown on $operation", ({ operation, flag }) => {
+    const metadata = buildJevMetadata("bash", {
+      command: `sf ${operation} --query '${privateQuery}' ${flag}`,
+    });
+    expect(metadata.metadata.shell).toMatchObject({
+      commands: [{ flags: [{ name: "--query" }, { name: "unknown" }] }],
+    });
+    expect(metadata.complete).toBe(false);
+  });
+
+  it("does not derive a query.run cap from its ignored limit argument", () => {
+    const metadata = buildJevMetadata("sf_soql", {
+      action: "query.run",
+      query: privateQuery,
+      limit: 10_000,
+    });
+    const request = buildJevRequest(metadata, {}, readBundledConfig());
+    expect(request.state).toMatchObject({
+      operation: { metadata: { limit: 10_000 }, complete: false },
+      observations: { contextComplete: false },
+    });
+    expect(
+      (request.state as { observations: Record<string, unknown> }).observations,
+    ).not.toHaveProperty("rowLimit");
+  });
+
+  it.each(
+    ["query.run", "query.sample", "query.queryAll"].flatMap((action) =>
+      [
+        { max_rows: 0, effectiveMaximum: 1, bucket: "bounded" },
+        { max_rows: -0.5, effectiveMaximum: 1, bucket: "bounded" },
+        { max_rows: 26.9, effectiveMaximum: 26, bucket: "bounded" },
+        { max_rows: 10_000, effectiveMaximum: 2000, bucket: "large" },
+      ].map((values) => ({ action, ...values })),
+    ),
+  )(
+    "observes $action max_rows=$max_rows with the runner clamp",
+    ({ action, max_rows, effectiveMaximum, bucket }) => {
+      const metadata = buildJevMetadata("sf_soql", {
+        action,
+        query: privateQuery,
+        max_rows,
+        limit: 9999,
+      });
+      const request = buildJevRequest(metadata, {}, readBundledConfig());
+      expect(request.state).toMatchObject({
+        observations: { rowLimit: { runnerCap: 2000, effectiveMaximum, bucket } },
+      });
+      expect(metadata.complete).toBe(false);
+      expect(metadata.omissions).toContain("payload_withheld");
+      expect(jevContextComplete(metadata, {})).toBe(false);
+      expect(evaluateJevPrediction(prediction(), jevContextComplete(metadata, {}))).toBe("confirm");
+      expect(JSON.stringify(request)).not.toContain("PrivateField__c");
+      expect(JSON.stringify(request)).not.toContain("PrivateObject__c");
+    },
+  );
+
+  it.each(
+    ["query.sample", "query.queryAll"].flatMap((action) =>
+      [
+        { limit: 0, effectiveMaximum: 1, bucket: "bounded" },
+        { limit: -0.5, effectiveMaximum: 1, bucket: "bounded" },
+        { limit: 26.9, effectiveMaximum: 26, bucket: "bounded" },
+        { limit: 10_000, effectiveMaximum: 2000, bucket: "large" },
+      ].map((values) => ({ action, ...values })),
+    ),
+  )("observes the honored $action limit=$limit", ({ action, limit, effectiveMaximum, bucket }) => {
+    const metadata = buildJevMetadata("sf_soql", { action, query: privateQuery, limit });
+    expect(buildJevRequest(metadata, {}, readBundledConfig()).state).toMatchObject({
+      observations: { rowLimit: { runnerCap: 2000, effectiveMaximum, bucket } },
+    });
+    expect(metadata.complete).toBe(false);
+  });
+});
+
+describe("supplied path kind facts", () => {
+  it.each(["file", "directory", "other", "unknown", undefined] as const)(
+    "preserves observed kind %s and current completeness without suffix inference",
+    (kind) => {
+      const metadata = buildJevMetadata("grep", {
+        path: "selected.txt",
+        pattern: "synthetic-private-selector",
+      });
+      const file = { path: "selected.txt", exists: true, ...(kind ? { kind } : {}) };
+      const request = buildJevRequest(metadata, { files: [file] }, readBundledConfig());
+      expect(request.state).toMatchObject({
+        version: 6,
+        facts: { files: [file] },
+        observations: { contextComplete: true },
+      });
+      if (!kind)
+        expect(
+          (request.state as { facts: { files: unknown[] } }).facts.files[0],
+        ).not.toHaveProperty("kind");
+      for (const question of [
+        request.questions.risk,
+        request.questions.file_policy,
+        request.questions.disclosure,
+      ]) {
+        const instructions = JSON.stringify(question?.instructions);
+        expect(instructions).toContain("Absent kind and lookup failure mean unknown.");
+        expect(instructions).toContain("Only the supplied path is observed.");
+        expect(instructions).toContain(
+          "Descendants, body contents, and sensitivity are not observed.",
+        );
+        expect(instructions).toContain("Do not infer kind from a suffix.");
+      }
+      expect(JSON.stringify(request)).not.toContain("synthetic-private-selector");
+    },
+  );
+});
+
 describe("Jev risk adapter", () => {
   it("sends only metadata and effective policy, while retaining hosted provenance", async () => {
     const request = vi.fn(async () => prediction());
@@ -914,23 +1053,27 @@ describe("Jev risk adapter", () => {
         orgIdentity: "synthetic-org",
       }),
     });
-    const priorProtocol = "fe49ed0f497a0ef2820225d9006647c8c17c3dde2561dcfb99580c5976c73a6d";
+    const priorProtocol = "647d951506b4f5b3b2a9aff5dcaf411a63d0f8be7131750841077ba1013a6224";
+    expect(JEV_PROTOCOL_HASH).toBe(
+      "9e07e666c0e1d14511135f8151cb7418dc8e93a878ec92d549258d393c48604a",
+    );
     expect(JEV_PROTOCOL_HASH).not.toBe(priorProtocol);
     expect(decision.jev?.protocolHash).toBe(JEV_PROTOCOL_HASH);
     expect(decision.approvalScope?.allowSession).toBe(true);
-    const priorFingerprint = jevHash({
+    const identity = {
       toolName: input.toolName,
       originalHash: decision.jev?.inputHash,
       descriptorHash: decision.jev?.descriptorHash,
       cwd: input.cwd,
       sessionId: null,
       factsHash: decision.jev?.factsHash,
+      transportHash: decision.jev?.transportHash,
       policyHash: decision.jev?.policyHash,
-      protocolHash: priorProtocol,
       engine: "jev",
       model: JEV_RESOLVED_MODEL,
-    });
-    expect(decision.fingerprint).not.toBe(priorFingerprint);
+    };
+    expect(decision.fingerprint).toBe(jevHash({ ...identity, protocolHash: JEV_PROTOCOL_HASH }));
+    expect(decision.fingerprint).not.toBe(jevHash({ ...identity, protocolHash: priorProtocol }));
   });
   it("keeps browser authority separate while not asking irrelevant disclosure questions", () => {
     const request = buildJevRequest(

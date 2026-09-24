@@ -40,6 +40,14 @@ metadata describes runner arguments; it does not prove an output bound.
 Directory facts do not establish the sensitivity of selected descendants.
 Jev must judge file policy and disclosure from the available facts.
 
+Protocol 10 adds the supplied path kind from the existing `stat` lookup.
+The lookup follows symlinks. An absent kind or lookup failure means unknown.
+Only the supplied path is observed. Its kind does not establish descendant
+contents or sensitivity. Do not infer kind from a suffix. Query flag metadata
+matches the installed CLI. A native `query.run` cap observation uses supplied
+`max_rows`, because that runner ignores `limit`. Query text stays local.
+These observations do not establish a policy result or automatic allow.
+
 **Command Token Projection**:
 Version 2's mechanical integer IDs for original, wrapper-expanded, and flattened command tokens, typed prefix classes, and Pi argument sequences. Effective ordered policy rows are active-only and carry explicit behavior and token IDs or one of seven special-pattern forms. Shared `policy.commands.matchGrammar` supplies token/namespace/special definitions to each independent question. Off allow/deny rows are omitted after validation/bounding and allocate no token classes; off ordinary rows become **Effect Waivers**. Jev compares these facts and chooses rules. `publicSyntax` maps only known CLI executables, subcommands, and flag keys already exposed in semantic metadata to IDs. Private operands have no explicit legend; the projection includes no raw command, private-word dictionary, stable hash, matched rules, or local outcome. Equality and known policy anchors can reveal membership; they provide neither cryptographic secrecy nor a deterministic model-matching guarantee.
 _Avoid_: encrypted command, anonymization guarantee, host policy matcher, precomputed verdict

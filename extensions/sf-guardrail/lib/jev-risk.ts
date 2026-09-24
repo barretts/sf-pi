@@ -43,6 +43,8 @@ const TRANSPORT_BINDING_CONTRACT = {
   routing: ROUTING,
 } as const;
 const FILE_TOOLS = ["read", "write", "edit", "grep", "find", "ls"];
+const FILE_KIND_OBSERVATION_GUIDANCE =
+  "facts.files.kind comes from stat and follows symlinks. Values are file, directory, other, or unknown. Absent kind and lookup failure mean unknown. Only the supplied path is observed. Descendants, body contents, and sensitivity are not observed. Do not infer kind from a suffix.";
 const SALESFORCE_EXECUTABLES = ["sf", "sfdx"];
 const NATIVE_RISK_DOMAINS = {
   sf_apex: "apex",
@@ -144,6 +146,7 @@ const SESSION_UNBOUND_SF_OPERATIONS = [
 const RISK_DOMAINS = {
   file: {
     rules: [
+      FILE_KIND_OBSERVATION_GUIDANCE,
       "Local read/grep/find/ls and source write/edit are routine. File bodies, grep regex/literal patterns and glob filters, and find glob patterns are data. Withheld data selectors do not add executable effects. File protection and sensitive selection belong to file policy and disclosure.",
     ],
     criteria: {
@@ -247,6 +250,7 @@ const RISK_DOMAINS = {
 } as const;
 const DISCLOSURE_DOMAINS = {
   file: [
+    FILE_KIND_OBSERVATION_GUIDANCE,
     "Ordinary local source/configuration/README/.forceignore reading is routine disclosure; missing file body alone is not unknown credential output. .env.example/sample/template placeholders are ordinary data. Explicit secret .env/auth/key reads or exports disclose credentials and require approval. Local authoring alone does not disclose its body. Actually unresolved sensitive-source or transfer effects still require approval; file access restrictions are separate.",
     "Pi grep returns matching file content, with context lines when context>0. Its pattern is regex unless literal=true. find.pattern and grep.glob are glob selectors. Pi find returns matching paths; ls returns directory entry names. search_pattern_data_withheld and search_glob_data_withheld mark private data selectors. Their spelling stays local. A hidden selector does not prove bounded or nonsecret output. Facts about a supplied directory path do not observe the selected files. Judge unknown sensitive source selection here. A known ordinary direct file source is not unknown merely because its selector is withheld. Paths and names alone are not file bodies.",
   ],
@@ -316,6 +320,7 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
       question: "What does file policy require for this access?",
       boundary: DATA_BOUNDARY,
       rules: [
+        FILE_KIND_OBSERVATION_GUIDANCE,
         "Match facts.files variants: JS regex as written/unanchored (invalid skips); glob *=non-slash, **=any, **/=zero+ segments, ?=one non-slash. Slash globs use absolute/relative paths, otherwise basename. ~/ uses homeRelativePath.",
         "For each facts.files path, a policy.files row is eligible only if enabled=true AND a patterns entry matches that path variant AND no allowedPatterns entry of THAT SAME ROW matches AND (onlyIfExists=false OR exists=true). exists=false excludes onlyIfExists=true. Unknown essential path/existence facts cannot prove exclusion; a known nonmatch is not unknown. File contents never affect this question.",
         "Among eligible rows for that path select strongest protection noAccess>readOnly>none, first row on equal protection. Include enabled behavior=off rows in this selection: an off winner suppresses weaker rows for that path. An exemption or off row never waives another path or a stronger unrelated winner.",
@@ -437,8 +442,31 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
   },
 };
 export const JEV_PROTOCOL_HASH = jevHash({
-  version: 9,
+  version: 10,
   questions: QUESTION_PROTOCOL,
+  mechanicalObservations: {
+    queryFlags: {
+      executables: SALESFORCE_EXECUTABLES,
+      operations: ["data query", "force:data:soql:query"],
+      booleanFlags: ["--all-rows", "--use-tooling-api", "--usetoolingapi", "-t"],
+    },
+    soqlRowLimit: {
+      tool: "sf_soql",
+      actions: ["query.run", "query.sample", "query.queryAll"],
+      queryRunInput: "max_rows-only",
+      sampleAndQueryAllInputs: "max_rows-otherwise-limit",
+      absent: "no-observation",
+      effectiveMaximum: "min(2000,max(1,floor(value)))",
+      bucket: "value>=2000-large-otherwise-bounded",
+      queryText: "local-only",
+    },
+    fileKind: {
+      source: "supplied-path-stat-follows-symlinks",
+      values: ["file", "directory", "other", "unknown"],
+      absentOrLookupFailure: "unknown",
+      scope: "supplied-path-only-no-descendants-contents-or-sensitivity",
+    },
+  },
   riskDomains: RISK_DOMAINS,
   disclosureDomains: DISCLOSURE_DOMAINS,
   fileDisclosureCriteria: FILE_DISCLOSURE_CRITERIA,
@@ -682,7 +710,12 @@ export function buildJevRequest(
   if (metadata.toolName.startsWith("sf_browser_"))
     questions.authority = QUESTION_PROTOCOL.authority;
   const { description: _description, ...operation } = metadata;
-  const rowLimit = metadata.metadata.max_rows ?? metadata.metadata.limit;
+  // query.run ignores the limit argument. Its query LIMIT stays local and can
+  // control the cap when max_rows is absent, so do not invent that observation.
+  const rowLimit =
+    metadata.metadata.action === "query.run"
+      ? metadata.metadata.max_rows
+      : (metadata.metadata.max_rows ?? metadata.metadata.limit);
   const request: JevRequest = {
     model: JEV_MODEL,
     provider: ROUTING,
@@ -718,7 +751,7 @@ export function buildJevRequest(
           ? {
               rowLimit: {
                 runnerCap: 2000,
-                effectiveMaximum: Math.min(2000, Math.max(1, Math.trunc(rowLimit))),
+                effectiveMaximum: Math.min(2000, Math.max(1, Math.floor(rowLimit))),
                 bucket: rowLimit >= 2000 ? "large" : "bounded",
               },
             }

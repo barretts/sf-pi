@@ -1068,8 +1068,10 @@ const BOOLEAN_FLAGS = new Set([
   "--quiet",
   "--all",
   "--help",
-  "--include-deleted",
-  "--tooling-api",
+  "--all-rows",
+  "--use-tooling-api",
+  "--usetoolingapi",
+  "-t",
   "--global",
   "--local",
   "--cached",
@@ -1299,7 +1301,7 @@ function optionKind(executable: string, operation: string, flag: string): string
           includes("--no-prompt --force")) ||
         (operation === "org logout" && includes("--all --no-prompt")) ||
         (["data query", "force:data:soql:query"].includes(operation) &&
-          includes("--include-deleted --tooling-api")))
+          includes("--all-rows --use-tooling-api --usetoolingapi -t")))
     )
       return "boolean";
     if (

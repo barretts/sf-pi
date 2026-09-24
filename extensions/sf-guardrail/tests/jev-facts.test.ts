@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/** Real filesystem and browser snapshot store; only Salesforce SDK resolution is mocked. */
+/** Real filesystem and browser store. Lookup faults and Salesforce SDK resolution are mocked. */
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,6 +10,15 @@ import type { GuardrailConfig, JevToolMetadata } from "../lib/types.ts";
 
 const sdk = vi.hoisted(() => ({ connect: vi.fn() }));
 vi.mock("../../../lib/common/sf-conn/index.ts", () => ({ connectSalesforce: sdk.connect }));
+const lookups = vi.hoisted(() => ({ stat: vi.fn(), realpath: vi.fn() }));
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    stat: lookups.stat.mockImplementation(actual.stat),
+    realpath: lookups.realpath.mockImplementation(actual.realpath),
+  };
+});
 
 const BODY = "PRIVATE_FILE_BODY_SENTINEL";
 const SESSION = "synthetic-facts-session";
@@ -22,6 +31,7 @@ let resolveFacts: typeof import("../lib/jev-facts.ts").resolveJevFacts;
 let resolveFileFacts: typeof import("../lib/jev-facts.ts").resolveJevFileFacts;
 let targetIndependentPress: typeof import("../lib/jev-facts.ts").isJevTargetIndependentBrowserPress;
 let contextComplete: typeof import("../lib/jev-risk.ts").jevContextComplete;
+let factBindingHash: typeof import("../lib/jev-risk.ts").jevFactBindingHash;
 let snapshots: typeof import("../../../lib/common/sf-browser-snapshot-state.ts");
 let config: GuardrailConfig;
 let controller: AbortController;
@@ -76,13 +86,16 @@ beforeAll(async () => {
     resolveJevFileFacts: resolveFileFacts,
     isJevTargetIndependentBrowserPress: targetIndependentPress,
   } = await import("../lib/jev-facts.ts"));
-  ({ jevContextComplete: contextComplete } = await import("../lib/jev-risk.ts"));
+  ({ jevContextComplete: contextComplete, jevFactBindingHash: factBindingHash } =
+    await import("../lib/jev-risk.ts"));
   snapshots = await import("../../../lib/common/sf-browser-snapshot-state.ts");
 });
 
 beforeEach(() => {
   sdk.connect.mockReset();
   sdk.connect.mockResolvedValue(session());
+  lookups.stat.mockClear();
+  lookups.realpath.mockClear();
   controller = new AbortController();
   config = {
     version: 1,
@@ -123,6 +136,7 @@ describe("Jev filesystem facts", () => {
         relativePath: "body.txt",
         basename: "body.txt",
         exists: true,
+        kind: "file",
         resolvedPath: canonical,
       },
       {
@@ -131,6 +145,7 @@ describe("Jev filesystem facts", () => {
         relativePath: "body-link.txt",
         basename: "body-link.txt",
         exists: true,
+        kind: "file",
         resolvedPath: canonical,
       },
       {
@@ -139,6 +154,7 @@ describe("Jev filesystem facts", () => {
         relativePath: "missing.txt",
         basename: "missing.txt",
         exists: false,
+        kind: "unknown",
       },
     ]);
     expect(JSON.stringify(result)).not.toContain(BODY);
@@ -152,11 +168,88 @@ describe("Jev filesystem facts", () => {
     try {
       const result = await resolve("read", { paths: ["unreadable.txt", "directory-without-body"] });
       expect(result.facts.files?.map((file) => file.exists)).toEqual([true, true]);
+      expect(result.facts.files?.map((file) => file.kind)).toEqual(["file", "directory"]);
       expect(JSON.stringify(result)).not.toContain(BODY);
     } finally {
       chmodSync(join(cwd, "unreadable.txt"), 0o600);
     }
   });
+
+  it("observes directory kinds through symlinks without using a file suffix or inspecting descendants", async () => {
+    mkdirSync(join(cwd, "selected.txt"));
+    writeFileSync(join(cwd, "selected.txt", "private-child.txt"), BODY);
+    symlinkSync("selected.txt", join(cwd, "selected-link.txt"));
+    const files = await resolveFileFacts(["selected.txt", "selected-link.txt"], cwd);
+    expect(files.map((file) => ({ exists: file.exists, kind: file.kind }))).toEqual([
+      { exists: true, kind: "directory" },
+      { exists: true, kind: "directory" },
+    ]);
+    expect(files[0].resolvedPath).toBe(files[1].resolvedPath);
+    expect(lookups.stat.mock.calls).toEqual([
+      [join(cwd, "selected.txt")],
+      [join(cwd, "selected-link.txt")],
+    ]);
+    expect(lookups.realpath.mock.calls).toEqual(lookups.stat.mock.calls);
+    expect(JSON.stringify(files)).not.toContain("private-child.txt");
+    expect(JSON.stringify(files)).not.toContain(BODY);
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "keeps a special file kind separate from regular files and directories",
+    async () => {
+      symlinkSync("/dev/null", join(cwd, "special-file.txt"));
+      const [file] = await resolveFileFacts(["special-file.txt"], cwd);
+      expect(file).toMatchObject({ exists: true, kind: "other", resolvedPath: "/dev/null" });
+    },
+  );
+
+  it("keeps missing creation paths complete and reports a missing symlink target as unknown kind", async () => {
+    symlinkSync("absent-target.txt", join(cwd, "dangling-link.txt"));
+    const result = await resolve("write", { paths: ["new-creation.txt", "dangling-link.txt"] });
+    expect(result.facts.files?.map((file) => ({ exists: file.exists, kind: file.kind }))).toEqual([
+      { exists: false, kind: "unknown" },
+      { exists: false, kind: "unknown" },
+    ]);
+    for (const file of result.facts.files ?? []) expect(file).not.toHaveProperty("resolvedPath");
+    expect(lookups.realpath).not.toHaveBeenCalled();
+    expect(contextComplete(metadata("write", { paths: ["new-creation.txt"] }), result.facts)).toBe(
+      true,
+    );
+  });
+
+  it("keeps failed stat observations unknown and incomplete", async () => {
+    writeFileSync(join(cwd, "stat-error.txt"), BODY);
+    lookups.stat.mockRejectedValueOnce(
+      Object.assign(new Error("Synthetic lookup fault"), { code: "EACCES" }),
+    );
+    const result = await resolve("read", { path: "stat-error.txt" });
+    expect(result.facts.files?.[0]).toMatchObject({ exists: "unknown", kind: "unknown" });
+    expect(result.facts.files?.[0]).not.toHaveProperty("resolvedPath");
+    expect(lookups.realpath).not.toHaveBeenCalled();
+    expect(contextComplete(metadata("read", { path: "stat-error.txt" }), result.facts)).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(BODY);
+  });
+
+  it.each([
+    ["EACCES", "unknown", false],
+    ["ENOENT", false, true],
+  ] as const)(
+    "keeps current existence and completeness on realpath failure %s",
+    async (code, exists, complete) => {
+      const name = `realpath-error-${code}.txt`;
+      writeFileSync(join(cwd, name), BODY);
+      lookups.realpath.mockRejectedValueOnce(
+        Object.assign(new Error("Synthetic lookup fault"), { code }),
+      );
+      const result = await resolve("read", { path: name });
+      expect(result.facts.files?.[0]).toMatchObject({ exists, kind: "unknown" });
+      expect(result.facts.files?.[0]).not.toHaveProperty("resolvedPath");
+      expect(lookups.stat).toHaveBeenCalledOnce();
+      expect(lookups.realpath).toHaveBeenCalledOnce();
+      expect(contextComplete(metadata("read", { path: name }), result.facts)).toBe(complete);
+      expect(JSON.stringify(result)).not.toContain(BODY);
+    },
+  );
 
   it.skipIf(process.platform === "win32")(
     "reports symlink lookup errors as unknown rather than missing or existing",
@@ -170,6 +263,7 @@ describe("Jev filesystem facts", () => {
           relativePath: "loop-a",
           basename: "loop-a",
           exists: "unknown",
+          kind: "unknown",
         },
       ]);
     },
@@ -186,6 +280,19 @@ describe("Jev filesystem facts", () => {
     expect(first.facts.files?.[0].resolvedPath).not.toBe(second.facts.files?.[0].resolvedPath);
   });
 
+  it("changes the approval binding when a file becomes a directory at the same path", async () => {
+    const name = "changing-kind.txt";
+    writeFileSync(join(cwd, name), BODY);
+    const first = await resolve("read", { path: name });
+    rmSync(join(cwd, name));
+    mkdirSync(join(cwd, name));
+    const second = await resolve("read", { path: name });
+    expect(first.facts.files?.[0].resolvedPath).toBe(second.facts.files?.[0].resolvedPath);
+    expect(first.facts.files?.[0]).toMatchObject({ exists: true, kind: "file" });
+    expect(second.facts.files?.[0]).toMatchObject({ exists: true, kind: "directory" });
+    expect(factBindingHash(first)).not.toBe(factBindingHash(second));
+  });
+
   it("provides the same logical variants for absolute and normalized relative inputs", async () => {
     const absolute = join(cwd, "nested", "new-file.ts");
     const files = await resolveFileFacts([absolute, "nested/../nested/new-file.ts"], cwd);
@@ -196,6 +303,7 @@ describe("Jev filesystem facts", () => {
         relativePath: join("nested", "new-file.ts"),
         basename: "new-file.ts",
         exists: false,
+        kind: "unknown",
       },
       {
         path: "nested/../nested/new-file.ts",
@@ -203,6 +311,7 @@ describe("Jev filesystem facts", () => {
         relativePath: join("nested", "new-file.ts"),
         basename: "new-file.ts",
         exists: false,
+        kind: "unknown",
       },
     ]);
   });
@@ -223,6 +332,7 @@ describe("Jev filesystem facts", () => {
         basename: "fixture.json",
         homeRelativePath: "~/.sf/fixture.json",
         exists: true,
+        kind: "file",
         resolvedPath: canonical,
       });
     expect(files[3]).toEqual({
@@ -232,6 +342,7 @@ describe("Jev filesystem facts", () => {
       basename: "new.json",
       homeRelativePath: "~/.sfdx/new.json",
       exists: false,
+      kind: "unknown",
     });
     expect(files[4]).toMatchObject({
       path: "~",
@@ -240,6 +351,7 @@ describe("Jev filesystem facts", () => {
       basename: "home",
       homeRelativePath: "~",
       exists: true,
+      kind: "directory",
     });
     expect(JSON.stringify(files)).not.toContain(BODY);
   });
@@ -267,6 +379,7 @@ describe("Jev filesystem facts", () => {
       relativePath: "home-target-link",
       basename: "home-target-link",
       exists: true,
+      kind: "file",
       resolvedPath: await realpath(target),
     });
     expect(JSON.stringify(file)).not.toContain(BODY);

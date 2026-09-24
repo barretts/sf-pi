@@ -92,6 +92,12 @@ One-file-per-concern split:
   unknown executable code. Preserve unknown selected-file sensitivity.
   Directory facts do not describe every selected descendant. Numeric runner
   arguments do not prove a complete output bound or a policy result.
+  Protocol 10 preserves the supplied path kind from the existing `stat`
+  lookup. This lookup follows symlinks. An absent kind or lookup failure
+  means unknown. Do not infer kind from a suffix or inspect descendants.
+  Query flag metadata must match the installed CLI. Native `query.run`
+  ignores `limit`; use only supplied `max_rows` for its cap observation.
+  Keep query text local and retain the completeness gate.
 - Send operation metadata and the minimum effective policy relevant to the
   questions. Known CLI structure, trusted file-path facts, and bounded numeric
   observations describe effects without deciding policy locally. Mechanically

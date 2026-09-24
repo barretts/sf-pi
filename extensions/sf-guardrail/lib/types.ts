@@ -13,6 +13,7 @@ export type ProtectionLevel = "noAccess" | "readOnly" | "none";
 export type RuleBehavior = "off" | "confirm" | "block";
 export type GuardrailEngine = "deterministic" | "jev";
 export type JevAction = "allow" | "confirm" | "block";
+export type JevFileKind = "file" | "directory" | "other" | "unknown";
 export type JevQuestionId =
   "risk" | "file_policy" | "command_policy" | "org_policy" | "disclosure" | "authority";
 
@@ -41,6 +42,8 @@ export interface JevFacts {
   files?: Array<{
     path: string;
     exists: boolean | "unknown";
+    /** Kind from stat, which follows symlinks. Absent means unknown. */
+    kind?: JevFileKind;
     resolvedPath?: string;
     absolutePath?: string;
     relativePath?: string;

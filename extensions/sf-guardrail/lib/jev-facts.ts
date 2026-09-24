@@ -6,6 +6,7 @@ import { findLatestBrowserSnapshotRefLookup } from "../../../lib/common/sf-brows
 import type {
   GuardrailConfig,
   JevFacts,
+  JevFileKind,
   JevResolvedFacts,
   JevToolMetadata,
   OrgTypeFilter,
@@ -79,12 +80,18 @@ export async function resolveJevFileFacts(
           : {}),
       };
       try {
-        await stat(absolutePath);
-        return { ...variants, exists: true, resolvedPath: await realpath(absolutePath) };
+        const details = await stat(absolutePath);
+        const kind: JevFileKind = details.isFile()
+          ? "file"
+          : details.isDirectory()
+            ? "directory"
+            : "other";
+        return { ...variants, exists: true, kind, resolvedPath: await realpath(absolutePath) };
       } catch (error) {
         return {
           ...variants,
           exists: (error as NodeJS.ErrnoException).code === "ENOENT" ? false : ("unknown" as const),
+          kind: "unknown" as const,
         };
       }
     }),
