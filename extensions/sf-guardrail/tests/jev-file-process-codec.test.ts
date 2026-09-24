@@ -621,7 +621,7 @@ describe("whole-chain admission before transport", () => {
       },
       readBundledConfig(),
     );
-    expect(bytes(value)).toBe(31_914);
+    expect(bytes(value)).toBe(32_049);
     const plan = legacy(value);
     expect(plan.selection.reason).toBe("complete-match-body-exceeds-cap");
     expect(state(plan.original.request).facts.files[0].path).toHaveLength(4_000);

@@ -153,6 +153,12 @@ try {
   assert.equal(fileStage.format, "file_match_then_policy");
   assert.equal(fileStage.match.stage, "file_match");
   assert.deepEqual(Object.keys(fileStage.match.answers), fileMatchIds);
+  assert.equal(Object.hasOwn(fileResult.fileSourceRequest.state, "fileMatchPremises"), false);
+  assert.equal(Object.hasOwn(fileMatch.request.state, "fileMatchPremises"), false);
+  assert.deepEqual(fileActions.request.state.fileMatchPremises, [
+    { fileRecordIndex: 0, policyRowIndex: 0, patternList: "patterns", choice: fileStage.match.answers.f_a.choice },
+    { fileRecordIndex: 0, policyRowIndex: 0, patternList: "allowedPatterns", choice: fileStage.match.answers.f_b.choice },
+  ]);
   for (const answer of Object.values(fileStage.match.answers)) {
     assert.equal(answer.choice, "unknown");
     assert.deepEqual(answer.probabilities, { match: 0, no_match: 0, unknown: 1 });

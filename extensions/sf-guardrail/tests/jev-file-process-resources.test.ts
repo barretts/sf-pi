@@ -151,7 +151,7 @@ describe("independent wire trees and immutable host plans", () => {
     expect(() => prepareJevFileProcess(source(), false)).toThrow("Authored program failure.");
   });
   it("declares and deeply freezes separate request limits and local plan rules", () => {
-    expect(JEV_FILE_PROCESS_PROTOCOL.version).toBe(2);
+    expect(JEV_FILE_PROCESS_PROTOCOL.version).toBe(3);
     expect(JEV_FILE_PROCESS_PROTOCOL.requestTrees).toContain("no aggregate wire tree cap");
     frozen(JEV_FILE_PROCESS_PROTOCOL);
   });

@@ -566,6 +566,26 @@ describe("current deterministic baseline development evaluation", () => {
     );
     expect(filePlan.match?.json).toBe(captures[0].body);
     expect(JSON.stringify(rebuilt.request)).toBe(captures[1].body);
+    const sourceState = read.fileSourceRequest!.state as {
+      policy: { files: unknown[] };
+    };
+    const policyRowCount = sourceState.policy.files.length;
+    expect(Object.hasOwn(sourceState, "fileMatchPremises")).toBe(false);
+    const reservedSource = structuredClone(read.fileSourceRequest!);
+    (reservedSource.state as Record<string, unknown>).fileMatchPremises = [];
+    const reservedPlan = prepareJevFileProcess(reservedSource, false);
+    expect(reservedPlan.format).toBe("legacy");
+    expect(reservedPlan.selection.reason).toBe("source-premise-field-already-present");
+    expect(reservedPlan.original.json).toBe(JSON.stringify(reservedSource));
+    expect(Object.hasOwn(filePlan.match!.request.state as object, "fileMatchPremises")).toBe(false);
+    expect((rebuilt.request.state as Record<string, unknown>).fileMatchPremises).toEqual(
+      filePlan.selection.questionIds.map((questionId, index) => ({
+        fileRecordIndex: Math.floor(index / (policyRowCount * 2)),
+        policyRowIndex: Math.floor(index / 2) % policyRowCount,
+        patternList: index % 2 === 0 ? "patterns" : "allowedPatterns",
+        choice: read.process.fileStage!.match!.answers[questionId]!.choice,
+      })),
+    );
     expect(read.process.fileStage?.transcript).toBe(rebuilt.transcript);
     expect(read.requestPreparations?.map((item) => item.stage)).toEqual([
       "file_match",
@@ -594,6 +614,11 @@ describe("current deterministic baseline development evaluation", () => {
     );
     expect(first.fileSourceRequest).toEqual(second.fileSourceRequest);
     expect(first.requestPreparations?.[0].request).toEqual(second.requestPreparations?.[0].request);
+    expect(
+      (first.requestPreparations![1].request!.state as Record<string, unknown>).fileMatchPremises,
+    ).toEqual(
+      (second.requestPreparations![1].request!.state as Record<string, unknown>).fileMatchPremises,
+    );
     expect(first.syntheticFilePreparation?.fileStage.match?.answers).toEqual(
       second.syntheticFilePreparation?.fileStage.match?.answers,
     );
@@ -601,6 +626,13 @@ describe("current deterministic baseline development evaluation", () => {
       Object.values(first.syntheticFilePreparation!.fileStage.match!.answers).every(
         (answer) => answer?.choice === "unknown" && answer.probabilities.unknown === 1,
       ),
+    ).toBe(true);
+    expect(
+      (
+        first.requestPreparations![1].request!.state as {
+          fileMatchPremises: Array<{ choice: string }>;
+        }
+      ).fileMatchPremises.every((premise) => premise.choice === "unknown"),
     ).toBe(true);
     expect(summarizeBaselineDev([first, second])).toMatchObject({
       decided: 0,

@@ -69,6 +69,8 @@ function harness(
   options: {
     action?: JevAction;
     choice?: JevFileMatchChoice;
+    choices?: readonly JevFileMatchChoice[];
+    actions?: Partial<Record<string, JevAction>>;
     selected?: number;
     point?: "conservative" | "argmax";
     onReply?: (ordinal: number, body: JevRequest) => void;
@@ -77,51 +79,53 @@ function harness(
   const point = resolveJevOperatingPoint(options.point ?? "conservative");
   const bodies: JevRequest[] = [];
   const selected = options.selected ?? 1;
-  const choice = options.choice ?? "no_match";
   const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
     const request = JSON.parse(init!.body as string) as JevRequest;
     bodies.push(request);
     const ids = Object.keys(request.questions);
     const ternary = ids[0]?.startsWith("f_");
     const syntax = ids[0]?.startsWith("r_");
-    const action = options.action ?? "allow";
     const answers = Object.fromEntries(
-      ids.map((id) => [
-        id,
-        ternary
-          ? {
-              type: "choice",
-              choice,
-              probabilities: Object.fromEntries(
-                ["match", "no_match", "unknown"].map((name) => [
-                  name,
-                  name === choice
-                    ? selected
-                    : name === (choice === "match" ? "no_match" : "match")
-                      ? 1 - selected
-                      : 0,
-                ]),
-              ),
-              confidence: 1,
-            }
-          : syntax
+      ids.map((id, index) => {
+        const choice = options.choices?.[index] ?? options.choice ?? "no_match";
+        const action = options.actions?.[id] ?? options.action ?? "allow";
+        return [
+          id,
+          ternary
             ? {
                 type: "choice",
-                choice: "no_match",
-                probabilities: { match: 0, no_match: 1 },
-                confidence: 0.83,
+                choice,
+                probabilities: Object.fromEntries(
+                  ["match", "no_match", "unknown"].map((name) => [
+                    name,
+                    name === choice
+                      ? selected
+                      : name === (choice === "match" ? "no_match" : "match")
+                        ? 1 - selected
+                        : 0,
+                  ]),
+                ),
+                confidence: 1,
               }
-            : {
-                type: "choice",
-                choice: action,
-                probabilities: {
-                  allow: action === "allow" ? 1 : 0,
-                  confirm: action === "confirm" ? 1 : 0,
-                  block: action === "block" ? 1 : 0,
+            : syntax
+              ? {
+                  type: "choice",
+                  choice: "no_match",
+                  probabilities: { match: 0, no_match: 1 },
+                  confidence: 0.83,
+                }
+              : {
+                  type: "choice",
+                  choice: action,
+                  probabilities: {
+                    allow: action === "allow" ? 1 : 0,
+                    confirm: action === "confirm" ? 1 : 0,
+                    block: action === "block" ? 1 : 0,
+                  },
+                  confidence: 0.91,
                 },
-                confidence: 0.91,
-              },
-      ]),
+        ];
+      }),
     );
     options.onReply?.(bodies.length, request);
     return new Response(
@@ -206,6 +210,10 @@ describe("actual file matching then actual policy calls", () => {
     expect(hash(JSON.stringify(h.bodies[0]))).toBe(prefix.match!.evidence.requestHash);
     expect(hash(JSON.stringify(h.bodies[1]))).toBe(process.stage!.evidence.requestHash);
     const downstream = h.bodies[1] as JevRequest;
+    expect(downstream.state).toHaveProperty("fileMatchPremises", [
+      { fileRecordIndex: 0, policyRowIndex: 0, patternList: "patterns", choice: "no_match" },
+      { fileRecordIndex: 0, policyRowIndex: 0, patternList: "allowedPatterns", choice: "no_match" },
+    ]);
     for (const id of Object.keys(original.questions).filter((id) => id !== "file_policy"))
       expect(downstream.questions[id]).toEqual(original.questions[id]);
     expect(JSON.stringify(downstream.questions.file_policy!.instructions)).toContain(
@@ -228,6 +236,10 @@ describe("actual file matching then actual policy calls", () => {
       const conservative = harness(call(), { choice, selected: 0.51 });
       expect((await conservative.evaluate()).action).toBe("confirm");
       expect(conservative.bodies[1].state).toMatchObject({ fileMatch: expect.any(String) });
+      expect(conservative.bodies[1].state).toHaveProperty("fileMatchPremises", [
+        { fileRecordIndex: 0, policyRowIndex: 0, patternList: "patterns", choice },
+        { fileRecordIndex: 0, policyRowIndex: 0, patternList: "allowedPatterns", choice },
+      ]);
       const argmax = harness(call(), { choice, selected: 0.51, point: "argmax" });
       expect((await argmax.evaluate()).action).toBe("allow");
       const block = harness(call(), { choice, selected: 0.51, action: "block" });
@@ -268,8 +280,43 @@ describe("actual file matching then actual policy calls", () => {
     expect(decision.jev!.riskAnswer).toEqual(process.result.answers.risk);
     expect(process.result.distributionsCombined).toBe(false);
     expect(h.bodies[1].state).toHaveProperty("fileMatch");
+    expect(h.bodies[1].state).toHaveProperty("fileMatchPremises");
     expect(h.bodies[2].state).not.toHaveProperty("fileMatch");
+    expect(h.bodies[2].state).not.toHaveProperty("fileMatchPremises");
     expect(h.bodies[3].state).not.toHaveProperty("fileMatch");
+    expect(h.bodies[3].state).not.toHaveProperty("fileMatchPremises");
+  });
+  it("keeps a complete two-row matching call and the later actual independent block", async () => {
+    const input = call();
+    input.config.policies.rules.push({
+      id: "independent-row",
+      enabled: true,
+      protection: "noAccess",
+      behavior: "block",
+      patterns: [{ pattern: "**" }],
+      allowedPatterns: [],
+      onlyIfExists: false,
+    });
+    const h = harness(input, {
+      choices: ["match", "match", "match", "no_match"],
+      actions: { file_policy: "block" },
+    });
+    const decision = await h.evaluate();
+    expect(decision.action).toBe("block");
+    expect(h.fetch).toHaveBeenCalledTimes(2);
+    expect(Object.keys(h.bodies[0].questions)).toEqual(["f_a", "f_b", "f_c", "f_d"]);
+    expect(h.bodies[1].state).toHaveProperty("fileMatchPremises", [
+      { fileRecordIndex: 0, policyRowIndex: 0, patternList: "patterns", choice: "match" },
+      { fileRecordIndex: 0, policyRowIndex: 0, patternList: "allowedPatterns", choice: "match" },
+      { fileRecordIndex: 0, policyRowIndex: 1, patternList: "patterns", choice: "match" },
+      { fileRecordIndex: 0, policyRowIndex: 1, patternList: "allowedPatterns", choice: "no_match" },
+    ]);
+    expect(decision.jev!.riskAnswer!.choice).toBe("allow");
+    const process = decision.jev!.process!;
+    if (process.kind !== "all_heads") throw new Error("Wrong actual process.");
+    expect(process.fileStage!.format).toBe("file_match_then_policy");
+    expect(process.stage!.answers.file_policy!.choice).toBe("block");
+    expect(h.bodies.every((body) => Buffer.byteLength(JSON.stringify(body)) <= 32768)).toBe(true);
   });
   it("selects exact legacy bytes for more than eight heads, before the match factory", async () => {
     const input = call();

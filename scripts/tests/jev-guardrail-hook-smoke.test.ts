@@ -229,6 +229,37 @@ describe("actual SDK hook smoke operating point", () => {
       expect(contentReads).toEqual([]);
       expect(body).not.toContain("private-file-body-must-stay-local-hook-smoke");
       expect(body).not.toContain("synthetic-hook-smoke-key");
+      const sourceState = JSON.parse(body).state;
+      expect(sourceState.fileMatchPremises).toEqual([
+        { fileRecordIndex: 0, policyRowIndex: 0, patternList: "patterns", choice: "no_match" },
+        {
+          fileRecordIndex: 0,
+          policyRowIndex: 0,
+          patternList: "allowedPatterns",
+          choice: "no_match",
+        },
+        { fileRecordIndex: 0, policyRowIndex: 1, patternList: "patterns", choice: "no_match" },
+        {
+          fileRecordIndex: 0,
+          policyRowIndex: 1,
+          patternList: "allowedPatterns",
+          choice: "no_match",
+        },
+        { fileRecordIndex: 0, policyRowIndex: 2, patternList: "patterns", choice: "no_match" },
+        {
+          fileRecordIndex: 0,
+          policyRowIndex: 2,
+          patternList: "allowedPatterns",
+          choice: "no_match",
+        },
+        { fileRecordIndex: 0, policyRowIndex: 3, patternList: "patterns", choice: "no_match" },
+        {
+          fileRecordIndex: 0,
+          policyRowIndex: 3,
+          patternList: "allowedPatterns",
+          choice: "no_match",
+        },
+      ]);
       const evidence = report.audit!.jev;
       expect(evidence.process?.kind).toBe("all_heads");
       if (evidence.process?.kind !== "all_heads") throw new Error("Missing action-stage evidence.");
@@ -368,6 +399,20 @@ describe("actual SDK hook smoke operating point", () => {
     const editedRequest = prepared(body);
     editedRequest.request.state = { ...(editedRequest.request.state as object), injected: true };
     expect(hookSmokeDecisionPasses(original, editedRequest, ENDPOINT, point, plan)).toBe(false);
+    for (const change of [
+      (state) => delete state.fileMatchPremises,
+      (state) => state.fileMatchPremises.reverse(),
+      (state) => {
+        state.fileMatchPremises[0].choice = "match";
+      },
+      (state) => {
+        state.fileMatchPremises[0].privateOperand = "Unexpected data.";
+      },
+    ]) {
+      const changed = prepared(body);
+      change(changed.request.state);
+      expect(hookSmokeDecisionPasses(original, changed, ENDPOINT, point, plan)).toBe(false);
+    }
   });
 });
 

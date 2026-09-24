@@ -197,6 +197,13 @@ function currentAnswerEvidence(row: BaselineDevResult): AnswerEvidence {
     const fileStage = process.fileStage;
     if (fileStage !== undefined) {
       requireEvidence(row.fileSourceRequest && process.kind !== "file_stages");
+      const sourceState = row.fileSourceRequest.state;
+      requireEvidence(
+        sourceState &&
+          typeof sourceState === "object" &&
+          !Object.hasOwn(sourceState, "fileMatch") &&
+          !Object.hasOwn(sourceState, "fileMatchPremises"),
+      );
       const deadline = captured[0].deadline;
       requireEvidence(
         nonnegative(deadline) &&
@@ -265,7 +272,11 @@ function currentAnswerEvidence(row: BaselineDevResult): AnswerEvidence {
         row.fileSourceRequest === undefined &&
           captured.every((item) => {
             const state = item.request?.state;
-            return !state || typeof state !== "object" || !Object.hasOwn(state, "fileMatch");
+            return (
+              !state ||
+              typeof state !== "object" ||
+              (!Object.hasOwn(state, "fileMatch") && !Object.hasOwn(state, "fileMatchPremises"))
+            );
           }),
       );
     }

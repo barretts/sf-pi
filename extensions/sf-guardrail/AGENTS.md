@@ -213,6 +213,21 @@ One-file-per-concern split:
   Off-winner behavior, access, and the action. Keep unknown premises and all
   independent restrictions. Add no host matcher, row filter, winner, or
   second policy vote.
+- Protocol 19 includes flat `state.fileMatchPremises` entries with literal
+  zero-based `fileRecordIndex` in `facts.files`, `policyRowIndex` in
+  `policy.files`, `patternList` (`patterns` or `allowedPatterns`), and actual
+  `choice` (`match`, `no_match`, or `unknown`). Preserve exact source order.
+  Build the array and retained full `state.fileMatch` transcript from the
+  same validated matching receipt. Copy choices; compute no host policy
+  result. Require exact equality with the array rebuilt from that receipt.
+  Reject missing, extra, reordered, swapped, or changed entries. The inverse
+  removes both added fields and restores the original file policy question
+  to recover exact original request bytes.
+- Keep the general `risk` boundary for a local `write` or `edit` with
+  `exists=false`. Unknown prior file kind describes the absent object. That
+  fact alone does not mean an unknown executable effect. File protection
+  and disclosure remain with their sole independent Jev questions. Add no
+  host policy calculation.
 - Select the complete file format before any factory. A new count, byte,
   or JSON tree failure selects the exact complete original Jev route,
   subject to that route's own limits. No reply failure may change the route.
@@ -221,6 +236,9 @@ One-file-per-concern split:
   apply a wire tree cap to the local plan's duplicate copies. Do not trim
   or batch original records or rows to fit. Preserve command process 45
   and its complete syntax 44 or exact syntax 43 selection.
+  Before any factory, reserve the full transcript and named array with the
+  longest choice spelling `no_match` at every original coordinate. The
+  reserve is only for admission; it is not a model reply.
 - Keep the file transcript's strict 16-field header and six-field answers.
   Preserve actual receipt origins, hashes, IDs, model/provider, usage,
   optional cost, bytes, time, raw probabilities, confidence, and signed

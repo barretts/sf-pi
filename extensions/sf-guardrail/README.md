@@ -155,6 +155,13 @@ heads in exact source order. For each record, it visits every row, then
 head carries the complete original record and row. Jev chooses only `match`,
 `no_match`, or `unknown` for that named list and record.
 
+Protocol 19 includes a flat `state.fileMatchPremises` array. Each entry has the
+literal zero-based `fileRecordIndex` in `facts.files` and `policyRowIndex` in
+`policy.files`, `patternList` (`patterns` or `allowedPatterns`), and actual
+`choice` (`match`, `no_match`, or `unknown`). Entries keep the exact source
+order. This array and the retained full `state.fileMatch` transcript come
+from the same validated matching receipt.
+
 The later actual `file_policy` head uses those typed choices as matching
 premises. Jev applies eligibility, the same-row exemption, existence
 requirements, protection strength, first-tie order, Off-winner behavior,
@@ -165,7 +172,9 @@ keep their original instructions and independent restrictions.
 
 The adapter selects its complete format before any transport factory. It
 checks every required matching head. It checks each later complete request
-with the maximum reserved transcript.
+with the maximum reserved transcript and named array. At every original
+coordinate, reserve the longest choice spelling `no_match`. This reserve is
+only for admission; it is not a model reply.
 If a new count, byte, or JSON tree bound fails, it keeps the exact complete
 original Jev route. The original route must also meet its request limits.
 This selection uses only structure and size. A failed reply blocks the
@@ -184,6 +193,9 @@ Numbers use canonical numeric strings. Signed zero remains `-0`. The strict
 inverse restores the typed receipt and exact original request bytes. It
 preserves parsed numeric values and signed zero. Raw JSON number spelling
 is outside that inverse.
+Validation requires exact equality with the named array rebuilt from that
+receipt. The inverse removes both added fields and restores the original
+file policy question to recover exact original request bytes.
 
 The file adapter remains experimental. Full validation is pending. Earlier
 head-only file diagnostics do not establish this adapter's coverage. Its
@@ -214,6 +226,11 @@ before protection strength is selected. The default deployment exclusion
 applies only to `sf-deploy-prod`; independent custom restrictions remain.
 These criteria changes do not establish qualification. The latest measured
 results and failed targets are in the replacement progress report.
+
+For a local `write` or `edit` with `exists=false`, unknown prior file kind
+describes the absent object. In the `risk` question, that fact alone does not
+mean an unknown executable effect. File protection and disclosure remain
+with their sole independent Jev questions.
 
 Hosted browser facts omit only the changing `ageMs` value. They keep the actual
 freshness status and target fields. Local checks keep the snapshot identity,

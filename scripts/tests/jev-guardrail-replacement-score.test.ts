@@ -846,6 +846,45 @@ function firstPreparation(receipt: BaselineDevResult): RequestPreparation {
   return first;
 }
 
+function resealRequest(
+  receipt: BaselineDevResult,
+  index = receipt.requestPreparations!.length - 1,
+) {
+  const prepared = receipt.requestPreparations![index];
+  const encoded = JSON.stringify(prepared.request);
+  prepared.requestHash = scoreHash(encoded);
+  prepared.requestBytes = Buffer.byteLength(encoded);
+  const stage =
+    receipt.process!.kind === "all_heads"
+      ? receipt.process!.stage!
+      : commandEvidence(receipt).stages.find((stage) => stage.stage === prepared.stage)!;
+  stage.evidence.requestHash = prepared.requestHash;
+  stage.evidence.requestBytes = prepared.requestBytes;
+  if (receipt.process!.kind === "all_heads") {
+    receipt.process!.attempt!.requestHash = prepared.requestHash;
+    receipt.process!.attempt!.requestBytes = prepared.requestBytes;
+  } else {
+    const command = commandEvidence(receipt);
+    const attempt = command.attempts.find((attempt) => attempt.stage === prepared.stage)!;
+    attempt.requestHash = prepared.requestHash;
+    attempt.requestBytes = prepared.requestBytes;
+    for (const origin of Object.values(command.origins)) {
+      if (origin?.stage === prepared.stage) {
+        origin.requestHash = prepared.requestHash;
+        origin.requestBytes = prepared.requestBytes;
+      }
+    }
+  }
+  if (receipt.riskOrigin?.stage === prepared.stage) {
+    receipt.riskOrigin.requestHash = prepared.requestHash;
+    receipt.riskOrigin.requestBytes = prepared.requestBytes;
+  }
+  if (prepared === firstPreparation(receipt)) {
+    receipt.requestHash = prepared.requestHash;
+    receipt.requestBytes = prepared.requestBytes;
+  }
+}
+
 async function fileStageRow(
   id: string,
   options: {
@@ -1095,6 +1134,19 @@ describe("Jev file-stage source score", () => {
       });
       expect(conservative.candidateAction).toBe("confirm");
       expect(argmax.candidateAction).toBe("allow");
+      for (const receipt of [conservative, argmax]) {
+        const state = receipt.requestPreparations![1].request!.state as Record<string, unknown>;
+        expect(state.fileMatch).toBe(receipt.process!.fileStage!.transcript);
+        expect(state.fileMatchPremises).toEqual([
+          { fileRecordIndex: 0, policyRowIndex: 0, patternList: "patterns", choice: fileChoice },
+          {
+            fileRecordIndex: 0,
+            policyRowIndex: 0,
+            patternList: "allowedPatterns",
+            choice: fileChoice,
+          },
+        ]);
+      }
       expect(scoreJevGuardrailReplacement([conservative, argmax])).toMatchObject({
         answerEvidence: { complete: 2, invalid: 0 },
         observedActionConsistency: { matched: 2 },
@@ -1122,6 +1174,22 @@ describe("Jev file-stage source score", () => {
     expect(scoreJevGuardrailReplacement([receipt]).answerEvidence).toMatchObject({
       complete: 1,
       invalid: 0,
+    });
+  });
+
+  it.each([[], undefined])("rejects reserved source premises %j", async (value) => {
+    const receipt = await fileStageRow("reserved-file-source", { fileRows: 5 });
+    (receipt.fileSourceRequest!.state as Record<string, unknown>).fileMatchPremises = value;
+    (firstPreparation(receipt).request!.state as Record<string, unknown>).fileMatchPremises = value;
+    if (value !== undefined) {
+      const plan = prepareJevFileProcess(receipt.fileSourceRequest!, false);
+      expect(plan.format).toBe("legacy");
+      receipt.process!.fileStage!.selection = structuredClone(plan.selection);
+    }
+    resealRequest(receipt);
+    expect(scoreJevGuardrailReplacement([receipt]).answerEvidence).toMatchObject({
+      complete: 0,
+      invalid: 1,
     });
   });
 
@@ -1246,30 +1314,32 @@ describe("Jev file-stage source score", () => {
     });
   });
 
-  it.each([false, true])("rejects a rehashed later body with Bash=%s", async (bash) => {
-    const receipt = await fileStageRow(`changed-file-later-${bash}`, { bash });
-    const last = receipt.requestPreparations![receipt.requestPreparations!.length - 1];
-    (last.request!.state as Record<string, unknown>).extra = "Changed test data.";
-    const encoded = JSON.stringify(last.request);
-    last.requestHash = scoreHash(encoded);
-    last.requestBytes = Buffer.byteLength(encoded);
-    const stage =
-      receipt.process!.kind === "all_heads"
-        ? receipt.process!.stage!
-        : commandEvidence(receipt).stages[commandEvidence(receipt).stages.length - 1];
-    stage.evidence.requestHash = last.requestHash;
-    stage.evidence.requestBytes = last.requestBytes;
-    if (receipt.process!.kind === "all_heads") {
-      receipt.process!.attempt!.requestHash = last.requestHash;
-      receipt.process!.attempt!.requestBytes = last.requestBytes;
-      receipt.riskOrigin!.requestHash = last.requestHash;
-      receipt.riskOrigin!.requestBytes = last.requestBytes;
+  it.each(
+    [false, true].flatMap((bash) =>
+      ["extra", "missing premises", "changed choice", "changed coordinate", "changed order"].map(
+        (change) => [bash, change] as const,
+      ),
+    ),
+  )("rejects rehashed Bash=%s body with %s", async (bash, change) => {
+    const receipt = await fileStageRow(`changed-file-later-${bash}-${change}`, { bash });
+    const index = change === "extra" ? receipt.requestPreparations!.length - 1 : 1;
+    const prepared = receipt.requestPreparations![index];
+    const state = prepared.request!.state as {
+      fileMatchPremises?: Array<{ fileRecordIndex: number; choice: string }>;
+      extra?: string;
+    };
+    if (change === "extra") {
+      state.extra = "Changed test data.";
+    } else if (change === "missing premises") {
+      delete state.fileMatchPremises;
+    } else if (change === "changed choice") {
+      state.fileMatchPremises![0].choice = "match";
+    } else if (change === "changed coordinate") {
+      state.fileMatchPremises![0].fileRecordIndex++;
     } else {
-      const attempt =
-        commandEvidence(receipt).attempts[commandEvidence(receipt).attempts.length - 1];
-      attempt.requestHash = last.requestHash;
-      attempt.requestBytes = last.requestBytes;
+      state.fileMatchPremises!.reverse();
     }
+    resealRequest(receipt, index);
     expect(scoreJevGuardrailReplacement([receipt]).answerEvidence).toMatchObject({
       complete: 0,
       invalid: 1,
@@ -1308,20 +1378,26 @@ describe("Jev file-stage source score", () => {
     });
   });
 
-  it("rejects an orphan file transcript after receipt fields are removed", async () => {
-    const receipt = await fileStageRow("orphan-file-transcript");
-    delete receipt.fileSourceRequest;
-    delete receipt.process!.fileStage;
-    receipt.requestPreparations!.shift();
-    const first = firstPreparation(receipt);
-    receipt.requestStage = first.stage;
-    receipt.requestHash = first.requestHash;
-    receipt.requestBytes = first.requestBytes;
-    expect(scoreJevGuardrailReplacement([receipt]).answerEvidence).toMatchObject({
-      complete: 0,
-      invalid: 1,
-    });
-  });
+  it.each(["fileMatch", "fileMatchPremises"] as const)(
+    "rejects orphan %s after receipt fields are removed",
+    async (retained) => {
+      const receipt = await fileStageRow(`orphan-${retained}`);
+      delete receipt.fileSourceRequest;
+      delete receipt.process!.fileStage;
+      receipt.requestPreparations!.shift();
+      const first = firstPreparation(receipt);
+      const state = first.request!.state as Record<string, unknown>;
+      delete state[retained === "fileMatch" ? "fileMatchPremises" : "fileMatch"];
+      resealRequest(receipt);
+      receipt.requestStage = first.stage;
+      receipt.requestHash = first.requestHash;
+      receipt.requestBytes = first.requestBytes;
+      expect(scoreJevGuardrailReplacement([receipt]).answerEvidence).toMatchObject({
+        complete: 0,
+        invalid: 1,
+      });
+    },
+  );
 });
 
 describe("Jev replacement score with actual stage evidence", () => {

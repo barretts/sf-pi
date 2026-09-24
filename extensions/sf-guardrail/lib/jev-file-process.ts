@@ -64,21 +64,36 @@ export const JEV_FILE_MATCH_TEMPLATES = Object.freeze({
       "An essential path operand is absent, so neither match nor no_match can be established. Existence, kind, file bodies and source sensitivity alone do not create this uncertainty.",
   }),
 });
+export const JEV_FILE_PREMISES_INSTRUCTION =
+  "state.fileMatchPremises names each earlier actual Jev choice: fileRecordIndex is the zero-based facts.files index, policyRowIndex is the zero-based policy.files index, patternList is patterns or allowedPatterns, and choice is match, no_match or unknown. Entries retain record-major, row-major, patterns then allowedPatterns order. This is the same matching evidence as state.fileMatch, not another vote or a policy action. Use these literal choices at their exact coordinates. Unknown remains unknown.";
 export const JEV_FILE_TRANSCRIPT_INSTRUCTION =
-  "state.fileMatch is JSON: [version=1,stateHash,manifestHash,requestHash,responseHash,transportHash,model,provider,requestId,requestBytes,responseBytes,inputTokens,outputTokens,costOrNull,latencyMs,answers]. Each answer is [questionId,choiceCode,Pmatch,PnoMatch,Punknown,confidence]; code 0=match, 1=no_match, 2=unknown. Numbers are canonical decimal strings; -0 retains signed zero. IDs f_a onward are record-major then row-major, patterns then allowedPatterns, for every original facts.files record and policy.files row, including disabled and off rows. The prior actual choices are fallible conditional matching premises only. Unknown remains unknown. Use their three raw probabilities separately; do not combine confidence or soften a required block. Jev alone applies the original full eligibility, same-row exemption, existence, strength, first-tie, off-winner, access and action rules. All original operands and independent restrictions remain authoritative.";
+  "state.fileMatch is JSON: [version=1,stateHash,manifestHash,requestHash,responseHash,transportHash,model,provider,requestId,requestBytes,responseBytes,inputTokens,outputTokens,costOrNull,latencyMs,answers]. Each answer is [questionId,choiceCode,Pmatch,PnoMatch,Punknown,confidence]; code 0=match, 1=no_match, 2=unknown. Numbers are canonical decimal strings; -0 retains signed zero. IDs f_a onward are record-major then row-major, patterns then allowedPatterns, for every original facts.files record and policy.files row, including disabled and off rows. The prior actual choices are fallible conditional matching premises only. Unknown remains unknown. Use their three raw probabilities separately; do not combine confidence or soften a required block. Jev alone applies the original full eligibility, same-row exemption, existence, strength, first-tie, off-winner, access and action rules. All original operands and independent restrictions remain authoritative. " +
+  JEV_FILE_PREMISES_INSTRUCTION;
 export const JEV_FILE_STAGED_RULES = Object.freeze([
   "For each original record and row, use the earlier typed patterns choice and allowedPatterns choice at its exact record/row/list coordinate. match means that predicate matches, no_match means it does not match, and unknown leaves that matching predicate unknown. Do not rematch raw patterns or substitute another row or path. Original pattern data remain for source identity, not a second matching vote.",
   "A row is eligible for this record only if enabled=true AND its earlier patterns choice=match AND its earlier allowedPatterns choice=no_match AND (onlyIfExists=false OR exists=true). exists=false excludes onlyIfExists=true. An unknown essential matching or existence predicate cannot prove exclusion; a known no_match is not unknown. File contents never affect this question.",
   "Use the earlier allowedPatterns choice for THAT SAME ROW and record before selecting protection. match excludes only that row for that record. A known exemption, disabled row, patterns=no_match, or exists=false with onlyIfExists=true remains an exclusion even if another predicate is unknown. Continue every other row and every other record; independent restrictions and unknowns remain.",
 ]);
 export const JEV_FILE_PROCESS_PROTOCOL = snapshotJevStageResult({
-  version: 2,
+  version: 3,
   requestTrees:
     "Each full actual wire request retains depth 32 and at most 16384 JSON nodes. Validate and freeze original, match and worst later requests separately before any factory. A new match or later request tree admission failure selects exact valid legacy. The local plan uses frozen request snapshots, frozen small wrappers and selection, and a shallow frozen outer plan; duplicated host references impose no aggregate wire tree cap.",
   match: JEV_FILE_MATCH_PROCESS_PROTOCOL,
   templates: JEV_FILE_MATCH_TEMPLATES,
   transcriptInstruction: JEV_FILE_TRANSCRIPT_INSTRUCTION,
   stagedMatchingRules: JEV_FILE_STAGED_RULES,
+  premiseProjection: {
+    field: "state.fileMatchPremises",
+    entryFields: ["fileRecordIndex", "policyRowIndex", "patternList", "choice"],
+    choiceValues: CHOICES,
+    instruction: JEV_FILE_PREMISES_INSTRUCTION,
+    source:
+      "Every frozen original match question coordinate/list in exact manifest order, with its actual choice from the validated decoded transcript. Preserve all entries and unknown; compute no policy result.",
+    reserve:
+      "Use the longest literal choice spelling no_match at every original coordinate before any factory. Validate each complete later request with both the full transcript reserve and named array against unchanged byte/tree/command bounds.",
+    inverse:
+      "Require exact equality with the projection rebuilt from the actual decoded receipt. Reject missing, extra, reordered, swapped or changed entries. Remove both fileMatch and fileMatchPremises and restore the original question to recover exact original request bytes.",
+  },
   codec: {
     headerWidth: 16,
     answerWidth: 6,
@@ -93,7 +108,7 @@ export const JEV_FILE_PROCESS_PROTOCOL = snapshotJevStageResult({
       "actual request/response/transport hashes, model/provider/request ID/usage/bytes/latency",
   },
   selection:
-    "Before any factory: complete original route; then all operands and 1..8 heads, match body, worst transcript in every later action body, and unchanged command syntax/grouped reserves. Select exact original legacy bytes if a new count or byte limit fails; no added wire field on legacy.",
+    "Before any factory: complete original route; then all operands and 1..8 heads, match body, worst transcript and longest-choice named premises in every later action body, and unchanged command syntax/grouped reserves. Select exact original legacy bytes if a new count or byte limit fails; no added wire field on legacy.",
   downstream:
     "Separate actual all_heads, or non_command then optional syntax then command_policy. Only file_policy consumes the earlier typed transcript. Other original questions and command source formats remain unchanged.",
   operatingPoint:
@@ -128,16 +143,40 @@ function actionSizes(request: JevRequest, bash: boolean): number[] {
   }
   return [body(request).bytes];
 }
-function augmented(original: JevRequest, transcript: string): JevRequest {
+function fileMatchPremises(
+  match: JevFileMatchRequest,
+  questionIds: readonly string[],
+  answers?: JevFileMatchStageResult["answers"],
+) {
+  return questionIds.map((id) => {
+    const question = match.questions[id as JevFileMatchQuestionId];
+    const answer = answers?.[id as JevFileMatchQuestionId];
+    if (!question || (answers && !answer)) fail();
+    return {
+      fileRecordIndex: question.instructions.recordOrdinal,
+      policyRowIndex: question.instructions.rowOrdinal,
+      patternList: question.instructions.listName,
+      // Without a receipt, this is only the longest-spelling admission reserve.
+      choice: answer?.choice ?? "no_match",
+    };
+  });
+}
+function augmented(
+  original: JevRequest,
+  transcript: string,
+  premises: ReturnType<typeof fileMatchPremises>,
+): JevRequest {
   const request = structuredClone(original);
   const question = request.questions.file_policy;
   if (!object(request.state) || !question || !object(question.instructions)) fail();
   if (
     Object.hasOwn(request.state, "fileMatch") ||
+    Object.hasOwn(request.state, "fileMatchPremises") ||
     Object.hasOwn(question.instructions as object, "matchingPremises")
   )
     fail();
   request.state.fileMatch = transcript;
+  request.state.fileMatchPremises = premises;
   const instructions = question.instructions as Record<string, unknown>;
   if (!Array.isArray(instructions.rules) || instructions.rules.length !== 6) fail();
   question.instructions = {
@@ -211,6 +250,10 @@ export function prepareJevFileProcess(source: JevRequest, bash: boolean): JevFil
     });
   if (!original.request.questions.file_policy || !records || !rows || coordinates.length === 0)
     return legacy();
+  if (Object.hasOwn(state, "fileMatchPremises")) {
+    selection.reason = "source-premise-field-already-present";
+    return legacy();
+  }
   if (coordinates.length > IDS.length) {
     selection.reason = "head-count-exceeds-eight";
     return legacy();
@@ -259,7 +302,11 @@ export function prepareJevFileProcess(source: JevRequest, bash: boolean): JevFil
   selection.matchRequestHash = match.hash;
   selection.matchRequestBytes = match.bytes;
   const maximum = maximumTranscript(selection);
-  const worst = augmented(original.request, maximum);
+  const worst = augmented(
+    original.request,
+    maximum,
+    fileMatchPremises(match.request, selection.questionIds),
+  );
   if (body(worst).bytes > REQUEST_CAP) {
     selection.reason = "complete-downstream-reserve-exceeds-cap";
     return legacy();
@@ -530,7 +577,13 @@ export function buildJevFilePolicyRequest(
   transportHash: string,
 ) {
   const transcript = encodeJevFileTranscript(plan, reply, transportHash);
-  const request = augmented(plan.original.request, transcript);
+  const decoded = decodeJevFileTranscript(plan, transcript, transportHash, reply);
+  if (!plan.match) fail();
+  const request = augmented(
+    plan.original.request,
+    transcript,
+    fileMatchPremises(plan.match.request, plan.selection.questionIds, decoded.answers),
+  );
   const sizes = actionSizes(
     request,
     !!plan.original.request.questions.command_policy &&
@@ -555,22 +608,31 @@ export function restoreJevFileSourceRequest(
   transportHash: string,
 ): string {
   const request = snapshotJevStageResult(source);
+  const transcript = encodeJevFileTranscript(plan, expectedStage, transportHash);
+  const decoded = decodeJevFileTranscript(plan, transcript, transportHash, expectedStage);
   if (
+    !plan.match ||
     !object(request.state) ||
     typeof request.state.fileMatch !== "string" ||
+    !Array.isArray(request.state.fileMatchPremises) ||
     !object(request.questions.file_policy?.instructions)
   )
     fail();
   if (
     !isDeepStrictEqual(
       request,
-      augmented(plan.original.request, encodeJevFileTranscript(plan, expectedStage, transportHash)),
+      augmented(
+        plan.original.request,
+        transcript,
+        fileMatchPremises(plan.match.request, plan.selection.questionIds, decoded.answers),
+      ),
     )
   )
     fail();
   const restored = structuredClone(request);
   if (!object(restored.state)) fail();
   delete restored.state.fileMatch;
+  delete restored.state.fileMatchPremises;
   restored.questions.file_policy = structuredClone(plan.original.request.questions.file_policy);
   const json = JSON.stringify(restored);
   if (json !== plan.original.json) fail();

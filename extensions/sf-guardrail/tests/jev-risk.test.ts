@@ -2352,7 +2352,7 @@ describe("Jev risk adapter", () => {
       resolved.facts,
       input.config,
     );
-    expect(Buffer.byteLength(JSON.stringify(expected))).toBe(31914);
+    expect(Buffer.byteLength(JSON.stringify(expected))).toBe(32049);
     expect(expected.state).not.toHaveProperty("fileComparisonView");
     const requestCall = vi.fn<TestPredictionRequest>(async (wire) => {
       expect(JSON.stringify(wire)).toBe(JSON.stringify(expected));
@@ -2370,7 +2370,7 @@ describe("Jev risk adapter", () => {
     expect(decision.jev?.process?.kind).toBe("all_heads");
     if (decision.jev?.process?.kind !== "all_heads")
       throw new Error("missing actual all-head evidence");
-    expect(decision.jev.process.stage?.evidence.requestBytes).toBe(31914);
+    expect(decision.jev.process.stage?.evidence.requestBytes).toBe(32049);
     expect(decision.jev.process.stage?.evidence.requestHash).toBe(
       createHash("sha256").update(JSON.stringify(expected)).digest("hex"),
     );
@@ -2414,9 +2414,10 @@ describe("Jev risk adapter", () => {
       "0e04eae25722caf0d86aca285ffbef575738c0e3015472e9a8b44f3f6a8e8962",
       "3472d1d1a8fa1c8debd46b54ca200667b803016e4daa06721c7bc46f970fc39c",
       "53b22b9b3279451a147e9147a0e60469f6a897ddc07174c0c09f4f166b7a3588",
+      "cfffb7fce2c2e77eac05fd0bcf0c61d3e8db3de46382f37d6a09338b43183b27",
     ];
     expect(JEV_PROTOCOL_HASH).toBe(
-      "cfffb7fce2c2e77eac05fd0bcf0c61d3e8db3de46382f37d6a09338b43183b27",
+      "adf8586988d03ee861d803784bb2cbec77ae30e8f7a6280edfc6dd34c6b57cbf",
     );
     const protocolHash = jevRuntimeProtocolHash();
     expect(decision.jev?.protocolHash).toBe(protocolHash);

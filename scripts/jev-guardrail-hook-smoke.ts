@@ -655,6 +655,12 @@ function wirePrivacyPasses(
     };
     policy?: { files?: unknown[] };
     fileMatch?: string;
+    fileMatchPremises?: Array<{
+      fileRecordIndex?: number;
+      policyRowIndex?: number;
+      patternList?: string;
+      choice?: string;
+    }>;
     observations?: {
       contextComplete?: boolean;
       rowLimit?: { runnerCap?: number; effectiveMaximum?: number; bucket?: string };
@@ -716,9 +722,30 @@ function wirePrivacyPasses(
     state.version === 6 &&
     [
       "facts,observations,operation,policy,version",
-      "facts,fileMatch,observations,operation,policy,version",
+      "facts,fileMatch,fileMatchPremises,observations,operation,policy,version",
     ].includes(Object.keys(state).sort().join(",")) &&
     (state.fileMatch === undefined || typeof state.fileMatch === "string") &&
+    (state.fileMatchPremises === undefined
+      ? state.fileMatch === undefined
+      : typeof state.fileMatch === "string" &&
+        Array.isArray(state.fileMatchPremises) &&
+        state.fileMatchPremises.length >= 1 &&
+        state.fileMatchPremises.length <= 8 &&
+        state.fileMatchPremises.every(
+          (entry) =>
+            entry !== null &&
+            typeof entry === "object" &&
+            Object.keys(entry).sort().join(",") ===
+              "choice,fileRecordIndex,patternList,policyRowIndex" &&
+            Number.isInteger(entry.fileRecordIndex) &&
+            (entry.fileRecordIndex ?? -1) >= 0 &&
+            (entry.fileRecordIndex ?? Infinity) < (state.facts?.files?.length ?? 0) &&
+            Number.isInteger(entry.policyRowIndex) &&
+            (entry.policyRowIndex ?? -1) >= 0 &&
+            (entry.policyRowIndex ?? Infinity) < (state.policy?.files?.length ?? 0) &&
+            ["patterns", "allowedPatterns"].includes(entry.patternList ?? "") &&
+            ["match", "no_match", "unknown"].includes(entry.choice ?? ""),
+        )) &&
     operation?.toolName === "read" &&
     operation.complete === true &&
     Object.keys(operation).every((key) =>
@@ -757,6 +784,7 @@ function wirePrivacyPasses(
     rowLimitValid &&
     (questionIds[0]?.startsWith("f_")
       ? state.fileMatch === undefined &&
+        state.fileMatchPremises === undefined &&
         questionIds.length >= 1 &&
         questionIds.length <= 8 &&
         questionIds.every(

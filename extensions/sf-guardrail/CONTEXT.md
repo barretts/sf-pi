@@ -104,6 +104,14 @@ The experimental `file_match_then_policy` format copies every original
 in exact source order: record, row, then `patterns` and `allowedPatterns`.
 Disabled and Off rows stay in the complete set. Jev judges only whether the
 named list matches that record. It chooses `match`, `no_match`, or `unknown`.
+
+Protocol 19 includes flat `state.fileMatchPremises` entries. Each has the literal
+zero-based `fileRecordIndex` in `facts.files`, `policyRowIndex` in
+`policy.files`, `patternList` (`patterns` or `allowedPatterns`), and actual
+`choice` (`match`, `no_match`, or `unknown`). The entries keep exact source
+order. The array and retained full `state.fileMatch` transcript come from
+the same validated matching receipt.
+
 The later actual `file_policy` head owns eligibility, same-row exemptions,
 existence requirements, protection strength, first-tie order, Off-winner
 behavior, access, and the action. Unknown remains unknown. The host copies,
@@ -111,12 +119,20 @@ binds, and validates data. It does not match or filter rows or add a second
 policy vote. Other original questions keep their independent restrictions.
 _Avoid_: host path matcher, local policy winner, matching choice as approval
 
+For a local `write` or `edit` with `exists=false`, unknown prior file kind
+describes the absent object. In the `risk` question, that fact alone does not
+mean an unknown executable effect. File protection and disclosure remain
+with their sole independent Jev questions.
+
 Select the complete format before any transport factory. A new count, byte,
 or JSON tree failure selects the exact complete original Jev route, subject
 to that route's own limits. A reply failure blocks without a later route
 change. Every actual request has depth at most 32, at most 16,384 JSON nodes,
 and at most 32,768 UTF-8 body bytes. Freeze each request separately. Duplicate
 local plan copies do not count against the JSON tree limit for a request.
+Before any factory, reserve the full transcript and named array with the
+longest choice spelling `no_match` at every original coordinate. This reserve
+is only for admission; it is not a model reply.
 
 The file transcript has 16 top-level fields and six fields per answer.
 It preserves the actual receipt, raw probabilities and confidence, hashes,
@@ -126,6 +142,9 @@ Numeric strings preserve parsed values and signed zero `-0`. Raw JSON
 number spelling is outside that inverse. Full validation and this adapter's
 current full development score remain unproved. Earlier head-only file
 scores do not qualify this experimental process.
+Validation requires exact equality with the named array rebuilt from that
+receipt. The inverse removes both added fields and restores the original
+file policy question to recover exact original request bytes.
 
 **Effect Waiver**:
 An effectively off ordinary command row projected separately under `policy.commands.effectWaivers`. Jev may exactly match it when judging that configured operational or disclosure effect. It is not an allow exception and cannot suppress active command, org, or file restrictions. File rules retain an enabled off winner's precedence over weaker file rules; an org rule's matching off outcome still stops later rules for that command.
