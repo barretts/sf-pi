@@ -9,7 +9,7 @@
  *   --prepare-only --output .logs/jev-baseline-dev-preparation.json
  * Omit --prepare-only to call the normal Jev client with environment credentials.
  * --fixture accepts only scripts/fixtures/jev-guardrail-baseline-dev.json (default)
- * or scripts/fixtures/jev-guardrail-independent-eval.json. Both remain unqualified.
+ * or the reviewed independent and replacement holdout fixtures. None is qualified.
  */
 import { createHash } from "node:crypto";
 import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
@@ -34,10 +34,12 @@ import type {
   PolicyRule,
   RuleBehavior,
 } from "../extensions/sf-guardrail/lib/types.ts";
+import { scoreJevGuardrailReplacement } from "./jev-guardrail-replacement-score.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURE = join(ROOT, "scripts/fixtures/jev-guardrail-baseline-dev.json");
 const INDEPENDENT_FIXTURE = join(ROOT, "scripts/fixtures/jev-guardrail-independent-eval.json");
+const REPLACEMENT_FIXTURE = join(ROOT, "scripts/fixtures/jev-guardrail-replacement-holdout.json");
 const ACTION_RANK: Record<JevAction, number> = { allow: 0, confirm: 1, block: 2 };
 const DEFAULT_ORG_ENVIRONMENT: NonNullable<JevFacts["org"]> = {
   type: "scratch",
@@ -88,6 +90,7 @@ export interface BaselineDevResult {
   probabilities?: Record<JevAction, number>;
   confidence?: number;
   answers?: Partial<Record<JevQuestionId, JevChoiceAnswer>>;
+  questionIds?: JevQuestionId[];
   model?: string;
   provider?: string;
   requestId?: string;
@@ -132,6 +135,12 @@ export function selectBaselineEvalFixture(value?: string): {
       path,
       kind: "independent-machine-authored",
       relativePath: "scripts/fixtures/jev-guardrail-independent-eval.json",
+    };
+  if (path === REPLACEMENT_FIXTURE)
+    return {
+      path,
+      kind: "independent-machine-authored",
+      relativePath: "scripts/fixtures/jev-guardrail-replacement-holdout.json",
     };
   throw new Error("unsupported-evaluation-fixture");
 }
@@ -502,6 +511,7 @@ export async function createBaselineDevEvaluator() {
           },
           request: async (request: JevRequest, requestOptions) => {
             const encoded = JSON.stringify(request);
+            result.questionIds = Object.keys(request.questions) as JevQuestionId[];
             result.requestHash = sha256(encoded);
             result.requestBytes = Buffer.byteLength(encoded);
             result.requestInvoked = !options.prepareOnly;
@@ -557,8 +567,15 @@ export async function createBaselineDevEvaluator() {
         result.provider = observedPrediction.provider;
         result.requestId = observedPrediction.requestId;
         result.cost = observedPrediction.usage.cost;
-        if (observedPrediction.answers)
-          result.answers = structuredClone(observedPrediction.answers);
+        result.answers = structuredClone(
+          observedPrediction.answers ?? {
+            risk: {
+              choice: observedPrediction.choice,
+              probabilities: observedPrediction.probabilities,
+              confidence: observedPrediction.confidence,
+            },
+          },
+        );
       }
       await recordResult(result, cwd);
     }
@@ -769,6 +786,7 @@ export function summarizeBaselineDev(results: BaselineDevResult[]) {
     gates,
     developmentGatesPassed: Object.values(gates).every(Boolean),
     qualification: false,
+    replacementProgress: scoreJevGuardrailReplacement(results),
   };
 }
 
@@ -823,6 +841,7 @@ async function main() {
       await Promise.all(
         [
           "scripts/jev-guardrail-baseline-eval.ts",
+          "scripts/jev-guardrail-replacement-score.ts",
           "extensions/sf-guardrail/lib/jev-risk.ts",
           "extensions/sf-guardrail/lib/jev-client.ts",
           "extensions/sf-guardrail/lib/jev-metadata.ts",

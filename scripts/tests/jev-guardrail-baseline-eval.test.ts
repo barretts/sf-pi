@@ -114,7 +114,7 @@ function result(
 }
 
 describe("current deterministic baseline development evaluation", () => {
-  it("permits only the two reviewed fixture paths, preserving the DEV default and rejecting external namesakes", async () => {
+  it("permits only the three reviewed fixture paths, preserving the DEV default and rejecting external namesakes", async () => {
     const defaultFixture = selectBaselineEvalFixture();
     expect(defaultFixture.kind).toBe("development");
     expect(selectBaselineEvalFixture("./scripts/fixtures/jev-guardrail-baseline-dev.json")).toEqual(
@@ -125,9 +125,15 @@ describe("current deterministic baseline development evaluation", () => {
     );
     expect(independent.kind).toBe("independent-machine-authored");
     expect(selectBaselineEvalFixture(independent.path)).toEqual(independent);
+    const replacement = selectBaselineEvalFixture(
+      "scripts/fixtures/jev-guardrail-replacement-holdout.json",
+    );
+    expect(replacement.kind).toBe("independent-machine-authored");
+    expect(selectBaselineEvalFixture(replacement.path)).toEqual(replacement);
     for (const unsupported of [
       "/tmp/jev-guardrail-independent-eval.json",
-      "../simple-jev-ts/fixtures/guardrail/reserved.json",
+      "/tmp/jev-guardrail-replacement-holdout.json",
+      "../external-fixtures/guardrail/reserved.json",
       "scripts/fixtures/unreviewed.json",
       "",
     ]) {
@@ -239,6 +245,7 @@ describe("current deterministic baseline development evaluation", () => {
         requestBytes: Buffer.byteLength(encoded),
       });
       expect(Object.keys(prepared.answers ?? {}).sort()).toEqual(questionIds.sort());
+      expect(prepared.questionIds?.slice().sort()).toEqual(questionIds.sort());
       expect(prepared.answers?.risk?.choice).toBe("confirm");
       expect(request).not.toHaveBeenCalled();
 
@@ -738,6 +745,13 @@ describe("current deterministic baseline development evaluation", () => {
       prepared: 175,
       decided: 0,
       qualification: false,
+      replacementProgress: {
+        targetRate: 0.98,
+        baselineExact: { attempted: 165, matched: 0 },
+        goldExact: { attempted: 175, matched: 0 },
+        safeAutomaticAllows: { attempted: 32, matched: 0 },
+        progressTargetsPassed: false,
+      },
     });
   });
 });
