@@ -105,7 +105,7 @@ validation.
 This complete inventory is generated from `package.json`; edit that file and run `npm run generate-catalog`.
 
 <details>
-<summary>Show all 57 package scripts</summary>
+<summary>Show all 58 package scripts</summary>
 
 **Generated sources**
 
@@ -158,6 +158,7 @@ This complete inventory is generated from `package.json`; edit that file and run
 
 - `npm run test`
 - `npm run test:coverage`
+- `npm run test:jev-command-syntax-screen`
 - `npm run test:runtime-surface`
 - `npm run test:watch`
 

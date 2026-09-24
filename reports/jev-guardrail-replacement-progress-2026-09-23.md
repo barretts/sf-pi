@@ -825,5 +825,54 @@ it does not prove this change will pass. See the
 [Choice contract](https://docs.typesafe.ai/primitives/choice) and
 [Jev 1.13 limits](https://docs.typesafe.ai/model-jaggedness/jev-1.13).
 
+## Source-only syntax screen
+
+The new public `scripts/jev-command-syntax-screen.mjs` has no default endpoint
+or credential. Its compact source fixture retains all 26 old DEV cases and all
+1,617 syntax labels. Frozen hashes bind every row field and selector. Preparation
+keeps the original token arrays, old classes, complete grammar, and source policy.
+Root compared both preparations: all 26 posted bodies and all labels were equal.
+The largest posted body is 27,830 bytes, within the 32,768-byte form limit.
+
+The review found two diagnostic gaps before any live call. A pending receipt
+write could overlap the final timeout receipt. Receipt writes now share one queue.
+The final queued write completes before the file closes. The outer timer could
+also omit official transport evidence. The harness now records evidence when the
+primary transport settles, including success before later source checks fail.
+Transport settlement and final receipt storage are outside the measured case
+interval. Neither can make an expired case valid. Body cancellation starts
+without waiting for its asynchronous completion.
+
+All 21 local Node tests passed. They cover the delayed receipt write, pending
+fetch timeout, retained transport hashes, strict decoding, immutable answers,
+all selector kinds, invalid timing, and guards against late sends. These use
+synthetic credentials and local fetch stubs. They prove no provider coverage.
+The normal validation script now runs this test command:
+
+```sh
+npm run test:jev-command-syntax-screen
+```
+
+Prepare the source-only plan without reading a credential:
+
+```sh
+node --experimental-strip-types scripts/jev-command-syntax-screen.mjs --prepare
+```
+
+A live screen requires explicit `--live` with the exact preparation hash and
+configured endpoint and credential. It makes at most 26 calls, with no retry.
+It claims a new private receipt before credential access. The fixed test requires
+all 1,617 fresh syntax answers to match the source labels. It proves no full
+policy score or automatic-use score. No paid v40 call has started at this update.
+
+The new public harness also passed full `validate:ci` and `lint` in a private
+profile without provider configuration. The main suite had 5,502 passed tests
+and 65 skipped tests. The separate syntax screen passed all 21 Node tests.
+The Manager check passed 20 tests. Source hashes stayed unchanged during both
+commands. The first preflight found a stale generated package script inventory;
+root regenerated that inventory and retained the failed preflight receipt.
+The final full CI log SHA-256 is
+`3732b65d696cc384ea41eab1a113fcb548087de815b19025fa992631b15da075`.
+
 The full current 175-case model result and independent TEST remain unproved.
 The default engine remains deterministic. The goal remains active.

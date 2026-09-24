@@ -71,4 +71,7 @@ node scripts/check-lifecycle-scripts.mjs
 banner "Tests"
 npx vitest run --reporter=dot
 
+banner "Jev syntax screen tests"
+npm run test:jev-command-syntax-screen --silent
+
 banner "All checks passed"
