@@ -5,6 +5,10 @@ import {
   prepare,
   project,
   inverse,
+  tokenLabel,
+  tokenNumber,
+  relabelTokens,
+  relabelSelector,
   decode,
   score,
   captureFetch,
@@ -34,6 +38,7 @@ const synthetic = (c) => ({
   ),
 });
 let prepared;
+const originalOf = (c) => JSON.parse(c.originalJson);
 test("prepare retains all source rows without wire labels or key access", async () => {
   const prior = process.env.SF_GUARDRAIL_JEV_API_KEY;
   process.env.SF_GUARDRAIL_JEV_API_KEY = "invalid\nkey";
@@ -56,10 +61,7 @@ test("prepare retains all source rows without wire labels or key access", async 
         "matchedRules",
       ])
         assert(!c.json.includes('"' + key + '"'));
-      const old = structuredClone(b);
-      old.state.version = 37;
-      delete old.state.syntaxInstruction.boundary;
-      for (const q of Object.values(old.questions)) delete q.instructions.rule;
+      const old = originalOf(c);
       assert.deepEqual(inverse(b, old), old);
       assert.equal(sha(c.json), c.requestHash);
     }
@@ -78,14 +80,12 @@ test("literal rules bind the actual selector namespaces for all nine kinds", () 
       assert(!q.instructions.rule.includes("row."));
       assert(!q.instructions.rule.includes("operation.metadata.commandTokens"));
     }
-    assert(b.state.syntaxInstruction.boundary.includes("no intervening token ID"));
-    assert(b.state.syntaxInstruction.boundary.includes("numeric ID is still supplied"));
+    assert(b.state.syntaxInstruction.boundary.includes("no intervening label"));
+    assert(b.state.syntaxInstruction.boundary.includes("does not prove a label occurs"));
+    assert(b.state.syntaxInstruction.boundary.includes("not a wildcard"));
   }
   assert.equal(seen.size, 8); // The paid cohort has no empty selector. Test that source kind separately.
-  const old = JSON.parse(prepared.plan.cases[0].json);
-  old.state.version = 37;
-  delete old.state.syntaxInstruction.boundary;
-  for (const q of Object.values(old.questions)) delete q.instructions.rule;
+  const old = originalOf(prepared.plan.cases[0]);
   old.questions.r_a.instructions.selector = { kind: "empty", publicNames: {} };
   const empty = project(old);
   assert.equal(empty.questions.r_a.instructions.rule, old.state.matchGrammar.empty);
@@ -94,10 +94,7 @@ test("literal rules bind the actual selector namespaces for all nine kinds", () 
 });
 test("inverse rejects added outcome fields and overflow instead of dropping rows", () => {
   const b = JSON.parse(prepared.plan.cases[0].json);
-  const old = structuredClone(b);
-  old.state.version = 37;
-  delete old.state.syntaxInstruction.boundary;
-  for (const q of Object.values(old.questions)) delete q.instructions.rule;
+  const old = originalOf(prepared.plan.cases[0]);
   b.questions.r_a.instructions.matched = true;
   assert.throws(() => inverse(b, old));
   old.state.commandTokens.extra = "x".repeat(32768);
@@ -216,8 +213,8 @@ test("score rejects copied flags, missing, extra, duplicate-ID and late results"
 });
 
 test("prospective token check rejects altered or referenced classes", () => {
-  const current = JSON.parse(prepared.plan.cases[0].json).state.commandTokens;
-  const rows = Object.values(JSON.parse(prepared.plan.cases[0].json).questions).map(
+  const current = originalOf(prepared.plan.cases[0]).state.commandTokens;
+  const rows = Object.values(originalOf(prepared.plan.cases[0]).questions).map(
     (q) => q.instructions.selector,
   );
   const extra = structuredClone(current);
@@ -381,5 +378,53 @@ test("failed strict decoding retains safe bounded raw reply and actual transport
   } finally {
     if (previous === undefined) delete process.env.SF_GUARDRAIL_JEV_API_KEY;
     else process.env.SF_GUARDRAIL_JEV_API_KEY = previous;
+  }
+});
+
+test("alphabetic token labels have one exact inverse over the admitted domain", () => {
+  const labels = new Set();
+  for (let id = 0; id < 4096; id++) {
+    const label = tokenLabel(id);
+    assert.match(label, /^t_[a-z]+$/);
+    assert.equal(tokenNumber(label), id);
+    labels.add(label);
+  }
+  assert.equal(labels.size, 4096);
+  for (const value of [-1, 4096, NaN, Infinity, 1.5, "1"]) assert.throws(() => tokenLabel(value));
+  for (const value of ["a", "t_", "t_A", "t_aa0", "t_aaaaa", 0, null])
+    assert.throws(() => tokenNumber(value));
+});
+test("every projected field restores exact current source bytes", () => {
+  for (const c of prepared.plan.cases) {
+    const original = originalOf(c),
+      posted = JSON.parse(c.json);
+    assert.equal(JSON.stringify(inverse(posted, original)), c.originalJson);
+    assert.equal(sha(c.originalJson), c.originalHash);
+    const tokens = structuredClone(posted.state.commandTokens);
+    relabelTokens(tokens, tokenNumber);
+    assert.deepEqual(tokens, original.state.commandTokens);
+    assert.deepEqual(posted.state.matchGrammar, original.state.matchGrammar);
+    const questionIds = Object.keys(posted.questions);
+    assert.equal(posted.state.selectorDisplayNames.length, questionIds.length);
+    for (const [index, id] of questionIds.entries()) {
+      const selector = structuredClone(posted.questions[id].instructions.selector);
+      assert(!Object.hasOwn(selector, "publicNames"));
+      selector.publicNames = posted.state.selectorDisplayNames[index];
+      relabelSelector(selector, tokenNumber);
+      assert.deepEqual(selector, original.questions[id].instructions.selector);
+      assert.deepEqual(posted.questions[id].criteria, original.questions[id].criteria);
+    }
+  }
+});
+test("inverse rejects altered labels, relations, positions and display-name entries", () => {
+  const original = originalOf(prepared.plan.cases[0]);
+  for (const mode of ["head", "relation", "order", "missing-name", "changed-name"]) {
+    const posted = project(original);
+    if (mode === "head") posted.state.commandTokens.original[0].head = "t_cv";
+    if (mode === "relation") posted.state.commandTokens.classes[0].equalsPrefix = "t_cv";
+    if (mode === "order") posted.state.commandTokens.flat.reverse();
+    if (mode === "missing-name") posted.state.selectorDisplayNames.pop();
+    if (mode === "changed-name") posted.state.selectorDisplayNames[0] = { tokens: ["changed"] };
+    assert.throws(() => inverse(posted, original));
   }
 });

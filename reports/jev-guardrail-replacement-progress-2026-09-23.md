@@ -973,3 +973,33 @@ hashes stayed unchanged. Its source-only evidence SHA-256 is
 The stored plans remain valid only in that worker. There is no live mode or raw
 verifier in this preparation. A new source and decoder plan must be fixed
 before a full live run. The 98% replacement target remains unproved.
+
+The public syntax harness now builds the V42 format. All 26 request bodies
+match the passed private provider screen exactly. The local source record keeps
+the numeric short syntax JSON for an exact inverse check. This record stays off
+the wire. All 24 public Node tests passed. They retain the transport, decoding,
+deadline, and receipt checks and add the alphabetic inverse and display-name
+checks. All 109 Bash bodies from the full source-only preparation also fit:
+6,763 syntax rows remain, and the largest body is 28,325 bytes.
+
+This public source revision passed full `validate:ci` and `lint`. The main
+suite passed 5,502 tests and skipped 65. The Manager check passed 20 tests.
+The syntax screen passed all 24 Node tests. The run used a private HOME, no
+Pi directory override, no inherited `NO_COLOR`, and no provider configuration.
+All 1,789 tracked file hashes stayed unchanged during both commands. Full
+CI log SHA-256:
+`2074125a2ff58f035cc2edc8b1a96b530c9c74d3351790990bfcf4b79ada2f68`.
+Lint log SHA-256:
+`a641a3c1dffb34986ac4961ccdc72a611b246ba5ab4252044ebe10486d620119`.
+
+Two earlier full checks failed because of root's test setup. The first used a
+Pi directory override and inherited `NO_COLOR=1`; 60 tests failed in 14 files.
+The second removed the directory override; ten color tests failed in four
+files. All 86 tests in those four files then passed with both overrides absent.
+Root changed no product code or test expectation to repair the setup. All
+source hashes stayed unchanged during both failed runs. Their logs remain.
+The first failed log SHA-256 is
+`16eedfebe02c795e15e046c4d5a3199cfc9fdd3af7a623fde27d9eae92bb08b6`.
+The second failed log SHA-256 is
+`18d0ce4ce4b41a9213b18d438eacf62463293229ee5664af587d8e531fba77f4`.
+These source checks establish no further provider coverage or tool execution.

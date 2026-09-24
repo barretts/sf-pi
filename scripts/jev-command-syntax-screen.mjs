@@ -21,13 +21,13 @@ const PACKET = "scripts/fixtures/jev-command-syntax-dev.json";
 const PACKET_HASH = "c17ba1b8c160b0c3292e6424271507802c8810916126a055a97e82812931e6ef";
 const SELF = "scripts/jev-command-syntax-screen.mjs";
 const TESTS = "scripts/tests/jev-command-syntax-screen.test.mjs";
-const OUT = ".logs/jev-command-syntax-screen-v40.json";
+const OUT = ".logs/jev-command-syntax-screen-v42-public.json";
 export const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const fail = (code = "invalid-diagnostic-binding") => {
   throw new Error(code);
 };
 export const CONTRACT = Object.freeze({
-  version: 40,
+  version: 42,
   diagnosticOnly: true,
   providerCalls: 26,
   totalDeadlineMs: 10000,
@@ -39,7 +39,7 @@ export const CONTRACT = Object.freeze({
   syntaxOnly: true,
   hostPolicyVotes: 0,
   hypothesis:
-    "Give each question the literal rule for its selector kind. Bind row and commandTokens references to the actual hosted namespaces. Keep the entire original grammar and token data.",
+    "Keep alphabetic token labels and all original data. Store selector display names in a separate ordered array. Every selector label stays literal. No host match or policy vote.",
   tokensSplit:
     "Keep the first tokens sentence inline. Keep its remaining order, quoted-boundary, distinct-ID, and non-fuzzy conditions in the complete shared grammar. No examples or case labels in the request.",
   gate: "All 26 fresh results must be strict, uniquely bound, complete and within one total deadline each. Require all 1617 exact source labels. Retain all failed attempts. No action or automatic-use proof.",
@@ -51,6 +51,46 @@ export const CONTRACT = Object.freeze({
   source:
     "Freeze this script, tests, source packet, and all guardrail source plus shared identity. Do not read old replies, keys, settings, or TEST during preparation.",
 });
+export function tokenLabel(value) {
+  if (!Number.isSafeInteger(value) || value < 0 || value >= 4096) fail("invalid-token-label");
+  let cursor = value + 1,
+    suffix = "";
+  while (cursor) {
+    suffix = String.fromCharCode(97 + ((cursor - 1) % 26)) + suffix;
+    cursor = Math.floor((cursor - 1) / 26);
+  }
+  return "t_" + suffix;
+}
+export function tokenNumber(value) {
+  if (typeof value !== "string" || !/^t_[a-z]+$/.test(value)) fail("invalid-token-label");
+  let cursor = 0;
+  for (const letter of value.slice(2)) {
+    cursor = cursor * 26 + letter.charCodeAt(0) - 96;
+    if (cursor > 4096) fail("invalid-token-label");
+  }
+  const number = cursor - 1;
+  if (tokenLabel(number) !== value) fail("invalid-token-label");
+  return number;
+}
+export function relabelTokens(tokens, convert) {
+  for (const group of ["original", "expanded"])
+    for (const command of tokens[group]) {
+      command.head = convert(command.head);
+      command.args = command.args.map(convert);
+    }
+  tokens.flat = tokens.flat.map(convert);
+  tokens.piArgs = tokens.piArgs.map((sequence) => sequence.map(convert));
+  for (const entry of tokens.classes)
+    for (const field of Object.keys(entry)) entry[field] = convert(entry[field]);
+  for (const entry of tokens.publicSyntax) entry.id = convert(entry.id);
+}
+export function relabelSelector(selector, convert) {
+  for (const field of Object.keys(selector))
+    if (!["kind", "publicNames"].includes(field))
+      selector[field] = Array.isArray(selector[field])
+        ? selector[field].map(convert)
+        : convert(selector[field]);
+}
 export function project(original) {
   const b = structuredClone(original);
   if (
@@ -60,9 +100,12 @@ export function project(original) {
     !b.state.syntaxInstruction
   )
     fail();
-  b.state.version = 40;
+  b.state.version = 42;
+  b.state.tokenIdEncoding = "opaque-alphabetic-v1";
   b.state.syntaxInstruction.boundary =
-    "Use the selector in this question and commandTokens in state. In matchGrammar, row means this selector. operation.metadata.commandTokens means commandTokens in state. Consecutive means no intervening token ID. A null public name withholds spelling. Its numeric ID is still supplied.";
+    "Token IDs are opaque alphabetic labels. Compare literal labels, not their spelling or public names. Only original, expanded, flat and piArgs record command observations. classes is a vocabulary of both command and policy labels. A vocabulary entry does not prove a label occurs in a command. Consecutive means adjacent positions with no intervening label. Selector display names are stored separately in question order. A null display name is not a wildcard. Every selector label is still literal.";
+  relabelTokens(b.state.commandTokens, tokenLabel);
+  b.state.selectorDisplayNames = [];
   for (const q of Object.values(b.questions)) {
     const kind = q.instructions?.selector?.kind;
     let rule = b.state.matchGrammar[kind];
@@ -76,6 +119,9 @@ export function project(original) {
       .replaceAll("row.", "selector.")
       .replaceAll("row token", "selector token")
       .replaceAll("operation.metadata.commandTokens", "commandTokens");
+    relabelSelector(q.instructions.selector, tokenLabel);
+    b.state.selectorDisplayNames.push(q.instructions.selector.publicNames);
+    delete q.instructions.selector.publicNames;
   }
   if (Buffer.byteLength(JSON.stringify(b)) > CONTRACT.requestBytes) fail("request-too-large");
   return b;
@@ -84,8 +130,16 @@ export function inverse(posted, original) {
   if (!same(posted, project(original))) fail();
   const b = structuredClone(posted);
   b.state.version = 37;
+  delete b.state.tokenIdEncoding;
   delete b.state.syntaxInstruction.boundary;
-  for (const q of Object.values(b.questions)) delete q.instructions.rule;
+  relabelTokens(b.state.commandTokens, tokenNumber);
+  let index = 0;
+  for (const q of Object.values(b.questions)) {
+    delete q.instructions.rule;
+    q.instructions.selector.publicNames = b.state.selectorDisplayNames[index++];
+    relabelSelector(q.instructions.selector, tokenNumber);
+  }
+  delete b.state.selectorDisplayNames;
   if (!same(b, original)) fail();
   return b;
 }
@@ -179,6 +233,7 @@ export async function prepare() {
       requestHash: sha(json),
       requestBytes: Buffer.byteLength(json),
       originalHash: sha(JSON.stringify(original)),
+      originalJson: JSON.stringify(original),
       priorTokenContextHash: sha(JSON.stringify(c.commandTokens)),
       currentTokenContextHash: sha(JSON.stringify(original.state.commandTokens)),
       tokenLabelComparisonUnchanged: true,
@@ -519,7 +574,7 @@ async function live(expectedHash) {
   await mkdir(resolve(ROOT, ".logs"), { recursive: true, mode: 0o700 });
   const file = await open(resolve(ROOT, OUT), "wx", 0o600);
   const report = {
-    version: 40,
+    version: 42,
     diagnosticOnly: true,
     prepared,
     providerCalls: 0,
