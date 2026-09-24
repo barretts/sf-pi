@@ -3,6 +3,11 @@
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import {
+  resolveJevOperatingPoint,
+  validateJevOperatingPoint,
+  type JevOperatingPoint,
+} from "./jev-operating-point.ts";
+import {
   JEV_MODEL,
   JEV_PROVIDER,
   JEV_RESOLVED_MODEL,
@@ -22,6 +27,7 @@ import type {
   JevRequest,
   JevStageEvidence,
   JevStageFailureEvidence,
+  JevStageTimingOrigin,
   JevSyntaxChoiceAnswer,
   JevSyntaxQuestionId,
   JevSyntaxRequest,
@@ -108,9 +114,9 @@ export const JEV_COMMAND_ACTION_CRITERIA = freeze({
     "No allowedPatterns row selects match. Any autoDenyPatterns row selects match. Otherwise, the first patterns row that selects match declares block.",
 });
 export const JEV_COMMAND_PROCESS_PROTOCOL = freeze({
-  operatingPoint: "prospective-experimental-command-process",
+  operatingPoint: "validated-closed-conservative-or-argmax-bound-by-runtime-adapter",
   deadline:
-    "One absolute performance.now() deadline includes preparation, all stages, waits, response reads, validation, and synchronous cleanup work. Cancellation starts without awaiting asynchronous cleanup completion. The total limit is 10,000 ms. No per-stage reset. The current hook and one-call limit stay at 1,500 ms.",
+    "One absolute performance.now() deadline includes preparation, all stages, waits, response reads, validation, and synchronous cleanup work. Cancellation starts without awaiting asynchronous cleanup completion. The experimental hook shares one total 10,000 ms classification and automatic-release limit. No per-stage reset. A later explicit human approval uses a separate bounded context recheck, without repeating the model process.",
   stages: ["non_command", "syntax", "command_policy"],
   emptyManifestStages: ["non_command", "command_policy"],
   emptyManifest:
@@ -143,7 +149,7 @@ export const JEV_COMMAND_PROCESS_PROTOCOL = freeze({
   actionCriteria: JEV_COMMAND_ACTION_CRITERIA,
   limits: JEV_COMMAND_PROCESS_LIMITS,
   automaticAllow:
-    "Complete original context; every actual action head allows with raw P(allow)>=.99; every actual binary head has raw P(selected choice)>=.99. No joint calibration claim.",
+    "Complete original context and every actual action head selects allow. The validated conservative point requires raw P(allow)>=.99 and every actual binary raw P(selected choice)>=.99. The explicit experimental argmax point has both floors at zero. Any actual action block is hard. No joint calibration or safety qualification claim.",
   failure:
     "Any error blocks. Preserve all completed stage evidence and actual blocks. No retry or fallback.",
 });
@@ -187,6 +193,11 @@ function replyCopy<T>(value: T): T {
   } catch {
     throw new JevClientError("invalid_response");
   }
+}
+
+/** Keep validated reply data independent from transport cleanup. */
+export function snapshotJevStageResult<T>(value: T): T {
+  return freeze(replyCopy(value));
 }
 
 function body<T>(request: T) {
@@ -716,7 +727,7 @@ function validAnswer(answer: unknown, choices: readonly string[]): boolean {
     (answer.probabilities[answer.choice as string] as number) >= Math.max(...(values as number[]))
   );
 }
-function validateStage(
+export function validateJevStageResult(
   stage: string,
   reply: unknown,
   request: { hash: string; bytes: number; request: { questions: unknown } },
@@ -783,9 +794,9 @@ export function buildJevGroupedCommandRequest(
   binary?: JevSyntaxStageResult,
 ) {
   if (!isDeepStrictEqual(prepared, prepareJevCommandProcess(prepared.original.request))) fail();
-  validateStage("non_command", first, prepared.nonCommand);
+  validateJevStageResult("non_command", first, prepared.nonCommand);
   if (prepared.syntax)
-    validateStage("syntax", binary, prepared.syntax, first.evidence.transportHash);
+    validateJevStageResult("syntax", binary, prepared.syntax, first.evidence.transportHash);
   else if (binary !== undefined) fail();
   const posted = body(
     groupedBody(prepared.original.request, prepared.manifest, binary?.answers ?? {}),
@@ -839,6 +850,70 @@ function validFailedResponseBinding(evidence: JevStageFailureEvidence): boolean 
   return evidence.responseComplete === undefined && !full && !prefix;
 }
 
+/** Validate an attempted failure before it can enter the audit record. */
+export function validateJevStageFailureEvidence(
+  source: JevStageFailureEvidence,
+  attempt: {
+    stage: string;
+    requestedQuestionIds: string[];
+    requestHash: string;
+    requestBytes: number;
+  },
+  failure: string,
+  transportHash?: string,
+): JevStageFailureEvidence {
+  const evidence = jsonCopy(source);
+  if (
+    evidence.stage !== attempt.stage ||
+    evidence.failure !== failure ||
+    !(
+      (evidence.requestHash === undefined &&
+        evidence.requestBytes === undefined &&
+        isDeepStrictEqual(evidence.requestedQuestionIds, []) &&
+        evidence.requestSent === false) ||
+      (isDeepStrictEqual(evidence.requestedQuestionIds, attempt.requestedQuestionIds) &&
+        evidence.requestHash === attempt.requestHash &&
+        evidence.requestBytes === attempt.requestBytes)
+    ) ||
+    Object.keys(evidence).some(
+      (key) =>
+        ![
+          "stage",
+          "requestedQuestionIds",
+          "requestHash",
+          "requestBytes",
+          "transportHash",
+          "latencyMs",
+          "requestSent",
+          "failure",
+          "responseComplete",
+          "responseHash",
+          "responseBytes",
+          "responsePrefixHash",
+          "responsePrefixBytes",
+        ].includes(key),
+    ) ||
+    typeof evidence.requestSent !== "boolean" ||
+    (!evidence.requestSent &&
+      [
+        "responseComplete",
+        "responseHash",
+        "responseBytes",
+        "responsePrefixHash",
+        "responsePrefixBytes",
+      ].some((key) => Object.hasOwn(evidence, key))) ||
+    typeof evidence.latencyMs !== "number" ||
+    !Number.isFinite(evidence.latencyMs) ||
+    evidence.latencyMs < 0 ||
+    !validFailedResponseBinding(evidence) ||
+    typeof evidence.transportHash !== "string" ||
+    !/^[a-f0-9]{64}$/.test(evidence.transportHash) ||
+    (transportHash !== undefined && evidence.transportHash !== transportHash)
+  )
+    throw new JevClientError("invalid_response");
+  return freeze(evidence);
+}
+
 /** This is a release gate. It is not a model reply or a joint probability. */
 export function jevCommandProcessGate(
   contextComplete: boolean,
@@ -846,17 +921,21 @@ export function jevCommandProcessGate(
   binary: Record<JevSyntaxQuestionId, JevSyntaxChoiceAnswer>,
   completed: boolean,
   emptyManifest = false,
+  operatingPoint: JevOperatingPoint = resolveJevOperatingPoint("conservative"),
 ): "allow" | "confirm" | "block" {
+  const point = validateJevOperatingPoint(operatingPoint);
   if (Object.values(answers).some((answer) => answer.choice === "block")) return "block";
   if (!completed) return "block";
   return contextComplete &&
     Object.hasOwn(answers, "risk") &&
     Object.hasOwn(answers, "command_policy") &&
     Object.values(answers).every(
-      (answer) => answer.choice === "allow" && answer.probabilities.allow >= 0.99,
+      (answer) => answer.choice === "allow" && answer.probabilities.allow >= point.allowProbability,
     ) &&
     (emptyManifest ? Object.values(binary).length === 0 : Object.values(binary).length > 0) &&
-    Object.values(binary).every((answer) => answer.probabilities[answer.choice] >= 0.99)
+    Object.values(binary).every(
+      (answer) => answer.probabilities[answer.choice] >= point.syntaxProbability,
+    )
     ? "allow"
     : "confirm";
 }
@@ -869,10 +948,14 @@ export async function runJevCommandProcess(
   options: {
     deadline: number;
     signal?: AbortSignal;
+    operatingPoint?: JevOperatingPoint;
+    transportHash?: string;
     createTransport: (options: { deadline: number; signal?: AbortSignal }) => JevProcessTransport;
   },
 ) {
   const started = performance.now();
+  let operatingPoint: JevOperatingPoint;
+  let expectedTransportHash: string | undefined;
   const deadline = options.deadline;
   const answers: Partial<Record<JevQuestionId, JevChoiceAnswer>> = {};
   const origins: Partial<
@@ -881,6 +964,7 @@ export async function runJevCommandProcess(
       JevStageEvidence<string> & {
         stage: "non_command" | "command_policy";
         questionId: JevQuestionId;
+        timingOrigin: JevStageTimingOrigin;
       }
     >
   > = {};
@@ -894,9 +978,13 @@ export async function runJevCommandProcess(
     behavior: string;
     originalRowHash: string;
     answer: JevSyntaxChoiceAnswer;
-    origin: JevStageEvidence<JevSyntaxQuestionId> & { questionId: JevSyntaxQuestionId };
+    origin: JevStageEvidence<JevSyntaxQuestionId> & {
+      questionId: JevSyntaxQuestionId;
+      timingOrigin: JevStageTimingOrigin;
+    };
   }> = [];
   let prepared: ReturnType<typeof prepareJevCommandProcess>;
+  let postedCommandRequest: ReturnType<typeof buildJevGroupedCommandRequest>;
   let transport: JevProcessTransport;
   let activeStage: "prepare" | "non_command" | "syntax" | "command_policy" = "prepare";
   let failure: string;
@@ -907,6 +995,49 @@ export async function runJevCommandProcess(
     requestHash: string;
     requestBytes: number;
   }> = [];
+  const stageTimingOrigins: Array<{
+    stage: "non_command" | "syntax" | "command_policy";
+    timingOrigin: JevStageTimingOrigin;
+  }> = [];
+  const retainStage = (
+    reply: JevNonCommandStageResult | JevSyntaxStageResult | JevCommandPolicyStageResult,
+    timingOrigin: JevStageTimingOrigin = "transport_cleanup",
+  ) => {
+    stageTimingOrigins.push({ stage: reply.stage, timingOrigin });
+    stages.push(freeze(reply));
+    if (reply.stage === "non_command") {
+      for (const [key, answer] of Object.entries(reply.answers)) {
+        answers[key] = answer;
+        origins[key] = freeze({
+          ...reply.evidence,
+          stage: "non_command",
+          questionId: key,
+          timingOrigin,
+        });
+      }
+    } else if (reply.stage === "syntax") {
+      for (const row of prepared.manifest)
+        syntaxTranscript.push(
+          freeze({
+            rowId: row.rowId,
+            group: row.group,
+            order: row.ordinal,
+            behavior: row.behavior,
+            originalRowHash: row.originalRowHash,
+            answer: reply.answers[row.questionId],
+            origin: { ...reply.evidence, questionId: row.questionId, timingOrigin },
+          }),
+        );
+    } else {
+      answers.command_policy = reply.answers.command_policy;
+      origins.command_policy = freeze({
+        ...reply.evidence,
+        stage: "command_policy",
+        questionId: "command_policy",
+        timingOrigin,
+      });
+    }
+  };
   let completed = false;
   let cleanupFailed = false;
   const closeTransport = () => {
@@ -936,6 +1067,16 @@ export async function runJevCommandProcess(
     if (performance.now() >= deadline) throw new JevClientError("timeout");
   };
   try {
+    expectedTransportHash = options.transportHash;
+    if (
+      expectedTransportHash !== undefined &&
+      (typeof expectedTransportHash !== "string" || !/^[a-f0-9]{64}$/.test(expectedTransportHash))
+    )
+      fail();
+    const configuredPoint = options.operatingPoint;
+    operatingPoint = validateJevOperatingPoint(
+      configuredPoint === undefined ? resolveJevOperatingPoint("conservative") : configuredPoint,
+    );
     if (!Number.isFinite(deadline) || deadline > started + JEV_COMMAND_PROCESS_TIMEOUT_MS) fail();
     guard();
     timer = setTimeout(() => stop("timeout"), Math.max(0, deadline - performance.now()));
@@ -955,12 +1096,8 @@ export async function runJevCommandProcess(
     const first = replyCopy(
       await Promise.race([transport.requestNonCommand(prepared.nonCommand.request), interrupted]),
     );
-    validateStage(activeStage, first, prepared.nonCommand);
-    stages.push(freeze(first));
-    for (const [key, answer] of Object.entries(first.answers)) {
-      answers[key] = answer;
-      origins[key] = freeze({ ...first.evidence, stage: "non_command", questionId: key });
-    }
+    validateJevStageResult(activeStage, first, prepared.nonCommand, expectedTransportHash);
+    retainStage(first);
     guard();
     let binary: JevSyntaxStageResult;
     if (prepared.syntax) {
@@ -974,24 +1111,12 @@ export async function runJevCommandProcess(
       binary = replyCopy(
         await Promise.race([transport.requestSyntax(prepared.syntax.request), interrupted]),
       );
-      validateStage(activeStage, binary, prepared.syntax, first.evidence.transportHash);
-      stages.push(freeze(binary));
-      for (const row of prepared.manifest)
-        syntaxTranscript.push(
-          freeze({
-            rowId: row.rowId,
-            group: row.group,
-            order: row.ordinal,
-            behavior: row.behavior,
-            originalRowHash: row.originalRowHash,
-            answer: binary.answers[row.questionId],
-            origin: { ...binary.evidence, questionId: row.questionId },
-          }),
-        );
+      validateJevStageResult(activeStage, binary, prepared.syntax, first.evidence.transportHash);
+      retainStage(binary);
     }
     guard();
     activeStage = "command_policy";
-    const posted = buildJevGroupedCommandRequest(prepared, first, binary);
+    const posted = (postedCommandRequest = buildJevGroupedCommandRequest(prepared, first, binary));
     guard();
     attempts.push({
       stage: activeStage,
@@ -1002,72 +1127,55 @@ export async function runJevCommandProcess(
     const action = replyCopy(
       await Promise.race([transport.requestCommandPolicy(posted.request), interrupted]),
     );
-    validateStage(activeStage, action, posted, first.evidence.transportHash);
-    stages.push(freeze(action));
-    answers.command_policy = action.answers.command_policy;
-    origins.command_policy = freeze({
-      ...action.evidence,
-      stage: "command_policy",
-      questionId: "command_policy",
-    });
+    validateJevStageResult(activeStage, action, posted, first.evidence.transportHash);
+    retainStage(action);
     guard();
     completed = true;
   } catch (error) {
     failure = error instanceof JevClientError ? error.code : "transport_error";
+    try {
+      const reported = error instanceof JevStageClientError ? error.observedResult : undefined;
+      const source =
+        reported ??
+        (stages.some((stage) => stage.stage === activeStage)
+          ? undefined
+          : transport?.getObservedResult?.());
+      if (source !== undefined) {
+        const observed = snapshotJevStageResult(source);
+        const posted =
+          activeStage === "non_command"
+            ? prepared?.nonCommand
+            : activeStage === "syntax"
+              ? prepared?.syntax
+              : postedCommandRequest;
+        if (reported !== undefined || observed.stage === activeStage) {
+          if (!posted || observed.stage === "all_heads")
+            throw new JevClientError("invalid_response");
+          validateJevStageResult(
+            activeStage,
+            observed,
+            posted,
+            expectedTransportHash ?? stages[0]?.evidence.transportHash,
+          );
+          const previous = stages.find((stage) => stage.stage === observed.stage);
+          if (previous && !isDeepStrictEqual(previous, observed))
+            throw new JevClientError("invalid_response");
+          if (!previous) retainStage(observed, "strict_validation");
+        }
+      }
+    } catch {
+      failure = "invalid_response";
+    }
     if (error instanceof JevStageClientError) {
       try {
-        const evidence = jsonCopy(error.evidence);
         const attempt = attempts.at(-1);
-        if (
-          !attempt ||
-          evidence.stage !== attempt.stage ||
-          evidence.failure !== failure ||
-          !(
-            (evidence.requestHash === undefined &&
-              evidence.requestBytes === undefined &&
-              isDeepStrictEqual(evidence.requestedQuestionIds, []) &&
-              evidence.requestSent === false) ||
-            (isDeepStrictEqual(evidence.requestedQuestionIds, attempt.requestedQuestionIds) &&
-              evidence.requestHash === attempt.requestHash &&
-              evidence.requestBytes === attempt.requestBytes)
-          ) ||
-          Object.keys(evidence).some(
-            (key) =>
-              ![
-                "stage",
-                "requestedQuestionIds",
-                "requestHash",
-                "requestBytes",
-                "transportHash",
-                "latencyMs",
-                "requestSent",
-                "failure",
-                "responseComplete",
-                "responseHash",
-                "responseBytes",
-                "responsePrefixHash",
-                "responsePrefixBytes",
-              ].includes(key),
-          ) ||
-          typeof evidence.requestSent !== "boolean" ||
-          (!evidence.requestSent &&
-            [
-              "responseComplete",
-              "responseHash",
-              "responseBytes",
-              "responsePrefixHash",
-              "responsePrefixBytes",
-            ].some((key) => Object.hasOwn(evidence, key))) ||
-          typeof evidence.latencyMs !== "number" ||
-          !Number.isFinite(evidence.latencyMs) ||
-          evidence.latencyMs < 0 ||
-          !validFailedResponseBinding(evidence) ||
-          typeof evidence.transportHash !== "string" ||
-          !/^[a-f0-9]{64}$/.test(evidence.transportHash) ||
-          (stages.length && evidence.transportHash !== stages[0].evidence.transportHash)
-        )
-          throw new JevClientError("invalid_response");
-        failureEvidence = freeze(evidence);
+        if (!attempt) throw new JevClientError("invalid_response");
+        failureEvidence = validateJevStageFailureEvidence(
+          error.evidence,
+          attempt,
+          failure,
+          expectedTransportHash ?? stages[0]?.evidence.transportHash,
+        );
       } catch {
         failure = "invalid_response";
       }
@@ -1094,6 +1202,7 @@ export async function runJevCommandProcess(
     binaryAnswers,
     completed,
     prepared?.manifest.length === 0,
+    operatingPoint ?? resolveJevOperatingPoint("conservative"),
   );
   return freeze({
     completed,
@@ -1103,6 +1212,7 @@ export async function runJevCommandProcess(
     answers,
     origins,
     stages,
+    stageTimingOrigins,
     attempts,
     failureEvidence,
     syntaxPlan: prepared?.syntaxPlan,

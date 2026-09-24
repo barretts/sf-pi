@@ -4,6 +4,8 @@ import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import type {
   JevAction,
+  JevAllHeadRequest,
+  JevAllHeadStageResult,
   JevClientFailureCode,
   JevStageFailureEvidence,
   JevChoiceAnswer,
@@ -14,7 +16,7 @@ import type {
   JevCommandPolicyStageResult,
   JevNonCommandRequest,
   JevNonCommandStageResult,
-  JevProcessTransport,
+  JevDecisionTransport,
   JevSyntaxChoice,
   JevSyntaxChoiceAnswer,
   JevSyntaxRequest,
@@ -26,7 +28,7 @@ export const JEV_MODEL = "typesafe/jev-1.13";
 export const JEV_RESOLVED_MODEL = "typesafe/jev-1.13-20260917";
 export const JEV_PROVIDER = "TypeSafe";
 export const JEV_TIMEOUT_MS = 1_500;
-/** Total limit for the unused experimental command process. The hook keeps 1,500 ms. */
+/** One total limit for the experimental decision adapter and command process. */
 export const JEV_COMMAND_PROCESS_TIMEOUT_MS = 10_000;
 export const JEV_RESPONSE_VALIDATION_CONTRACT = Object.freeze({
   version: 2,
@@ -75,11 +77,28 @@ export class JevClientError extends Error {
 /** Retain bounded hashes and failure facts. Keep remote text out of errors. */
 export class JevStageClientError extends JevClientError {
   readonly evidence: JevStageFailureEvidence;
+  readonly observedResult?:
+    | JevNonCommandStageResult
+    | JevSyntaxStageResult
+    | JevCommandPolicyStageResult
+    | JevAllHeadStageResult;
 
-  constructor(code: JevClientFailureCode, evidence: JevStageFailureEvidence) {
+  constructor(
+    code: JevClientFailureCode,
+    evidence: JevStageFailureEvidence,
+    observedResult?: StageResult,
+  ) {
     super(code);
     this.name = "JevStageClientError";
     this.evidence = evidence;
+    if (observedResult) {
+      Object.defineProperty(this, "observedResult", {
+        value: observedResult,
+        enumerable: true,
+        writable: false,
+        configurable: false,
+      });
+    }
   }
 }
 
@@ -500,9 +519,14 @@ export async function requestJev(
 export const JEV_STAGE_REQUEST_BYTES = 32_768;
 export const JEV_SYNTAX_QUESTION_LIMIT = 64;
 const SYNTAX_CHOICES: JevSyntaxChoice[] = ["match", "no_match"];
-type Stage = "non_command" | "syntax" | "command_policy";
-type StageRequest = JevNonCommandRequest | JevSyntaxRequest | JevCommandPolicyRequest;
-type StageResult = JevNonCommandStageResult | JevSyntaxStageResult | JevCommandPolicyStageResult;
+type Stage = "non_command" | "syntax" | "command_policy" | "all_heads";
+type StageRequest =
+  JevNonCommandRequest | JevSyntaxRequest | JevCommandPolicyRequest | JevAllHeadRequest;
+type StageResult =
+  | JevNonCommandStageResult
+  | JevSyntaxStageResult
+  | JevCommandPolicyStageResult
+  | JevAllHeadStageResult;
 
 function exactKeys(value: Record<string, unknown>, keys: string[]): boolean {
   const actual = Object.keys(value);
@@ -583,15 +607,20 @@ function stageRequest(stage: Stage, request: StageRequest): { ids: string[]; bod
   }
   const ids = Object.keys(request.questions);
   const validIds =
-    stage === "non_command"
+    stage === "all_heads"
       ? ids.includes("risk") &&
-        ids.length <= QUESTIONS.length - 1 &&
-        ids.every((id) => id !== "command_policy" && QUESTIONS.includes(id as JevQuestionId))
-      : stage === "command_policy"
-        ? ids.length === 1 && ids[0] === "command_policy"
-        : ids.length >= 1 &&
-          ids.length <= JEV_SYNTAX_QUESTION_LIMIT &&
-          ids.every((id, index) => id === syntaxQuestionId(index));
+        ids.length >= 1 &&
+        ids.length <= QUESTIONS.length &&
+        ids.every((id) => QUESTIONS.includes(id as JevQuestionId))
+      : stage === "non_command"
+        ? ids.includes("risk") &&
+          ids.length <= QUESTIONS.length - 1 &&
+          ids.every((id) => id !== "command_policy" && QUESTIONS.includes(id as JevQuestionId))
+        : stage === "command_policy"
+          ? ids.length === 1 && ids[0] === "command_policy"
+          : ids.length >= 1 &&
+            ids.length <= JEV_SYNTAX_QUESTION_LIMIT &&
+            ids.every((id, index) => id === syntaxQuestionId(index));
   if (!validIds) throw new JevClientError("invalid_request");
   const choices = stage === "syntax" ? SYNTAX_CHOICES : ACTIONS;
   for (const id of ids) {
@@ -688,6 +717,18 @@ function stageHash(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+/** Retain only the validated data. Later cleanup cannot change this copy. */
+function immutableStageResult(result: StageResult): StageResult {
+  const snapshot = stageJson(result) as StageResult;
+  function freeze(value: unknown): void {
+    if (value === null || typeof value !== "object") return;
+    for (const item of Object.values(value)) freeze(item);
+    Object.freeze(value);
+  }
+  freeze(snapshot);
+  return snapshot;
+}
+
 function cancelStageBody(value: { cancel(): Promise<unknown> } | null | undefined): void {
   if (!value) return;
   try {
@@ -701,7 +742,7 @@ function cancelStageBody(value: { cancel(): Promise<unknown> } | null | undefine
  * Include response reads and synchronous cleanup work.
  * Start cancellation without awaiting its asynchronous completion.
  * The caller passes its existing deadline. The factory permits at most 10,000 ms.
- * This experimental process transport is not used by the current hook.
+ * The active experimental adapter uses this process transport.
  * This transport does not select a policy action or combine probabilities.
  */
 export function createJevProcessTransport(options: {
@@ -709,13 +750,32 @@ export function createJevProcessTransport(options: {
   signal?: AbortSignal;
   fetch?: typeof fetch;
   endpoint?: string;
-}): JevProcessTransport {
+  binding?: { protocolHash: string; operatingPointHash: string };
+}): JevDecisionTransport {
   const created = performance.now();
   let deadline: number;
   let callerSignal: AbortSignal | undefined;
   let configuredEndpoint: string | undefined;
+  let processBinding: { protocolHash: string; operatingPointHash: string } | undefined;
   let fetchCall: typeof globalThis.fetch;
   try {
+    const configuredBinding = options.binding;
+    if (configuredBinding !== undefined) {
+      const snapshot = stageJson(configuredBinding);
+      if (
+        !record(snapshot) ||
+        !exactKeys(snapshot, ["protocolHash", "operatingPointHash"]) ||
+        typeof snapshot.protocolHash !== "string" ||
+        !/^[a-f0-9]{64}$/.test(snapshot.protocolHash) ||
+        typeof snapshot.operatingPointHash !== "string" ||
+        !/^[a-f0-9]{64}$/.test(snapshot.operatingPointHash)
+      )
+        throw new JevClientError("invalid_request");
+      processBinding = {
+        protocolHash: snapshot.protocolHash,
+        operatingPointHash: snapshot.operatingPointHash,
+      };
+    }
     deadline = options.deadline;
     callerSignal = options.signal;
     configuredEndpoint = options.endpoint;
@@ -734,12 +794,17 @@ export function createJevProcessTransport(options: {
   if (deadline <= created) throw new JevClientError("timeout");
   const endpoint =
     configuredEndpoint === undefined ? resolveJevEndpoint() : validateEndpoint(configuredEndpoint);
-  const transportHash = jevHash({ contract: JEV_TRANSPORT_BINDING_CONTRACT, endpoint });
+  const transportHash = jevHash({
+    contract: JEV_TRANSPORT_BINDING_CONTRACT,
+    endpoint,
+    ...(processBinding ? { processBinding } : {}),
+  });
   if (performance.now() >= deadline) throw new JevClientError("timeout");
   const controller = new AbortController();
   let failure: JevClientError["code"] | undefined;
   let key: string | undefined;
   let busy = false;
+  let lastObservedResult: StageResult | undefined;
   const fail = (code: JevClientError["code"]) => {
     failure ??= code;
     controller.abort();
@@ -764,6 +829,7 @@ export function createJevProcessTransport(options: {
     let responseBody: ReadableStream<Uint8Array> | null | undefined;
     let abortListener: (() => void) | undefined;
     let prepared: { ids: string[]; body: string } | undefined;
+    let observedResult: StageResult | undefined;
     let requestSent = false;
     let responseComplete = false;
     const chunks: Uint8Array[] = [];
@@ -772,6 +838,7 @@ export function createJevProcessTransport(options: {
       guard();
       if (busy) throw new JevClientError("invalid_request");
       busy = true;
+      lastObservedResult = undefined;
       // Validate all JSON and bytes before the one credential read.
       prepared = stageRequest(stage, request);
       const { ids, body } = prepared;
@@ -830,7 +897,6 @@ export function createJevProcessTransport(options: {
           throw new JevClientError("invalid_response");
         }
         const actual = stagePrediction(stage, parsed, capturedKey, ids);
-        guard();
         const result = {
           stage,
           answers: actual.answers,
@@ -848,6 +914,7 @@ export function createJevProcessTransport(options: {
             latencyMs: performance.now() - started,
           },
         } as StageResult;
+        observedResult = lastObservedResult = immutableStageResult(result);
         guard();
         result.evidence.latencyMs = performance.now() - started;
         return result;
@@ -863,29 +930,33 @@ export function createJevProcessTransport(options: {
       const code = failure ?? (error instanceof JevClientError ? error.code : "transport_error");
       fail(code);
       const content = Buffer.concat(chunks, length);
-      throw new JevStageClientError(code, {
-        stage,
-        requestedQuestionIds: prepared?.ids ?? [],
-        ...(prepared
-          ? {
-              requestHash: stageHash(prepared.body),
-              requestBytes: Buffer.byteLength(prepared.body),
-            }
-          : {}),
-        transportHash,
-        latencyMs: Math.max(0, performance.now() - started),
-        requestSent,
-        failure: code,
-        ...(responseComplete
-          ? { responseComplete: true, responseHash: stageHash(content), responseBytes: length }
-          : length > 0
+      throw new JevStageClientError(
+        code,
+        {
+          stage,
+          requestedQuestionIds: prepared?.ids ?? [],
+          ...(prepared
             ? {
-                responseComplete: false,
-                responsePrefixHash: stageHash(content),
-                responsePrefixBytes: length,
+                requestHash: stageHash(prepared.body),
+                requestBytes: Buffer.byteLength(prepared.body),
               }
             : {}),
-      });
+          transportHash,
+          latencyMs: Math.max(0, performance.now() - started),
+          requestSent,
+          failure: code,
+          ...(responseComplete
+            ? { responseComplete: true, responseHash: stageHash(content), responseBytes: length }
+            : length > 0
+              ? {
+                  responseComplete: false,
+                  responsePrefixHash: stageHash(content),
+                  responsePrefixBytes: length,
+                }
+              : {}),
+        },
+        observedResult,
+      );
     } finally {
       busy = false;
       if (abortListener) controller.signal.removeEventListener("abort", abortListener);
@@ -897,6 +968,8 @@ export function createJevProcessTransport(options: {
     }
   }
   return {
+    getObservedResult: () => lastObservedResult,
+    requestAllHeads: (request) => send("all_heads", request) as Promise<JevAllHeadStageResult>,
     requestNonCommand: (request) =>
       send("non_command", request) as Promise<JevNonCommandStageResult>,
     requestSyntax: (request) => send("syntax", request) as Promise<JevSyntaxStageResult>,

@@ -6,9 +6,10 @@ import { renderAudit, renderStatus } from "../lib/status.ts";
 import { readBundledConfig } from "../lib/config.ts";
 import { recordDecision } from "../lib/approval-ledger.ts";
 import { evaluateJevSafety } from "../lib/jev-risk.ts";
-import { JEV_PROVIDER, JEV_RESOLVED_MODEL } from "../lib/jev-client.ts";
+import { JEV_RESOLVED_MODEL } from "../lib/jev-client.ts";
 import type { Data360ExecutionChainEntryData } from "../lib/approval-ledger.ts";
 import type { DecisionEntryData } from "../lib/types.ts";
+import { controlledAllHeadTransport } from "./jev-controlled-transport.ts";
 
 const chain: Data360ExecutionChainEntryData = {
   timestamp: Date.UTC(2026, 6, 6, 20, 0, 0),
@@ -44,6 +45,22 @@ afterEach(() => {
 
 describe("sf-guardrail status rendering", () => {
   it("shows an independent file-policy block alongside the actual operational risk allow", async () => {
+    const answers = {
+      risk: {
+        choice: "allow" as const,
+        probabilities: { allow: 1, confirm: 0, block: 0 },
+        confidence: 0.83,
+      },
+      file_policy: {
+        choice: "block" as const,
+        probabilities: { allow: 0.02, confirm: 0.03, block: 0.95 },
+        confidence: 0.95,
+      },
+    };
+    const createTransport = controlledAllHeadTransport((id) => answers[id], {
+      requestId: "synthetic-independent-answer-request",
+      usage: { input_tokens: 20, output_tokens: 30 },
+    });
     const decision = await evaluateJevSafety(
       {
         toolName: "write",
@@ -52,30 +69,12 @@ describe("sf-guardrail status rendering", () => {
         config: readBundledConfig(),
       },
       {
-        request: async () => ({
-          choice: "allow",
-          probabilities: { allow: 1, confirm: 0, block: 0 },
-          confidence: 0.83,
-          answers: {
-            risk: {
-              choice: "allow",
-              probabilities: { allow: 1, confirm: 0, block: 0 },
-              confidence: 0.83,
-            },
-            file_policy: {
-              choice: "block",
-              probabilities: { allow: 0.02, confirm: 0.03, block: 0.95 },
-              confidence: 0.95,
-            },
-          },
-          model: JEV_RESOLVED_MODEL,
-          provider: JEV_PROVIDER,
-          requestId: "synthetic-independent-answer-request",
-          usage: { input_tokens: 20, output_tokens: 30 },
-        }),
+        createTransport,
         resolveFacts: async () => ({ facts: { files: [{ path: ".env", exists: true }] } }),
       },
     );
+    expect(createTransport).toHaveBeenCalledOnce();
+    expect(createTransport.mock.results[0].value.requestAllHeads).toHaveBeenCalledOnce();
     expect(decision.action).toBe("block");
     const recent: DecisionEntryData[] = [];
     const pi = {

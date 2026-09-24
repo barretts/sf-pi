@@ -16,8 +16,8 @@ import type {
   GuardrailConfig,
   JevAction,
   JevFacts,
-  JevPrediction,
 } from "../../extensions/sf-guardrail/lib/types.ts";
+import type { createJevProcessTransport } from "../../extensions/sf-guardrail/lib/jev-client.ts";
 
 const subprocessSpies = vi.hoisted(() => {
   const reject = () => {
@@ -38,11 +38,24 @@ vi.mock("node:child_process", async (importOriginal) => {
     default: { ...module, ...subprocessSpies },
   };
 });
+const fileSpies = vi.hoisted(() => ({ openSync: vi.fn() }));
+vi.mock("node:fs", async (importOriginal) => {
+  const module = await importOriginal<typeof import("node:fs")>();
+  fileSpies.openSync.mockImplementation(module.openSync);
+  return {
+    ...module,
+    openSync: fileSpies.openSync,
+    default: { ...module, openSync: fileSpies.openSync },
+  };
+});
 
 let evaluator: Awaited<ReturnType<typeof createBaselineDevEvaluator>>;
 let base: GuardrailConfig;
+let client: typeof import("../../extensions/sf-guardrail/lib/jev-client.ts");
+let replyOrdinal = 0;
 beforeEach(() => {
   vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", "https://decisions.example.test/v1/decisions");
+  vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "synthetic-offline-baseline-key");
 });
 afterEach(() => vi.unstubAllEnvs());
 beforeAll(async () => {
@@ -50,6 +63,7 @@ beforeAll(async () => {
   // profile before importing either actual runtime adapter.
   vi.resetModules();
   evaluator = await createBaselineDevEvaluator();
+  client = await import("../../extensions/sf-guardrail/lib/jev-client.ts");
   base = JSON.parse(
     await readFile(
       new URL("../../extensions/sf-guardrail/SF_GUARDRAIL_DEFAULTS.json", import.meta.url),
@@ -61,20 +75,47 @@ afterAll(async () => {
   await evaluator?.dispose();
 });
 
-function prediction(choice: JevAction = "allow"): JevPrediction {
+function rawPrediction(
+  request: { questions: Record<string, unknown> },
+  choice: JevAction = "allow",
+) {
+  const binary = Object.keys(request.questions).every((id) => id.startsWith("r_"));
+  const selected = binary ? "no_match" : choice;
+  const choices = binary ? ["match", "no_match"] : ["allow", "confirm", "block"];
   return {
-    choice,
-    probabilities: {
-      allow: choice === "allow" ? 1 : 0,
-      confirm: choice === "confirm" ? 1 : 0,
-      block: choice === "block" ? 1 : 0,
-    },
-    confidence: 1,
-    model: "typesafe/jev-1.13-20260917",
-    provider: "TypeSafe",
-    requestId: "baseline-development-response",
+    model: client.JEV_RESOLVED_MODEL,
+    provider: client.JEV_PROVIDER,
+    id: `synthetic-baseline-response-${replyOrdinal++}`,
     usage: { input_tokens: 20, output_tokens: 1, cost: 0.00001 },
+    answers: Object.fromEntries(
+      Object.keys(request.questions).map((id) => [
+        id,
+        {
+          type: "choice",
+          choice: selected,
+          confidence: 1,
+          probabilities: Object.fromEntries(
+            choices.map((value) => [value, value === selected ? 1 : 0]),
+          ),
+        },
+      ]),
+    ),
   };
+}
+
+function offlineTransport(
+  onRequest?: (request: { questions: Record<string, unknown>; state: unknown }) => void,
+  choice: JevAction = "allow",
+): typeof createJevProcessTransport {
+  return (options) =>
+    client.createJevProcessTransport({
+      ...options,
+      fetch: async (_url, init) => {
+        const request = JSON.parse(String(init?.body));
+        onRequest?.(request);
+        return new Response(JSON.stringify(rawPrediction(request, choice)));
+      },
+    });
 }
 
 function probe(
@@ -160,7 +201,7 @@ describe("current deterministic baseline development evaluation", () => {
   });
 
   it("prepares through both actual adapters with no provider calls and records actual baseline decisions", async () => {
-    const request = vi.fn(async () => prediction());
+    const createTransport = vi.fn(offlineTransport());
     const rows = [
       {
         ...probe("forceignore-write", "write", { path: ".forceignore", content: "synthetic body" }),
@@ -187,9 +228,9 @@ describe("current deterministic baseline development evaluation", () => {
       },
     ];
     vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", undefined);
-    const results = await evaluator.runCases(rows, { prepareOnly: true, request });
+    const results = await evaluator.runCases(rows, { prepareOnly: true, createTransport });
     expect(process.env.SF_GUARDRAIL_JEV_ENDPOINT).toBeUndefined();
-    expect(request).not.toHaveBeenCalled();
+    expect(createTransport).not.toHaveBeenCalled();
     expect(results.every((row) => row.stage === "prepared" && row.candidateAction === null)).toBe(
       true,
     );
@@ -211,7 +252,7 @@ describe("current deterministic baseline development evaluation", () => {
   });
 
   it("captures a separate request copy only during preparation without changing dummy answer IDs or invoking transport", async () => {
-    const request = vi.fn(async () => prediction());
+    const createTransport = vi.fn(offlineTransport());
     const fetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected fetch."));
     let encoded = "";
     let questionIds: string[] = [];
@@ -234,7 +275,7 @@ describe("current deterministic baseline development evaluation", () => {
             files: [".env"],
           },
         ],
-        { prepareOnly: true, request, onRequestPrepared },
+        { prepareOnly: true, createTransport, onRequestPrepared },
       );
       expect(onRequestPrepared).toHaveBeenCalledOnce();
       expect(prepared).toMatchObject({
@@ -247,19 +288,285 @@ describe("current deterministic baseline development evaluation", () => {
       expect(Object.keys(prepared.answers ?? {}).sort()).toEqual(questionIds.sort());
       expect(prepared.questionIds?.slice().sort()).toEqual(questionIds.sort());
       expect(prepared.answers?.risk?.choice).toBe("confirm");
-      expect(request).not.toHaveBeenCalled();
+      expect(createTransport).not.toHaveBeenCalled();
 
       const [live] = await evaluator.runCases(
         [probe("live-copy-hook-gating", "read", { path: "guide.md" }, "allow")],
-        { request, onRequestPrepared },
+        { createTransport, onRequestPrepared },
       );
       expect(live.stage).toBe("decided");
-      expect(request).toHaveBeenCalledOnce();
+      expect(createTransport).toHaveBeenCalledOnce();
       expect(onRequestPrepared).toHaveBeenCalledOnce();
       expect(fetch).not.toHaveBeenCalled();
     } finally {
       fetch.mockRestore();
     }
+  });
+
+  it("prepares each actual stage without opening a key file or exporting synthetic provider evidence", async () => {
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", undefined);
+    vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY_FILE", "unread-synthetic-key-file");
+    const previousOpen = fileSpies.openSync.getMockImplementation();
+    const open = fileSpies.openSync.mockClear().mockImplementation(() => {
+      throw new Error("Unexpected key file read.");
+    });
+    const factory = vi.spyOn(client, "createJevProcessTransport").mockImplementation(() => {
+      throw new Error("Unexpected real transport factory.");
+    });
+    const fetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected fetch."));
+    const preparedStages: string[] = [];
+    try {
+      const rows = await evaluator.runCases(
+        [
+          probe("local-read-preparation", "read", { path: "guide.md" }, "allow"),
+          probe("local-command-preparation", "bash", { command: "git status" }, "allow"),
+        ],
+        {
+          prepareOnly: true,
+          onRequestPrepared: (_request, _id, stage) => preparedStages.push(stage),
+        },
+      );
+      expect(preparedStages).toEqual(["all_heads", "non_command", "syntax", "command_policy"]);
+      expect(rows.every((row) => row.stage === "prepared" && row.candidateAction === null)).toBe(
+        true,
+      );
+      for (const row of rows) {
+        expect(row.syntheticPreparation).toBe(true);
+        expect(row.requestInvoked).toBe(false);
+        expect(row.operatingPoint).toMatchObject({
+          name: "conservative",
+          allowProbability: 0.99,
+          syntaxProbability: 0.99,
+        });
+        for (const field of [
+          "model",
+          "provider",
+          "requestId",
+          "cost",
+          "process",
+          "riskOrigin",
+          "modelChoice",
+          "probabilities",
+          "confidence",
+        ])
+          expect(row).not.toHaveProperty(field);
+        expect(JSON.stringify(row)).not.toContain("preparation-only-local-");
+      }
+      expect(summarizeBaselineDev(rows)).toMatchObject({
+        decided: 0,
+        requestInvocations: 0,
+        reportedCost: 0,
+        costReportedCalls: 0,
+        replacementProgress: { goldExact: { matched: 0 }, progressTargetsPassed: false },
+      });
+      expect(open).not.toHaveBeenCalled();
+      expect(factory).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      open.mockImplementation(previousOpen);
+      factory.mockRestore();
+      fetch.mockRestore();
+    }
+  });
+
+  it("rejects a stale request seam before either adapter or transport can run", async () => {
+    const request = vi.fn();
+    const createTransport = vi.fn(offlineTransport());
+    const onResult = vi.fn();
+    await expect(
+      evaluator.runCases([probe("stale-request-option", "read", { path: "guide.md" }, "allow")], {
+        request,
+        createTransport,
+        onResult,
+      } as Parameters<typeof evaluator.runCases>[1]),
+    ).rejects.toThrow("unsupported-evaluation-request-option");
+    expect(request).not.toHaveBeenCalled();
+    expect(createTransport).not.toHaveBeenCalled();
+    expect(onResult).not.toHaveBeenCalled();
+  });
+
+  it("keeps a failed preparation action null and excludes it from provider scores", async () => {
+    const createTransport = vi.fn(offlineTransport());
+    const [row] = await evaluator.runCases(
+      [probe("failed-local-preparation", "read", { path: "guide.md" }, "allow")],
+      {
+        prepareOnly: true,
+        createTransport,
+        onRequestPrepared: () => {
+          throw new Error("Synthetic preparation callback failure.");
+        },
+      },
+    );
+    expect(row).toMatchObject({
+      stage: "failed",
+      candidateAction: null,
+      requestInvoked: false,
+      syntheticPreparation: true,
+    });
+    expect(row.failure).toBeDefined();
+    expect(row.requestId).toBeUndefined();
+    expect(row.process).toBeUndefined();
+    expect(row.modelChoice).toBeUndefined();
+    expect(row.cost).toBeUndefined();
+    expect(createTransport).not.toHaveBeenCalled();
+    expect(summarizeBaselineDev([row])).toMatchObject({
+      decided: 0,
+      failures: 1,
+      requestInvocations: 0,
+      costReportedCalls: 0,
+      replacementProgress: { goldExact: { matched: 0 }, progressTargetsPassed: false },
+    });
+  });
+
+  it("keeps actual strict stage bodies, reply IDs and origins separate for Bash and all-head calls", async () => {
+    const captures: Array<{ body: string; reply: string }> = [];
+    const createTransport: typeof createJevProcessTransport = (options) =>
+      client.createJevProcessTransport({
+        ...options,
+        fetch: async (_url, init) => {
+          const body = String(init?.body);
+          const reply = JSON.stringify(rawPrediction(JSON.parse(body)));
+          captures.push({ body, reply });
+          return new Response(reply);
+        },
+      });
+    const [read, command] = await evaluator.runCases(
+      [
+        probe("actual-read-stages", "read", { path: "guide.md" }, "allow"),
+        probe("actual-command-stages", "bash", { command: "git status" }, "allow"),
+      ],
+      { createTransport },
+    );
+    expect(read.stage).toBe("decided");
+    expect(command.stage).toBe("decided");
+    expect(read.process?.kind).toBe("all_heads");
+    expect(command.process?.kind).toBe("command_stages");
+    if (read.process?.kind !== "all_heads" || command.process?.kind !== "command_stages")
+      throw new Error("Missing actual stage evidence.");
+    const stages = [read.process.stage!, ...command.process.result.stages];
+    expect(stages.map((stage) => stage.stage)).toEqual([
+      "all_heads",
+      "non_command",
+      "syntax",
+      "command_policy",
+    ]);
+    expect(captures).toHaveLength(stages.length);
+    expect(new Set(stages.map((stage) => stage.evidence.requestId)).size).toBe(stages.length);
+    for (const [index, stage] of stages.entries()) {
+      expect(stage.evidence).toMatchObject({
+        requestedQuestionIds: Object.keys(JSON.parse(captures[index].body).questions),
+        requestHash: createHash("sha256").update(captures[index].body).digest("hex"),
+        requestBytes: Buffer.byteLength(captures[index].body),
+        responseHash: createHash("sha256").update(captures[index].reply).digest("hex"),
+        responseBytes: Buffer.byteLength(captures[index].reply),
+        requestId: JSON.parse(captures[index].reply).id,
+      });
+    }
+    expect(read.requestId).toBe(stages[0].evidence.requestId);
+    expect(read.riskOrigin).toMatchObject({ stage: "all_heads", requestId: read.requestId });
+    expect(command.requestId).toBeUndefined();
+    expect(command.riskOrigin).toMatchObject({
+      stage: "non_command",
+      requestId: stages[1].evidence.requestId,
+    });
+    expect(command.process.result.origins.command_policy).toMatchObject({
+      stage: "command_policy",
+      requestId: stages[3].evidence.requestId,
+    });
+    expect(
+      command.process.result.syntaxTranscript.every(
+        (row) => row.origin.requestId === stages[2].evidence.requestId,
+      ),
+    ).toBe(true);
+    expect(command.requestPreparations?.map((row) => row.stage)).toEqual([
+      "non_command",
+      "syntax",
+      "command_policy",
+    ]);
+    expect(command.answers).toEqual(command.process.result.answers);
+    expect(read.costReportedStageCount).toBe(1);
+    expect(command.costReportedStageCount).toBe(3);
+    expect(summarizeBaselineDev([read, command])).toMatchObject({
+      costReportedCalls: 4,
+      reportedCost: 0.00004,
+    });
+  });
+
+  it("blocks a malformed syntax reply and retains only the actual completed action heads", async () => {
+    let calls = 0;
+    let firstId = "";
+    const createTransport: typeof createJevProcessTransport = (options) =>
+      client.createJevProcessTransport({
+        ...options,
+        fetch: async (_url, init) => {
+          const reply = rawPrediction(JSON.parse(String(init?.body)));
+          if (calls++ === 0) firstId = reply.id;
+          else delete reply.answers[Object.keys(reply.answers)[0]];
+          return new Response(JSON.stringify(reply));
+        },
+      });
+    const [row] = await evaluator.runCases(
+      [probe("invalid-syntax-response", "bash", { command: "git status" }, "allow")],
+      { createTransport },
+    );
+    expect(row).toMatchObject({
+      stage: "failed",
+      candidateAction: "block",
+      failure: "invalid_response",
+    });
+    expect(calls).toBe(2);
+    expect(row.requestId).toBeUndefined();
+    expect(row.process?.kind).toBe("command_stages");
+    if (row.process?.kind !== "command_stages") throw new Error("Missing failed process evidence.");
+    expect(row.process.result.stages.map((stage) => stage.stage)).toEqual(["non_command"]);
+    expect(row.process.result.attempts.map((attempt) => attempt.stage)).toEqual([
+      "non_command",
+      "syntax",
+    ]);
+    expect(row.process.result.failureEvidence).toMatchObject({
+      stage: "syntax",
+      requestSent: true,
+      responseComplete: true,
+    });
+    expect(row.riskOrigin?.requestId).toBe(firstId);
+    expect(row.answers?.risk?.choice).toBe("allow");
+    expect(row.answers?.command_policy).toBeUndefined();
+    expect(row.process.result.syntaxTranscript).toEqual([]);
+  });
+
+  it("retains a strict observed reply when the stage method fails after validation", async () => {
+    const createTransport: typeof createJevProcessTransport = (options) => {
+      const transport = offlineTransport()(options);
+      return {
+        ...transport,
+        requestAllHeads: async (request) => {
+          await transport.requestAllHeads(request);
+          throw new Error("Synthetic failure after strict validation.");
+        },
+      };
+    };
+    const [row] = await evaluator.runCases(
+      [probe("observed-read-response", "read", { path: "guide.md" }, "allow")],
+      { createTransport },
+    );
+    expect(row).toMatchObject({
+      stage: "failed",
+      candidateAction: "block",
+      failure: "invalid-input-or-context",
+    });
+    expect(row.process?.kind).toBe("all_heads");
+    if (row.process?.kind !== "all_heads") throw new Error("Missing observed stage evidence.");
+    expect(row.process.completed).toBe(false);
+    expect(row.process.stageTimingOrigin).toBe("strict_validation");
+    expect(row.riskOrigin).toMatchObject({
+      stage: "all_heads",
+      timingOrigin: "strict_validation",
+      requestId: row.process.stage?.evidence.requestId,
+    });
+    expect(row.answers).toEqual(row.process.stage?.answers);
+    expect(row.answers?.risk?.choice).toBe("allow");
+    expect(row.costReportedStageCount).toBe(1);
+    expect(summarizeBaselineDev([row])).toMatchObject({ decided: 0, failures: 1, extraCatches: 0 });
   });
 
   it("uses real isolated file existence and preserves explicit blocks in the actual baseline", async () => {
@@ -298,10 +605,9 @@ describe("current deterministic baseline development evaluation", () => {
       probe("enter-no-snapshot", "sf_browser_press", { key: "Enter" }),
     ];
     const results = await evaluator.runCases(rows, {
-      request: async (request) => {
+      createTransport: offlineTransport((request) => {
         if (!outbound) outbound = JSON.stringify(request);
-        return prediction();
-      },
+      }),
     });
     expect(results[0]).toMatchObject({
       baselineAction: "allow",
@@ -344,15 +650,11 @@ describe("current deterministic baseline development evaluation", () => {
     ];
     const results = await evaluator.runCases(rows, {
       config,
-      request: async (request) => {
+      createTransport: offlineTransport((request) => {
+        if (!Object.hasOwn(request.questions, "org_policy")) return;
         outboundFacts.push((request.state as { facts: JevFacts }).facts);
         expect(request.questions.org_policy).toBeDefined();
-        const answer = prediction();
-        return {
-          ...answer,
-          answers: Object.fromEntries(Object.keys(request.questions).map((id) => [id, answer])),
-        };
-      },
+      }),
     });
     expect(outboundFacts.map((facts) => facts.org)).toEqual([
       { type: "production", verified: true, explicit: false },
@@ -367,7 +669,7 @@ describe("current deterministic baseline development evaluation", () => {
   });
 
   it("retains rejected org rows between valid cases, emits callbacks, and continues without network or subprocess calls", async () => {
-    const request = vi.fn(async () => prediction());
+    const createTransport = vi.fn(offlineTransport());
     const onResult = vi.fn();
     const onProgress = vi.fn();
     const rows: BaselineDevCase[] = [
@@ -387,7 +689,7 @@ describe("current deterministic baseline development evaluation", () => {
     try {
       const results = await evaluator.runCases(rows, {
         prepareOnly: true,
-        request,
+        createTransport,
         onResult,
         onProgress,
       });
@@ -436,7 +738,7 @@ describe("current deterministic baseline development evaluation", () => {
         latency: { measuredRows: 2, preparationRejectionsExcluded: 2 },
         gates: { everyAttemptDecided: false },
       });
-      expect(request).not.toHaveBeenCalled();
+      expect(createTransport).not.toHaveBeenCalled();
       expect(fetch).not.toHaveBeenCalled();
       for (const spy of Object.values(subprocessSpies)) expect(spy).not.toHaveBeenCalled();
     } finally {
@@ -500,10 +802,10 @@ describe("current deterministic baseline development evaluation", () => {
         }),
       ],
       {
-        request: async (request) => {
+        createTransport: offlineTransport((request) => {
           outbound = JSON.stringify(request);
           throw new Error(`${marker}: a foreign exception includes the body`);
-        },
+        }),
       },
     );
     expect(outbound).not.toContain(marker);
@@ -515,7 +817,7 @@ describe("current deterministic baseline development evaluation", () => {
       stage: "failed",
       candidateAction: "block",
       baselineAction: "confirm",
-      failure: "invalid-input-or-context",
+      failure: "transport_error",
     });
     expect(summarizeBaselineDev(results)).toMatchObject({
       attempted: 1,

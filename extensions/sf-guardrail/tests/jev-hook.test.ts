@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Real SDK registration/event dispatch; tools are deliberately counter-only, with no external effects. */
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { performance as sourcePerformance } from "node:perf_hooks";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type } from "typebox";
@@ -23,7 +24,7 @@ import sfGuardrail from "../index.ts";
 import { readRecentDecisions } from "../lib/approval-ledger.ts";
 import { JEV_PROVIDER, JEV_RESOLVED_MODEL } from "../lib/jev-client.ts";
 import { resolveJevFacts } from "../lib/jev-facts.ts";
-import { jevTransportBindingHash } from "../lib/jev-risk.ts";
+import { jevDecisionTransportBindingHash } from "../lib/jev-risk.ts";
 import { OPERATOR_AUTO_APPROVE_VALUE } from "../lib/hitl.ts";
 import type { GuardrailPiSettings } from "../lib/guardrail-settings.ts";
 import {
@@ -96,7 +97,19 @@ function reply(
       answers: Object.fromEntries(
         questions.map((id) => {
           const override = overrides[id];
-          return [id, override ? answer(override.choice, override.allow) : answer(choice, allow)];
+          return [
+            id,
+            id.startsWith("r_")
+              ? {
+                  type: "choice",
+                  choice: "no_match",
+                  probabilities: { match: 0, no_match: 1 },
+                  confidence: 0.734567,
+                }
+              : override
+                ? answer(override.choice, override.allow)
+                : answer(choice, allow),
+          ];
         }),
       ),
       usage: { input_tokens: 200, output_tokens: 35, cost: 0.00002 },
@@ -166,6 +179,7 @@ beforeEach(async () => {
   vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", ENDPOINT);
   vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", TEST_KEY);
   vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY_FILE", "");
+  vi.stubEnv("SF_GUARDRAIL_JEV_OPERATING_POINT", "conservative");
   vi.stubEnv("SF_GUARDRAIL_ALLOW_HEADLESS", "");
   vi.stubEnv("SF_GUARDRAIL_OPERATOR_AUTO_APPROVE", "");
   settings();
@@ -183,7 +197,7 @@ beforeEach(async () => {
   const extension = await loadExtensionFromFactory(
     (pi) => {
       sfGuardrail(pi);
-      for (const name of ["read", "write", "jev_inert_unknown"]) {
+      for (const name of ["read", "write", "bash", "herdr_pane", "jev_inert_unknown"]) {
         pi.registerTool({
           name,
           label: `Inert ${name}`,
@@ -192,6 +206,7 @@ beforeEach(async () => {
             path: Type.Optional(Type.String()),
             content: Type.Optional(Type.String()),
             action: Type.Optional(Type.String()),
+            command: Type.Optional(Type.String()),
           }),
           execute: async () => {
             counter += 1;
@@ -261,6 +276,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   runner?.invalidate("Synthetic hook test completed.");
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   rmSync(directory, { recursive: true, force: true });
@@ -284,7 +301,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
         probabilities: { allow: 1, confirm: 0, block: 0 },
         confidence: 0.95,
         cost: 0.00002,
-        transportHash: jevTransportBindingHash(ENDPOINT),
+        transportHash: jevDecisionTransportBindingHash(ENDPOINT),
       },
     });
     expect(JSON.stringify(audit())).not.toContain(BODY);
@@ -293,6 +310,223 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     expect(fetch.mock.calls[0][1].body).not.toContain(BODY);
     expect(fetch.mock.calls[0][0]).toBe(ENDPOINT);
   });
+
+  it("uses three actual Bash replies and keeps each head at its own origin", async () => {
+    expect(await invoke("bash", { command: "git status" })).toBeUndefined();
+    expect(counter).toBe(1);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    const requests = fetch.mock.calls.map((call) => JSON.parse(call[1].body as string));
+    expect(Object.keys(requests[0].questions)).not.toContain("command_policy");
+    expect(Object.keys(requests[0].questions)).toContain("risk");
+    expect(Object.keys(requests[1].questions).every((id) => id.startsWith("r_"))).toBe(true);
+    expect(Object.keys(requests[2].questions)).toEqual(["command_policy"]);
+    const evidence = audit()[0].jev;
+    expect(evidence.process.kind).toBe("command_stages");
+    if (evidence.process.kind !== "command_stages") throw new Error("Expected command stages.");
+    expect(evidence).not.toHaveProperty("requestId");
+    expect(evidence).not.toHaveProperty("answers");
+    expect(evidence.process.result.stages.map((stage) => stage.stage)).toEqual([
+      "non_command",
+      "syntax",
+      "command_policy",
+    ]);
+    expect(evidence.riskOrigin.stage).toBe("non_command");
+    expect(evidence.process.result.origins.command_policy.stage).toBe("command_policy");
+    expect(evidence.process.result.distributionsCombined).toBe(false);
+    expect(evidence.process.result.representsOneProviderReply).toBe(false);
+    expect(evidence.process.result.syntaxTranscript.length).toBe(
+      Object.keys(requests[1].questions).length,
+    );
+    expect(
+      new Set(evidence.process.result.stages.map((stage) => stage.evidence.transportHash)),
+    ).toEqual(new Set([evidence.transportHash]));
+  });
+
+  it("keeps a non-Bash command head in one actual all-head call", async () => {
+    expect(await invoke("herdr_pane", { action: "run", command: "git status" })).toBeUndefined();
+    expect(fetch).toHaveBeenCalledOnce();
+    const request = JSON.parse(fetch.mock.calls[0][1].body as string);
+    expect(Object.keys(request.questions)).toContain("command_policy");
+    const evidence = audit()[0].jev;
+    expect(evidence.process.kind).toBe("all_heads");
+    if (evidence.process.kind !== "all_heads") throw new Error("Expected one actual reply.");
+    expect(evidence.process.stage.answers.command_policy.choice).toBe("allow");
+    expect(evidence.requestId).toBe(evidence.process.stage.evidence.requestId);
+    expect(counter).toBe(1);
+  });
+
+  it("keeps a first-stage actual block after a later stage fails", async () => {
+    interactive();
+    fetch.mockImplementationOnce(async () => reply("block"));
+    fetch.mockRejectedValueOnce(new Error("Synthetic syntax transport error."));
+    expect(await invoke("bash", { command: "git status" })).toMatchObject({ block: true });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(counter).toBe(0);
+    expect(select).not.toHaveBeenCalled();
+    const evidence = audit()[0].jev;
+    if (evidence.process.kind !== "command_stages") throw new Error("Expected command stages.");
+    expect(evidence.process.result.actualBlocks[0]).toMatchObject({
+      questionId: "risk",
+      answer: { choice: "block" },
+      origin: { stage: "non_command" },
+    });
+    expect(evidence.process.result.stages).toHaveLength(1);
+    expect(evidence.process.result.failure).toMatchObject({
+      stage: "syntax",
+      code: "transport_error",
+    });
+  });
+
+  it.each(["conservative", "argmax"])(
+    "uses the declared %s syntax floor with actual raw numbers",
+    async (point) => {
+      vi.stubEnv("SF_GUARDRAIL_JEV_OPERATING_POINT", point);
+      fetch.mockImplementation(async () => {
+        const current = JSON.parse(fetch.mock.calls.at(-1)[1].body as string);
+        if (!Object.keys(current.questions)[0].startsWith("r_")) return reply();
+        return new Response(
+          JSON.stringify({
+            model: JEV_RESOLVED_MODEL,
+            provider: JEV_PROVIDER,
+            id: "synthetic-binary-point",
+            answers: Object.fromEntries(
+              Object.keys(current.questions).map((id) => [
+                id,
+                {
+                  type: "choice",
+                  choice: "no_match",
+                  probabilities: { match: 0.4, no_match: 0.6 },
+                  confidence: 0.123456,
+                },
+              ]),
+            ),
+            usage: { input_tokens: 200, output_tokens: 50 },
+          }),
+        );
+      });
+      const result = await invoke("bash", { command: "git status" });
+      expect(result?.block ?? false).toBe(point === "conservative");
+      expect(counter).toBe(point === "argmax" ? 1 : 0);
+      const evidence = audit()[0].jev;
+      expect(evidence.operatingPoint.name).toBe(point);
+      if (evidence.process.kind !== "command_stages") throw new Error("Expected command stages.");
+      expect(evidence.process.result.syntaxTranscript[0].answer).toEqual({
+        choice: "no_match",
+        probabilities: { match: 0.4, no_match: 0.6 },
+        confidence: 0.123456,
+      });
+      expect(evidence.process.result.gate).toBe(point === "argmax" ? "allow" : "confirm");
+    },
+  );
+
+  it("blocks an invalid operating point before facts or dispatch", async () => {
+    vi.stubEnv("SF_GUARDRAIL_JEV_OPERATING_POINT", "custom");
+    vi.mocked(resolveJevFacts).mockClear();
+    expect(await invoke()).toMatchObject({ block: true });
+    expect(resolveJevFacts).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(counter).toBe(0);
+  });
+
+  it("allows a late human approval after a fresh bounded context check", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    vi.spyOn(sourcePerformance, "now").mockImplementation(() => performance.now());
+    interactive();
+    fetch.mockImplementationOnce(async () => reply("confirm"));
+    select.mockImplementationOnce(async () => {
+      vi.advanceTimersByTime(20_000);
+      return "Allow once";
+    });
+    expect(await invoke()).toBeUndefined();
+    expect(counter).toBe(1);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(audit()[0].outcome).toBe("allow_once");
+    expect(resolveJevFacts).toHaveBeenCalledTimes(3);
+  });
+
+  it("blocks when the later approval recheck consumes its separate 1500 ms bound", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    vi.spyOn(sourcePerformance, "now").mockImplementation(() => performance.now());
+    interactive();
+    fetch.mockImplementationOnce(async () => reply("confirm"));
+    const original = vi.mocked(resolveJevFacts).getMockImplementation();
+    select.mockImplementationOnce(async () => {
+      vi.advanceTimersByTime(20_000);
+      vi.mocked(resolveJevFacts).mockImplementationOnce(async (options) => {
+        const resolved = await original(options);
+        vi.advanceTimersByTime(1500);
+        return resolved;
+      });
+      return "Allow once";
+    });
+    expect(await invoke()).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(audit()[0]).toMatchObject({
+      outcome: "hard_block",
+      jev: { failure: "changed-context" },
+    });
+  });
+
+  it("rechecks the point after an automatic allow audit before release", async () => {
+    const original = session.appendCustomEntry.bind(session);
+    vi.spyOn(session, "appendCustomEntry").mockImplementation((type, data) => {
+      const entry = original(type, data);
+      if (type === DECISION_ENTRY_TYPE) vi.stubEnv("SF_GUARDRAIL_JEV_OPERATING_POINT", "argmax");
+      return entry;
+    });
+    expect(await invoke()).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(audit().map((entry) => entry.outcome)).toEqual(["hard_block", "allow_auto"]);
+  });
+
+  it("includes facts time and final automatic context checks in one total deadline", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    vi.spyOn(sourcePerformance, "now").mockImplementation(() => performance.now());
+    const original = vi.mocked(resolveJevFacts).getMockImplementation();
+    vi.mocked(resolveJevFacts)
+      .mockImplementationOnce(async (options) => {
+        const resolved = await original(options);
+        vi.advanceTimersByTime(6000);
+        return resolved;
+      })
+      .mockImplementationOnce(async (options) => {
+        const resolved = await original(options);
+        vi.advanceTimersByTime(4000);
+        return resolved;
+      });
+    expect(await invoke()).toMatchObject({ block: true });
+    expect(counter).toBe(0);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(audit()[0]).toMatchObject({
+      outcome: "hard_block",
+      jev: { failure: "changed-context" },
+    });
+  });
+
+  it.each(["toolName", "toolCallId"] as const)(
+    "blocks a changed %s while classification is pending",
+    async (field) => {
+      const release = pendingFetch();
+      const event: ToolCallEvent = {
+        type: "tool_call",
+        toolCallId: "same-descriptor-origin",
+        toolName: "read",
+        input: { path: "README.md" },
+      };
+      const pending = runner.emitToolCall(event);
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+      event[field] = field === "toolName" ? "write" : "changed-origin";
+      release();
+      expect(await pending).toMatchObject({ block: true });
+      expect(counter).toBe(0);
+      expect(audit()[0]).toMatchObject({
+        toolName: "read",
+        outcome: "hard_block",
+        jev: { failure: "changed-context" },
+      });
+    },
+  );
 
   it("blocks a missing endpoint before fact lookup or a model request", async () => {
     vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", "");
@@ -554,8 +788,8 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     const decisions = audit();
     expect(decisions[0].outcome).toBe("block");
     expect(decisions[1].outcome).toBe("allow_session");
-    expect(decisions[0].jev.transportHash).toBe(jevTransportBindingHash(OTHER_ENDPOINT));
-    expect(decisions[1].jev.transportHash).toBe(jevTransportBindingHash(ENDPOINT));
+    expect(decisions[0].jev.transportHash).toBe(jevDecisionTransportBindingHash(OTHER_ENDPOINT));
+    expect(decisions[1].jev.transportHash).toBe(jevDecisionTransportBindingHash(ENDPOINT));
     expect(decisions[0].fingerprint).not.toBe(decisions[1].fingerprint);
     expect(JSON.stringify(decisions)).not.toContain("decisions.example.test");
   });
@@ -581,7 +815,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     expect(appendEntryTypes).not.toContain(ALLOW_ENTRY_TYPE);
     expect(audit()[0]).toMatchObject({
       outcome: "hard_block",
-      jev: { failure: "changed-context", transportHash: jevTransportBindingHash(ENDPOINT) },
+      jev: { failure: "changed-context", transportHash: jevDecisionTransportBindingHash(ENDPOINT) },
     });
 
     vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", ENDPOINT);
@@ -660,6 +894,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     "engine",
     "policy",
     "endpoint",
+    "operatingPoint",
     "input",
     "registry",
     "cancelled",
@@ -684,6 +919,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     if (change === "engine") settings({ engine: "deterministic" });
     if (change === "policy") settings({ confirmTimeoutMs: 45_000 });
     if (change === "endpoint") vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", OTHER_ENDPOINT);
+    if (change === "operatingPoint") vi.stubEnv("SF_GUARDRAIL_JEV_OPERATING_POINT", "argmax");
     if (change === "input") input.content = `${BODY}_changed`;
     if (change === "registry")
       tools = tools.map((tool) =>

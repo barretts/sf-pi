@@ -640,14 +640,15 @@
         "SF_GUARDRAIL_OPERATOR_AUTO_APPROVE",
         "SF_GUARDRAIL_JEV_ENDPOINT",
         "SF_GUARDRAIL_JEV_API_KEY",
-        "SF_GUARDRAIL_JEV_API_KEY_FILE"
+        "SF_GUARDRAIL_JEV_API_KEY_FILE",
+        "SF_GUARDRAIL_JEV_OPERATING_POINT"
       ],
       "safety": [
         "Deterministic is the default. Jev is an explicit engine preference and has no automatic deterministic fallback; exact policy patterns are interpreted by a model without a deterministic matching guarantee.",
         "Every block / allow / confirm decision is persisted as an audit entry without credentials or raw Jev payloads.",
         "In deterministic mode, Power Tool and audited process-level operator/headless controls can allow confirm-class decisions, but never bypass hard blocks. Jev confirmations require explicit human approval and block headless execution regardless of those controls.",
         "Jev sends operation metadata and effective policy for every Pi tool call, excluding raw arguments and file, script, Apex, query, Canvas, credential, transcript, fetched, and full browser content. Omitted effects remain uncertainty.",
-        "Jev auto-allows only complete-context allow predictions with P(allow) >= 0.99; model block predictions are hard blocks. Transport, configuration, deadline, cancellation, malformed-response, and identity failures block without retries.",
+        "Jev uses actual command stages for Bash and one strict all-head call for other tools. The default conservative point requires complete context and .99 raw action and selected syntax floors. Explicit argmax uses zero floors; every action must still select allow. Actual blocks and errors stay hard. Neither point has joint calibration or safety qualification. One total limit of 10 seconds covers facts through automatic release. Later human approval uses a fresh bounded context check.",
         "Jev requires an explicit HTTPS Decisions endpoint and API key. There is no default endpoint. The gateway must support the pinned TypeSafe Jev model and independent Choice contract. Readiness checks do not send requests or disclose the endpoint, key value, or key path.",
         "Jev session approval requires a complete exact call and verified non-production org. It binds full input, target, cwd, policy/protocol, engine, model identity, and a local transport hash. A changed endpoint, model, provider, or routing invalidates approval. Factory/startup makes no live Jev requests.",
         "alwaysActive=false but disabling removes the safety layer entirely; the manager surfaces this clearly."
@@ -656,7 +657,7 @@
     "entry": "extensions/sf-guardrail/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 12740
+    "srcLoc": 13490
   },
   {
     "id": "sf-herdr",

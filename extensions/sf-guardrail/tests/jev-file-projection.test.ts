@@ -9,8 +9,8 @@ import {
   jevContextComplete,
   jevPolicyContext,
 } from "../lib/jev-risk.ts";
-import { JEV_PROVIDER, JEV_RESOLVED_MODEL } from "../lib/jev-client.ts";
-import type { JevAction, JevFacts, JevPrediction, PolicyRule } from "../lib/types.ts";
+import type { JevAction, JevFacts, PolicyRule } from "../lib/types.ts";
+import { controlledAllHeadTransport } from "./jev-controlled-transport.ts";
 
 const observations = [
   ["read", "read", "file_content"],
@@ -249,14 +249,9 @@ describe("Jev file projection", () => {
   });
 
   it("uses the model answers once without turning access policy into disclosure", async () => {
-    const request = vi.fn(async (): Promise<JevPrediction> => ({
-      ...answer(),
-      answers: { risk: answer(), file_policy: answer("block"), disclosure: answer("confirm") },
-      model: JEV_RESOLVED_MODEL,
-      provider: JEV_PROVIDER,
-      requestId: "source-only-test",
-      usage: { input_tokens: 1, output_tokens: 1 },
-    }));
+    const createTransport = controlledAllHeadTransport((id) =>
+      answer(id === "file_policy" ? "block" : id === "disclosure" ? "confirm" : "allow"),
+    );
     const decision = await evaluateJevSafety(
       {
         toolName: "grep",
@@ -266,12 +261,14 @@ describe("Jev file projection", () => {
       },
       {
         endpoint: "https://decisions.example.test/v1/decisions",
-        request,
+        createTransport,
         resolveFacts: async () => ({
           facts: { files: [{ path: ".env", exists: true, kind: "directory" }] },
         }),
       },
     );
+    expect(createTransport).toHaveBeenCalledOnce();
+    const request = vi.mocked(createTransport.mock.results[0].value.requestAllHeads);
     expect(request).toHaveBeenCalledOnce();
     expect(decision.action).toBe("block");
     expect(decision.jev?.answers).toMatchObject({

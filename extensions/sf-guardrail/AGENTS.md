@@ -21,6 +21,8 @@ One-file-per-concern split:
 | Schema + persisted entry types       | `lib/types.ts`                                      |
 | Safety decision seam                 | `lib/safety-kernel.ts`                              |
 | Jev Decisions transport              | `lib/jev-client.ts`                                 |
+| Jev command request stages           | `lib/jev-command-process.ts`                        |
+| Jev experimental operating point     | `lib/jev-operating-point.ts`                        |
 | Jev metadata and local facts         | `lib/jev-metadata.ts` + `lib/jev-facts.ts`          |
 | Mechanical command token projection  | `lib/jev-command-tokens.ts`                         |
 | Jev request and decision adapter     | `lib/jev-risk.ts`                                   |
@@ -175,8 +177,10 @@ One-file-per-concern split:
   ingest, and manifest runs ignore supplied dry-run intent. Do not infer a
   preview from that intent or a suffix alone; prerequisite reads can still occur
   under an honored business-write dry run. These facts do not decide risk.
-- Use the built-in `fetch` client. Send independent Choice questions in one
-  Decisions request. Wire state version stays 6. Require an explicit HTTPS
+- Use the built-in `fetch` client. Non-Bash tools send all requested action
+  heads in one strict Decisions request. Bash uses the actual non-command,
+  syntax, and grouped command-policy stages. An empty active command manifest
+  omits only the syntax call. The original state stays version 6. Require an explicit HTTPS
   `SF_GUARDRAIL_JEV_ENDPOINT`; there is no default endpoint. Read
   `SF_GUARDRAIL_JEV_API_KEY`, otherwise `SF_GUARDRAIL_JEV_API_KEY_FILE`.
   Check the endpoint before reading a key. This connection must support the
@@ -188,31 +192,37 @@ One-file-per-concern split:
   calls, and org policy for structurally possible org AST entries. Disclosure
   follows the tool-specific projection; incomplete shell effects retain it.
   Authority is browser-only; other unknown effects stay in risk/disclosure and
-  the completeness gate. At most six model-authored answers supply all risk
+  the completeness gate. At most six model-authored action answers supply all risk
   and policy judgments. Structural applicability must not decide an outcome.
   Genuinely unresolved policy restrictions remain model confirm/block criteria.
   Private command values/comments retain policy equality through token IDs;
   withheld spelling alone is not missing policy evidence or a match.
-  Preserve the bounded request,
-  total 1,500 ms deadline, cancellation, and no retries. Pin routing to TypeSafe
-  only with fallbacks disabled; require the configured model/provider identity.
-  Coverage-first diagnostic harnesses may record an authorized 10-second
-  transport deadline with inert operations; keep that evidence separate from
-  runtime qualification under the enforced 1,500 ms deadline/500 ms p95 target.
-- The unused experimental command process has one total 10,000 ms deadline.
-  Preparation, all calls, response reads, validation, and synchronous cleanup
-  share that bound. Cancellation starts without a wait for asynchronous
-  cleanup completion. The current hook and one-call limit stay at 1,500 ms.
-  Do not transfer prior diagnostic scores to this new operating point.
-- Automatically execute only with complete context and every requested answer
-  choosing `allow` with `P(allow) >= 0.99`. Any model `block` is a hard block;
-  any `confirm`, insufficient allow probability, or incomplete context requires
-  explicit human confirmation. This threshold is a conservative initial default
-  requiring domain-label evaluation, not a calibration or qualification claim.
+  Keep every request within 32,768 bytes. Keep all active command rows in
+  source order, up to 64 rows. Do not batch, trim, match, or select rules
+  locally. Pin TypeSafe routing with fallbacks disabled. Require the configured
+  model and provider identity. Errors block without retries or fallback.
+- Freeze and validate the exact experimental operating point before facts or
+  calls. `SF_GUARDRAIL_JEV_OPERATING_POINT` accepts only `conservative` (default)
+  or `argmax`. Conservative requires every action to select allow with raw
+  P(allow) at least 0.99, and every selected syntax choice to have raw probability
+  at least 0.99. Argmax declares both floors as zero; actions must still select allow.
+  Both points require complete original context. Every actual action block
+  stays hard. Neither point has joint calibration or safety qualification.
+- Use one total 10,000 ms absolute deadline from before facts through calls,
+  validation, synchronous cleanup, and automatic release checks. Do not reset
+  the model deadline for a stage. Do not count a human dialog against a later
+  explicit approval. That approval gets one new 1,500 ms context recheck phase.
+  Artifact consumers keep fresh bounded rechecks before connection and writes.
+  Prior diagnostic scores do not qualify this runtime adapter.
+- Bind the fixed point to protocol, fingerprint, transport, audit, and current
+  context checks. The normal engine default remains deterministic. Do not
+  change normal profiles or transfer a deterministic approval to Jev.
 - Audit every Jev outcome and each answer's actual probabilities/confidence
   without raw payloads or credentials. Top-level evidence must remain the
-  actual `risk` answer labeled with that question's choice, not the final gate
-  or a synthesized combined confidence. Recheck engine,
+  actual `risk` answer and its origin, not the final gate or a combined
+  confidence. Keep separate actual stage receipts and the full binary transcript.
+  Do not attach collected heads to one provider request ID. Keep validated
+  observed answers after a later failure or cleanup error. Recheck engine,
   policy identity, and cancellation before releasing execution.
 
 ## Editing the bundled ruleset

@@ -19,8 +19,8 @@ import {
   jevFactBindingHash,
 } from "../lib/jev-risk.ts";
 import { jevHash } from "../lib/jev-identity.ts";
-import { JEV_PROVIDER, JEV_RESOLVED_MODEL } from "../lib/jev-client.ts";
-import type { JevArtifactPlanContext, JevPrediction } from "../lib/types.ts";
+import type { JevArtifactPlanContext } from "../lib/types.ts";
+import { controlledAllHeadTransport } from "./jev-controlled-transport.ts";
 
 const sdk = vi.hoisted(() => ({ connect: vi.fn() }));
 vi.mock("../../../lib/common/sf-conn/index.ts", () => ({ connectSalesforce: sdk.connect }));
@@ -63,19 +63,11 @@ async function observe(metadata: ReturnType<typeof project>, input = context.inp
   });
 }
 
-function prediction(): JevPrediction {
-  const answer = {
+function allowAnswer() {
+  return {
     choice: "allow" as const,
     probabilities: { allow: 1, confirm: 0, block: 0 },
     confidence: 1,
-  };
-  return {
-    ...answer,
-    answers: { risk: answer, file_policy: answer, disclosure: answer },
-    model: JEV_RESOLVED_MODEL,
-    provider: JEV_PROVIDER,
-    requestId: "source-only-artifact-test",
-    usage: { input_tokens: 1, output_tokens: 1 },
   };
 }
 
@@ -275,16 +267,17 @@ describe("trusted query artifact projection", () => {
         },
       }),
     );
-    const request = vi.fn(async () => prediction());
+    const createTransport = controlledAllHeadTransport(allowAnswer);
     const decision = await evaluateJevSafety(
       { ...context, config: readBundledConfig(), artifactPlan: prepared },
       {
         endpoint: "https://decisions.example.test/v1/decisions",
-        request,
+        createTransport,
         resolveFacts: async () => resolved,
       },
     );
-    expect(request).toHaveBeenCalledOnce();
+    expect(createTransport).toHaveBeenCalledOnce();
+    expect(createTransport.mock.results[0].value.requestAllHeads).toHaveBeenCalledOnce();
     expect(decision.action).toBe("allow");
     expect(decision.jev?.factsHash).toBe(hash);
     expect(decision.jev?.artifactPlanHash).toBe(prepared.hash);
@@ -306,7 +299,7 @@ describe("trusted query artifact projection", () => {
       { ...nextContext, config: readBundledConfig(), artifactPlan: next },
       {
         endpoint: "https://decisions.example.test/v1/decisions",
-        request: async () => prediction(),
+        createTransport: controlledAllHeadTransport(allowAnswer),
         resolveFacts: async () => nextResolved,
       },
     );

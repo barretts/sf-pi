@@ -14,6 +14,7 @@ import { evaluateOrgAwareRiskWithOrgLookup } from "./org-aware-risk-gate.ts";
 import { evaluateNativeToolRiskWithOrgLookup } from "./native-tool-risk-gate.ts";
 import { normalizeSafetySubject } from "./safety-subject.ts";
 import { evaluateJevSafety } from "./jev-risk.ts";
+import type { JevOperatingPoint } from "./jev-operating-point.ts";
 import type { PreparedSoqlArtifactPlan } from "../../../lib/common/sf-soql-artifact-plan/store.ts";
 import type {
   ClassifiedDecision,
@@ -33,6 +34,8 @@ export interface SafetyKernelInput {
   engine?: GuardrailEngine;
   descriptor?: JevToolDescriptor;
   signal?: AbortSignal;
+  deadline?: number;
+  operatingPoint?: JevOperatingPoint;
 }
 export type GuardrailDecision = ClassifiedDecision;
 
@@ -40,7 +43,12 @@ export async function evaluateSafety(
   input: SafetyKernelInput,
 ): Promise<GuardrailDecision | undefined> {
   if (input.engine === "jev") {
-    return evaluateJevSafety(input, { descriptor: input.descriptor, signal: input.signal });
+    return evaluateJevSafety(input, {
+      descriptor: input.descriptor,
+      signal: input.signal,
+      deadline: input.deadline,
+      operatingPoint: input.operatingPoint,
+    });
   }
   const subject = normalizeSafetySubject(input.toolName, input.input, {
     sessionId: input.sessionId,

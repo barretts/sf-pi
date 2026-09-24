@@ -8,6 +8,7 @@ import {
   JEV_PROVIDER,
   JEV_RESOLVED_MODEL,
 } from "../lib/jev-client.ts";
+import { resolveJevOperatingPoint } from "../lib/jev-operating-point.ts";
 import { buildJevMetadata } from "../lib/jev-metadata.ts";
 import { buildJevRequest } from "../lib/jev-risk.ts";
 import {
@@ -600,9 +601,14 @@ function allSelectorShapesRequest() {
 describe("alphabetic syntax 42 and its numeric inverse", () => {
   it("binds the new format and preserves the exact prior process contract", () => {
     expect(hash(JEV_COMMAND_PROCESS_PROTOCOL)).toBe(
-      "8627637805531f44aa769768306935e762cfd83d414fd353f97b91f8d74244bb",
+      "8dcf700749fc8813119627d5b26f1ce63b130d339b292755389ec191e0b471a8",
     );
     const prior = clone(JEV_COMMAND_PROCESS_PROTOCOL) as Record<string, any>;
+    prior.operatingPoint = "prospective-experimental-command-process";
+    prior.deadline =
+      "One absolute performance.now() deadline includes preparation, all stages, waits, response reads, validation, and synchronous cleanup work. Cancellation starts without awaiting asynchronous cleanup completion. The total limit is 10,000 ms. No per-stage reset. The current hook and one-call limit stay at 1,500 ms.";
+    prior.automaticAllow =
+      "Complete original context; every actual action head allows with raw P(allow)>=.99; every actual binary head has raw P(selected choice)>=.99. No joint calibration claim.";
     prior.syntaxStateVersion = 37;
     for (const field of [
       "numericSyntaxStateVersion",
@@ -1617,5 +1623,218 @@ describe("one absolute total deadline and cancellation", () => {
         false,
       ),
     ).toBe("block");
+  });
+});
+
+describe("closed process operating points", () => {
+  it("keeps the default floors and applies explicit argmax to actual separate heads", async () => {
+    const selected = transport();
+    selected.requestNonCommand.mockImplementation(async (current) =>
+      result("non_command", current, { risk: allow(0.6) }),
+    );
+    selected.requestSyntax.mockImplementation(async (current) =>
+      result("syntax", current, { r_a: syntax(0.6) }),
+    );
+    selected.requestCommandPolicy.mockImplementation(async (current) =>
+      result("command_policy", current, { command_policy: allow(0.7) }),
+    );
+    const conservative = await runJevCommandProcess(request(), {
+      deadline: performance.now() + 1000,
+      createTransport: () => selected,
+    });
+    expect(conservative.gate).toBe("confirm");
+    const argmax = await runJevCommandProcess(request(), {
+      deadline: performance.now() + 1000,
+      operatingPoint: resolveJevOperatingPoint("argmax"),
+      createTransport: () => selected,
+    });
+    expect(argmax.gate).toBe("allow");
+    expect(argmax.answers.risk).toEqual(allow(0.6));
+    expect(argmax.answers.command_policy).toEqual(allow(0.7));
+    expect(argmax.syntaxTranscript[0].answer).toEqual(syntax(0.6));
+    expect(argmax.distributionsCombined).toBe(false);
+  });
+
+  it("keeps an actual conditional command block hard at argmax", async () => {
+    const selected = transport();
+    selected.requestSyntax.mockImplementation(async (current) =>
+      result("syntax", current, { r_a: syntax(0.6, "match") }),
+    );
+    selected.requestCommandPolicy.mockImplementation(async (current) =>
+      result("command_policy", current, { command_policy: block() }),
+    );
+    const completed = await runJevCommandProcess(request(), {
+      deadline: performance.now() + 1000,
+      operatingPoint: resolveJevOperatingPoint("argmax"),
+      createTransport: () => selected,
+    });
+    expect(completed.gate).toBe("block");
+    expect(completed.actualBlocks).toEqual([
+      { questionId: "command_policy", answer: block(), origin: completed.origins.command_policy },
+    ]);
+  });
+
+  it("rejects an invalid point before constructing or sending a transport", async () => {
+    const createTransport = vi.fn(transport);
+    const result = await runJevCommandProcess(request(), {
+      deadline: performance.now() + 1000,
+      operatingPoint: { ...resolveJevOperatingPoint("argmax"), syntaxProbability: 0.5 } as any,
+      createTransport,
+    });
+    expect(result.failure).toEqual({ stage: "prepare", code: "invalid_request" });
+    expect(result.gate).toBe("block");
+    expect(createTransport).not.toHaveBeenCalled();
+  });
+});
+
+describe("validated replies observed before a client failure", () => {
+  function failObserved(
+    actual: JevNonCommandStageResult | JevSyntaxStageResult | JevCommandPolicyStageResult,
+  ): never {
+    const receipt = actual.evidence;
+    throw new JevStageClientError(
+      "timeout",
+      {
+        stage: actual.stage,
+        requestedQuestionIds: receipt.requestedQuestionIds,
+        requestHash: receipt.requestHash,
+        requestBytes: receipt.requestBytes,
+        responseComplete: true,
+        responseHash: receipt.responseHash,
+        responseBytes: receipt.responseBytes,
+        transportHash: receipt.transportHash,
+        latencyMs: receipt.latencyMs,
+        requestSent: true,
+        failure: "timeout",
+      },
+      actual,
+    );
+  }
+  it.each(["non_command", "syntax", "command_policy"] as const)(
+    "keeps the actual %s heads and origins while blocking",
+    async (stage) => {
+      const selected = transport();
+      if (stage === "non_command")
+        selected.requestNonCommand.mockImplementation(async (current) =>
+          failObserved(result("non_command", current, { risk: block() })),
+        );
+      if (stage === "syntax")
+        selected.requestSyntax.mockImplementation(async (current) =>
+          failObserved(result("syntax", current, { r_a: syntax(0.6) })),
+        );
+      if (stage === "command_policy")
+        selected.requestCommandPolicy.mockImplementation(async (current) =>
+          failObserved(result("command_policy", current, { command_policy: block() })),
+        );
+      const completed = await run(request(), selected).promise;
+      expect(completed.completed).toBe(false);
+      expect(completed.gate).toBe("block");
+      expect(completed.failure).toEqual({ stage, code: "timeout" });
+      expect(completed.stages.at(-1).stage).toBe(stage);
+      expect(completed.failureEvidence.responseComplete).toBe(true);
+      expect(completed.failureEvidence.responseHash).toBe(
+        completed.stages.at(-1).evidence.responseHash,
+      );
+      if (stage === "syntax") {
+        expect(completed.syntaxTranscript[0].answer).toEqual(syntax(0.6));
+        expect(completed.syntaxTranscript[0].origin.requestId).toBe("test-syntax");
+        expect(selected.requestCommandPolicy).not.toHaveBeenCalled();
+      } else {
+        const id = stage === "non_command" ? "risk" : "command_policy";
+        expect(completed.actualBlocks.find((row) => row.questionId === id)).toEqual({
+          questionId: id,
+          answer: block(),
+          origin: completed.origins[id],
+        });
+        expect(completed.origins[id].stage).toBe(stage);
+      }
+    },
+  );
+  it("rejects a wrong observed request origin without an invented actual head", async () => {
+    const selected = transport();
+    selected.requestNonCommand.mockImplementation(async (current) => {
+      const actual = result("non_command", current, { risk: block() });
+      actual.evidence.requestHash = "a".repeat(64);
+      return failObserved(actual);
+    });
+    const completed = await run(request(), selected).promise;
+    expect(completed.failure).toEqual({ stage: "non_command", code: "invalid_response" });
+    expect(completed.stages).toEqual([]);
+    expect(completed.answers).toEqual({});
+    expect(completed.actualBlocks).toEqual([]);
+    expect(completed.gate).toBe("block");
+  });
+});
+
+describe("synchronous strict observation after an outer abort race", () => {
+  it.each(["non_command", "syntax", "command_policy"] as const)(
+    "retains the bound %s result without waiting for the pending method",
+    async (stage) => {
+      const controller = new AbortController();
+      const selected = { ...transport(), getObservedResult: vi.fn() };
+      const abortObserved = (
+        actual: JevNonCommandStageResult | JevSyntaxStageResult | JevCommandPolicyStageResult,
+      ) => {
+        selected.getObservedResult.mockReturnValue(actual);
+        controller.abort();
+        return new Promise<never>(() => {});
+      };
+      if (stage === "non_command")
+        selected.requestNonCommand.mockImplementation(async (current) =>
+          abortObserved(result("non_command", current, { risk: block() })),
+        );
+      if (stage === "syntax")
+        selected.requestSyntax.mockImplementation(async (current) =>
+          abortObserved(result("syntax", current, { r_a: syntax(0.6) })),
+        );
+      if (stage === "command_policy")
+        selected.requestCommandPolicy.mockImplementation(async (current) =>
+          abortObserved(result("command_policy", current, { command_policy: block() })),
+        );
+      const completed = await run(request(), selected, performance.now() + 1000, controller.signal)
+        .promise;
+      expect(completed.gate).toBe("block");
+      expect(completed.completed).toBe(false);
+      expect(completed.failure).toEqual({ stage, code: "cancelled" });
+      expect(selected.getObservedResult).toHaveBeenCalledOnce();
+      expect(completed.stages.at(-1).stage).toBe(stage);
+      expect(completed.stageTimingOrigins.at(-1)).toEqual({
+        stage,
+        timingOrigin: "strict_validation",
+      });
+      expect(completed.failureEvidence).toBeUndefined();
+      if (stage === "syntax") {
+        expect(completed.syntaxTranscript[0].answer).toEqual(syntax(0.6));
+        expect(completed.syntaxTranscript[0].origin).toMatchObject({
+          requestId: "test-syntax",
+          timingOrigin: "strict_validation",
+        });
+      } else {
+        const id = stage === "non_command" ? "risk" : "command_policy";
+        expect(completed.actualBlocks.find((row) => row.questionId === id)).toMatchObject({
+          answer: block(),
+          origin: { requestId: `test-${stage}`, timingOrigin: "strict_validation" },
+        });
+      }
+    },
+  );
+
+  it("rejects a wrong current getter origin before retaining any actual head", async () => {
+    const controller = new AbortController();
+    const selected = { ...transport(), getObservedResult: vi.fn() };
+    selected.requestNonCommand.mockImplementation(async (current) => {
+      const observed = result("non_command", current, { risk: block() });
+      observed.evidence.requestHash = "a".repeat(64);
+      selected.getObservedResult.mockReturnValue(observed);
+      controller.abort();
+      return new Promise<never>(() => {});
+    });
+    const completed = await run(request(), selected, performance.now() + 1000, controller.signal)
+      .promise;
+    expect(completed.gate).toBe("block");
+    expect(completed.failure).toEqual({ stage: "non_command", code: "invalid_response" });
+    expect(completed.stages).toEqual([]);
+    expect(completed.answers).toEqual({});
+    expect(completed.actualBlocks).toEqual([]);
   });
 });

@@ -100,16 +100,24 @@ import {
   jevCredentialStatus,
   jevEndpointStatus,
   JEV_RESOLVED_MODEL,
-  JEV_TIMEOUT_MS,
+  JEV_COMMAND_PROCESS_TIMEOUT_MS,
 } from "./lib/jev-client.ts";
 import {
   jevConfigHash,
   jevFactBindingHash,
-  jevTransportBindingHash,
+  jevDecisionTransportBindingHash,
   withinDeadline,
   JEV_PROTOCOL_HASH,
 } from "./lib/jev-risk.ts";
 import { jevHash } from "./lib/jev-identity.ts";
+import {
+  resolveJevOperatingPoint,
+  jevOperatingPointHash,
+  type JevOperatingPoint,
+} from "./lib/jev-operating-point.ts";
+
+// A later human approval and each artifact consumer recheck have their own bounded phase.
+const JEV_APPROVAL_RECHECK_MS = 1500;
 import { addJevArtifactPlan, buildJevMetadata, extractJevTargetOrg } from "./lib/jev-metadata.ts";
 import { resolveJevFacts } from "./lib/jev-facts.ts";
 import { shouldPowerToolAutoApprove } from "./lib/power-tool-mode.ts";
@@ -187,13 +195,19 @@ export default function sfGuardrail(pi: ExtensionAPI) {
 
   // ─── tool_call: the main enforcement seam ─────────────────────────────────
   pi.on("tool_call", async (event, ctx) => {
+    const capturedToolName = event.toolName;
+    const capturedToolCallId = event.toolCallId;
     let artifactPlan: Readonly<PreparedSoqlArtifactPlan> | undefined;
     let artifactReleased = false;
     try {
       const classificationStarted = performance.now();
+      const classificationDeadline = classificationStarted + JEV_COMMAND_PROCESS_TIMEOUT_MS;
+      let releaseDeadline = classificationDeadline;
+      let operatingPoint: JevOperatingPoint | undefined;
       let snapshot: ReturnType<typeof loadGuardrailSnapshot>;
       try {
         snapshot = loadGuardrailSnapshot();
+        if (snapshot.engine === "jev") operatingPoint = resolveJevOperatingPoint();
       } catch {
         const decision: ClassifiedDecision = {
           ruleId: "guardrail-config-invalid",
@@ -210,7 +224,7 @@ export default function sfGuardrail(pi: ExtensionAPI) {
             failure: "invalid-config",
           },
         };
-        recordDecision(pi, decision, "hard_block", event.toolName);
+        recordDecision(pi, decision, "hard_block", capturedToolName);
         return { block: true, reason: decision.reason };
       }
       const { config, engine } = snapshot;
@@ -242,7 +256,14 @@ export default function sfGuardrail(pi: ExtensionAPI) {
           toolCallId: event.toolCallId,
           engine,
           ...(artifactPlan ? { artifactPlan } : {}),
-          ...(engine === "jev" ? { signal: ctx.signal, descriptor: getDescriptor() } : {}),
+          ...(engine === "jev"
+            ? {
+                signal: ctx.signal,
+                descriptor: getDescriptor(),
+                deadline: classificationDeadline,
+                operatingPoint,
+              }
+            : {}),
         });
       } catch {
         if (engine !== "jev") throw new Error("Guardrail evaluation failed.");
@@ -264,12 +285,14 @@ export default function sfGuardrail(pi: ExtensionAPI) {
             failure: "missing-decision",
           },
         };
-        recordDecision(pi, failed, "hard_block", event.toolName);
+        recordDecision(pi, failed, "hard_block", capturedToolName);
         return { block: true, reason: failed.reason };
       }
 
       const basicStateChanged = (): boolean => {
         if (engine !== "jev") return false;
+        if (event.toolName !== capturedToolName || event.toolCallId !== capturedToolCallId)
+          return true;
         if (
           artifactPlan &&
           (event.toolCallId !== artifactPlan.binding.toolCallId ||
@@ -290,10 +313,13 @@ export default function sfGuardrail(pi: ExtensionAPI) {
           return true;
         try {
           const current = loadGuardrailSnapshot();
+          const currentPoint = resolveJevOperatingPoint();
           return (
             current.engine !== "jev" ||
             jevConfigHash(current.config) !== decision.jev?.policyHash ||
-            jevTransportBindingHash() !== decision.jev?.transportHash ||
+            jevOperatingPointHash(currentPoint) !== decision.jev?.operatingPointHash ||
+            jevDecisionTransportBindingHash(undefined, currentPoint) !==
+              decision.jev?.transportHash ||
             jevHash(event.input ?? {}) !== decision.jev?.inputHash ||
             jevHash(JSON.parse(JSON.stringify(getDescriptor() ?? null))) !==
               decision.jev?.descriptorHash
@@ -348,14 +374,19 @@ export default function sfGuardrail(pi: ExtensionAPI) {
         }
       };
       const releaseArtifacts = () => {
-        if (!artifactPlan) return;
+        if (engine === "jev" && (performance.now() >= releaseDeadline || basicStateChanged()))
+          return false;
+        if (!artifactPlan) return true;
         authorizeSoqlArtifactPlan(
           artifactPlan,
           decision.fingerprint,
-          async () => !(await stateChanged(JEV_TIMEOUT_MS)),
+          async () => !(await stateChanged(JEV_APPROVAL_RECHECK_MS)),
           () => !basicStateChanged(),
         );
+        if (engine === "jev" && (performance.now() >= releaseDeadline || basicStateChanged()))
+          return false;
         artifactReleased = true;
+        return true;
       };
       const blockChangedState = () => {
         const changed = {
@@ -365,34 +396,34 @@ export default function sfGuardrail(pi: ExtensionAPI) {
             "Jev approval context changed or was cancelled; execution is blocked. Retry to classify the current operation.",
           ...(decision.jev ? { jev: { ...decision.jev, failure: "changed-context" } } : {}),
         };
-        recordDecision(pi, changed, "hard_block", event.toolName);
+        recordDecision(pi, changed, "hard_block", capturedToolName);
         return { block: true as const, reason: changed.reason };
       };
       if (
         decision.action !== "block" &&
-        (await stateChanged(JEV_TIMEOUT_MS - (performance.now() - classificationStarted)))
+        (await stateChanged(classificationDeadline - performance.now()))
       )
         return blockChangedState();
       if (decision.jev) decision.jev.latencyMs = performance.now() - classificationStarted;
 
       // Audited auto-allow → no prompt.
       if (decision.action === "allow") {
-        recordDecision(pi, decision, "allow_auto", event.toolName);
-        releaseArtifacts();
+        recordDecision(pi, decision, "allow_auto", capturedToolName);
+        if (!releaseArtifacts()) return blockChangedState();
         return undefined;
       }
 
       // Hard block → no prompt.
       if (decision.action === "block") {
-        recordDecision(pi, decision, "hard_block", event.toolName);
+        recordDecision(pi, decision, "hard_block", capturedToolName);
         if (ctx.hasUI) ctx.ui.notify(decision.reason, "warning");
         return { block: true, reason: decision.reason };
       }
 
       // Previously granted for this session?
       if (hasSessionApproval(decision)) {
-        recordDecision(pi, decision, "allow_session", event.toolName);
-        releaseArtifacts();
+        recordDecision(pi, decision, "allow_session", capturedToolName);
+        if (!releaseArtifacts()) return blockChangedState();
         return undefined;
       }
 
@@ -400,7 +431,7 @@ export default function sfGuardrail(pi: ExtensionAPI) {
         engine !== "jev" &&
         shouldPowerToolAutoApprove(decision, readGuardrailPiSettings().powerTool)
       ) {
-        recordDecision(pi, decision, "operator_auto_approve", event.toolName);
+        recordDecision(pi, decision, "operator_auto_approve", capturedToolName);
         return undefined;
       }
 
@@ -415,40 +446,40 @@ export default function sfGuardrail(pi: ExtensionAPI) {
         allowAutomaticApproval: engine !== "jev",
       });
 
-      if (
-        (result.outcome === "allow_once" || result.outcome === "allow_session") &&
-        (await stateChanged(JEV_TIMEOUT_MS))
-      )
-        return blockChangedState();
+      if (result.outcome === "allow_once" || result.outcome === "allow_session") {
+        // Human wait time does not renew the model deadline. Check current facts in a new phase.
+        releaseDeadline = performance.now() + JEV_APPROVAL_RECHECK_MS;
+        if (await stateChanged(releaseDeadline - performance.now())) return blockChangedState();
+      }
 
       switch (result.outcome) {
         case "allow_once":
-          recordDecision(pi, decision, "allow_once", event.toolName);
-          releaseArtifacts();
+          recordDecision(pi, decision, "allow_once", capturedToolName);
+          if (!releaseArtifacts()) return blockChangedState();
           return undefined;
         case "allow_session":
-          recordDecision(pi, decision, "allow_session", event.toolName);
+          recordDecision(pi, decision, "allow_session", capturedToolName);
           grantSessionApproval(pi, decision);
-          releaseArtifacts();
+          if (!releaseArtifacts()) return blockChangedState();
           return undefined;
         case "operator_auto_approve":
-          recordDecision(pi, decision, "operator_auto_approve", event.toolName);
+          recordDecision(pi, decision, "operator_auto_approve", capturedToolName);
           return undefined;
         case "headless_pass":
-          recordDecision(pi, decision, "headless_pass", event.toolName);
+          recordDecision(pi, decision, "headless_pass", capturedToolName);
           return undefined;
         case "headless_block":
-          recordDecision(pi, decision, "headless_block", event.toolName);
+          recordDecision(pi, decision, "headless_block", capturedToolName);
           return { block: true, reason: result.reason };
         case "timeout":
-          recordDecision(pi, decision, "timeout", event.toolName);
+          recordDecision(pi, decision, "timeout", capturedToolName);
           return { block: true, reason: result.reason };
         case "cancel":
-          recordDecision(pi, decision, "cancel", event.toolName);
+          recordDecision(pi, decision, "cancel", capturedToolName);
           return { block: true, reason: result.reason };
         case "block":
         default:
-          recordDecision(pi, decision, "block", event.toolName);
+          recordDecision(pi, decision, "block", capturedToolName);
           return { block: true, reason: result.reason };
       }
     } catch {
@@ -464,7 +495,7 @@ export default function sfGuardrail(pi: ExtensionAPI) {
           "Guardrail enforcement failed; execution is blocked. Retry after repairing the local error.",
       };
       try {
-        recordDecision(pi, failed, "hard_block", event.toolName);
+        recordDecision(pi, failed, "hard_block", capturedToolName);
       } catch {
         // There is no alternate approval authority when audit storage is unavailable.
       }

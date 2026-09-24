@@ -7,7 +7,7 @@
  *
  * node --experimental-strip-types scripts/jev-guardrail-baseline-eval.ts \
  *   --prepare-only --output .logs/jev-baseline-dev-preparation.json
- * Omit --prepare-only to call the normal Jev client with environment credentials.
+ * Omit --prepare-only to use the actual Jev transport with environment credentials.
  * --fixture accepts only scripts/fixtures/jev-guardrail-baseline-dev.json (default)
  * or the reviewed independent and replacement holdout fixtures. None is qualified.
  */
@@ -24,12 +24,22 @@ import type {
   CommandPattern,
   GuardrailConfig,
   JevAction,
+  JevActionOrigin,
+  JevAllHeadRequest,
+  JevAllHeadStageResult,
   JevChoiceAnswer,
+  JevCommandPolicyRequest,
+  JevCommandPolicyStageResult,
+  JevDecisionProcessEvidence,
+  JevDecisionTransport,
   JevFacts,
-  JevPrediction,
+  JevNonCommandRequest,
+  JevNonCommandStageResult,
+  JevOperatingPointData,
   JevQuestionId,
-  JevRequest,
   JevResolvedFacts,
+  JevSyntaxRequest,
+  JevSyntaxStageResult,
   JevToolDescriptor,
   PolicyRule,
   RuleBehavior,
@@ -41,6 +51,14 @@ const FIXTURE = join(ROOT, "scripts/fixtures/jev-guardrail-baseline-dev.json");
 const INDEPENDENT_FIXTURE = join(ROOT, "scripts/fixtures/jev-guardrail-independent-eval.json");
 const REPLACEMENT_FIXTURE = join(ROOT, "scripts/fixtures/jev-guardrail-replacement-holdout.json");
 const ACTION_RANK: Record<JevAction, number> = { allow: 0, confirm: 1, block: 2 };
+type BaselineDevRequest =
+  JevAllHeadRequest | JevNonCommandRequest | JevSyntaxRequest | JevCommandPolicyRequest;
+type BaselineDevStage = "all_heads" | "non_command" | "syntax" | "command_policy";
+type BaselineDevStageResult =
+  | JevAllHeadStageResult
+  | JevNonCommandStageResult
+  | JevSyntaxStageResult
+  | JevCommandPolicyStageResult;
 const DEFAULT_ORG_ENVIRONMENT: NonNullable<JevFacts["org"]> = {
   type: "scratch",
   verified: true,
@@ -98,10 +116,26 @@ export interface BaselineDevResult {
   omissionCount?: number;
   policyHash?: string;
   protocolHash?: string;
+  operatingPoint?: Readonly<JevOperatingPointData>;
+  operatingPointHash?: string;
   inputHash?: string;
   factsHash?: string;
+  transportHash?: string;
   requestHash?: string;
   requestBytes?: number;
+  /** Each body has its own stage. These fields do not prove a POST or provider reply. */
+  requestStage?: BaselineDevStage;
+  requestPreparations?: Array<{
+    stage: BaselineDevStage;
+    questionIds: string[];
+    requestHash: string;
+    requestBytes: number;
+  }>;
+  /** Local synthetic replies exercise preparation only. They cannot supply a model score. */
+  syntheticPreparation?: boolean;
+  process?: JevDecisionProcessEvidence;
+  riskOrigin?: JevActionOrigin;
+  costReportedStageCount?: number;
   publicExampleDevicePathProbe?: boolean;
   failure?: string;
   baselineLatencyMs: number;
@@ -306,32 +340,47 @@ export async function createBaselineDevEvaluator() {
     else process.env.PI_CODING_AGENT_DIR = previousProfile;
     await rm(temporary, { recursive: true, force: true });
   };
-  const [kernel, adapter, metadataModule, configModule, client, environment, browser, factsModule] =
-    await Promise.all([
-      import("../extensions/sf-guardrail/lib/safety-kernel.ts"),
-      import("../extensions/sf-guardrail/lib/jev-risk.ts"),
-      import("../extensions/sf-guardrail/lib/jev-metadata.ts"),
-      import("../extensions/sf-guardrail/lib/config.ts"),
-      import("../extensions/sf-guardrail/lib/jev-client.ts"),
-      import("../lib/common/sf-environment/shared-runtime.ts"),
-      import("../lib/common/sf-browser-snapshot-state.ts"),
-      import("../extensions/sf-guardrail/lib/jev-facts.ts"),
-    ]).catch(async (error) => {
-      await dispose();
-      throw error;
-    });
+  const [
+    kernel,
+    adapter,
+    metadataModule,
+    configModule,
+    client,
+    environment,
+    browser,
+    factsModule,
+    identity,
+  ] = await Promise.all([
+    import("../extensions/sf-guardrail/lib/safety-kernel.ts"),
+    import("../extensions/sf-guardrail/lib/jev-risk.ts"),
+    import("../extensions/sf-guardrail/lib/jev-metadata.ts"),
+    import("../extensions/sf-guardrail/lib/config.ts"),
+    import("../extensions/sf-guardrail/lib/jev-client.ts"),
+    import("../lib/common/sf-environment/shared-runtime.ts"),
+    import("../lib/common/sf-browser-snapshot-state.ts"),
+    import("../extensions/sf-guardrail/lib/jev-facts.ts"),
+    import("../extensions/sf-guardrail/lib/jev-identity.ts"),
+  ]).catch(async (error) => {
+    await dispose();
+    throw error;
+  });
 
   const runCases = async (
     cases: BaselineDevCase[],
     options: {
       prepareOnly?: boolean;
-      request?: typeof client.requestJev;
-      onRequestPrepared?: (request: JevRequest, caseId: string) => void;
+      createTransport?: typeof client.createJevProcessTransport;
+      onRequestPrepared?: (
+        request: BaselineDevRequest,
+        caseId: string,
+        stage: BaselineDevStage,
+      ) => void;
       config?: GuardrailConfig;
       onProgress?: (result: { attempted: number; total: number; failures: number }) => void;
       onResult?: (result: BaselineDevResult) => Promise<void> | void;
     } = {},
   ): Promise<BaselineDevResult[]> => {
+    if (Object.hasOwn(options, "request")) throw new Error("unsupported-evaluation-request-option");
     if (closed || process.env.PI_CODING_AGENT_DIR !== profile) {
       throw new Error("isolated-profile-context-changed");
     }
@@ -435,7 +484,116 @@ export async function createBaselineDevEvaluator() {
 
       const candidateStarted = performance.now();
       result.candidateAttempted = true;
-      let observedPrediction: JevPrediction | undefined;
+      const capturePreparation = (stage: BaselineDevStage, request: BaselineDevRequest) => {
+        const encoded = JSON.stringify(request);
+        const questionIds = Object.keys(request.questions);
+        const preparation = {
+          stage,
+          questionIds,
+          requestHash: sha256(encoded),
+          requestBytes: Buffer.byteLength(encoded),
+        };
+        (result.requestPreparations ??= []).push(preparation);
+        if (result.requestHash === undefined) {
+          result.requestStage = stage;
+          result.requestHash = preparation.requestHash;
+          result.requestBytes = preparation.requestBytes;
+        }
+        if (stage !== "syntax") {
+          result.questionIds = [
+            ...new Set([...(result.questionIds ?? []), ...questionIds]),
+          ] as JevQuestionId[];
+        }
+        if (options.prepareOnly) {
+          options.onRequestPrepared?.(JSON.parse(encoded), row.id, stage);
+        } else {
+          result.requestInvoked = true;
+        }
+      };
+      const preparationTransport: typeof client.createJevProcessTransport = (transportOptions) => {
+        const transportHash = identity.jevHash({
+          contract: client.JEV_TRANSPORT_BINDING_CONTRACT,
+          endpoint: transportOptions.endpoint,
+          processBinding: transportOptions.binding,
+        });
+        let observed: BaselineDevStageResult | undefined;
+        const reply = (stage: BaselineDevStage, request: BaselineDevRequest) => {
+          const started = performance.now();
+          const encoded = JSON.stringify(request);
+          const questionIds = Object.keys(request.questions);
+          const answers = Object.fromEntries(
+            questionIds.map((id) => [
+              id,
+              stage === "syntax"
+                ? { choice: "no_match", probabilities: { match: 0, no_match: 1 }, confidence: 1 }
+                : {
+                    choice: "confirm",
+                    probabilities: { allow: 0, confirm: 1, block: 0 },
+                    confidence: 1,
+                  },
+            ]),
+          );
+          // No fetch, credential read or provider reply occurs in this branch.
+          // The adapter uses these explicit local replies only to exercise preparation.
+          const synthetic = JSON.stringify({ syntheticPreparation: true, stage, answers });
+          observed = {
+            stage,
+            answers,
+            evidence: {
+              requestedQuestionIds: questionIds,
+              requestHash: sha256(encoded),
+              responseHash: sha256(synthetic),
+              transportHash,
+              requestBytes: Buffer.byteLength(encoded),
+              responseBytes: Buffer.byteLength(synthetic),
+              model: client.JEV_RESOLVED_MODEL,
+              provider: client.JEV_PROVIDER,
+              requestId: `preparation-only-local-${stage}`,
+              usage: { input_tokens: 0, output_tokens: 0 },
+              latencyMs: performance.now() - started,
+            },
+          } as BaselineDevStageResult;
+          return observed;
+        };
+        return {
+          requestAllHeads: async (request) => reply("all_heads", request) as JevAllHeadStageResult,
+          requestNonCommand: async (request) =>
+            reply("non_command", request) as JevNonCommandStageResult,
+          requestSyntax: async (request) => reply("syntax", request) as JevSyntaxStageResult,
+          requestCommandPolicy: async (request) =>
+            reply("command_policy", request) as JevCommandPolicyStageResult,
+          getObservedResult: () => observed,
+          close() {},
+        };
+      };
+      const createTransport: typeof client.createJevProcessTransport = (transportOptions) => {
+        const transport = (
+          options.prepareOnly
+            ? preparationTransport
+            : (options.createTransport ?? client.createJevProcessTransport)
+        )(transportOptions);
+        const invoke = async <T extends BaselineDevStageResult>(
+          stage: BaselineDevStage,
+          request: BaselineDevRequest,
+          method: () => Promise<T>,
+        ): Promise<T> => {
+          capturePreparation(stage, request);
+          return method();
+        };
+        const wrapped: JevDecisionTransport = {
+          requestAllHeads: (request) =>
+            invoke("all_heads", request, () => transport.requestAllHeads(request)),
+          requestNonCommand: (request) =>
+            invoke("non_command", request, () => transport.requestNonCommand(request)),
+          requestSyntax: (request) =>
+            invoke("syntax", request, () => transport.requestSyntax(request)),
+          requestCommandPolicy: (request) =>
+            invoke("command_policy", request, () => transport.requestCommandPolicy(request)),
+          getObservedResult: () => transport.getObservedResult?.(),
+          close: () => transport.close(),
+        };
+        return wrapped;
+      };
       const candidate = await adapter.evaluateJevSafety(
         { ...input, engine: "jev" },
         {
@@ -509,37 +667,7 @@ export async function createBaselineDevEvaluator() {
                 : {}),
             };
           },
-          request: async (request: JevRequest, requestOptions) => {
-            const encoded = JSON.stringify(request);
-            result.questionIds = Object.keys(request.questions) as JevQuestionId[];
-            result.requestHash = sha256(encoded);
-            result.requestBytes = Buffer.byteLength(encoded);
-            result.requestInvoked = !options.prepareOnly;
-            if (options.prepareOnly) options.onRequestPrepared?.(JSON.parse(encoded), row.id);
-            const prediction = options.prepareOnly
-              ? {
-                  choice: "confirm" as const,
-                  probabilities: { allow: 0, confirm: 1, block: 0 },
-                  confidence: 1,
-                  answers: Object.fromEntries(
-                    Object.keys(request.questions).map((id) => [
-                      id,
-                      {
-                        choice: "confirm" as const,
-                        probabilities: { allow: 0, confirm: 1, block: 0 },
-                        confidence: 1,
-                      },
-                    ]),
-                  ),
-                  model: client.JEV_RESOLVED_MODEL,
-                  provider: client.JEV_PROVIDER,
-                  requestId: "preparation-only-no-provider-call",
-                  usage: { input_tokens: 0, output_tokens: 0 },
-                }
-              : await (options.request ?? client.requestJev)(request, requestOptions);
-            if (!options.prepareOnly) observedPrediction = prediction;
-            return prediction;
-          },
+          createTransport,
         },
       );
       result.candidateLatencyMs = performance.now() - candidateStarted;
@@ -548,34 +676,51 @@ export async function createBaselineDevEvaluator() {
         : options.prepareOnly
           ? "prepared"
           : "decided";
-      result.candidateAction =
-        options.prepareOnly && !candidate.jev?.failure ? null : candidate.action;
+      result.candidateAction = options.prepareOnly ? null : candidate.action;
       const evidence = candidate.jev;
       if (evidence) {
         result.policyHash = evidence.policyHash;
         result.protocolHash = evidence.protocolHash;
+        if (evidence.operatingPoint)
+          result.operatingPoint = structuredClone(evidence.operatingPoint);
+        result.operatingPointHash = evidence.operatingPointHash;
         result.inputHash = evidence.inputHash;
         result.factsHash = evidence.factsHash;
+        result.transportHash = evidence.transportHash;
         if (evidence.failure) result.failure = evidence.failure;
-        if (evidence.answers) result.answers = structuredClone(evidence.answers);
-      }
-      if (observedPrediction) {
-        result.modelChoice = observedPrediction.choice;
-        result.probabilities = observedPrediction.probabilities;
-        result.confidence = observedPrediction.confidence;
-        result.model = observedPrediction.model;
-        result.provider = observedPrediction.provider;
-        result.requestId = observedPrediction.requestId;
-        result.cost = observedPrediction.usage.cost;
-        result.answers = structuredClone(
-          observedPrediction.answers ?? {
-            risk: {
-              choice: observedPrediction.choice,
-              probabilities: observedPrediction.probabilities,
-              confidence: observedPrediction.confidence,
-            },
-          },
-        );
+        const answers =
+          evidence.process?.kind === "command_stages"
+            ? evidence.process.result.answers
+            : (evidence.process?.stage?.answers ?? evidence.answers);
+        if (answers) result.answers = structuredClone(answers);
+        if (options.prepareOnly) {
+          result.syntheticPreparation = true;
+        } else {
+          if (evidence.process) result.process = structuredClone(evidence.process);
+          if (evidence.riskAnswer) result.modelChoice = evidence.riskAnswer.choice;
+          if (evidence.probabilities)
+            result.probabilities = structuredClone(evidence.probabilities);
+          if (evidence.confidence !== undefined) result.confidence = evidence.confidence;
+          if (evidence.riskOrigin) result.riskOrigin = structuredClone(evidence.riskOrigin);
+          result.model = evidence.model;
+          result.provider = evidence.provider ?? evidence.riskOrigin?.provider;
+          // A Bash result has several actual replies. Keep each ID in its stage origin.
+          if (evidence.process?.kind === "all_heads" && evidence.requestId)
+            result.requestId = evidence.requestId;
+          const stages =
+            evidence.process?.kind === "command_stages"
+              ? evidence.process.result.stages
+              : evidence.process?.stage
+                ? [evidence.process.stage]
+                : [];
+          const costs = stages.flatMap((stage) =>
+            stage.evidence.usage.cost === undefined ? [] : [stage.evidence.usage.cost],
+          );
+          if (costs.length) {
+            result.cost = costs.reduce((sum, cost) => sum + cost, 0);
+            result.costReportedStageCount = costs.length;
+          }
+        }
       }
       await recordResult(result, cwd);
     }
@@ -695,7 +840,7 @@ export function summarizeBaselineDev(results: BaselineDevResult[]) {
     requestFailures: requestFailures.length,
     requestFailureIds: requestFailures.map((row) => row.id),
     requestInvocationScope:
-      "The client or injected request function was invoked; this does not prove network transmission or a provider response.",
+      "An actual named transport stage method was invoked. This does not prove network transmission or a provider response. Preparation uses local synthetic replies and does not invoke the supplied transport factory.",
     baselineFailures: baselineFailures.length,
     baselineCoverageLoss: coverageLoss.length,
     coverageLossIds: coverageLoss.map((row) => row.id),
@@ -781,7 +926,7 @@ export function summarizeBaselineDev(results: BaselineDevResult[]) {
       preparationRejectionsExcluded: preparationRejections.length,
       scope: "actual-candidate-adapter-with-isolated-local-facts-no-release-recheck-or-human-UI",
     },
-    costReportedCalls: costRows.length,
+    costReportedCalls: costRows.reduce((sum, row) => sum + (row.costReportedStageCount ?? 1), 0),
     reportedCost: costRows.reduce((sum, row) => sum + (row.cost ?? 0), 0),
     gates,
     developmentGatesPassed: Object.values(gates).every(Boolean),
@@ -844,6 +989,10 @@ async function main() {
           "scripts/jev-guardrail-replacement-score.ts",
           "extensions/sf-guardrail/lib/jev-risk.ts",
           "extensions/sf-guardrail/lib/jev-client.ts",
+          "extensions/sf-guardrail/lib/jev-command-process.ts",
+          "extensions/sf-guardrail/lib/jev-operating-point.ts",
+          "extensions/sf-guardrail/lib/jev-identity.ts",
+          "extensions/sf-guardrail/lib/types.ts",
           "extensions/sf-guardrail/lib/jev-metadata.ts",
           "extensions/sf-guardrail/lib/jev-facts.ts",
           "extensions/sf-guardrail/lib/safety-kernel.ts",
@@ -878,7 +1027,10 @@ async function main() {
           ]),
       "Latency covers candidate classification with mocked org facts, excluding the normal fresh SDK org resolution, release recheck, and human UI.",
       "Failed attempts remain in the denominator and cannot count as model catches or passing calls.",
-      "Org preparation rejections retain null actions and zero latencies; neither adapter nor request function is invoked, and these rows are excluded from adapter latency percentiles.",
+      "Org preparation rejections retain null actions and zero latencies. Neither adapter nor transport method is invoked. These rows are excluded from adapter latency percentiles.",
+      "Preparation uses explicit local synthetic replies. It records no provider ID, cost or model score and does not invoke the supplied or default real transport factory.",
+      "The adapter reads the declared operating point and defaults to conservative when absent. Each result records the actual point and its hash.",
+      "The staged result retains actual binary answers and origins for action consistency checks. Summary checks cannot independently replay raw wire bytes.",
       "Costs reported after timeouts may be incomplete because the provider returns no usage for failed attempts.",
     ],
     results: [] as BaselineDevResult[],

@@ -8,10 +8,12 @@
  * No arguments or --prepare-only exercise SDK setup without connection settings,
  * key reads, or a Jev request.
  */
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import {
   createEventBus,
   discoverAndLoadExtensions,
@@ -20,16 +22,19 @@ import {
   ModelRuntime,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import { JEV_MODEL, resolveJevEndpoint } from "../extensions/sf-guardrail/lib/jev-client.ts";
+import { validateJevStageResult } from "../extensions/sf-guardrail/lib/jev-command-process.ts";
 import {
-  JEV_MODEL,
-  JEV_PROVIDER,
-  JEV_RESOLVED_MODEL,
-  resolveJevEndpoint,
-} from "../extensions/sf-guardrail/lib/jev-client.ts";
+  resolveJevOperatingPoint,
+  validateJevOperatingPoint,
+  jevOperatingPointHash,
+} from "../extensions/sf-guardrail/lib/jev-operating-point.ts";
 import {
   DECISION_ENTRY_TYPE,
   type DecisionEntryData,
   type JevEvidence,
+  type JevAllHeadRequest,
+  type JevOperatingPoint,
   type JevQuestionId,
   type JevRequest,
 } from "../extensions/sf-guardrail/lib/types.ts";
@@ -48,6 +53,8 @@ const GUARDRAIL_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../extensions/sf-guardrail/index.ts",
 );
+// Load stateful source modules only after runHookSmoke installs its private profile.
+let sourceRisk: typeof import("../extensions/sf-guardrail/lib/jev-risk.ts") | undefined;
 
 export interface HookSmokeReport {
   success: boolean;
@@ -56,6 +63,11 @@ export interface HookSmokeReport {
   model: string | null;
   provider: string | null;
   requestId: string | null;
+  operatingPoint: JevEvidence["operatingPoint"] | null;
+  operatingPointHash: string | null;
+  protocolHash: string | null;
+  transportHash: string | null;
+  requestHash: string | null;
   /** These are the risk answer's probabilities, never a synthesized combined score. */
   probabilityQuestion: "risk";
   probabilities: JevEvidence["probabilities"] | null;
@@ -86,6 +98,7 @@ export async function runHookSmoke(
   let runner: ExtensionRunner | undefined;
   let hookActive = false;
   let endpoint: string | undefined;
+  let postedRequest: { request: JevAllHeadRequest; hash: string; bytes: number } | undefined;
   const report: HookSmokeReport = {
     success: false,
     preparedOnly: prepareOnly,
@@ -93,6 +106,11 @@ export async function runHookSmoke(
     model: null,
     provider: null,
     requestId: null,
+    operatingPoint: null,
+    operatingPointHash: null,
+    protocolHash: null,
+    transportHash: null,
+    requestHash: null,
     probabilityQuestion: "risk",
     probabilities: null,
     confidence: null,
@@ -118,6 +136,7 @@ export async function runHookSmoke(
     const inertExtensionPath = join(temporaryRoot, "inert-read.ts");
     await writeFile(inertExtensionPath, inertReadExtension(), { mode: 0o600 });
     process.env.PI_CODING_AGENT_DIR = agentDir;
+    sourceRisk = await import("../extensions/sf-guardrail/lib/jev-risk.ts");
 
     // Inspect the bounded body only. Never inspect or retain authorization headers.
     globalThis.fetch = async (input, init) => {
@@ -137,11 +156,12 @@ export async function runHookSmoke(
         throw new Error("invalid-smoke-wire-body");
       }
       report.requestBytes = Buffer.byteLength(init.body);
+      report.requestHash = createHash("sha256").update(init.body).digest("hex");
       report.wirePrivacySuccess = wirePrivacyPasses(init.body, readmePath, cwd, resolvedReadmePath);
       if (!report.wirePrivacySuccess) throw new Error("smoke-wire-privacy-failure");
-      report.questionIds = Object.keys(
-        (JSON.parse(init.body) as JevRequest).questions,
-      ) as JevQuestionId[];
+      const request = JSON.parse(init.body) as JevAllHeadRequest;
+      report.questionIds = Object.keys(request.questions) as JevQuestionId[];
+      postedRequest = { request, hash: report.requestHash, bytes: report.requestBytes };
       return originalFetch(input, init);
     };
 
@@ -232,6 +252,7 @@ export async function runHookSmoke(
     }
 
     endpoint = resolveJevEndpoint();
+    const declaredPoint = resolveJevOperatingPoint();
     const toolCallId = "jev-live-hook-smoke-read";
     const input = { path: readmePath };
     hookActive = true;
@@ -256,6 +277,10 @@ export async function runHookSmoke(
       model: evidence.model,
       provider: evidence.provider ?? null,
       requestId: evidence.requestId ?? null,
+      operatingPoint: evidence.operatingPoint ?? null,
+      operatingPointHash: evidence.operatingPointHash ?? null,
+      protocolHash: evidence.protocolHash,
+      transportHash: evidence.transportHash ?? null,
       probabilities: evidence.probabilities ?? null,
       confidence: evidence.confidence ?? null,
       cost: evidence.cost ?? null,
@@ -271,20 +296,8 @@ export async function runHookSmoke(
     const validDecision =
       !result?.block &&
       audit.outcome === "allow_auto" &&
-      evidence.model === JEV_RESOLVED_MODEL &&
-      evidence.provider === JEV_PROVIDER &&
-      Boolean(evidence.requestId) &&
-      evidence.probabilities !== undefined &&
-      evidence.probabilities.allow >= 0.99 &&
-      evidence.confidence !== undefined &&
-      evidence.answers !== undefined &&
-      Object.keys(evidence.answers).length === report.questionIds.length &&
-      report.questionIds.every(
-        (id) =>
-          evidence.answers?.[id]?.choice === "allow" &&
-          (evidence.answers[id]?.probabilities.allow ?? 0) >= 0.99,
-      ) &&
-      !evidence.failure;
+      postedRequest !== undefined &&
+      hookSmokeDecisionPasses(evidence, postedRequest, endpoint, declaredPoint);
     if (validDecision && report.wirePrivacySuccess && report.requests === 1) {
       const tool = runner.getToolDefinition("read");
       if (!tool) throw new Error("smoke-read-tool-missing");
@@ -321,6 +334,90 @@ export async function runHookSmoke(
   }
 }
 
+/** Validate one actual receipt, then use the source action gate for its exact point. */
+export function hookSmokeDecisionPasses(
+  evidence: JevEvidence,
+  posted: { request: JevAllHeadRequest; hash: string; bytes: number },
+  endpoint: string,
+  declaredPoint: JevOperatingPoint,
+): boolean {
+  try {
+    if (!sourceRisk) return false;
+    const json = JSON.stringify(posted.request);
+    if (
+      posted.hash !== createHash("sha256").update(json).digest("hex") ||
+      posted.bytes !== Buffer.byteLength(json)
+    )
+      return false;
+    const point = validateJevOperatingPoint(evidence.operatingPoint);
+    if (!isDeepStrictEqual(point, validateJevOperatingPoint(declaredPoint))) return false;
+    const transportHash = sourceRisk.jevDecisionTransportBindingHash(endpoint, point);
+    const process = evidence.process;
+    if (
+      evidence.failure ||
+      evidence.operatingPointHash !== jevOperatingPointHash(point) ||
+      evidence.protocolHash !== sourceRisk.jevRuntimeProtocolHash(point) ||
+      evidence.transportHash !== transportHash ||
+      !Number.isFinite(evidence.latencyMs) ||
+      evidence.latencyMs < 0 ||
+      evidence.latencyMs >= point.totalTimeoutMs ||
+      process?.kind !== "all_heads" ||
+      !process.completed ||
+      process.cleanupFailed ||
+      process.failureEvidence !== undefined ||
+      process.stageTimingOrigin !== "transport_cleanup" ||
+      !process.stage ||
+      !isDeepStrictEqual(process.attempt, {
+        requestedQuestionIds: Object.keys(posted.request.questions),
+        requestHash: posted.hash,
+        requestBytes: posted.bytes,
+      })
+    )
+      return false;
+    const stage = process.stage;
+    validateJevStageResult("all_heads", stage, posted, transportHash);
+    if (stage.evidence.latencyMs > evidence.latencyMs) return false;
+    const risk = stage.answers.risk;
+    if (
+      evidence.model !== stage.evidence.model ||
+      evidence.provider !== stage.evidence.provider ||
+      evidence.requestId !== stage.evidence.requestId ||
+      !isDeepStrictEqual(evidence.answers, stage.answers) ||
+      !isDeepStrictEqual(evidence.riskAnswer, risk) ||
+      !isDeepStrictEqual(evidence.probabilities, risk.probabilities) ||
+      evidence.confidence !== risk.confidence ||
+      evidence.cost !== stage.evidence.usage.cost ||
+      !isDeepStrictEqual(evidence.riskOrigin, {
+        ...stage.evidence,
+        stage: "all_heads",
+        questionId: "risk",
+        timingOrigin: "transport_cleanup",
+      })
+    )
+      return false;
+    const state = posted.request.state as {
+      operation?: { complete?: boolean };
+      observations?: { contextComplete?: boolean };
+    };
+    return (
+      sourceRisk.evaluateJevPrediction(
+        {
+          ...risk,
+          answers: stage.answers,
+          model: stage.evidence.model,
+          provider: stage.evidence.provider,
+          requestId: stage.evidence.requestId,
+          usage: stage.evidence.usage,
+        },
+        state.operation?.complete === true && state.observations?.contextComplete === true,
+        point,
+      ) === "allow"
+    );
+  } catch {
+    return false;
+  }
+}
+
 function wirePrivacyPasses(
   body: string,
   readmePath: string,
@@ -338,6 +435,7 @@ function wirePrivacyPasses(
       files?: Array<{
         path?: string;
         exists?: boolean;
+        kind?: string;
         resolvedPath?: string;
         absolutePath?: string;
         relativePath?: string;
@@ -412,16 +510,31 @@ function wirePrivacyPasses(
       ["toolName", "metadata", "omissions", "complete"].includes(key),
     ) &&
     Boolean(metadata) &&
-    Object.keys(metadata ?? {}).every((key) => ["path", "paths", "parameterShape"].includes(key)) &&
+    Object.keys(metadata ?? {}).every((key) =>
+      [
+        "path",
+        "paths",
+        "parameterShape",
+        "fileAccess",
+        "outputShape",
+        "selectedDescendantsObserved",
+      ].includes(key),
+    ) &&
+    metadata?.fileAccess === "read" &&
+    metadata.outputShape === "file_content" &&
+    metadata.selectedDescendantsObserved === false &&
     Array.isArray(metadata?.paths) &&
     metadata.paths.length === 1 &&
     metadata.paths[0] === readmePath &&
     state.facts?.files?.length === 1 &&
     state.facts.files[0].path === readmePath &&
     state.facts.files[0].exists === true &&
+    state.facts.files[0].kind === "file" &&
     fileVariantsValid &&
     Object.keys(state.facts).every((key) => key === "files") &&
-    Object.keys(state.facts.files[0]).every((key) => ["exists", ...filePathFields].includes(key)) &&
+    Object.keys(state.facts.files[0]).every((key) =>
+      ["exists", "kind", ...filePathFields].includes(key),
+    ) &&
     Object.keys(state.policy ?? {}).join(",") === "files" &&
     Array.isArray(state.policy?.files) &&
     state.observations?.contextComplete === true &&

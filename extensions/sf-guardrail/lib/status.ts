@@ -133,18 +133,31 @@ function formatEntry(e: DecisionEntryData): string {
 
 function formatJevEvidence(evidence: NonNullable<DecisionEntryData["jev"]>): string {
   const fields = [`model=${evidence.model}`, `${Math.round(evidence.latencyMs)}ms`];
+  if (evidence.operatingPoint) fields.push(`point=${evidence.operatingPoint.name}`);
+  if (evidence.riskAnswer) fields.push(`risk=${evidence.riskAnswer.choice}`);
   if (evidence.requestId) fields.push(`request=${evidence.requestId}`);
   if (evidence.probabilities) {
     fields.push(`risk P(allow)=${evidence.probabilities.allow.toFixed(4)}`);
   }
   if (evidence.confidence !== undefined)
     fields.push(`risk confidence=${evidence.confidence.toFixed(4)}`);
-  for (const [id, answer] of Object.entries(evidence.answers ?? {})) {
+  const heads =
+    evidence.process?.kind === "command_stages"
+      ? evidence.process.result.answers
+      : evidence.process?.kind === "all_heads"
+        ? (evidence.process.stage?.answers ?? evidence.answers)
+        : evidence.answers;
+  for (const [id, answer] of Object.entries(heads ?? {})) {
     if (!answer) continue;
     fields.push(
-      `${id}=${answer.choice} (P(allow)=${answer.probabilities.allow.toFixed(4)}; confidence=${answer.confidence.toFixed(4)})`,
+      `${id}=${answer.choice} (P(allow)=${answer.probabilities.allow.toFixed(4)}; confidence=${answer.confidence.toFixed(4)}${evidence.process?.kind === "command_stages" ? `; request=${evidence.process.result.origins[id]?.requestId ?? "unobserved"}` : ""})`,
     );
   }
+  if (evidence.process?.kind === "command_stages")
+    fields.push(
+      `actual stages=${evidence.process.result.stages.length}`,
+      `syntax answers=${evidence.process.result.syntaxTranscript.length}`,
+    );
   if (evidence.cost !== undefined) fields.push(`cost=$${evidence.cost.toFixed(8)}`);
   if (evidence.failure) fields.push(`failure=${evidence.failure}`);
   return `  Jev(${fields.join("; ")})`;

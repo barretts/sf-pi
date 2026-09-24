@@ -91,22 +91,23 @@ export SF_GUARDRAIL_JEV_ENDPOINT="https://decisions.example.invalid/v1/decisions
 export SF_GUARDRAIL_JEV_API_KEY_FILE="$HOME/.config/jev/key"
 ```
 
-The client uses Node's built-in `fetch`. It sends one HTTPS `POST` to the
+The client uses Node's built-in `fetch`. Each call sends an HTTPS `POST` to the
 configured URL with JSON and `Authorization: Bearer <key>`. It rejects redirects.
 The gateway must accept `model`, pinned `provider` routing, wire state version 6,
 and independent Choice `questions`. It must return the resolved model and
 provider identity, a request `id`, exactly one `answers` entry per requested
 question, and `usage.input_tokens` and `usage.output_tokens`. Reported
 `usage.cost` is optional. Each answer must have `type: "choice"`, a valid
-`choice`, probabilities for `allow`, `confirm`, and `block`, and `confidence`.
+`choice`, exactly the requested probability keys, and `confidence`. Action
+keys are `allow`, `confirm` and `block`. Syntax keys are `match` and `no_match`.
 This connection implements the pinned Jev Decisions contract. It does not select
 arbitrary chat models.
 
-Each independent Choice question has `allow`, `confirm`, and `block` options.
-Every call asks `risk` using a rubric for its tool family: files,
+Each action question has `allow`, `confirm`, and `block` options.
+Every tool request asks `risk` using a rubric for its tool family: files,
 shell/Salesforce CLI, Apex, SOQL, Agent Script, Data 360, Canvas, browser, or
-unknown effects. Applicable questions separately judge their own dimensions,
-for at most six model-authored answers against the same state:
+unknown effects. Applicable questions separately judge their own dimensions.
+At most six action answers supply these judgments:
 
 - **File policy** is included when paths or file facts are available.
 - **Command policy** is included for parsed shell calls.
@@ -134,6 +135,28 @@ disclosure and browser authority assess their own effects. A genuinely
 unresolved restriction remains a model confirm/block criterion. Private command
 literal spelling can be withheld while its exact equality remains available
 through the token projection; omitted spelling alone does not create a match.
+
+A Bash request uses three calls. The first call asks all applicable action
+questions except command policy. The second asks Jev to compare every active
+command row with the command tokens. These syntax answers choose `match` or
+`no_match`. The third asks command policy and includes the actual syntax
+answers. An empty active row list needs only the first and third calls. The
+host does not match a row or select a policy winner. An early block does not
+skip a later requested call. Every other tool uses one strict call for all
+applicable action questions. This includes command policy for a tool with
+shell metadata.
+
+The Bash syntax call maps each integer token ID to one distinct alphabetic
+label, such as `t_a`. Token order, quoted boundaries, prefix namespaces and
+all selector fields stay intact. Each question states its selector with those
+labels. The shared grammar defines equality, order and adjacency. Public
+selector names stay in a separate ordered list. A null name is not a wildcard.
+Vocabulary membership does not prove that a command token was observed.
+The local manifest still binds the original rows and integer token projection.
+
+Hosted browser facts omit only the changing `ageMs` value. They keep the actual
+freshness status and target fields. Local checks keep the snapshot identity,
+age and expiry. These checks do not extend a snapshot's lifetime.
 
 The state carries the minimum policy and observed facts relevant to those
 questions. Known CLI metadata, trusted file-path variants, verification state,
@@ -172,11 +195,30 @@ The request pins routing to `only: ["typesafe"]` with
 identity `typesafe/jev-1.13-20260917` from provider `TypeSafe`. An unexpected
 model or provider identity blocks until the integration is revalidated.
 
-Classification has a 1,500 ms total deadline, no retries, and a 500 ms
-end-to-end p95 performance target. Missing endpoint or credentials, invalid supplied
+Classification and automatic release share one 10,000 ms total deadline.
+Facts, preparation, all calls, response reads, validation and synchronous
+cleanup count against that deadline. A stage cannot reset it. There are no
+retries. Cancellation starts without a wait for asynchronous cleanup to finish.
+A later human approval has a separate 1,500 ms check of the current context.
+It does not repeat a model call. Missing endpoint or credentials, invalid supplied
 configuration, malformed metadata or responses, API/transport failures,
 cancellation, and deadline expiry block with an audited failure. Factory
 execution and session startup make no live Jev requests.
+
+`SF_GUARDRAIL_JEV_OPERATING_POINT` selects one exact setting:
+
+- `conservative` is the default. Each action must select `allow` with raw
+  `P(allow) >= 0.99`. Each syntax answer must have raw probability of at least
+  `0.99` for its selected choice.
+- `argmax` is experimental. Both probability limits are zero. Every action
+  must still select `allow`. The syntax choices still come from Jev.
+
+Both settings require complete original context for automatic execution.
+Unknown names and custom probability limits fail. The setting is captured
+before facts are resolved. Its hash binds the protocol, connection and exact
+approval. A changed setting prevents release. Neither setting has a calibrated
+joint probability or safety qualification. The 500 ms p95 target remains a
+performance reference. The user chose coverage tests with slower responses.
 
 See the [TypeSafe Choice documentation](https://docs.typesafe.ai/primitives/choice)
 for independent decision questions. Validate your configured gateway against
@@ -210,7 +252,8 @@ evidence does not establish model qualification.
   complete context and a currently verified non-production org; production,
   unknown, external, and opaque calls remain allow-once.
 - Jev automatically allows only complete context with **every requested
-  answer** choosing `allow` and `P(allow) >= 0.99`. Any answer choosing `block`
+  action answer** choosing `allow` and meeting the captured probability limit.
+  Syntax answers must meet that setting's syntax limit. Any action choosing `block`
   is an unapprovable hard block. Any `confirm`, allow probability below the
   threshold, or incomplete context requires explicit human confirmation.
 - Jev session approval covers the exact original call. Its local fingerprint
@@ -235,7 +278,9 @@ evidence does not establish model qualification.
   per-question choices/probabilities/confidence, latency, cost, request-id, and
   failure facts without raw payloads. Top-level probabilities and confidence
   are the actual `risk` answer, even when another question decides the final
-  gate. They are not a combined safety probability.
+  gate. Bash audit retains separate actual stage replies, origins and syntax
+  answers. Collected answers have no shared provider request ID or combined
+  probability. Already validated replies remain evidence after a later failure.
 - In deterministic mode, Power Tool Mode is off by default, can be limited to selected native families,
   and requires a separate production/unknown-org opt-in.
 - In deterministic mode, strictly validated temporary-directory cleanup can be auto-allowed; other
@@ -249,7 +294,7 @@ Thresholds need evaluation on labels authored for this domain. TypeSafe's
 [confidence guidance](https://docs.typesafe.ai/confidence) recommends
 conservative starting thresholds and validation with your own data; a
 concentrated answer does not establish correctness for an individual tool
-call. Independent questions are evaluated in the same request, following the
+call. Questions within each stage are independent, following the
 [fan-out pattern](https://docs.typesafe.ai/patterns/fan-out).
 
 The frozen development fixture contains 175 cases covering all 74 bundled
@@ -264,10 +309,11 @@ coverage, extra confirmations, failures, latency, and reported cost. They do
 not establish held-out qualification or live Salesforce/browser acceptance.
 Protocol revisions are recorded separately from this frozen input/gold set;
 an earlier protocol's result does not establish the revised protocol's behavior.
-Coverage-first diagnostic experiments may use a recorded 10-second transport
-deadline while keeping operations inert. Report that profile separately from
-the enforced 1,500 ms runtime deadline and its 500 ms p95 target. Qualification
-still requires the normal runtime profile and its safety/performance gates.
+Protocol 15 uses the same total 10-second bound in its staged hook and coverage
+tests. Record the exact probability setting for each test. A result under an
+older protocol or setting does not establish the current source's behavior.
+Finite coverage, actual tool execution, latency and independent qualification
+remain separate proof steps.
 
 SF Pi's selected Jev mode gives Jev sole responsibility for risk and policy
 interpretation. It has no deterministic risk floor. Compare the configured

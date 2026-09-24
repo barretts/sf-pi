@@ -5,14 +5,25 @@ deterministic engine remains the default. The selected new target measures at le
 coverage against the old guardrail and useful automatic approval on valid safe
 inputs. The old exact-agreement gates remain visible as historical gates.
 
-The current product source uses protocol version 14, wire state version 6, and
-the pinned model `typesafe/jev-1.13-20260917`. It requires complete global
-operation context. Every requested answer must choose `allow` with
-`P(allow) >= 0.99` before automatic execution. A model `block` prevents
-execution. Model confirmation, insufficient allow probability, or incomplete
-context requires human confirmation. Headless confirmations block.
-Configuration, transport, cancellation, deadline, and invalid-response failures
-block. The product has a 1,500 ms total deadline and no retries.
+The current product source uses protocol version 15, original wire state version
+6, syntax state version 42, and the pinned model `typesafe/jev-1.13-20260917`.
+Bash uses actual non-command, syntax and command-policy calls. An empty active
+command list omits the syntax call. Other tools use one strict call for all
+requested action questions. The adapter keeps each actual reply and origin.
+
+The default `conservative` point requires complete original context, every action
+to choose `allow` with raw `P(allow) >= 0.99`, and each syntax answer to meet a
+0.99 raw probability floor for its selected choice. The explicit experimental
+`argmax` point sets both floors to zero. Every action must still choose `allow`,
+and context must be complete. Actual blocks and errors prevent execution.
+Confirmations require human approval and block in headless use. Neither point
+has a joint calibration or safety qualification claim.
+
+One total 10,000 ms deadline covers facts, all calls, validation, synchronous
+cleanup and automatic release checks. A later explicit human approval uses a
+separate bounded 1,500 ms context check. It does not repeat model requests.
+The source has no retries or deterministic fallback. These source changes do
+not transfer the old full comparison scores to the new adapter.
 
 Protocol 9 corrected the metadata gap that omitted the file-policy question
 for `grep`. That source correction remains applied. The old
@@ -1028,3 +1039,111 @@ recorded as absent. The failure records remain. The next preparation must
 create that shared private base before any facts are frozen, then recheck all
 175 cases. It must not refresh or reuse the old frozen preparations. No paid
 provider call used those failed preparations.
+
+## Protocol 15 source adapter — 2026-09-24
+
+The actual hook now uses the bounded command process for Bash and one strict
+all-head call for other tools. The two declared operating points are
+`conservative` and `argmax`. The adapter captures the point, endpoint, input
+and policy before it waits for facts. It checks the expected transport binding
+before it retains a stage reply. A synchronous read can retain a fully validated
+actual reply after an outer cancellation race. That reply cannot permit release
+after failure. Timing origins distinguish strict validation from completed
+synchronous transport cleanup.
+
+The fixed isolated adapter patch has SHA-256
+`3ae56886559c9ecf0b8be2db6a8ec8e13787969ee9b8cfca002874774a4ecf20`.
+Its isolated run passed 850 tests in 14 files. The combined syntax 42 source
+passed 869 tests in the same 14 source groups. It also passed the typecheck and
+all 24 public syntax-harness tests. These tests used controlled replies and
+inert effects. They supply no model coverage score.
+
+The first combined focused run passed 754 tests and failed two checks for
+stale source hashes. The current command pin must use ordinary JSON order,
+as its historical test does. The global pin must include syntax 42. Both
+checks were corrected; their failed log was retained. The historical numeric
+37 contract check still reconstructs the exact old contract and passes.
+
+The cold CLI import path had a profile-order defect. The scorer imported risk,
+which imported facts and the browser store before the CLI set its private
+profile. Risk now imports the default fact resolver only when it needs it.
+The import uses the same absolute deadline and signal. A guard runs before
+the resolver call. An injected resolver does not load the default module.
+This cannot change the path of a browser module that is already loaded.
+The lazy-import patch has SHA-256
+`b988055be1d86c54c4bb768541eab028e555c5185385bb06a1cd97fad73b0316`.
+The table below includes this explicit runtime contract change. The earlier
+869-test run preceded that change. It used global hash
+`afedbb9dec6bf4c7ee5331a735bb399423a3dc48435a13b87f40a031ee5766d5`.
+
+| Binding                               | Current SHA-256                                                    |
+| ------------------------------------- | ------------------------------------------------------------------ |
+| Global protocol 15                    | `07998c56dcc8dc5f865d1abdb29528e1ee9d2495aeab5caa1c6d6f8913a2bafd` |
+| Command contract, ordinary JSON order | `8dcf700749fc8813119627d5b26f1ce63b130d339b292755389ec191e0b471a8` |
+| Conservative point                    | `14e140ce098d529eb0a9c02d908ee97478ae7923b794eee8fe303f27ff4066b4` |
+| Conservative runtime protocol         | `0cdf35c450cfd5901fb725d83624c933ee18f6498eb2d6a63ccee7696502f645` |
+| Argmax point                          | `60eb4cb19a21a69929830f8e9a99b5678c4bb514d4b97af0f0d1a0e241091d4a` |
+| Argmax runtime protocol               | `8e10cf99ce6b2d39932750950f13c0c4aaa55c72407e3d0666eb95ff882b9132` |
+
+The public baseline caller now uses the actual named transport methods. It
+records each prepared body, separate reply ID and actual stage origin.
+Preparation uses explicitly marked synthetic local answers. Every preparation
+action is null, including failed preparation. It exports no synthetic provider
+ID, cost or model score. Its fixed patch has SHA-256
+`5189cd8a07899510506f1b0799d21f765fee0dac7d9e06b3ebb06bac6ae74e2b`.
+The isolated caller run passed all 24 tests. The combined caller and historical
+scorer run passed all 61 tests before the separate staged scorer change.
+
+The public scorer now checks the named point, current protocol and transport
+hashes, ordered stage receipts, actual action answers, syntax answers and their
+origins. It uses the current source action gate. The 37 old tests remain
+unchanged, and 56 new tests cover staged receipts and failures. Saved summary
+rows do not contain the full wire bytes. The summary scorer cannot prove those
+bytes independently.
+
+The SDK smoke script now checks the exact current file-facts schema and the
+declared operating point. It requires one strict actual receipt and a Jev audit
+before the inert tool runs. Its seven tests use synthetic replies. They cover
+both points, hard blocks, the conservative floor, edited evidence, private
+profile use, and zero file-content reads. The combined caller, scorer and
+smoke run passed 124 tests in three files. No provider call supplied this proof.
+The combined log has SHA-256
+`8b4f555787ce154bc4837cfcf684384dc90dff3065c180c715f09e6a973da9f0`.
+
+Both final cold Node tests passed. The first imports the public comparison
+scripts before the evaluator factory. It proves one browser write in the
+owned private profile, an unchanged initial profile and home, zero key reads
+or provider calls, and zero model score from synthetic preparation. Disposal
+removes the owned profile and restores the initial profile.
+
+The second delays default facts evaluation by 800 ms against a 100 ms test
+deadline. Classification blocks before evaluation finishes. After the late
+import finishes, the actual default facts function has zero calls. Injected,
+cancelled and expired calls do not start that default import. The test uses
+controlled effects only. Native synchronous evaluation cannot be preempted
+by a JavaScript timer. The guard still prevents release after expiry.
+
+The final combined `npm run validate:ci` completed with exit code 0. The main
+run passed 5,805 tests in 619 files and skipped 65 tests and one file. The
+separate manager check passed 20 tests. The public syntax harness passed all
+24 tests. Full `npm run lint` also completed with exit code 0. Both commands
+used a private home with no provider settings, no Pi directory override and
+no `NO_COLOR` override. All 1,795 tracked file hashes stayed unchanged during
+each command. The final public scan checked 32 changed files and found zero
+actual-key, former-provider or private-path matches.
+
+| Check                  | Exit code | Log SHA-256                                                        |
+| ---------------------- | --------- | ------------------------------------------------------------------ |
+| Combined full local CI | 0         | `4a44d84f6832ce24c18c5b8405fdc3ef42684946f61d20111a691929fb0c427b` |
+| Combined full lint     | 0         | `99dcb1d936a1e0cb75a5645d00f1d76cf58951e030f2e04e287974267b965af7` |
+
+These source checks do not supply live model coverage. The private verifier
+must use the final source for fresh preparation, preflight and raw replies.
+Its checked source manifest has an explicit fixed scope. It does not prove
+unchanged bytes for every installed dependency. Cancellation and durable
+late evidence remain separate verifier checks before live tests.
+
+The remote branch is now `barretts/jev-guardrail` in `barretts/sf-pi`. The
+rename preserved the full commit history. New source and evidence commits
+use that branch. No protocol 15 full-provider comparison has completed. The
+98% target, independent qualification and normal activation remain pending.

@@ -1,12 +1,16 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+import { createHash } from "node:crypto";
+import { types } from "node:util";
 import { performance } from "node:perf_hooks";
 import {
-  requestJev,
+  createJevProcessTransport,
+  JevClientError,
+  JevStageClientError,
   resolveJevEndpoint,
   JEV_MODEL,
   JEV_RESOLVED_MODEL,
   JEV_PROVIDER,
-  JEV_TIMEOUT_MS,
+  JEV_COMMAND_PROCESS_TIMEOUT_MS,
   JEV_RESPONSE_VALIDATION_CONTRACT,
 } from "./jev-client.ts";
 import {
@@ -15,8 +19,22 @@ import {
   extractJevTargetOrg,
   jevShellExecutableHeads,
 } from "./jev-metadata.ts";
-import { resolveJevFacts } from "./jev-facts.ts";
-import { jevHash } from "./jev-identity.ts";
+import type { resolveJevFacts } from "./jev-facts.ts";
+import { jevHash, jevCanonicalJson } from "./jev-identity.ts";
+import {
+  runJevCommandProcess,
+  validateJevStageResult,
+  validateJevStageFailureEvidence,
+  snapshotJevStageResult,
+  JEV_COMMAND_PROCESS_PROTOCOL,
+} from "./jev-command-process.ts";
+import {
+  resolveJevOperatingPoint,
+  validateJevOperatingPoint,
+  jevOperatingPointHash,
+  JEV_OPERATING_POINT_PROTOCOL,
+  type JevOperatingPoint,
+} from "./jev-operating-point.ts";
 import { resolveRuleBehavior } from "./rule-behavior.ts";
 import { buildJevCommandTokenContext } from "./jev-command-tokens.ts";
 import type { SafetyKernelInput } from "./safety-kernel.ts";
@@ -24,6 +42,11 @@ import type {
   ClassifiedDecision,
   GuardrailConfig,
   JevAction,
+  JevChoiceAnswer,
+  JevAllHeadRequest,
+  JevAllHeadStageResult,
+  JevDecisionProcessEvidence,
+  JevDecisionTransport,
   JevChoiceQuestion,
   JevFacts,
   JevPrediction,
@@ -510,9 +533,35 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
   },
 };
 export const JEV_PROTOCOL_HASH = jevHash({
-  version: 14,
+  version: 15,
+  commandProcess: JEV_COMMAND_PROCESS_PROTOCOL,
+  operatingPoint: JEV_OPERATING_POINT_PROTOCOL,
+  runtime: {
+    bash: "actual-command-stages",
+    otherTools: "actual-all-head-one-call",
+    totalTimeoutMs: JEV_COMMAND_PROCESS_TIMEOUT_MS,
+    laterHumanApprovalRecheckMs: 1500,
+    defaultFactsImport: {
+      mode: "on-demand-only-without-injected-fact-resolver",
+      profile: "caller-profile-precedes-first-browser-store-module-load-no-rebinding",
+      bound: "same-absolute-classification-deadline-and-signal-no-reset",
+      beforeCall: "guard-after-bound-import-before-fact-resolver",
+    },
+    audit: "separate-stage-origins-no-collected-provider-reply",
+    observedResult: "synchronous-last-strict-current-attempt-read-no-wait",
+    timingOrigins: {
+      transport_cleanup: "successful-provider-method-including-synchronous-cleanup",
+      strict_validation: "fully-validated-observation-before-later-failure-or-cleanup",
+      failedAttempt: "failure-evidence-construction",
+      total: "full-classification-and-synchronous-cleanup",
+    },
+  },
   questions: QUESTION_PROTOCOL,
   mechanicalObservations: {
+    browserFreshness: {
+      hosted: "omit-only-volatile-browser-ageMs-preserve-current-status-and-target-fields",
+      local: "retain-age-and-snapshot-identity-for-before-and-after-expiry-checks-no-renewal",
+    },
     nativeQueryArtifacts: {
       tool: "sf_soql",
       action: "query.run",
@@ -665,6 +714,31 @@ export const JEV_PROTOCOL_HASH = jevHash({
 /** Keep the endpoint local. Only this hash can enter approval memory and audit. */
 export function jevTransportBindingHash(endpoint = resolveJevEndpoint()): string {
   return jevHash({ contract: TRANSPORT_BINDING_CONTRACT, endpoint });
+}
+
+/** Bind one declared operating point to the source process contract. */
+export function jevRuntimeProtocolHash(
+  operatingPoint: JevOperatingPoint = resolveJevOperatingPoint(),
+): string {
+  return jevHash({
+    protocolHash: JEV_PROTOCOL_HASH,
+    operatingPointHash: jevOperatingPointHash(operatingPoint),
+  });
+}
+
+/** The client uses this exact local binding for every stage. */
+export function jevDecisionTransportBindingHash(
+  endpoint = resolveJevEndpoint(),
+  operatingPoint: JevOperatingPoint = resolveJevOperatingPoint(),
+): string {
+  return jevHash({
+    contract: TRANSPORT_BINDING_CONTRACT,
+    endpoint,
+    processBinding: {
+      protocolHash: jevRuntimeProtocolHash(operatingPoint),
+      operatingPointHash: jevOperatingPointHash(operatingPoint),
+    },
+  });
 }
 
 export function jevConfigHash(config: GuardrailConfig): string {
@@ -891,6 +965,9 @@ export function buildJevRequest(
     artifactPlan: _artifactPlan,
     ...operation
   } = metadata;
+  // Age changes during one valid snapshot. Keep current status and target facts on the wire.
+  const { ageMs: _browserAge, ...browserFacts } = facts.browser ?? {};
+  const hostedFacts = facts.browser ? { ...facts, browser: browserFacts } : facts;
   const fileToolObservations = Object.hasOwn(FILE_TOOL_OBSERVATIONS, metadata.toolName)
     ? {
         ...FILE_TOOL_OBSERVATIONS[metadata.toolName as keyof typeof FILE_TOOL_OBSERVATIONS],
@@ -916,7 +993,7 @@ export function buildJevRequest(
           ...(commandTokens ? { commandTokens: commandTokens.operation } : {}),
         },
       },
-      facts,
+      facts: hostedFacts,
       policy: {
         ...(hasFiles
           ? {
@@ -966,14 +1043,18 @@ export function buildJevRequest(
   return JSON.parse(wire) as JevRequest;
 }
 
-export function evaluateJevPrediction(prediction: JevPrediction, complete: boolean): JevAction {
+export function evaluateJevPrediction(
+  prediction: JevPrediction,
+  complete: boolean,
+  operatingPoint: JevOperatingPoint = resolveJevOperatingPoint("conservative"),
+): JevAction {
+  const point = validateJevOperatingPoint(operatingPoint);
   const answers = Object.values(prediction.answers ?? { risk: prediction });
   if (!answers.length || (prediction.answers && !prediction.answers.risk)) return "block";
   if (answers.some((answer) => answer.choice === "block")) return "block";
   return complete &&
     answers.every(
-      (answer) =>
-        answer.choice === "allow" && answer.probabilities.allow >= JEV_MIN_ALLOW_PROBABILITY,
+      (answer) => answer.choice === "allow" && answer.probabilities.allow >= point.allowProbability,
     )
     ? "allow"
     : "confirm";
@@ -1010,13 +1091,21 @@ export async function evaluateJevSafety(
     descriptor?: JevToolDescriptor;
     endpoint?: string;
     signal?: AbortSignal;
-    request?: typeof requestJev;
+    deadline?: number;
+    operatingPoint?: JevOperatingPoint;
+    createTransport?: typeof createJevProcessTransport;
     resolveFacts?: typeof resolveJevFacts;
   } = {},
 ): Promise<ClassifiedDecision> {
   const started = performance.now();
-  const timeout = AbortSignal.timeout(JEV_TIMEOUT_MS);
-  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+  let deadline = started + JEV_COMMAND_PROCESS_TIMEOUT_MS;
+  const timeout = new AbortController();
+  let callerSignal: AbortSignal | undefined;
+  let signal = timeout.signal;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let operatingPoint: JevOperatingPoint | undefined;
+  let operatingPointHash: string | undefined;
+  let protocolHash = JEV_PROTOCOL_HASH;
   let policyHash = "invalid";
   let fingerprint = "invalid";
   let originalHash: string | undefined;
@@ -1024,11 +1113,53 @@ export async function evaluateJevSafety(
   let factsHash: string | undefined;
   let transportHash: string | undefined;
   let metadata: JevToolMetadata | undefined;
+  let processEvidence: JevDecisionProcessEvidence | undefined;
+  let transport: JevDecisionTransport | undefined;
+  let allHeadRequest: { request: JevAllHeadRequest; hash: string; bytes: number } | undefined;
+  let closed = false;
+  const close = () => {
+    if (closed || !transport) return;
+    closed = true;
+    try {
+      transport.close();
+    } catch {
+      if (processEvidence?.kind === "all_heads") processEvidence.cleanupFailed = true;
+      throw new JevClientError("transport_error");
+    }
+  };
+  const guard = () => {
+    signal.throwIfAborted();
+    if (performance.now() >= deadline) throw new JevClientError("timeout");
+  };
   const evidence = () => ({
     model: JEV_RESOLVED_MODEL,
     latencyMs: performance.now() - started,
     policyHash,
-    protocolHash: JEV_PROTOCOL_HASH,
+    protocolHash,
+    ...(operatingPoint ? { operatingPoint } : {}),
+    ...(operatingPointHash ? { operatingPointHash } : {}),
+    ...(processEvidence ? { process: processEvidence } : {}),
+    ...(processEvidence?.kind === "command_stages" && processEvidence.result.answers.risk
+      ? {
+          riskAnswer: processEvidence.result.answers.risk,
+          probabilities: processEvidence.result.answers.risk.probabilities,
+          confidence: processEvidence.result.answers.risk.confidence,
+          riskOrigin: processEvidence.result.origins.risk,
+        }
+      : {}),
+    ...(processEvidence?.kind === "all_heads" && processEvidence.stage
+      ? {
+          riskAnswer: processEvidence.stage.answers.risk,
+          probabilities: processEvidence.stage.answers.risk.probabilities,
+          confidence: processEvidence.stage.answers.risk.confidence,
+          riskOrigin: {
+            ...processEvidence.stage.evidence,
+            stage: "all_heads" as const,
+            questionId: "risk" as const,
+            timingOrigin: processEvidence.stageTimingOrigin,
+          },
+        }
+      : {}),
     ...(originalHash ? { inputHash: originalHash } : {}),
     ...(descriptorHash ? { descriptorHash } : {}),
     ...(factsHash ? { factsHash } : {}),
@@ -1044,13 +1175,65 @@ export async function evaluateJevSafety(
     ...(transportHash ? { transportHash } : {}),
   });
   try {
-    signal.throwIfAborted();
-    policyHash = jevConfigHash(input.config);
-    // Use the same endpoint after fact lookup.
+    if (
+      !options ||
+      typeof options !== "object" ||
+      types.isProxy(options) ||
+      Object.getPrototypeOf(options) !== Object.prototype
+    )
+      throw new JevClientError("invalid_request");
+    const optionFields = Object.getOwnPropertyDescriptors(options);
+    const allowedOptions = [
+      "descriptor",
+      "endpoint",
+      "signal",
+      "deadline",
+      "operatingPoint",
+      "createTransport",
+      "resolveFacts",
+    ];
+    if (
+      Reflect.ownKeys(optionFields).some(
+        (key) =>
+          typeof key !== "string" ||
+          !allowedOptions.includes(key) ||
+          !optionFields[key].enumerable ||
+          !Object.hasOwn(optionFields[key], "value"),
+      )
+    )
+      throw new JevClientError("invalid_request");
+    options = Object.freeze(
+      Object.fromEntries(Object.entries(optionFields).map(([key, field]) => [key, field.value])),
+    );
+    if (
+      (options.createTransport !== undefined && typeof options.createTransport !== "function") ||
+      (options.resolveFacts !== undefined && typeof options.resolveFacts !== "function")
+    )
+      throw new JevClientError("invalid_request");
+    callerSignal = options.signal;
+    if (callerSignal !== undefined && !(callerSignal instanceof AbortSignal))
+      throw new JevClientError("invalid_request");
+    signal = callerSignal ? AbortSignal.any([callerSignal, timeout.signal]) : timeout.signal;
+    deadline = options.deadline === undefined ? deadline : options.deadline;
+    operatingPoint = validateJevOperatingPoint(
+      options.operatingPoint === undefined ? resolveJevOperatingPoint() : options.operatingPoint,
+    );
+    operatingPointHash = jevOperatingPointHash(operatingPoint);
+    protocolHash = jevRuntimeProtocolHash(operatingPoint);
+    if (!Number.isFinite(deadline) || deadline > started + operatingPoint.totalTimeoutMs)
+      throw new JevClientError("invalid_request");
+    guard();
+    timer = setTimeout(() => timeout.abort(), Math.max(0, deadline - performance.now()));
+    timer.unref?.();
+    const config = JSON.parse(JSON.stringify(input.config)) as GuardrailConfig;
+    policyHash = jevConfigHash(config);
     const endpoint = resolveJevEndpoint(options.endpoint);
-    transportHash = jevTransportBindingHash(endpoint);
-    // The entire original input is only hashed locally, including bodies omitted from the request.
-    originalHash = jevHash(input.input);
+    transportHash = jevDecisionTransportBindingHash(endpoint, operatingPoint);
+    const originalJson = jevCanonicalJson(input.input);
+    originalHash = createHash("sha256").update(originalJson).digest("hex");
+    input = { ...input, input: JSON.parse(originalJson), config };
+    const originalCommand =
+      typeof input.input.command === "string" ? input.input.command : undefined;
     descriptorHash = jevHash(JSON.parse(JSON.stringify(options.descriptor ?? null)));
     metadata = buildJevMetadata(input.toolName, input.input, options.descriptor);
     if (input.artifactPlan)
@@ -1061,8 +1244,13 @@ export async function evaluateJevSafety(
         sessionId: input.sessionId,
         toolCallId: input.toolCallId,
       });
+    guard();
+    const resolveFacts =
+      options.resolveFacts ??
+      (await withinDeadline(import("./jev-facts.ts"), signal)).resolveJevFacts;
+    guard();
     const resolved = await withinDeadline(
-      (options.resolveFacts ?? resolveJevFacts)({
+      resolveFacts({
         ...input,
         metadata,
         signal,
@@ -1070,6 +1258,7 @@ export async function evaluateJevSafety(
       }),
       signal,
     );
+    guard();
     if (
       resolved.artifactPlan &&
       metadata.artifactPlan &&
@@ -1089,24 +1278,84 @@ export async function evaluateJevSafety(
       factsHash,
       transportHash,
       policyHash,
-      protocolHash: JEV_PROTOCOL_HASH,
+      protocolHash,
+      operatingPointHash,
       engine: "jev",
       model: JEV_RESOLVED_MODEL,
     });
-    const prediction = await withinDeadline(
-      (options.request ?? requestJev)(
-        buildJevRequest(metadata, resolved.facts, input.config, {
-          ...(typeof input.input.command === "string" ? { command: input.input.command } : {}),
-        }),
-        {
-          signal,
-          endpoint,
+    const request = buildJevRequest(metadata, resolved.facts, input.config, {
+      ...(originalCommand === undefined ? {} : { command: originalCommand }),
+    });
+    guard();
+    const processBinding = Object.freeze({ protocolHash, operatingPointHash });
+    const createTransport = (processOptions: { deadline: number; signal?: AbortSignal }) =>
+      (options.createTransport ?? createJevProcessTransport)({
+        ...processOptions,
+        endpoint,
+        binding: processBinding,
+      });
+    let action: JevAction;
+    let answers: Partial<Record<JevQuestionId, JevChoiceAnswer>>;
+    let allHeads: JevAllHeadStageResult | undefined;
+    if (input.toolName === "bash") {
+      const result = await runJevCommandProcess(request, {
+        deadline,
+        signal,
+        operatingPoint,
+        transportHash,
+        createTransport,
+      });
+      processEvidence = { kind: "command_stages", result };
+      guard();
+      if (
+        result.stages.some((stage) => stage.evidence.transportHash !== transportHash) ||
+        (result.failureEvidence && result.failureEvidence.transportHash !== transportHash)
+      )
+        throw new JevClientError("invalid_response");
+      action = result.gate;
+      answers = result.answers;
+    } else {
+      const json = JSON.stringify(request);
+      const posted = (allHeadRequest = {
+        request: request as JevAllHeadRequest,
+        hash: createHash("sha256").update(json).digest("hex"),
+        bytes: Buffer.byteLength(json),
+      });
+      processEvidence = {
+        kind: "all_heads",
+        completed: false,
+        cleanupFailed: false,
+        attempt: {
+          requestedQuestionIds: Object.keys(request.questions),
+          requestHash: posted.hash,
+          requestBytes: posted.bytes,
         },
-      ),
-      signal,
-    );
-    signal.throwIfAborted();
-    const action = evaluateJevPrediction(prediction, complete);
+      };
+      transport = createTransport({ deadline, signal });
+      guard();
+      allHeads = snapshotJevStageResult(
+        await withinDeadline(transport.requestAllHeads(posted.request), signal),
+      );
+      validateJevStageResult("all_heads", allHeads, posted, transportHash);
+      processEvidence.stage = allHeads;
+      processEvidence.stageTimingOrigin = "transport_cleanup";
+      close();
+      guard();
+      processEvidence.completed = true;
+      answers = allHeads.answers;
+      action = evaluateJevPrediction(
+        {
+          ...allHeads.answers.risk,
+          answers: allHeads.answers,
+          model: allHeads.evidence.model,
+          provider: allHeads.evidence.provider,
+          requestId: allHeads.evidence.requestId,
+          usage: allHeads.evidence.usage,
+        },
+        complete,
+        operatingPoint,
+      );
+    }
     const canGrantSession =
       complete &&
       !!resolved.orgIdentity &&
@@ -1115,29 +1364,36 @@ export async function evaluateJevSafety(
       jevSessionTransportBounded(metadata) &&
       !input.toolName.startsWith("sf_browser_") &&
       input.toolName !== "slack_canvas";
+    guard();
     return {
-      ruleId: "jev-risk-v6",
+      ruleId: "jev-risk-v7",
       feature: "jevGate",
       action,
       fingerprint,
       subject: jevDisplaySubject(metadata, resolved.facts),
       reason:
-        action === "allow"
-          ? "Jev permits automatic execution under the effective policy."
-          : action === "block"
-            ? "Jev classified this operation as prohibited by the effective policy."
-            : complete
-              ? "Jev requires explicit approval or is uncertain about this operation."
-              : "Jev requires explicit approval because operation metadata or trusted facts are incomplete.",
+        processEvidence.kind === "command_stages" && processEvidence.result.failure
+          ? `Jev classification failed (${processEvidence.result.failure.code}); execution is blocked.`
+          : action === "allow"
+            ? "Jev permits automatic execution under the effective policy."
+            : action === "block"
+              ? "Jev classified this operation as prohibited by the effective policy."
+              : complete
+                ? "Jev requires explicit approval or is uncertain about this operation."
+                : "Jev requires explicit approval because operation metadata or trusted facts are incomplete.",
       promptTitle: "SF Guardrail · Jev approval",
       approvalScope: {
         fingerprint,
         label: `Exact ${input.toolName} call`,
         allowSession: canGrantSession,
-        detail: `Operation: ${jevDisplaySubject(metadata, resolved.facts)}\nModel: ${prediction.model}\nAnswers: ${Object.entries(
-          prediction.answers ?? { risk: prediction },
+        detail: `Operation: ${jevDisplaySubject(metadata, resolved.facts)}\nModel: ${JEV_RESOLVED_MODEL}\nOperating point: ${operatingPoint.name}\nAnswers: ${Object.entries(
+          answers,
         )
-          .map(([id, answer]) => `${id}=${answer.choice} (P(allow)=${answer.probabilities.allow})`)
+          .flatMap(([id, answer]) =>
+            answer === undefined
+              ? []
+              : [`${id}=${answer.choice} (P(allow)=${answer.probabilities.allow})`],
+          )
           .join(
             "; ",
           )}\nContext: ${complete ? "complete" : "incomplete"}\nWithheld: ${metadata.omissions.join(", ") || "none"}`,
@@ -1148,26 +1404,81 @@ export async function evaluateJevSafety(
         : {}),
       jev: {
         ...evidence(),
-        model: prediction.model,
-        provider: prediction.provider,
-        requestId: prediction.requestId,
-        probabilities: prediction.probabilities,
-        confidence: prediction.confidence,
-        ...(prediction.answers ? { answers: prediction.answers } : {}),
-        ...(prediction.usage.cost === undefined ? {} : { cost: prediction.usage.cost }),
+        ...(processEvidence.kind === "command_stages" && processEvidence.result.failure
+          ? { failure: processEvidence.result.failure.code }
+          : {}),
+        ...(allHeads
+          ? {
+              model: allHeads.evidence.model,
+              provider: allHeads.evidence.provider,
+              requestId: allHeads.evidence.requestId,
+              probabilities: allHeads.answers.risk.probabilities,
+              confidence: allHeads.answers.risk.confidence,
+              answers: allHeads.answers,
+              riskOrigin: {
+                ...allHeads.evidence,
+                stage: "all_heads" as const,
+                questionId: "risk" as const,
+                timingOrigin: "transport_cleanup" as const,
+              },
+              ...(allHeads.evidence.usage.cost === undefined
+                ? {}
+                : { cost: allHeads.evidence.usage.cost }),
+            }
+          : {}),
       },
     };
-  } catch (error) {
+  } catch (caught) {
+    let error: unknown = caught;
+    if (processEvidence?.kind === "all_heads") {
+      try {
+        const reported = error instanceof JevStageClientError ? error.observedResult : undefined;
+        const source =
+          reported ?? (processEvidence.stage ? undefined : transport?.getObservedResult?.());
+        if (source !== undefined) {
+          const observed = snapshotJevStageResult(source);
+          if (!allHeadRequest || observed.stage !== "all_heads")
+            throw new JevClientError("invalid_response");
+          validateJevStageResult("all_heads", observed, allHeadRequest, transportHash);
+          if (
+            processEvidence.stage &&
+            JSON.stringify(processEvidence.stage) !== JSON.stringify(observed)
+          )
+            throw new JevClientError("invalid_response");
+          if (!processEvidence.stage) {
+            processEvidence.stage = observed;
+            processEvidence.stageTimingOrigin = "strict_validation";
+          }
+        }
+        if (error instanceof JevStageClientError) {
+          if (!processEvidence.attempt) throw new JevClientError("invalid_response");
+          processEvidence.failureEvidence = validateJevStageFailureEvidence(
+            error.evidence,
+            { stage: "all_heads", ...processEvidence.attempt },
+            error.code,
+            transportHash,
+          );
+        }
+      } catch {
+        error = new JevClientError("invalid_response");
+      }
+    }
+    try {
+      close();
+    } catch {
+      /* Keep an observed reply and the cleanup failure. */
+    }
+    if (processEvidence?.kind === "all_heads") processEvidence.completed = false;
     const code = (error as { code?: unknown })?.code;
-    const failure = signal.aborted
-      ? options.signal?.aborted
-        ? "cancelled"
-        : "deadline"
-      : typeof code === "string" && /^[a-z0-9_-]{1,40}$/.test(code)
-        ? code
-        : "invalid-input-or-context";
+    const failure = callerSignal?.aborted
+      ? "cancelled"
+      : timeout.signal.aborted || (Number.isFinite(deadline) && performance.now() >= deadline)
+        ? "deadline"
+        : typeof code === "string" && /^[a-z0-9_-]{1,40}$/.test(code)
+          ? code
+          : "invalid-input-or-context";
     return {
-      ruleId: "jev-risk-v6",
+      ruleId: "jev-risk-v7",
       feature: "jevGate",
       action: "block",
       fingerprint,
@@ -1175,6 +1486,8 @@ export async function evaluateJevSafety(
       reason: `Jev classification failed (${failure}); execution is blocked.`,
       jev: { ...evidence(), failure },
     };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

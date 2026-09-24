@@ -117,7 +117,106 @@ export interface JevEvidence {
   artifactAccessCounts?: { mkdir: number; write: number };
   /** Local endpoint, model, provider, and routing binding. No endpoint text is stored. */
   transportHash?: string;
+  operatingPoint?: Readonly<JevOperatingPointData>;
+  operatingPointHash?: string;
+  /** Actual separate replies. No collected answers share one provider request ID. */
+  process?: JevDecisionProcessEvidence;
+  riskOrigin?: JevActionOrigin;
+  riskAnswer?: JevChoiceAnswer;
 }
+
+export type JevOperatingPoint =
+  | Readonly<{
+      version: 1;
+      name: "conservative";
+      allowProbability: 0.99;
+      syntaxProbability: 0.99;
+      totalTimeoutMs: 10000;
+    }>
+  | Readonly<{
+      version: 1;
+      name: "argmax";
+      allowProbability: 0;
+      syntaxProbability: 0;
+      totalTimeoutMs: 10000;
+    }>;
+
+export type JevOperatingPointData = JevOperatingPoint;
+
+export type JevStageTimingOrigin = "transport_cleanup" | "strict_validation";
+
+export type JevActionOrigin = JevStageEvidence<string> & {
+  stage: "all_heads" | "non_command" | "command_policy";
+  questionId: JevQuestionId;
+  timingOrigin?: JevStageTimingOrigin;
+};
+
+export interface JevCommandProcessEvidence {
+  completed: boolean;
+  gate: JevAction;
+  cleanupFailed: boolean;
+  failure?: { stage: "prepare" | "non_command" | "syntax" | "command_policy"; code: string };
+  answers: Partial<Record<JevQuestionId, JevChoiceAnswer>>;
+  origins: Partial<Record<JevQuestionId, JevActionOrigin>>;
+  stages: Array<JevNonCommandStageResult | JevSyntaxStageResult | JevCommandPolicyStageResult>;
+  stageTimingOrigins: Array<{
+    stage: "non_command" | "syntax" | "command_policy";
+    timingOrigin: JevStageTimingOrigin;
+  }>;
+  attempts: Array<{
+    stage: "non_command" | "syntax" | "command_policy";
+    requestedQuestionIds: string[];
+    requestHash: string;
+    requestBytes: number;
+  }>;
+  failureEvidence?: JevStageFailureEvidence;
+  syntaxPlan?:
+    | { requested: true; rowCount: number }
+    | {
+        requested: false;
+        reason: "empty-active-manifest";
+        rowCount: number;
+        manifestHash: string;
+        sourceGroups: {
+          allowedPatterns: unknown[];
+          autoDenyPatterns: unknown[];
+          patterns: unknown[];
+        };
+      };
+  syntaxTranscript: Array<{
+    rowId: JevSyntaxQuestionId;
+    group: "allowedPatterns" | "autoDenyPatterns" | "patterns";
+    order: number;
+    behavior: string;
+    originalRowHash: string;
+    answer: JevSyntaxChoiceAnswer;
+    origin: JevStageEvidence<JevSyntaxQuestionId> & {
+      questionId: JevSyntaxQuestionId;
+      timingOrigin?: JevStageTimingOrigin;
+    };
+  }>;
+  actualBlocks: Array<{ questionId: string; answer: JevChoiceAnswer; origin?: JevActionOrigin }>;
+  contextComplete: boolean;
+  originalRequestHash?: string;
+  manifestHash?: string;
+  tokenContextHash?: string;
+  deadline: number;
+  latencyMs: number;
+  distributionsCombined: false;
+  representsOneProviderReply: false;
+}
+
+export type JevDecisionProcessEvidence =
+  | { kind: "command_stages"; result: JevCommandProcessEvidence }
+  | {
+      kind: "all_heads";
+      completed: boolean;
+      stage?: JevAllHeadStageResult;
+      stageTimingOrigin?: JevStageTimingOrigin;
+      attempt?: { requestedQuestionIds: string[]; requestHash: string; requestBytes: number };
+      failureEvidence?: JevStageFailureEvidence;
+      cleanupFailed: boolean;
+    };
 
 export interface JevPrediction extends JevChoiceAnswer {
   answers?: Partial<Record<JevQuestionId, JevChoiceAnswer>>;
@@ -158,7 +257,7 @@ export type JevClientFailureCode =
 
 /** Partial reply hashes cover only the bound prefix, not a complete reply. */
 export interface JevStageFailureEvidence {
-  stage: "non_command" | "syntax" | "command_policy";
+  stage: "non_command" | "syntax" | "command_policy" | "all_heads";
   requestedQuestionIds: string[];
   requestHash?: string;
   requestBytes?: number;
@@ -193,6 +292,12 @@ export interface JevStageRequestBase {
 export interface JevNonCommandRequest extends JevStageRequestBase {
   questions: { risk: JevChoiceQuestion } & Partial<
     Record<Exclude<JevNonCommandQuestionId, "risk">, JevChoiceQuestion>
+  >;
+}
+
+export interface JevAllHeadRequest extends JevStageRequestBase {
+  questions: { risk: JevChoiceQuestion } & Partial<
+    Record<Exclude<JevQuestionId, "risk">, JevChoiceQuestion>
   >;
 }
 
@@ -234,6 +339,14 @@ export interface JevNonCommandStageResult {
   evidence: JevStageEvidence<JevNonCommandQuestionId>;
 }
 
+export interface JevAllHeadStageResult {
+  stage: "all_heads";
+  answers: { risk: JevChoiceAnswer } & Partial<
+    Record<Exclude<JevQuestionId, "risk">, JevChoiceAnswer>
+  >;
+  evidence: JevStageEvidence<JevQuestionId>;
+}
+
 export interface JevSyntaxStageResult {
   stage: "syntax";
   answers: Record<JevSyntaxQuestionId, JevSyntaxChoiceAnswer>;
@@ -250,8 +363,19 @@ export interface JevProcessTransport {
   requestNonCommand(request: JevNonCommandRequest): Promise<JevNonCommandStageResult>;
   requestSyntax(request: JevSyntaxRequest): Promise<JevSyntaxStageResult>;
   requestCommandPolicy(request: JevCommandPolicyRequest): Promise<JevCommandPolicyStageResult>;
+  /** Read the last strict validated reply without a wait or another request. */
+  getObservedResult?():
+    | JevNonCommandStageResult
+    | JevSyntaxStageResult
+    | JevCommandPolicyStageResult
+    | JevAllHeadStageResult
+    | undefined;
   /** Cancel pending work and remove the process timer and caller listener. */
   close(): void;
+}
+
+export interface JevDecisionTransport extends JevProcessTransport {
+  requestAllHeads(request: JevAllHeadRequest): Promise<JevAllHeadStageResult>;
 }
 
 export interface PolicyPattern {

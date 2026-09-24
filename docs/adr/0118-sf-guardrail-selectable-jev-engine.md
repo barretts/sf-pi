@@ -27,8 +27,8 @@ the effective policy after bundled defaults, stable-id overrides, and routine
 settings. It has no automatic deterministic fallback.
 
 Use Node's built-in `fetch` to call the configured HTTPS Decisions provider.
-Independent Choice questions share one state. Their options are `allow`,
-`confirm`, and `block`. Wire state version stays 6. Always ask `risk` with tool-family guidance about
+Independent action questions within a call share one state. Their options are `allow`,
+`confirm`, and `block`. Wire state version stays 6. Every tool request asks `risk` with tool-family guidance about
 operational effects. Available paths/file facts add file policy; parsed shell
 calls add command policy and structurally possible org policy. Complete known
 executable/wrapper heads narrow the projected org rules; incomplete/opaque
@@ -44,9 +44,12 @@ other tools stay in risk/disclosure and the completeness gate. Exact
 `sf_browser_press` key `Escape` is target-independent cancellation, still
 evaluated by risk and authority without requiring org or fresh target/focus
 facts; the request does not fabricate browser freshness. There are at
-most six answers. Structural question/state applicability does not decide an
+most six action answers. Structural question/state applicability does not decide an
 outcome. Every answer is model-authored;
 Jev is the sole risk engine in its selected mode, without a deterministic floor.
+Hosted browser facts omit only the changing `ageMs` value. Actual freshness
+status and target fields remain. Local snapshot identity, age, expiry and
+changed-context checks remain. No snapshot lifetime is extended.
 Request `typesafe/jev-1.13` with routing `only: ["typesafe"]` and
 `allow_fallbacks: false`; initially require resolved model
 `typesafe/jev-1.13-20260917` and provider `TypeSafe`. Require an explicit
@@ -57,8 +60,21 @@ Check the endpoint before reading a key. The gateway must implement the pinned
 Jev Decisions contract with independent Choice answers and required usage fields.
 Keep endpoint URLs, key values, and key paths out of UI, status, audit, and
 request bodies. Reject redirects.
-Apply a 1,500 ms total classification deadline, cancellation, bounded parsing,
-and no retries. Invalid supplied configuration, missing endpoint or credentials, malformed
+Protocol 15 uses three actual calls for Bash. First ask the applicable action
+questions except command policy. Then ask `match` or `no_match` for each
+active command row. Finally ask command policy with the actual syntax
+answers. An empty active row list omits the syntax call. Do not skip a later
+requested call because an earlier answer blocks. Other tools use one strict
+call for all applicable action questions. Include command policy for a tool
+with shell metadata. The host supplies facts and combines actual answers.
+It does not match a rule, choose a policy winner or add a deterministic vote.
+
+Apply one 10,000 ms total limit from preparation through automatic release.
+Facts, all calls, response reads, validation and synchronous cleanup count.
+No stage may reset that limit. Cancel without waiting for asynchronous
+cleanup. Use bounded parsing and no retries. A later explicit human approval
+uses a separate 1,500 ms check of the current context. It does not repeat the
+model process. Invalid supplied configuration, missing endpoint or credentials, malformed
 metadata/responses, API failures, cancellation, deadline expiry, and identity
 drift prevent execution with audit. Registration and startup make no live
 requests.
@@ -99,9 +115,15 @@ absent. Private command values/comments retain exact policy equality through
 token IDs; withholding their spelling does not create a match. Genuinely
 unresolved policy restrictions remain model confirm/block criteria.
 
-Command rows repeat selector labels in `publicNames`. Use only the operation's
-exact `publicSyntax` ID map. Keep null labels and separate prefix namespaces.
-Add no vocabulary or matched-rule facts. File and org criteria state
+The action projection repeats public selector names from the operation's
+exact `publicSyntax` ID map. The Bash syntax call puts those names in a
+separate ordered list. It maps each integer ID to one distinct alphabetic
+label. Preserve every command sequence, selector field, quoted boundary and
+prefix namespace. Each question states its selector. Shared grammar defines
+exact equality, order and adjacency. A null name is not a wildcard.
+Vocabulary membership does not establish a token observation. The local
+manifest still binds original rows and integer IDs. Add no vocabulary or
+matched-rule facts. File and org criteria state
 eligibility, exemptions, order, and tool access directly. Bind the templates
 and label rules in the protocol hash. Old protocol grants cannot approve a
 call under the new hash. These changes preserve sole model authority.
@@ -115,13 +137,25 @@ runner facts. An honored dry run skips the selected business-write branch
 while prerequisite reads may still occur; supplied intent or an action-name suffix alone cannot prove a
 preview or grant permission.
 
-Automatically execute only with complete context and every requested answer
-choosing `allow` with `P(allow) >= 0.99`. Any model `block` is an unapprovable
+Capture one exact setting from `SF_GUARDRAIL_JEV_OPERATING_POINT` before
+facts. `conservative` is the default. Its raw action allow limit and selected
+syntax limit are both `0.99`. Explicit `argmax` uses zero for both limits.
+Reject unknown names, custom limits and invalid point objects. Bind the
+validated point hash into protocol, connection, exact approval and audit.
+Recheck the point before release. Neither setting has joint calibration or
+safety qualification. The user chose coverage tests with slower responses.
+
+Automatically execute only with complete context and every requested action
+choosing `allow` and meeting the captured probability limit. Syntax answers
+must meet the selected syntax limit. Any model `block` is an unapprovable
 hard block; any `confirm`, allow probability below the cutoff, or incomplete
 context requires human confirmation. Audit each answer's choice, probabilities,
 and confidence. Top-level probability/confidence evidence remains the actual
-`risk` answer; it does not pretend to be a combined safety statistic. The
-threshold is a conservative initial default requiring evaluation against our
+`risk` answer; it does not pretend to be a combined safety statistic. Keep
+each Bash stage's actual reply, origin and syntax transcript. Do not give
+collected answers one provider request ID. Retain a fully validated reply
+after a later failure and keep the final result blocked. The conservative
+threshold is an initial default requiring evaluation against our
 own domain labels, following TypeSafe's
 [confidence guidance](https://docs.typesafe.ai/confidence).
 Preserve returned probability values rather than renormalizing them. Accept an
@@ -165,14 +199,14 @@ and audit recording succeed; failures cannot leave reusable approval behind.
   weakened explicit blocks, correct pre-execution enforcement, and no outbound
   payload leakage. Diagnostic replay and frozen acceptance results are
   reported separately, retaining failed calls in the denominator.
-- Measure end-to-end p50/p95 latency, failures, extra confirmations, and billed
-  cost against the 500 ms p95 target. Safety or performance gate failures leave
-  normal use on the deterministic engine.
-- Coverage-first diagnostic experiments may record a 10-second transport
-  deadline while leaving operations inert. Report their safety/coverage evidence
-  separately from runtime acceptance under the enforced 1,500 ms deadline and
-  500 ms p95 target. The diagnostic profile does not alter runtime settings or
-  establish qualification.
+- Measure end-to-end p50/p95 latency, failures, extra confirmations and reported
+  cost. Keep the 500 ms p95 target as a performance reference. The staged hook
+  has one total 10-second bound under the selected coverage-first requirement.
+  Normal use stays deterministic while Jev remains unqualified.
+- Freeze the source, decoder, score plan and exact probability setting before
+  provider tests. Report every attempted case. Keep finite development
+  coverage, actual tool execution and independent qualification separate.
+  Prior 1,500 ms or one-call measurements do not qualify this staged source.
 - The frozen 175-case DEV fixture covers all 74 bundled rule IDs, six
   native-tool families, and ten additional risk cases. Its inputs/gold were
   frozen before predictions (`81d8199c` hash prefix): 32 allow, 132 confirm,
