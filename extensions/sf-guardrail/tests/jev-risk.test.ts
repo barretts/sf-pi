@@ -18,6 +18,7 @@ import { jevHash } from "../lib/jev-identity.ts";
 import { buildJevMetadata } from "../lib/jev-metadata.ts";
 import {
   createJevProcessTransport,
+  createJevFileMatchProcessTransport,
   JEV_RESOLVED_MODEL,
   JEV_PROVIDER,
   JevClientError,
@@ -27,6 +28,7 @@ import { jevOperatingPointHash, resolveJevOperatingPoint } from "../lib/jev-oper
 import type {
   GuardrailConfig,
   JevAllHeadStageResult,
+  JevFileMatchStageResult,
   JevChoiceAnswer,
   JevCommandPolicyStageResult,
   JevNonCommandStageResult,
@@ -191,11 +193,16 @@ describe("Jev interpretation criteria", () => {
 });
 
 beforeEach(() => {
+  forbiddenFetch.mockClear();
+  testFileTransport.mockClear();
+  vi.stubGlobal("fetch", forbiddenFetch);
   vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", ENDPOINT);
   vi.stubEnv("SF_GUARDRAIL_JEV_OPERATING_POINT", undefined);
 });
 
 afterEach(() => {
+  expect(forbiddenFetch).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.useRealTimers();
   vi.unstubAllEnvs();
@@ -223,6 +230,65 @@ const answer = (value: JevChoiceAnswer): JevChoiceAnswer => ({
   probabilities: structuredClone(value.probabilities),
   confidence: value.confidence,
 });
+
+// Fixed synthetic choices test stage plumbing; they do not compute a selector or policy match.
+const testFileTransport = vi.fn<typeof createJevFileMatchProcessTransport>((options) => {
+  const point = resolveJevOperatingPoint(
+    options.binding.operatingPointHash === jevOperatingPointHash(resolveJevOperatingPoint("argmax"))
+      ? "argmax"
+      : "conservative",
+  );
+  let observed: JevFileMatchStageResult | undefined;
+  return {
+    requestFileMatch: vi.fn(async (wire) => {
+      const json = JSON.stringify(wire);
+      const answers = Object.fromEntries(
+        Object.keys(wire.questions).map((id) => [
+          id,
+          {
+            choice: "no_match" as const,
+            probabilities: { match: 0, no_match: 1, unknown: 0 },
+            confidence: 0.37,
+          },
+        ]),
+      );
+      const requestId = "synthetic-file-match-receipt";
+      const raw = JSON.stringify({
+        id: requestId,
+        model: JEV_RESOLVED_MODEL,
+        provider: JEV_PROVIDER,
+        answers,
+        usage: { input_tokens: 7, output_tokens: 9 },
+      });
+      observed = {
+        stage: "file_match",
+        answers,
+        evidence: {
+          requestedQuestionIds: Object.keys(
+            wire.questions,
+          ) as JevFileMatchStageResult["evidence"]["requestedQuestionIds"],
+          requestHash: createHash("sha256").update(json).digest("hex"),
+          responseHash: createHash("sha256").update(raw).digest("hex"),
+          transportHash: jevDecisionTransportBindingHash(options.endpoint, point),
+          requestBytes: Buffer.byteLength(json),
+          responseBytes: Buffer.byteLength(raw),
+          model: JEV_RESOLVED_MODEL,
+          provider: JEV_PROVIDER,
+          requestId,
+          usage: { input_tokens: 7, output_tokens: 9 },
+          latencyMs: 1,
+        },
+      };
+      return observed;
+    }),
+    getObservedResult: () => observed,
+    close: vi.fn(),
+  };
+});
+const forbiddenFetch = vi.fn(() => {
+  throw new Error("Uncontrolled network is prohibited in this fixture suite.");
+});
+
 function testTransport(
   request: TestPredictionRequest,
   mutate?: (reply: JevAllHeadStageResult) => void,
@@ -527,6 +593,7 @@ describe("unsupported modern deploy flags", () => {
       const decision = await evaluateJevSafety(
         { ...call(), toolName: "bash", input: { command } },
         {
+          createFileTransport: testFileTransport,
           createTransport,
           resolveFacts: async () => ({
             facts: { org: { type: "sandbox", verified: true, explicit: true } },
@@ -552,23 +619,53 @@ describe("unsupported modern deploy flags", () => {
 });
 
 describe("Jev risk adapter", () => {
-  it("binds Bash metadata and syntax to the original command across temporary caller changes", async () => {
+  it("blocks Bash caller changes during initial facts before dispatch and retains the original hash", async () => {
+    const input = bashCall([{ id: "source-status", pattern: "git status", behavior: "confirm" }]);
+    const originalHash = jevHash(input.input);
+    const request = vi.fn(async () => prediction());
+    const createTransport = testTransport(request);
+    const resolveFacts = vi.fn(async () => {
+      input.input.command = "git diff";
+      input.config.commandGate.patterns[0].behavior = "off";
+      return { facts: {} };
+    });
+    const decision = await evaluateJevSafety(input, {
+      createFileTransport: testFileTransport,
+      resolveFacts,
+      createTransport,
+    });
+    expect(decision.action).toBe("block");
+    expect(decision.jev?.failure).toBe("identity_mismatch");
+    expect(decision.jev?.inputHash).toBe(originalHash);
+    expect(resolveFacts).toHaveBeenCalledOnce();
+    expect(testFileTransport).not.toHaveBeenCalled();
+    expect(createTransport).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+    input.input.command = "git status";
+    input.config.commandGate.patterns[0].behavior = "confirm";
+    expect(jevHash(input.input)).toBe(originalHash);
+  });
+  it("binds Bash metadata and syntax to the original command across detached resolver-copy changes", async () => {
     const input = bashCall([{ id: "source-status", pattern: "git status", behavior: "confirm" }]);
     const originalHash = jevHash(input.input);
     const resolveFacts = vi.fn(
-      async (resolved: { input: Record<string, unknown>; metadata: JevToolMetadata }) => {
+      async (resolved: {
+        input: Record<string, unknown>;
+        metadata: JevToolMetadata;
+        config: GuardrailConfig;
+      }) => {
         expect(resolved.input).not.toBe(input.input);
         expect(resolved.input.command).toBe("git status");
         expect(resolved.metadata).toMatchObject({
           metadata: { shell: { commands: [{ executable: "git", subcommands: ["status"] }] } },
         });
-        input.input.command = "git diff";
-        input.config.commandGate.patterns[0].behavior = "off";
+        resolved.input.command = "git diff";
+        resolved.config.commandGate.patterns[0].behavior = "off";
         return { facts: {} };
       },
     );
     const request = vi.fn<TestPredictionRequest>(async (wire) => {
-      expect(input.input.command).toBe("git diff");
+      expect(input.input.command).toBe("git status");
       expect(wire.state).toMatchObject({
         operation: {
           metadata: {
@@ -578,17 +675,19 @@ describe("Jev risk adapter", () => {
         },
         policy: { commands: { patterns: [{ behavior: "confirm" }] } },
       });
-      input.input.command = "git status";
-      input.config.commandGate.patterns[0].behavior = "confirm";
       return prediction();
     });
     const createTransport = testTransport(request);
-    const decision = await evaluateJevSafety(input, { resolveFacts, createTransport });
+    const decision = await evaluateJevSafety(input, {
+      createFileTransport: testFileTransport,
+      resolveFacts,
+      createTransport,
+    });
     expect(decision.action).toBe("allow");
     expect(decision.jev?.failure).toBeUndefined();
     expect(decision.jev?.inputHash).toBe(originalHash);
     expect(jevHash(input.input)).toBe(originalHash);
-    expect(resolveFacts).toHaveBeenCalledOnce();
+    expect(resolveFacts).toHaveBeenCalledTimes(4);
     expect(request).toHaveBeenCalledOnce();
     const selected = createTransport.mock.results[0].value;
     expect(selected.requestNonCommand).toHaveBeenCalledOnce();
@@ -630,7 +729,12 @@ describe("Jev risk adapter", () => {
       });
       const decision = await evaluateJevSafety(
         bashCall([{ id: "source-status", pattern: "git status", behavior: "confirm" }]),
-        { deadline: 10_000, createTransport, resolveFacts: async () => ({ facts: {} }) },
+        {
+          createFileTransport: testFileTransport,
+          deadline: 10_000,
+          createTransport,
+          resolveFacts: async () => ({ facts: {} }),
+        },
       );
       expect(decision.action).toBe("block");
       expect(decision.jev?.failure).toBe(
@@ -665,6 +769,7 @@ describe("Jev risk adapter", () => {
       );
       const createTransport = testTransport(async () => prediction("allow", 0.990123));
       const decision = await evaluateJevSafety(input, {
+        createFileTransport: testFileTransport,
         createTransport,
         resolveFacts: async () => ({ facts: {} }),
       });
@@ -718,6 +823,7 @@ describe("Jev risk adapter", () => {
     input.config.commandGate.autoDenyPatterns = input.config.commandGate.patterns.splice(0, 1);
     const createTransport = testTransport(async () => prediction());
     const decision = await evaluateJevSafety(input, {
+      createFileTransport: testFileTransport,
       createTransport,
       resolveFacts: async () => ({ facts: {} }),
     });
@@ -773,6 +879,7 @@ describe("Jev risk adapter", () => {
     const request = vi.fn(async () => prediction());
     const createTransport = testTransport(request);
     const decision = await evaluateJevSafety(input, {
+      createFileTransport: testFileTransport,
       createTransport,
       resolveFacts: async () => ({ facts: {} }),
     });
@@ -780,16 +887,10 @@ describe("Jev risk adapter", () => {
     expect(decision.jev?.failure).toBe("invalid_request");
     expect(createTransport).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
-    expect(decision.jev?.process?.kind).toBe("command_stages");
-    if (decision.jev?.process?.kind !== "command_stages")
-      throw new Error("Expected command stage evidence");
-    expect(decision.jev.process.result.failure).toEqual({
-      stage: "prepare",
-      code: "invalid_request",
-    });
-    expect(decision.jev.process.result.stages).toEqual([]);
-    expect(decision.jev.process.result.attempts).toEqual([]);
+    expect(testFileTransport).not.toHaveBeenCalled();
+    expect(decision.jev?.process).toBeUndefined();
   });
+
   it.each(["default", "conservative", "argmax"] as const)(
     "uses %s point for every actual one-call head and preserves raw risk evidence",
     async (selection) => {
@@ -809,6 +910,7 @@ describe("Jev risk adapter", () => {
       };
       const createTransport = testTransport(async () => value);
       const decision = await evaluateJevSafety(call(), {
+        createFileTransport: testFileTransport,
         descriptor,
         resolveFacts: facts,
         createTransport,
@@ -854,6 +956,7 @@ describe("Jev risk adapter", () => {
   );
   it("binds the explicit operating point into exact approval identity", async () => {
     const options = {
+      createFileTransport: testFileTransport,
       descriptor,
       resolveFacts: facts,
       createTransport: testTransport(async () => prediction("confirm", 0)),
@@ -881,17 +984,26 @@ describe("Jev risk adapter", () => {
     const clock = vi.spyOn(nodePerformance, "now").mockReturnValue(0);
     const request = vi.fn<TestPredictionRequest>(() => new Promise(() => {}));
     const createTransport = testTransport(request);
-    const resolveFacts = vi.fn(
-      () =>
-        new Promise<JevResolvedFacts>((resolve) => {
-          setTimeout(
-            () => resolve({ facts: { files: [{ path: "src/example.ts", exists: false }] } }),
-            6000,
-          );
-        }),
-    );
+    const resolveFacts = vi
+      .fn<NonNullable<NonNullable<Parameters<typeof evaluateJevSafety>[1]>["resolveFacts"]>>(
+        async () => ({ facts: { files: [{ path: "src/example.ts", exists: false }] } }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<JevResolvedFacts>((resolve) => {
+            setTimeout(
+              () => resolve({ facts: { files: [{ path: "src/example.ts", exists: false }] } }),
+              6000,
+            );
+          }),
+      );
     let settled = false;
-    const pending = evaluateJevSafety(call(), { descriptor, resolveFacts, createTransport });
+    const pending = evaluateJevSafety(call(), {
+      createFileTransport: testFileTransport,
+      descriptor,
+      resolveFacts,
+      createTransport,
+    });
     void pending.then(() => {
       settled = true;
     });
@@ -946,6 +1058,7 @@ describe("Jev risk adapter", () => {
     async (_label, mutate) => {
       const createTransport = testTransport(async () => prediction(), mutate);
       const decision = await evaluateJevSafety(call(), {
+        createFileTransport: testFileTransport,
         descriptor,
         resolveFacts: facts,
         createTransport,
@@ -983,6 +1096,7 @@ describe("Jev risk adapter", () => {
       return selected;
     });
     const decision = await evaluateJevSafety(call(), {
+      createFileTransport: testFileTransport,
       descriptor,
       resolveFacts: facts,
       createTransport,
@@ -1054,6 +1168,7 @@ describe("Jev risk adapter", () => {
           config: bashCall().config,
         },
         {
+          createFileTransport: testFileTransport,
           descriptor,
           signal: controller.signal,
           createTransport,
@@ -1107,6 +1222,7 @@ describe("Jev risk adapter", () => {
       const createTransport = testTransport(request);
       const resolveFacts = vi.fn(async () => ({ facts: {} }));
       const decision = await evaluateJevSafety(call(), {
+        createFileTransport: testFileTransport,
         descriptor,
         createTransport,
         resolveFacts,
@@ -1141,6 +1257,7 @@ describe("Jev risk adapter", () => {
       throw new Error("Unexpected proxy trap");
     });
     let options: NonNullable<Parameters<typeof evaluateJevSafety>[1]> = {
+      createFileTransport: testFileTransport,
       descriptor,
       createTransport,
       resolveFacts,
@@ -1214,6 +1331,7 @@ describe("Jev risk adapter", () => {
     });
     const createTransport = testTransport(request);
     const decision = await evaluateJevSafety(call(), {
+      createFileTransport: testFileTransport,
       descriptor,
       resolveFacts: facts,
       createTransport,
@@ -1245,6 +1363,7 @@ describe("Jev risk adapter", () => {
       return selected;
     });
     const decision = await evaluateJevSafety(call(), {
+      createFileTransport: testFileTransport,
       descriptor,
       resolveFacts: facts,
       createTransport,
@@ -1272,6 +1391,7 @@ describe("Jev risk adapter", () => {
   it("sends only metadata and effective policy, while retaining hosted provenance", async () => {
     const request = vi.fn(async () => prediction());
     const decision = await evaluateJevSafety(call(), {
+      createFileTransport: testFileTransport,
       descriptor,
       createTransport: testTransport(request),
       resolveFacts: facts,
@@ -1296,6 +1416,7 @@ describe("Jev risk adapter", () => {
       const resolveFacts = vi.fn(async () => ({ facts: {} }));
       const request = vi.fn(async () => prediction());
       const decision = await evaluateJevSafety(call(), {
+        createFileTransport: testFileTransport,
         descriptor,
         resolveFacts,
         createTransport: testTransport(request),
@@ -1310,6 +1431,7 @@ describe("Jev risk adapter", () => {
   );
   it("changes the exact approval fingerprint when the endpoint changes", async () => {
     const options = {
+      createFileTransport: testFileTransport,
       descriptor,
       createTransport: testTransport(async () => prediction("confirm", 0)),
       resolveFacts: async () => ({
@@ -1341,12 +1463,16 @@ describe("Jev risk adapter", () => {
     const deadline = performance.now() + 10_000;
     let releaseFacts!: (value: JevResolvedFacts) => void;
     let releasePrediction!: (value: JevPrediction) => void;
-    const resolveFacts = vi.fn(
-      () =>
-        new Promise<JevResolvedFacts>((resolve) => {
-          releaseFacts = resolve;
-        }),
-    );
+    const resolveFacts = vi
+      .fn<NonNullable<NonNullable<Parameters<typeof evaluateJevSafety>[1]>["resolveFacts"]>>(
+        async () => ({ facts: { files: [{ path: "src/example.ts", exists: false }] } }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<JevResolvedFacts>((resolve) => {
+            releaseFacts = resolve;
+          }),
+      );
     const request = vi.fn<TestPredictionRequest>(
       () =>
         new Promise<JevPrediction>((resolve) => {
@@ -1355,10 +1481,13 @@ describe("Jev risk adapter", () => {
     );
     const createTransport = testTransport(request);
     const pending = evaluateJevSafety(call(), {
+      createFileTransport: testFileTransport,
       descriptor,
       resolveFacts,
       createTransport,
       deadline,
+      endpoint: ENDPOINT,
+      operatingPoint: point,
     });
     expect(resolveFacts).toHaveBeenCalledOnce();
     vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", OTHER_ENDPOINT);
@@ -1375,15 +1504,17 @@ describe("Jev risk adapter", () => {
       },
     });
     const wireRequest = request.mock.calls[0][0];
-    expect(wireRequest).toEqual(
+    expect(wireRequest.state).toMatchObject(
       buildJevRequest(
         buildJevMetadata(call().toolName, call().input, descriptor),
         { files: [{ path: "src/example.ts", exists: false }] },
         call().config,
-      ),
+      ).state as object,
     );
     expect(JSON.stringify(wireRequest)).not.toContain(ENDPOINT);
-    expect(JSON.stringify(wireRequest)).not.toContain("transportHash");
+    expect(wireRequest).not.toHaveProperty("transportHash");
+    expect(wireRequest.state).not.toHaveProperty("transportHash");
+    expect(testFileTransport).toHaveBeenCalledOnce();
     vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", "");
     releasePrediction(prediction("allow", 0.98));
     const decision = await pending;
@@ -1492,9 +1623,13 @@ describe("Jev risk adapter", () => {
     });
     const decision = await evaluateJevSafety(
       { ...call(), toolName: "grep", input },
-      { createTransport: testTransport(request), resolveFacts },
+      {
+        createFileTransport: testFileTransport,
+        createTransport: testTransport(request),
+        resolveFacts,
+      },
     );
-    expect(resolveFacts).toHaveBeenCalledOnce();
+    expect(resolveFacts).toHaveBeenCalledTimes(4);
     expect(request).toHaveBeenCalledOnce();
     expect(decision.action).toBe("block");
     expect(decision.jev?.failure).toBeUndefined();
@@ -1524,6 +1659,7 @@ describe("Jev risk adapter", () => {
         input: { path: "README.md", pattern: "PRIVATE_SELECTOR_SENTINEL", literal: true },
       },
       {
+        createFileTransport: testFileTransport,
         createTransport: testTransport(request),
         resolveFacts: async () => ({ facts: { files: [{ path: "README.md", exists: true }] } }),
       },
@@ -1592,11 +1728,13 @@ describe("Jev risk adapter", () => {
       orgIdentity: "synthetic-org",
     });
     const first = await evaluateJevSafety(call("one"), {
+      createFileTransport: testFileTransport,
       descriptor,
       createTransport: testTransport(request),
       resolveFacts,
     });
     const second = await evaluateJevSafety(call("two"), {
+      createFileTransport: testFileTransport,
       descriptor,
       createTransport: testTransport(request),
       resolveFacts,
@@ -1604,22 +1742,34 @@ describe("Jev risk adapter", () => {
     const policy = call("one");
     policy.config.policies.rules[0].behavior = "block";
     const third = await evaluateJevSafety(policy, {
+      createFileTransport: testFileTransport,
       descriptor,
       createTransport: testTransport(request),
       resolveFacts,
     });
     const fourth = await evaluateJevSafety(
       { ...call("one"), cwd: "/other" },
-      { descriptor, createTransport: testTransport(request), resolveFacts },
+      {
+        createFileTransport: testFileTransport,
+        descriptor,
+        createTransport: testTransport(request),
+        resolveFacts,
+      },
     );
     const fifth = await evaluateJevSafety(call("one"), {
+      createFileTransport: testFileTransport,
       descriptor: { ...descriptor, description: "Changed semantics" },
       createTransport: testTransport(request),
       resolveFacts,
     });
     const sixth = await evaluateJevSafety(
       { ...call("one"), sessionId: "another-session" },
-      { descriptor, createTransport: testTransport(request), resolveFacts },
+      {
+        createFileTransport: testFileTransport,
+        descriptor,
+        createTransport: testTransport(request),
+        resolveFacts,
+      },
     );
     expect(first.approvalScope?.allowSession).toBe(true);
     expect(
@@ -1679,6 +1829,7 @@ describe("Jev risk adapter", () => {
       const decision = await evaluateJevSafety(
         { ...call(), ...operation },
         {
+          createFileTransport: testFileTransport,
           createTransport: testTransport(request),
           resolveFacts: async () => ({
             facts: { org: { type: "scratch", verified: true, explicit: true } },
@@ -2209,6 +2360,7 @@ describe("Jev risk adapter", () => {
     });
     const createTransport = testTransport(requestCall);
     const decision = await evaluateJevSafety(input, {
+      createFileTransport: testFileTransport,
       createTransport,
       resolveFacts: async () => resolved,
     });
@@ -2240,6 +2392,7 @@ describe("Jev risk adapter", () => {
   it("changes the grant key for the new contract and keeps local authoring session approval", async () => {
     const input = call();
     const decision = await evaluateJevSafety(input, {
+      createFileTransport: testFileTransport,
       descriptor,
       createTransport: testTransport(async () => prediction("confirm", 0)),
       resolveFacts: async () => ({
@@ -2263,7 +2416,7 @@ describe("Jev risk adapter", () => {
       "53b22b9b3279451a147e9147a0e60469f6a897ddc07174c0c09f4f166b7a3588",
     ];
     expect(JEV_PROTOCOL_HASH).toBe(
-      "318078ec771e8674dc3bccb170a931047a07a5fd61a2b7d7cbf8c3739a3306f2",
+      "cfffb7fce2c2e77eac05fd0bcf0c61d3e8db3de46382f37d6a09338b43183b27",
     );
     const protocolHash = jevRuntimeProtocolHash();
     expect(decision.jev?.protocolHash).toBe(protocolHash);
@@ -2389,6 +2542,7 @@ describe("Jev risk adapter", () => {
     for (const resolved of observations)
       decisions.push(
         await evaluateJevSafety(input, {
+          createFileTransport: testFileTransport,
           descriptor: { description: "Activate an observed browser target" },
           createTransport,
           resolveFacts: async () => resolved,
@@ -2425,6 +2579,7 @@ describe("Jev risk adapter", () => {
     "does not grant session approval to %s targets",
     async (type) => {
       const decision = await evaluateJevSafety(call(), {
+        createFileTransport: testFileTransport,
         descriptor,
         createTransport: testTransport(async () => prediction("confirm", 0)),
         resolveFacts: async () => ({
@@ -2437,6 +2592,7 @@ describe("Jev risk adapter", () => {
   );
   it("keeps failures blocked without any old-engine fallback or raw error details", async () => {
     const decision = await evaluateJevSafety(call(), {
+      createFileTransport: testFileTransport,
       descriptor,
       resolveFacts: facts,
       createTransport: testTransport(async () => {
@@ -2455,6 +2611,7 @@ describe("Jev risk adapter", () => {
         input: { action: "request", params: { method: "DELETE", path: "/fixture/resources/item" } },
       },
       {
+        createFileTransport: testFileTransport,
         descriptor: { description: "Request a Data 360 resource" },
         createTransport: testTransport(async () => prediction("confirm", 0)),
         resolveFacts: async () => ({ facts: {} }),
@@ -2473,6 +2630,7 @@ describe("Jev risk adapter", () => {
         }),
     );
     const pending = evaluateJevSafety(call(), {
+      createFileTransport: testFileTransport,
       descriptor,
       resolveFacts: facts,
       createTransport: testTransport(request),
@@ -2493,6 +2651,7 @@ describe("Jev risk adapter", () => {
       const controller = new AbortController();
       const request = vi.fn();
       const pending = evaluateJevSafety(call(), {
+        createFileTransport: testFileTransport,
         descriptor,
         signal: controller.signal,
         createTransport: testTransport(request),
@@ -2515,6 +2674,7 @@ describe("Jev risk adapter", () => {
         input: { action: "execute", body: "PRIVATE_UNKNOWN_BODY" },
       },
       {
+        createFileTransport: testFileTransport,
         descriptor: { description: "Custom action" },
         createTransport: testTransport(request),
         resolveFacts: async () => ({ facts: {} }),

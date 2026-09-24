@@ -9,6 +9,9 @@ import type {
   JevCommandPolicyStageResult,
   JevNonCommandStageResult,
   JevOperatingPoint,
+  JevFileMatchChoice,
+  JevFileMatchStageResult,
+  JevRequest,
   JevProcessTransport,
   JevSyntaxChoiceAnswer,
   JevSyntaxStageResult,
@@ -26,6 +29,11 @@ import {
   runJevCommandProcess,
   validateJevStageResult,
 } from "../../extensions/sf-guardrail/lib/jev-command-process.ts";
+import {
+  buildJevFilePolicyRequest,
+  prepareJevFileProcess,
+  validateJevFileMatchResult,
+} from "../../extensions/sf-guardrail/lib/jev-file-process.ts";
 import {
   jevOperatingPointHash,
   resolveJevOperatingPoint,
@@ -651,6 +659,7 @@ function captureScorePreparation(
     questionIds: Object.keys(request.questions),
     requestHash: scoreHash(encoded),
     requestBytes: Buffer.byteLength(encoded),
+    request: JSON.parse(encoded) as RequestPreparation["request"],
   });
 }
 
@@ -836,6 +845,484 @@ function firstPreparation(receipt: BaselineDevResult): RequestPreparation {
   if (!first) throw new Error("Expected a request preparation.");
   return first;
 }
+
+async function fileStageRow(
+  id: string,
+  options: {
+    bash?: boolean;
+    point?: JevOperatingPoint["name"];
+    fileProbability?: number;
+    fileChoice?: JevFileMatchChoice;
+    action?: JevAction;
+    fileRows?: number;
+    fileLatencyMs?: number;
+    actionLatencyMs?: number;
+  } = {},
+): Promise<BaselineDevResult> {
+  const point = resolveJevOperatingPoint(options.point ?? "conservative");
+  const config = stagedConfig(options.bash ? 1 : 0);
+  config.policies.rules = Array.from({ length: options.fileRows ?? 1 }, (_, index) => ({
+    id: `file-score-rule-${index}`,
+    protection: "noAccess",
+    behavior: "block",
+    patterns: [{ pattern: "notes.txt" }],
+  }));
+  const command = "cat notes.txt";
+  const metadata = options.bash
+    ? buildJevMetadata("bash", { command })
+    : buildJevMetadata("write", { path: "notes.txt", content: "Synthetic source." });
+  const facts = { files: [{ path: "notes.txt", exists: false as const }] };
+  const original = buildJevRequest(metadata, facts, config, options.bash ? { command } : {});
+  const plan = prepareJevFileProcess(original, options.bash === true);
+  const preparations: RequestPreparation[] = [];
+  let request: JevRequest = original;
+  let match: JevFileMatchStageResult | undefined;
+  let transcript: string | undefined;
+  if (plan.match) {
+    const probability = options.fileProbability ?? 1;
+    const choice = options.fileChoice ?? "no_match";
+    const answers = Object.fromEntries(
+      plan.selection.questionIds.map((questionId) => [
+        questionId,
+        {
+          choice,
+          probabilities: {
+            match: choice === "match" ? probability : 0,
+            no_match: choice === "no_match" ? probability : 1 - probability,
+            unknown:
+              choice === "unknown" ? probability : choice === "no_match" ? 1 - probability : 0,
+          },
+          confidence: 0.01,
+        },
+      ]),
+    );
+    captureScorePreparation(preparations, "file_match", plan.match.request);
+    const reply = controlledStage("file_match", plan.match.request, answers);
+    reply.evidence.latencyMs = options.fileLatencyMs ?? 1;
+    match = validateJevFileMatchResult(reply, plan, SCORE_TRANSPORT_HASH);
+    const built = buildJevFilePolicyRequest(plan, match, SCORE_TRANSPORT_HASH);
+    request = built.request;
+    transcript = built.transcript;
+  }
+  const floorMet =
+    !match ||
+    Object.values(match.answers).every(
+      (answer) => !!answer && answer.probabilities[answer.choice] >= point.syntaxProbability,
+    );
+  const fileStage = {
+    format: plan.format,
+    selection: structuredClone(plan.selection),
+    completed: true,
+    cleanupFailed: false,
+    selectedProbabilityFloor: point.syntaxProbability,
+    selectedProbabilityFloorMet: floorMet,
+    ...(match
+      ? {
+          match,
+          matchTimingOrigin: "transport_cleanup" as const,
+          transcript,
+          attempt: {
+            requestedQuestionIds: preparations[0].questionIds,
+            requestHash: preparations[0].requestHash,
+            requestBytes: preparations[0].requestBytes,
+          },
+        }
+      : {}),
+  };
+  const action = options.action ?? "allow";
+  let process: NonNullable<BaselineDevResult["process"]>;
+  let actualAnswers: NonNullable<BaselineDevResult["answers"]>;
+  let riskOrigin: NonNullable<BaselineDevResult["riskOrigin"]>;
+  let gate: JevAction;
+  let requestId: string | undefined;
+  if (options.bash) {
+    const transport: JevProcessTransport = {
+      async requestNonCommand(posted) {
+        captureScorePreparation(preparations, "non_command", posted);
+        return controlledStage(
+          "non_command",
+          posted,
+          Object.fromEntries(
+            Object.keys(posted.questions).map((questionId) => [questionId, stagedAction(action)]),
+          ),
+        ) as JevNonCommandStageResult;
+      },
+      async requestSyntax(posted) {
+        captureScorePreparation(preparations, "syntax", posted);
+        return controlledStage(
+          "syntax",
+          posted,
+          Object.fromEntries(
+            Object.keys(posted.questions).map((questionId) => [
+              questionId,
+              {
+                choice: "no_match",
+                probabilities: { match: 0, no_match: 1 },
+                confidence: 0.01,
+              },
+            ]),
+          ),
+        ) as JevSyntaxStageResult;
+      },
+      async requestCommandPolicy(posted) {
+        captureScorePreparation(preparations, "command_policy", posted);
+        return controlledStage("command_policy", posted, {
+          command_policy: stagedAction(action),
+        }) as JevCommandPolicyStageResult;
+      },
+      close() {},
+    };
+    const result = await runJevCommandProcess(request, {
+      deadline: performance.now() + point.totalTimeoutMs,
+      operatingPoint: point,
+      transportHash: SCORE_TRANSPORT_HASH,
+      createTransport: () => transport,
+    });
+    process = { kind: "command_stages", result: structuredClone(result), fileStage };
+    actualAnswers = structuredClone(result.answers);
+    riskOrigin = structuredClone(result.origins.risk!);
+    gate = result.gate;
+  } else {
+    captureScorePreparation(preparations, "all_heads", request);
+    const answers = Object.fromEntries(
+      Object.keys(request.questions).map((questionId) => [questionId, stagedAction(action)]),
+    );
+    const stage = controlledStage("all_heads", request, answers) as JevAllHeadStageResult;
+    stage.evidence.latencyMs = options.actionLatencyMs ?? 1;
+    const posted = preparations[preparations.length - 1];
+    validateJevStageResult(
+      "all_heads",
+      stage,
+      {
+        hash: posted.requestHash,
+        bytes: posted.requestBytes,
+        request,
+      },
+      SCORE_TRANSPORT_HASH,
+    );
+    process = {
+      kind: "all_heads",
+      completed: true,
+      cleanupFailed: false,
+      fileStage,
+      stage,
+      stageTimingOrigin: "transport_cleanup",
+      attempt: {
+        requestedQuestionIds: posted.questionIds,
+        requestHash: posted.requestHash,
+        requestBytes: posted.requestBytes,
+      },
+    };
+    actualAnswers = stage.answers;
+    riskOrigin = {
+      ...stage.evidence,
+      stage: "all_heads",
+      questionId: "risk",
+      timingOrigin: "transport_cleanup",
+    };
+    requestId = stage.evidence.requestId;
+    gate = evaluateJevPrediction(
+      { ...stage.answers.risk, answers: stage.answers } as never,
+      jevContextComplete(metadata, facts),
+      point,
+    );
+  }
+  if (gate === "allow" && !floorMet) gate = "confirm";
+  const deadline =
+    process.kind === "command_stages"
+      ? process.result.deadline
+      : performance.now() + point.totalTimeoutMs;
+  for (const preparation of preparations) {
+    preparation.processBinding = {
+      protocolHash: jevRuntimeProtocolHash(point),
+      operatingPointHash: jevOperatingPointHash(point),
+    };
+    preparation.deadline = deadline;
+  }
+  const risk = actualAnswers.risk!;
+  return row(id, gate, {
+    complete: jevContextComplete(metadata, facts),
+    answers: actualAnswers,
+    questionIds: Object.keys(actualAnswers) as BaselineDevResult["questionIds"],
+    modelChoice: risk.choice,
+    probabilities: structuredClone(risk.probabilities),
+    confidence: risk.confidence,
+    model: riskOrigin.model,
+    provider: riskOrigin.provider,
+    requestId,
+    operatingPoint: structuredClone(point),
+    operatingPointHash: jevOperatingPointHash(point),
+    protocolHash: jevRuntimeProtocolHash(point),
+    transportHash: SCORE_TRANSPORT_HASH,
+    process: structuredClone(process),
+    riskOrigin,
+    fileSourceRequest: structuredClone(original),
+    requestStage: preparations[0].stage,
+    requestHash: preparations[0].requestHash,
+    requestBytes: preparations[0].requestBytes,
+    requestPreparations: preparations,
+    syntheticPreparation: false,
+  });
+}
+
+describe("Jev file-stage source score", () => {
+  it.each([false, true])("rebuilds every later source body with Bash=%s", async (bash) => {
+    const receipt = await fileStageRow(`file-source-${bash}`, { bash });
+    expect(receipt.requestPreparations?.map((prepared) => prepared.stage)).toEqual(
+      bash
+        ? ["file_match", "non_command", "syntax", "command_policy"]
+        : ["file_match", "all_heads"],
+    );
+    expect(scoreJevGuardrailReplacement([receipt])).toMatchObject({
+      answerEvidence: { complete: 1, invalid: 0 },
+      observedActionConsistency: { attempted: 1, matched: 1 },
+      safeAutomaticAllows: { attempted: 1, matched: 1 },
+      qualified: false,
+    });
+  });
+
+  it.each(["match", "no_match", "unknown"] as const)(
+    "uses the selected %s probability at each point",
+    async (fileChoice) => {
+      const conservative = await fileStageRow(`file-floor-${fileChoice}`, {
+        fileChoice,
+        fileProbability: 0.8,
+      });
+      const argmax = await fileStageRow(`file-argmax-${fileChoice}`, {
+        fileChoice,
+        fileProbability: 0.8,
+        point: "argmax",
+      });
+      expect(conservative.candidateAction).toBe("confirm");
+      expect(argmax.candidateAction).toBe("allow");
+      expect(scoreJevGuardrailReplacement([conservative, argmax])).toMatchObject({
+        answerEvidence: { complete: 2, invalid: 0 },
+        observedActionConsistency: { matched: 2 },
+        probabilityOnlyConfirmationIds: [conservative.id],
+      });
+    },
+  );
+
+  it("retains an actual action block below the file floor", async () => {
+    const receipt = await fileStageRow("file-floor-action-block", {
+      action: "block",
+      fileProbability: 0.8,
+    });
+    expect(scoreJevGuardrailReplacement([receipt])).toMatchObject({
+      answerEvidence: { complete: 1 },
+      goldHardBlocks: { attempted: 1, matched: 1 },
+    });
+  });
+
+  it("checks an exact legacy body when the file head count exceeds eight", async () => {
+    const receipt = await fileStageRow("file-legacy-count", { fileRows: 5 });
+    expect(receipt.process?.fileStage?.format).toBe("legacy");
+    expect(receipt.requestPreparations?.map((prepared) => prepared.stage)).toEqual(["all_heads"]);
+    expect(receipt.requestPreparations?.[0].request).toEqual(receipt.fileSourceRequest);
+    expect(scoreJevGuardrailReplacement([receipt]).answerEvidence).toMatchObject({
+      complete: 1,
+      invalid: 0,
+    });
+  });
+
+  it.each([
+    [
+      "source",
+      (receipt: BaselineDevResult) => {
+        delete receipt.fileSourceRequest;
+      },
+    ],
+    [
+      "factory point",
+      (receipt: BaselineDevResult) => {
+        receipt.requestPreparations![0].processBinding!.operatingPointHash = scoreHash("other");
+      },
+    ],
+    [
+      "factory deadline",
+      (receipt: BaselineDevResult) => {
+        receipt.requestPreparations![0].deadline!++;
+      },
+    ],
+    [
+      "source state",
+      (receipt: BaselineDevResult) => {
+        (receipt.fileSourceRequest!.state as { version: number }).version++;
+      },
+    ],
+    [
+      "selection",
+      (receipt: BaselineDevResult) => {
+        receipt.process!.fileStage!.selection.reason = "other";
+      },
+    ],
+    [
+      "completion",
+      (receipt: BaselineDevResult) => {
+        receipt.process!.fileStage!.completed = false;
+      },
+    ],
+    [
+      "cleanup",
+      (receipt: BaselineDevResult) => {
+        receipt.process!.fileStage!.cleanupFailed = true;
+      },
+    ],
+    [
+      "timing",
+      (receipt: BaselineDevResult) => {
+        receipt.process!.fileStage!.matchTimingOrigin = "strict_validation";
+      },
+    ],
+    [
+      "floor",
+      (receipt: BaselineDevResult) => {
+        receipt.process!.fileStage!.selectedProbabilityFloor = 0;
+      },
+    ],
+    [
+      "floor result",
+      (receipt: BaselineDevResult) => {
+        receipt.process!.fileStage!.selectedProbabilityFloorMet = false;
+      },
+    ],
+    [
+      "transcript",
+      (receipt: BaselineDevResult) => {
+        receipt.process!.fileStage!.transcript += " ";
+      },
+    ],
+    [
+      "transport",
+      (receipt: BaselineDevResult) => {
+        receipt.process!.fileStage!.match!.evidence.transportHash = scoreHash("other");
+      },
+    ],
+    [
+      "request hash",
+      (receipt: BaselineDevResult) => {
+        receipt.process!.fileStage!.match!.evidence.requestHash = scoreHash("other");
+      },
+    ],
+    [
+      "answer",
+      (receipt: BaselineDevResult) => {
+        delete receipt.process!.fileStage!.match!.answers.f_a;
+      },
+    ],
+    [
+      "probability",
+      (receipt: BaselineDevResult) => {
+        receipt.process!.fileStage!.match!.answers.f_a!.probabilities.unknown = NaN;
+      },
+    ],
+    [
+      "request snapshot",
+      (receipt: BaselineDevResult) => {
+        delete receipt.requestPreparations![0].request;
+      },
+    ],
+    [
+      "later snapshot",
+      (receipt: BaselineDevResult) => {
+        delete receipt.requestPreparations![1].request;
+      },
+    ],
+    [
+      "synthetic marker",
+      (receipt: BaselineDevResult) => {
+        receipt.syntheticFilePreparation = {
+          syntheticPreparation: true,
+          fileStage: receipt.process!.fileStage!,
+        };
+      },
+    ],
+  ] as const)("rejects changed file %s evidence", async (_name, change) => {
+    const receipt = await fileStageRow("changed-file-evidence");
+    change(receipt);
+    expect(scoreJevGuardrailReplacement([receipt])).toMatchObject({
+      answerEvidence: { complete: 0, invalid: 1 },
+      safeAutomaticAllows: { attempted: 1, matched: 0 },
+    });
+  });
+
+  it.each([false, true])("rejects a rehashed later body with Bash=%s", async (bash) => {
+    const receipt = await fileStageRow(`changed-file-later-${bash}`, { bash });
+    const last = receipt.requestPreparations![receipt.requestPreparations!.length - 1];
+    (last.request!.state as Record<string, unknown>).extra = "Changed test data.";
+    const encoded = JSON.stringify(last.request);
+    last.requestHash = scoreHash(encoded);
+    last.requestBytes = Buffer.byteLength(encoded);
+    const stage =
+      receipt.process!.kind === "all_heads"
+        ? receipt.process!.stage!
+        : commandEvidence(receipt).stages[commandEvidence(receipt).stages.length - 1];
+    stage.evidence.requestHash = last.requestHash;
+    stage.evidence.requestBytes = last.requestBytes;
+    if (receipt.process!.kind === "all_heads") {
+      receipt.process!.attempt!.requestHash = last.requestHash;
+      receipt.process!.attempt!.requestBytes = last.requestBytes;
+      receipt.riskOrigin!.requestHash = last.requestHash;
+      receipt.riskOrigin!.requestBytes = last.requestBytes;
+    } else {
+      const attempt =
+        commandEvidence(receipt).attempts[commandEvidence(receipt).attempts.length - 1];
+      attempt.requestHash = last.requestHash;
+      attempt.requestBytes = last.requestBytes;
+    }
+    expect(scoreJevGuardrailReplacement([receipt]).answerEvidence).toMatchObject({
+      complete: 0,
+      invalid: 1,
+    });
+  });
+
+  it("gives no model credit to a failed file process", async () => {
+    const receipt = await fileStageRow("failed-file-source");
+    receipt.stage = "failed";
+    receipt.failure = "timeout";
+    receipt.candidateAction = "block";
+    receipt.baselineAction = "block";
+    receipt.gold.action = "block";
+    receipt.process = {
+      kind: "file_stages",
+      completed: false,
+      fileStage: receipt.process!.fileStage!,
+    };
+    receipt.process.fileStage.completed = false;
+    expect(scoreJevGuardrailReplacement([receipt])).toMatchObject({
+      answerEvidence: { complete: 0, invalid: 1 },
+      baselineHardBlocks: { attempted: 1, matched: 0 },
+      goldHardBlocks: { attempted: 1, matched: 0 },
+      failureBlockIds: [receipt.id],
+    });
+  });
+
+  it("rejects stage times whose sum exceeds the total deadline", async () => {
+    const receipt = await fileStageRow("file-combined-deadline", {
+      fileLatencyMs: 6000,
+      actionLatencyMs: 6000,
+    });
+    expect(scoreJevGuardrailReplacement([receipt])).toMatchObject({
+      answerEvidence: { complete: 0, invalid: 1 },
+      safeAutomaticAllows: { attempted: 1, matched: 0 },
+    });
+  });
+
+  it("rejects an orphan file transcript after receipt fields are removed", async () => {
+    const receipt = await fileStageRow("orphan-file-transcript");
+    delete receipt.fileSourceRequest;
+    delete receipt.process!.fileStage;
+    receipt.requestPreparations!.shift();
+    const first = firstPreparation(receipt);
+    receipt.requestStage = first.stage;
+    receipt.requestHash = first.requestHash;
+    receipt.requestBytes = first.requestBytes;
+    expect(scoreJevGuardrailReplacement([receipt]).answerEvidence).toMatchObject({
+      complete: 0,
+      invalid: 1,
+    });
+  });
+});
 
 describe("Jev replacement score with actual stage evidence", () => {
   it("uses the conservative binary gate and gives no probability-only restriction credit", async () => {

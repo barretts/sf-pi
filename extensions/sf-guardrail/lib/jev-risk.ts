@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import { createHash } from "node:crypto";
-import { types } from "node:util";
+import { types, isDeepStrictEqual } from "node:util";
 import { performance } from "node:perf_hooks";
 import {
   createJevProcessTransport,
+  createJevFileMatchProcessTransport,
+  JevFileMatchClientError,
   JevClientError,
   JevStageClientError,
   resolveJevEndpoint,
@@ -29,6 +31,13 @@ import {
   JEV_COMMAND_PROCESS_PROTOCOL,
 } from "./jev-command-process.ts";
 import {
+  prepareJevFileProcess,
+  buildJevFilePolicyRequest,
+  validateJevFileMatchResult,
+  JEV_FILE_PROCESS_PROTOCOL,
+  type JevFileProcessPlan,
+} from "./jev-file-process.ts";
+import {
   resolveJevOperatingPoint,
   validateJevOperatingPoint,
   jevOperatingPointHash,
@@ -47,6 +56,10 @@ import type {
   JevAllHeadStageResult,
   JevDecisionProcessEvidence,
   JevDecisionTransport,
+  JevFileMatchTransport,
+  JevFileMatchFailureEvidence,
+  JevStageFailureEvidence,
+  JevFilePolicyStageEvidence,
   JevChoiceQuestion,
   JevFacts,
   JevPrediction,
@@ -536,12 +549,19 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
   },
 };
 export const JEV_PROTOCOL_HASH = jevHash({
-  version: 15,
+  version: 17,
+  fileProcess: JEV_FILE_PROCESS_PROTOCOL,
   commandProcess: JEV_COMMAND_PROCESS_PROTOCOL,
   operatingPoint: JEV_OPERATING_POINT_PROTOCOL,
   runtime: {
-    bash: "actual-command-stages",
-    otherTools: "actual-all-head-one-call",
+    bash: "preflight-selected-file-match-prefix-then-actual-command-stages-or-exact-legacy",
+    otherTools: "preflight-selected-file-match-prefix-then-actual-all-heads-or-exact-legacy",
+    beforeDispatch:
+      "captured-context-validity-only-probe-under-original-deadline; all-selected-formats-recheck-original-hosted-facts-source-bindings-after-an-earlier-call",
+    resolverArguments:
+      "Each fact resolver call receives fresh detached original input and policy copies plus detached derived metadata. Protected adapter values, original required paths and actual artifactPlan producer identity remain unchanged. No aggregate snapshot cap is added.",
+    resolverResults:
+      "Before hashes, wire construction, display or approval use, validate plain data descriptors and prototypes without invoking accessors; detach each returned facts and identity result, then freeze its objects and arrays. Preserve finite scalars, signed zero and ordinary optional undefined fields. No aggregate host depth or node cap. The registered input artifactPlan producer object is unchanged.",
     totalTimeoutMs: JEV_COMMAND_PROCESS_TIMEOUT_MS,
     laterHumanApprovalRecheckMs: 1500,
     defaultFactsImport: {
@@ -1116,6 +1136,65 @@ export function jevFactBindingHash(resolved: JevResolvedFacts): string {
   });
 }
 
+/** Returned observations must not remain aliases of a resolver's retained result. */
+export function snapshotJevResolvedFacts(value: JevResolvedFacts): JevResolvedFacts {
+  const done = new WeakSet<object>();
+  const active = new WeakSet<object>();
+  const pending: Array<{ value: unknown; exit?: boolean }> = [{ value }];
+  while (pending.length) {
+    const entry = pending.pop();
+    const item = entry.value;
+    if (
+      item === undefined ||
+      item === null ||
+      typeof item === "boolean" ||
+      typeof item === "string"
+    )
+      continue;
+    if (typeof item === "number" && Number.isFinite(item)) continue;
+    if (typeof item !== "object" || types.isProxy(item))
+      throw new JevClientError("invalid_request");
+    if (entry.exit) {
+      active.delete(item);
+      done.add(item);
+      continue;
+    }
+    if (active.has(item)) throw new JevClientError("invalid_request");
+    if (done.has(item)) continue;
+    const prototype = Object.getPrototypeOf(item);
+    if (
+      Array.isArray(item)
+        ? prototype !== Array.prototype
+        : prototype !== Object.prototype && prototype !== null
+    )
+      throw new JevClientError("invalid_request");
+    active.add(item);
+    pending.push({ value: item, exit: true });
+    for (const key of Reflect.ownKeys(item)) {
+      const field = Object.getOwnPropertyDescriptor(item, key);
+      if (
+        typeof key !== "string" ||
+        !Object.hasOwn(field, "value") ||
+        (!field.enumerable && !(Array.isArray(item) && key === "length"))
+      )
+        throw new JevClientError("invalid_request");
+      pending.push({ value: field.value });
+    }
+  }
+  const copy = structuredClone(value);
+  const frozen = new WeakSet<object>();
+  const remaining: object[] = [copy];
+  while (remaining.length) {
+    const item = remaining.pop();
+    if (frozen.has(item)) continue;
+    frozen.add(item);
+    for (const child of Object.values(item))
+      if (child !== null && typeof child === "object") remaining.push(child);
+    Object.freeze(item);
+  }
+  return copy;
+}
+
 export async function evaluateJevSafety(
   input: SafetyKernelInput,
   options: {
@@ -1125,6 +1204,8 @@ export async function evaluateJevSafety(
     deadline?: number;
     operatingPoint?: JevOperatingPoint;
     createTransport?: typeof createJevProcessTransport;
+    createFileTransport?: typeof createJevFileMatchProcessTransport;
+    recheckContext?: () => boolean | Promise<boolean>;
     resolveFacts?: typeof resolveJevFacts;
   } = {},
 ): Promise<ClassifiedDecision> {
@@ -1146,6 +1227,20 @@ export async function evaluateJevSafety(
   let metadata: JevToolMetadata | undefined;
   let processEvidence: JevDecisionProcessEvidence | undefined;
   let transport: JevDecisionTransport | undefined;
+  let fileTransport: JevFileMatchTransport | undefined;
+  let filePlan: JevFileProcessPlan | undefined;
+  let fileStage: JevFilePolicyStageEvidence | undefined;
+  let fileClosed = false;
+  const closeFile = () => {
+    if (fileClosed || !fileTransport) return;
+    fileClosed = true;
+    try {
+      fileTransport.close();
+    } catch {
+      if (fileStage) fileStage.cleanupFailed = true;
+      throw new JevClientError("transport_error");
+    }
+  };
   let allHeadRequest: { request: JevAllHeadRequest; hash: string; bytes: number } | undefined;
   let closed = false;
   const close = () => {
@@ -1221,6 +1316,8 @@ export async function evaluateJevSafety(
       "deadline",
       "operatingPoint",
       "createTransport",
+      "createFileTransport",
+      "recheckContext",
       "resolveFacts",
     ];
     if (
@@ -1238,6 +1335,9 @@ export async function evaluateJevSafety(
     );
     if (
       (options.createTransport !== undefined && typeof options.createTransport !== "function") ||
+      (options.createFileTransport !== undefined &&
+        typeof options.createFileTransport !== "function") ||
+      (options.recheckContext !== undefined && typeof options.recheckContext !== "function") ||
       (options.resolveFacts !== undefined && typeof options.resolveFacts !== "function")
     )
       throw new JevClientError("invalid_request");
@@ -1256,6 +1356,8 @@ export async function evaluateJevSafety(
     guard();
     timer = setTimeout(() => timeout.abort(), Math.max(0, deadline - performance.now()));
     timer.unref?.();
+    const sourceInput = input;
+    const sourceDescriptor = options.descriptor;
     const config = JSON.parse(JSON.stringify(input.config)) as GuardrailConfig;
     policyHash = jevConfigHash(config);
     const endpoint = resolveJevEndpoint(options.endpoint);
@@ -1284,14 +1386,18 @@ export async function evaluateJevSafety(
       options.resolveFacts ??
       (await withinDeadline(import("./jev-facts.ts"), signal)).resolveJevFacts;
     guard();
-    const resolved = await withinDeadline(
-      resolveFacts({
-        ...input,
-        metadata: resolverMetadata,
+    const resolved = snapshotJevResolvedFacts(
+      await withinDeadline(
+        resolveFacts({
+          ...input,
+          input: JSON.parse(originalJson),
+          config: JSON.parse(JSON.stringify(config)),
+          metadata: resolverMetadata,
+          signal,
+          targetOrg: extractJevTargetOrg(input.toolName, input.input),
+        }),
         signal,
-        targetOrg: extractJevTargetOrg(input.toolName, input.input),
-      }),
-      signal,
+      ),
     );
     guard();
     if (
@@ -1318,18 +1424,189 @@ export async function evaluateJevSafety(
       engine: "jev",
       model: JEV_RESOLVED_MODEL,
     });
-    const request = buildJevRequest(metadata, resolved.facts, input.config, {
+    const originalRequest = buildJevRequest(metadata, resolved.facts, input.config, {
       ...(originalCommand === undefined ? {} : { command: originalCommand }),
       requiredFilePaths,
     });
     guard();
+    filePlan = prepareJevFileProcess(originalRequest, input.toolName === "bash");
+    fileStage = {
+      format: filePlan.format,
+      selection: filePlan.selection,
+      completed: filePlan.format === "legacy",
+      cleanupFailed: false,
+      selectedProbabilityFloor: operatingPoint.syntaxProbability,
+      selectedProbabilityFloorMet: filePlan.format === "legacy",
+    };
+    processEvidence = { kind: "file_stages", completed: false, fileStage };
+    const plan = filePlan;
+    const point = operatingPoint;
+    const originalMetadata = metadata;
     const processBinding = Object.freeze({ protocolHash, operatingPointHash });
-    const createTransport = (processOptions: { deadline: number; signal?: AbortSignal }) =>
-      (options.createTransport ?? createJevProcessTransport)({
+    let earlierCall = false;
+    const checkContext = async () => {
+      guard();
+      if (
+        options.recheckContext &&
+        (await withinDeadline(Promise.resolve(options.recheckContext()), signal)) !== true
+      )
+        throw new JevClientError("identity_mismatch");
+      guard();
+      if (
+        sourceInput.toolName !== input.toolName ||
+        sourceInput.cwd !== input.cwd ||
+        sourceInput.sessionId !== input.sessionId ||
+        sourceInput.toolCallId !== input.toolCallId ||
+        jevHash(sourceInput.input) !== originalHash ||
+        jevConfigHash(sourceInput.config) !== policyHash ||
+        jevHash(JSON.parse(JSON.stringify(sourceDescriptor ?? null))) !== descriptorHash ||
+        jevOperatingPointHash(
+          options.operatingPoint === undefined
+            ? resolveJevOperatingPoint()
+            : validateJevOperatingPoint(options.operatingPoint),
+        ) !== operatingPointHash ||
+        jevDecisionTransportBindingHash(resolveJevEndpoint(options.endpoint), point) !==
+          transportHash
+      )
+        throw new JevClientError("identity_mismatch");
+      if (earlierCall) {
+        const latest = snapshotJevResolvedFacts(
+          await withinDeadline(
+            resolveFacts({
+              ...input,
+              input: JSON.parse(originalJson),
+              config: JSON.parse(JSON.stringify(config)),
+              metadata: JSON.parse(JSON.stringify(metadata)),
+              signal,
+              targetOrg: extractJevTargetOrg(input.toolName, input.input),
+            }),
+            signal,
+          ),
+        );
+        guard();
+        if (
+          (latest.artifactPlan &&
+            originalMetadata.artifactPlan &&
+            jevHash(latest.artifactPlan) !== jevHash(originalMetadata.artifactPlan)) ||
+          jevFactBindingHash(
+            originalMetadata.artifactPlan
+              ? { ...latest, artifactPlan: originalMetadata.artifactPlan }
+              : latest,
+          ) !== factsHash ||
+          jevContextComplete(originalMetadata, latest.facts, requiredFilePaths) !== complete ||
+          JSON.stringify(
+            buildJevRequest(originalMetadata, latest.facts, config, {
+              ...(originalCommand === undefined ? {} : { command: originalCommand }),
+              requiredFilePaths,
+            }),
+          ) !== plan.original.json
+        )
+          throw new JevClientError("identity_mismatch");
+        // A resolver can yield while settings or the source context changes.
+        if (
+          options.recheckContext &&
+          (await withinDeadline(Promise.resolve(options.recheckContext()), signal)) !== true
+        )
+          throw new JevClientError("identity_mismatch");
+        guard();
+        if (
+          sourceInput.toolName !== input.toolName ||
+          sourceInput.cwd !== input.cwd ||
+          sourceInput.sessionId !== input.sessionId ||
+          sourceInput.toolCallId !== input.toolCallId ||
+          jevHash(sourceInput.input) !== originalHash ||
+          jevConfigHash(sourceInput.config) !== policyHash ||
+          jevHash(JSON.parse(JSON.stringify(sourceDescriptor ?? null))) !== descriptorHash ||
+          jevOperatingPointHash(
+            options.operatingPoint === undefined
+              ? resolveJevOperatingPoint()
+              : validateJevOperatingPoint(options.operatingPoint),
+          ) !== operatingPointHash ||
+          jevDecisionTransportBindingHash(resolveJevEndpoint(options.endpoint), point) !==
+            transportHash
+        )
+          throw new JevClientError("identity_mismatch");
+      }
+      guard();
+    };
+    const beforeDispatch = async () => {
+      try {
+        await checkContext();
+      } catch (error) {
+        if (fileStage)
+          fileStage.failure = {
+            stage: "recheck",
+            code: error instanceof JevClientError ? error.code : "invalid-context",
+          };
+        throw error;
+      }
+    };
+    let request = filePlan.original.request;
+    if (filePlan.format === "file_match_then_policy") {
+      const posted = plan.match;
+      if (!posted) throw new JevClientError("invalid_request");
+      fileStage.attempt = {
+        requestedQuestionIds: Object.keys(posted.request.questions),
+        requestHash: posted.hash,
+        requestBytes: posted.bytes,
+      };
+      await beforeDispatch();
+      guard();
+      fileTransport = (options.createFileTransport ?? createJevFileMatchProcessTransport)({
+        deadline,
+        signal,
+        endpoint,
+        binding: processBinding,
+      });
+      guard();
+      await beforeDispatch();
+      guard();
+      earlierCall = true;
+      fileStage.match = validateJevFileMatchResult(
+        await withinDeadline(fileTransport.requestFileMatch(posted.request), signal),
+        filePlan,
+        transportHash,
+      );
+      fileStage.matchTimingOrigin = "strict_validation";
+      closeFile();
+      guard();
+      fileStage.matchTimingOrigin = "transport_cleanup";
+      fileStage.selectedProbabilityFloorMet = Object.values(fileStage.match.answers).every(
+        (answer) => !!answer && answer.probabilities[answer.choice] >= point.syntaxProbability,
+      );
+      const built = buildJevFilePolicyRequest(filePlan, fileStage.match, transportHash);
+      guard();
+      fileStage.transcript = built.transcript;
+      fileStage.completed = true;
+      request = built.request;
+    }
+    const createTransport = (processOptions: { deadline: number; signal?: AbortSignal }) => {
+      const actual = (options.createTransport ?? createJevProcessTransport)({
         ...processOptions,
         endpoint,
         binding: processBinding,
       });
+      const send = async <T>(operation: () => Promise<T>): Promise<T> => {
+        await beforeDispatch();
+        guard();
+        earlierCall = true;
+        return operation();
+      };
+      const readObserved = actual.getObservedResult;
+      return {
+        requestAllHeads: (body: JevAllHeadRequest) => send(() => actual.requestAllHeads(body)),
+        requestNonCommand: (...args: Parameters<typeof actual.requestNonCommand>) =>
+          send(() => actual.requestNonCommand(...args)),
+        requestSyntax: (...args: Parameters<typeof actual.requestSyntax>) =>
+          send(() => actual.requestSyntax(...args)),
+        requestCommandPolicy: (...args: Parameters<typeof actual.requestCommandPolicy>) =>
+          send(() => actual.requestCommandPolicy(...args)),
+        ...(readObserved ? { getObservedResult: () => readObserved.call(actual) } : {}),
+        close: () => actual.close(),
+      };
+    };
+    // No downstream factory is created until the next captured-context check succeeds.
+    await beforeDispatch();
     let action: JevAction;
     let answers: Partial<Record<JevQuestionId, JevChoiceAnswer>>;
     let allHeads: JevAllHeadStageResult | undefined;
@@ -1341,7 +1618,7 @@ export async function evaluateJevSafety(
         transportHash,
         createTransport,
       });
-      processEvidence = { kind: "command_stages", result };
+      processEvidence = { kind: "command_stages", result, fileStage };
       guard();
       if (
         result.stages.some((stage) => stage.evidence.transportHash !== transportHash) ||
@@ -1359,6 +1636,7 @@ export async function evaluateJevSafety(
       });
       processEvidence = {
         kind: "all_heads",
+        fileStage,
         completed: false,
         cleanupFailed: false,
         attempt: {
@@ -1392,6 +1670,9 @@ export async function evaluateJevSafety(
         operatingPoint,
       );
     }
+    if (action === "allow" && !fileStage.selectedProbabilityFloorMet) action = "confirm";
+    await beforeDispatch();
+    guard();
     const canGrantSession =
       complete &&
       !!resolved.orgIdentity &&
@@ -1466,6 +1747,43 @@ export async function evaluateJevSafety(
     };
   } catch (caught) {
     let error: unknown = caught;
+    if (fileStage?.format === "file_match_then_policy" && filePlan && transportHash) {
+      try {
+        const reported =
+          error instanceof JevFileMatchClientError ? error.observedResult : undefined;
+        const source =
+          reported ?? (fileStage.match ? undefined : fileTransport?.getObservedResult());
+        if (source !== undefined) {
+          const observed = validateJevFileMatchResult(source, filePlan, transportHash);
+          if (
+            fileStage.match &&
+            !types.isProxy(fileStage.match) &&
+            !isDeepStrictEqual(fileStage.match, observed)
+          )
+            throw new JevClientError("invalid_response");
+          if (!fileStage.match) {
+            fileStage.match = observed;
+            fileStage.matchTimingOrigin = "strict_validation";
+          }
+        }
+        if (error instanceof JevFileMatchClientError) {
+          if (!fileStage.attempt) throw new JevClientError("invalid_response");
+          fileStage.failureEvidence = validateJevStageFailureEvidence(
+            error.evidence as unknown as JevStageFailureEvidence,
+            { stage: "file_match", ...fileStage.attempt },
+            error.code,
+            transportHash,
+          ) as unknown as JevFileMatchFailureEvidence;
+        }
+      } catch {
+        error = new JevClientError("invalid_response");
+      }
+      if (!fileStage.completed)
+        fileStage.failure ??= {
+          stage: fileStage.match ? "transcript" : "file_match",
+          code: error instanceof JevClientError ? error.code : "invalid-context",
+        };
+    }
     if (processEvidence?.kind === "all_heads") {
       try {
         const reported = error instanceof JevStageClientError ? error.observedResult : undefined;
@@ -1498,6 +1816,11 @@ export async function evaluateJevSafety(
       } catch {
         error = new JevClientError("invalid_response");
       }
+    }
+    try {
+      closeFile();
+    } catch {
+      /* Keep the actual match receipt and cleanup failure. */
     }
     try {
       close();

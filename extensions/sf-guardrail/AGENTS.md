@@ -22,6 +22,7 @@ One-file-per-concern split:
 | Safety decision seam                 | `lib/safety-kernel.ts`                              |
 | Jev Decisions transport              | `lib/jev-client.ts`                                 |
 | Jev command request stages           | `lib/jev-command-process.ts`                        |
+| Jev experimental file request stages | `lib/jev-file-process.ts`                           |
 | Jev experimental operating point     | `lib/jev-operating-point.ts`                        |
 | Jev metadata and local facts         | `lib/jev-metadata.ts` + `lib/jev-facts.ts`          |
 | Mechanical command token projection  | `lib/jev-command-tokens.ts`                         |
@@ -177,9 +178,10 @@ One-file-per-concern split:
   ingest, and manifest runs ignore supplied dry-run intent. Do not infer a
   preview from that intent or a suffix alone; prerequisite reads can still occur
   under an honored business-write dry run. These facts do not decide risk.
-- Use the built-in `fetch` client. Non-Bash tools send all requested action
-  heads in one strict Decisions request. Bash uses the actual non-command,
-  syntax, and grouped command-policy stages. An empty active command manifest
+- Use the built-in `fetch` client. The complete original route for non-Bash
+  tools sends all requested action heads in one strict Decisions request.
+  The experimental file adapter can add one matching call before either original route.
+  Bash uses the actual non-command, syntax, and grouped command-policy stages. An empty active command manifest
   omits only the syntax call. The original state stays version 6. Require an explicit HTTPS
   `SF_GUARDRAIL_JEV_ENDPOINT`; there is no default endpoint. Read
   `SF_GUARDRAIL_JEV_API_KEY`, otherwise `SF_GUARDRAIL_JEV_API_KEY_FILE`.
@@ -201,11 +203,38 @@ One-file-per-concern split:
   source order, up to 64 rows. Do not batch, trim, match, or select rules
   locally. Pin TypeSafe routing with fallbacks disabled. Require the configured
   model and provider identity. Errors block without retries or fallback.
+- Preserve the experimental `file_match_then_policy` source boundary.
+  Copy every original file fact record and file policy row. Keep 1 to 8
+  matching heads in exact record/row/list order, with `patterns` before
+  `allowedPatterns`. Include disabled and Off rows. Each head carries the
+  complete original record and row. Jev chooses only `match`, `no_match`,
+  or `unknown`. The later actual `file_policy` head applies eligibility,
+  same-row exemptions, existence requirements, strength, first-tie order,
+  Off-winner behavior, access, and the action. Keep unknown premises and all
+  independent restrictions. Add no host matcher, row filter, winner, or
+  second policy vote.
+- Select the complete file format before any factory. A new count, byte,
+  or JSON tree failure selects the exact complete original Jev route,
+  subject to that route's own limits. No reply failure may change the route.
+  Validate and freeze each actual request separately: depth at most 32,
+  at most 16,384 JSON nodes, and at most 32,768 UTF-8 body bytes. Do not
+  apply a wire tree cap to the local plan's duplicate copies. Do not trim
+  or batch original records or rows to fit. Preserve command process 45
+  and its complete syntax 44 or exact syntax 43 selection.
+- Keep the file transcript's strict 16-field header and six-field answers.
+  Preserve actual receipt origins, hashes, IDs, model/provider, usage,
+  optional cost, bytes, time, raw probabilities, confidence, and signed
+  zero. Require the exact canonical typed inverse and original request
+  inverse. It preserves parsed numbers; raw JSON spelling is outside the
+  inverse. Full validation is pending. Prior head-only file scores do not
+  qualify this adapter or establish its current full development score.
 - Freeze and validate the exact experimental operating point before facts or
   calls. `SF_GUARDRAIL_JEV_OPERATING_POINT` accepts only `conservative` (default)
   or `argmax`. Conservative requires every action to select allow with raw
   P(allow) at least 0.99, and every selected syntax choice to have raw probability
-  at least 0.99. Argmax declares both floors as zero; actions must still select allow.
+  at least 0.99. Apply the same selected-choice floor to every file matching
+  answer, including `unknown`. Argmax declares both floors as zero; actions
+  must still select allow.
   Both points require complete original context. Every actual action block
   stays hard. Neither point has joint calibration or safety qualification.
 - Use one total 10,000 ms absolute deadline from before facts through calls,
@@ -213,6 +242,18 @@ One-file-per-concern split:
   the model deadline for a stage. Do not count a human dialog against a later
   explicit approval. That approval gets one new 1,500 ms context recheck phase.
   Artifact consumers keep fresh bounded rechecks before connection and writes.
+  Recheck original input, policy, descriptor, operating point, context, and
+  hosted facts between all stages and before automatic release. A later
+  human allow repeats the bounded current-context checks. Give every facts
+  callback fresh detached copies of the original input and policy. Give it
+  detached derived metadata. Keep protected adapter values and mandatory
+  original paths intact. For each returned resolver result, check property
+  descriptors and plain data before `structuredClone`. Detach and freeze the
+  first and all later resolver results before hash, request, display, or
+  session use. Preserve the actual `input.artifactPlan` producer reference
+  and registered object identity.
+  Facts do not bind inode, modification time, or file bodies.
+  The checks do not prevent filesystem replacement races.
   Prior diagnostic scores do not qualify this runtime adapter.
 - Bind the fixed point to protocol, fingerprint, transport, audit, and current
   context checks. The normal engine default remains deterministic. Do not
@@ -220,7 +261,8 @@ One-file-per-concern split:
 - Audit every Jev outcome and each answer's actual probabilities/confidence
   without raw payloads or credentials. Top-level evidence must remain the
   actual `risk` answer and its origin, not the final gate or a combined
-  confidence. Keep separate actual stage receipts and the full binary transcript.
+  confidence. Keep separate actual stage receipts, the full command binary
+  transcript, and any actual file matching transcript.
   Do not attach collected heads to one provider request ID. Keep validated
   observed answers after a later failure or cleanup error. Recheck engine,
   policy identity, and cancellation before releasing execution.

@@ -25,7 +25,7 @@ The configured HTTPS gateway for the pinned TypeSafe Jev model and independent C
 _Avoid_: arbitrary chat endpoint, model discovery, automatic provider fallback
 
 **Jev Decision Questions**:
-The original action request uses wire state version 6. Non-Bash tools send all requested action heads in one strict call. Bash uses actual non-command, syntax, and grouped command-policy replies. An empty active command manifest skips the syntax call and sends three empty source groups to the actual command head. Each action question chooses `allow`, `confirm`, or `block`. Each syntax question chooses `match` or `no_match`. Every tool request asks `risk` about executable effects with guidance for the tool family. Policy questions judge matching block restrictions. File paths add file policy. Parsed shell calls add command policy and structurally possible org policy. Complete known executable or wrapper heads reduce the projected org rules. Opaque or incomplete heads, withheld comments, or missing commands retain all of them. Disclosure follows possible data effects and observed runner facts. Incomplete shell effects retain the disclosure question. Authority applies only to browser tools. Exact `sf_browser_press` key `Escape` remains risk- and authority-evaluated cancellation. It requires no org or fresh target/focus facts. The request does not create false freshness. At most six action answers supply all risk and policy judgments. Structural applicability does not decide an outcome.
+The original action request uses wire state version 6. The complete original route for non-Bash tools sends all requested action heads in one strict call. The experimental file adapter can add one complete matching call before either original action route. Bash uses actual non-command, syntax, and grouped command-policy replies. An empty active command manifest skips the syntax call and sends three empty source groups to the actual command head. Each action question chooses `allow`, `confirm`, or `block`. Each command syntax question chooses `match` or `no_match`. Each file matching question chooses `match`, `no_match`, or `unknown`. Every tool request asks `risk` about executable effects with guidance for the tool family. Policy questions judge matching block restrictions. File paths add file policy. Parsed shell calls add command policy and structurally possible org policy. Complete known executable or wrapper heads reduce the projected org rules. Opaque or incomplete heads, withheld comments, or missing commands retain all of them. Disclosure follows possible data effects and observed runner facts. Incomplete shell effects retain the disclosure question. Authority applies only to browser tools. Exact `sf_browser_press` key `Escape` remains risk- and authority-evaluated cancellation. It requires no org or fresh target/focus facts. The request does not create false freshness. At most six action answers supply all risk and policy judgments. Structural applicability does not decide an outcome.
 _Avoid_: unbounded model chain, deterministic policy vote, combined confidence
 
 **Operation Metadata**:
@@ -98,12 +98,41 @@ limit. The choice uses only serialized size. It adds no match, winner, action,
 retry, or wire field. Exact inverses restore syntax 43, syntax 42, numeric
 syntax 37, and long syntax 31.
 
+**File Matching Process**:
+The experimental `file_match_then_policy` format copies every original
+`facts.files` record and `policy.files` row. It admits 1 to 8 matching heads
+in exact source order: record, row, then `patterns` and `allowedPatterns`.
+Disabled and Off rows stay in the complete set. Jev judges only whether the
+named list matches that record. It chooses `match`, `no_match`, or `unknown`.
+The later actual `file_policy` head owns eligibility, same-row exemptions,
+existence requirements, protection strength, first-tie order, Off-winner
+behavior, access, and the action. Unknown remains unknown. The host copies,
+binds, and validates data. It does not match or filter rows or add a second
+policy vote. Other original questions keep their independent restrictions.
+_Avoid_: host path matcher, local policy winner, matching choice as approval
+
+Select the complete format before any transport factory. A new count, byte,
+or JSON tree failure selects the exact complete original Jev route, subject
+to that route's own limits. A reply failure blocks without a later route
+change. Every actual request has depth at most 32, at most 16,384 JSON nodes,
+and at most 32,768 UTF-8 body bytes. Freeze each request separately. Duplicate
+local plan copies do not count against the JSON tree limit for a request.
+
+The file transcript has 16 top-level fields and six fields per answer.
+It preserves the actual receipt, raw probabilities and confidence, hashes,
+IDs, model/provider, usage, cost availability, bytes, and timing. Its strict
+canonical inverse restores the typed receipt and original request bytes.
+Numeric strings preserve parsed values and signed zero `-0`. Raw JSON
+number spelling is outside that inverse. Full validation and this adapter's
+current full development score remain unproved. Earlier head-only file
+scores do not qualify this experimental process.
+
 **Effect Waiver**:
 An effectively off ordinary command row projected separately under `policy.commands.effectWaivers`. Jev may exactly match it when judging that configured operational or disclosure effect. It is not an allow exception and cannot suppress active command, org, or file restrictions. File rules retain an enabled off winner's precedence over weaker file rules; an org rule's matching off outcome still stops later rules for that command.
 _Avoid_: command-policy override, global exemption, inactive deny as allow
 
 **Jev Automatic Allow**:
-Complete original context with every actual action head choosing `allow`. The default experimental point, `conservative`, requires raw `P(allow) >= 0.99` for every action and raw `P(selected choice) >= 0.99` for every syntax answer. The explicit `argmax` point sets both floors to zero. `SF_GUARDRAIL_JEV_OPERATING_POINT` accepts only these two names. An actual `block` stays a **Hard Block**. A `confirm`, failed floor, or incomplete context requires human confirmation. Freeze the point before facts and calls, and bind it to protocol, fingerprint, transport, audit, and context. Neither point has joint calibration or safety qualification. One total 10,000 ms limit covers facts through automatic release and synchronous cleanup. A later explicit human approval uses a new bounded 1,500 ms context check; it does not repeat or renew the model process.
+Complete original context with every actual action head choosing `allow`. The default experimental point, `conservative`, requires raw `P(allow) >= 0.99` for every action and raw `P(selected choice) >= 0.99` for every command syntax answer and every file matching choice, including `unknown`. The explicit `argmax` point sets both floors to zero. `SF_GUARDRAIL_JEV_OPERATING_POINT` accepts only these two names. An actual `block` stays a **Hard Block**. A `confirm`, failed floor, or incomplete context requires human confirmation. Freeze the point before facts and calls, and bind it to protocol, fingerprint, transport, audit, and context. Neither point has joint calibration or safety qualification. One total 10,000 ms limit covers facts through automatic release and synchronous cleanup. A later explicit human approval uses a new bounded 1,500 ms context check; it does not repeat or renew the model process.
 _Avoid_: guaranteed safe, confidence-based approval, local C11 qualification
 
 File completeness requires every original declared path and artifact access
@@ -112,11 +141,16 @@ replace that observation. `exists=false` is valid, and kind is optional.
 Required path strings are copied before the fact resolver runs. The resolver
 receives separate derived metadata. It cannot change the original operation
 or its questions through that copy. The original prepared artifact plan keeps
-its registered object identity. These checks prove coverage of supplied facts;
-they do not prove that a supplied resolver reports the truth or select policy.
+its registered object identity. Between all stages and before automatic
+release, recheck the original input, policy, descriptor, operating point,
+context, and hosted facts. A later human
+allow repeats the bounded current-context check. These checks prove coverage
+of supplied facts. They do not establish resolver truth or a policy result.
+Path facts do not bind inode, modification time, or file contents.
+The checks do not prevent filesystem replacement races.
 
 **Jev Answer Evidence**:
-The individual model-authored choices, probability distributions, and confidence values preserved in audit. Top-level probabilities and confidence are the actual `risk` answer, even when a different question determines the enforced outcome. Separate stage receipts bind each actual head to its own request and reply hashes, model, provider, ID, usage, and time. Keep the full binary transcript and observed validated answers after failure. Collected Bash heads are not one provider reply. They are not a combined probability of safety.
+The individual model-authored choices, probability distributions, and confidence values preserved in audit. Top-level probabilities and confidence are the actual `risk` answer, even when a different question determines the enforced outcome. Separate stage receipts bind each actual head to its own request and reply hashes, model, provider, ID, usage, and time. Keep the full command binary transcript, any actual file matching transcript, and observed validated answers after failure. Collected Bash heads are not one provider reply. They are not a combined probability of safety.
 _Avoid_: synthesized confidence, aggregate calibration claim, threshold as security guarantee
 
 **Safety Mediator**:

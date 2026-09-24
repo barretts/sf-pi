@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 import type { BaselineDevResult } from "./jev-guardrail-baseline-eval.ts";
 import { isDeepStrictEqual } from "node:util";
+import { createHash } from "node:crypto";
 import { JEV_RESPONSE_VALIDATION_CONTRACT } from "../extensions/sf-guardrail/lib/jev-client.ts";
 import {
   evaluateJevPrediction,
@@ -8,11 +9,18 @@ import {
 } from "../extensions/sf-guardrail/lib/jev-risk.ts";
 import {
   jevCommandProcessGate,
+  buildJevGroupedCommandRequest,
+  prepareJevCommandProcess,
   jevCommandRowId,
   JEV_COMMAND_PROCESS_LIMITS,
   snapshotJevStageResult,
   validateJevStageResult,
 } from "../extensions/sf-guardrail/lib/jev-command-process.ts";
+import {
+  buildJevFilePolicyRequest,
+  prepareJevFileProcess,
+  validateJevFileMatchResult,
+} from "../extensions/sf-guardrail/lib/jev-file-process.ts";
 import {
   jevOperatingPointHash,
   validateJevOperatingPoint,
@@ -25,6 +33,7 @@ import type {
   JevCommandPolicyStageResult,
   JevNonCommandStageResult,
   JevPrediction,
+  JevRequest,
   JevQuestionId,
   JevSyntaxChoiceAnswer,
   JevSyntaxQuestionId,
@@ -134,6 +143,8 @@ const CURRENT_FIELDS = [
   "riskOrigin",
   "syntheticPreparation",
   "costReportedStageCount",
+  "fileSourceRequest",
+  "syntheticFilePreparation",
 ] as const;
 const COMMAND_GROUPS = ["allowedPatterns", "autoDenyPatterns", "patterns"] as const;
 const digest = (value: unknown): value is string =>
@@ -143,24 +154,121 @@ const nonnegative = (value: unknown): value is number =>
 function requireEvidence(condition: unknown): asserts condition {
   if (!condition) throw new Error("invalid-current-process-evidence");
 }
+const wireHash = (encoded: string) => createHash("sha256").update(encoded).digest("hex");
+function checkPostedBody(
+  preparation: NonNullable<BaselineDevResult["requestPreparations"]>[number],
+  expected: unknown,
+) {
+  const encoded = JSON.stringify(expected);
+  requireEvidence(
+    preparation.request !== undefined &&
+      JSON.stringify(preparation.request) === encoded &&
+      preparation.requestHash === wireHash(encoded) &&
+      preparation.requestBytes === Buffer.byteLength(encoded) &&
+      isDeepStrictEqual(preparation.questionIds, Object.keys(preparation.request.questions)),
+  );
+}
 
-/** Check saved headers and actual source receipts. This does not rebuild missing wire bodies. */
+/** Check source receipts and saved bodies. Earlier rows use their saved headers. */
 function currentAnswerEvidence(row: BaselineDevResult): AnswerEvidence {
   try {
-    requireEvidence(row.syntheticPreparation !== true && typeof row.complete === "boolean");
+    requireEvidence(
+      row.syntheticPreparation !== true &&
+        row.syntheticFilePreparation === undefined &&
+        typeof row.complete === "boolean",
+    );
     const point = validateJevOperatingPoint(row.operatingPoint);
     requireEvidence(row.operatingPointHash === jevOperatingPointHash(point));
     requireEvidence(
       row.protocolHash === jevRuntimeProtocolHash(point) && digest(row.transportHash),
     );
     const process = row.process;
-    const preparations = row.requestPreparations;
-    requireEvidence(process && Array.isArray(preparations) && preparations.length > 0);
+    const captured = row.requestPreparations;
+    requireEvidence(process && Array.isArray(captured) && captured.length > 0);
     requireEvidence(
-      row.requestStage === preparations[0].stage &&
-        row.requestHash === preparations[0].requestHash &&
-        row.requestBytes === preparations[0].requestBytes,
+      row.requestStage === captured[0].stage &&
+        row.requestHash === captured[0].requestHash &&
+        row.requestBytes === captured[0].requestBytes,
     );
+    let preparations = captured;
+    let downstreamRequest: JevRequest | undefined;
+    let fileFloorMet = true;
+    const actualStageLatencies: number[] = [];
+    const fileStage = process.fileStage;
+    if (fileStage !== undefined) {
+      requireEvidence(row.fileSourceRequest && process.kind !== "file_stages");
+      const deadline = captured[0].deadline;
+      requireEvidence(
+        nonnegative(deadline) &&
+          captured.every(
+            (item) =>
+              item.deadline === deadline &&
+              isDeepStrictEqual(item.processBinding, {
+                protocolHash: row.protocolHash,
+                operatingPointHash: row.operatingPointHash,
+              }),
+          ) &&
+          (process.kind !== "command_stages" || process.result.deadline === deadline),
+      );
+      const plan = prepareJevFileProcess(row.fileSourceRequest, process.kind === "command_stages");
+      requireEvidence(
+        fileStage.format === plan.format &&
+          isDeepStrictEqual(fileStage.selection, plan.selection) &&
+          fileStage.completed === true &&
+          fileStage.cleanupFailed === false &&
+          fileStage.failure === undefined &&
+          fileStage.failureEvidence === undefined &&
+          fileStage.selectedProbabilityFloor === point.syntaxProbability,
+      );
+      const state = plan.original.request.state as {
+        observations?: { contextComplete?: unknown };
+        operation?: { toolName?: unknown };
+      };
+      requireEvidence(
+        state.observations?.contextComplete === row.complete &&
+          typeof state.operation?.toolName === "string" &&
+          (state.operation.toolName === "bash") === (process.kind === "command_stages"),
+      );
+      downstreamRequest = plan.original.request;
+      if (plan.format === "file_match_then_policy") {
+        const first = captured[0];
+        requireEvidence(first.stage === "file_match" && plan.match && fileStage.match);
+        checkPostedBody(first, plan.match.request);
+        requireEvidence(
+          isDeepStrictEqual(fileStage.attempt, {
+            requestedQuestionIds: first.questionIds,
+            requestHash: first.requestHash,
+            requestBytes: first.requestBytes,
+          }) && fileStage.matchTimingOrigin === "transport_cleanup",
+        );
+        const match = validateJevFileMatchResult(fileStage.match, plan, row.transportHash);
+        requireEvidence(match.evidence.latencyMs < point.totalTimeoutMs);
+        actualStageLatencies.push(match.evidence.latencyMs);
+        fileFloorMet = Object.values(match.answers).every(
+          (answer) => !!answer && answer.probabilities[answer.choice] >= point.syntaxProbability,
+        );
+        const built = buildJevFilePolicyRequest(plan, match, row.transportHash);
+        requireEvidence(fileStage.transcript === built.transcript);
+        downstreamRequest = built.request;
+        preparations = captured.slice(1);
+      } else {
+        requireEvidence(
+          fileStage.match === undefined &&
+            fileStage.attempt === undefined &&
+            fileStage.matchTimingOrigin === undefined &&
+            fileStage.transcript === undefined,
+        );
+      }
+      requireEvidence(fileStage.selectedProbabilityFloorMet === fileFloorMet);
+    } else {
+      requireEvidence(
+        row.fileSourceRequest === undefined &&
+          captured.every((item) => {
+            const state = item.request?.state;
+            return !state || typeof state !== "object" || !Object.hasOwn(state, "fileMatch");
+          }),
+      );
+    }
     const checkedStage = <
       T extends
         | JevAllHeadStageResult
@@ -176,6 +284,7 @@ function currentAnswerEvidence(row: BaselineDevResult): AnswerEvidence {
       requireEvidence(
         preparation && preparation.stage === stage && digest(preparation.requestHash),
       );
+      if (preparation.request !== undefined) checkPostedBody(preparation, preparation.request);
       requireEvidence(
         Number.isSafeInteger(preparation.requestBytes) &&
           preparation.requestBytes > 0 &&
@@ -212,6 +321,7 @@ function currentAnswerEvidence(row: BaselineDevResult): AnswerEvidence {
       requireEvidence(
         nonnegative(actual.evidence.latencyMs) && actual.evidence.latencyMs < point.totalTimeoutMs,
       );
+      actualStageLatencies.push(actual.evidence.latencyMs);
       return actual;
     };
     let actualAnswers: Partial<Record<JevQuestionId, JevChoiceAnswer>>;
@@ -236,6 +346,7 @@ function currentAnswerEvidence(row: BaselineDevResult): AnswerEvidence {
         }),
       );
       const stage = checkedStage("all_heads", process.stage, 0);
+      if (downstreamRequest) checkPostedBody(preparations[0], downstreamRequest);
       actualAnswers = stage.answers;
       actualRiskOrigin = {
         ...stage.evidence,
@@ -307,6 +418,23 @@ function currentAnswerEvidence(row: BaselineDevResult): AnswerEvidence {
       const first = stages[0];
       const command = stages[stages.length - 1];
       requireEvidence(first.stage === "non_command" && command.stage === "command_policy");
+      if (downstreamRequest) {
+        const prepared = prepareJevCommandProcess(downstreamRequest);
+        requireEvidence(
+          result.originalRequestHash === prepared.original.hash &&
+            result.manifestHash === prepared.manifestHash &&
+            result.tokenContextHash === prepared.tokenContextHash &&
+            isDeepStrictEqual(result.syntaxPlan, prepared.syntaxPlan),
+        );
+        checkPostedBody(preparations[0], prepared.nonCommand.request);
+        const syntax = empty ? undefined : stages[1];
+        if (syntax !== undefined) {
+          requireEvidence(syntax.stage === "syntax" && prepared.syntax);
+          checkPostedBody(preparations[1], prepared.syntax.request);
+        }
+        const grouped = buildJevGroupedCommandRequest(prepared, first, syntax);
+        checkPostedBody(preparations[preparations.length - 1], grouped.request);
+      }
       actualAnswers = { ...first.answers, ...command.answers };
       const origins = Object.fromEntries(
         [first, command].flatMap((stage) =>
@@ -406,6 +534,11 @@ function currentAnswerEvidence(row: BaselineDevResult): AnswerEvidence {
       );
       requireEvidence(result.gate === expectedAction && row.requestId === undefined);
     }
+    if (fileStage !== undefined)
+      requireEvidence(
+        actualStageLatencies.reduce((total, latency) => total + latency, 0) < point.totalTimeoutMs,
+      );
+    if (expectedAction === "allow" && !fileFloorMet) expectedAction = "confirm";
     const ids = Object.keys(actualAnswers) as JevQuestionId[];
     requireEvidence(
       isDeepStrictEqual(row.questionIds, ids) &&
@@ -656,6 +789,6 @@ export function scoreJevGuardrailReplacement(results: readonly BaselineDevResult
     progressTargetsPassed: Object.values(gates).every(Boolean),
     qualified: false,
     scope:
-      "Progress on supplied cases only. Current process receipts support source gate and retained-header consistency checks; missing wire bodies and raw replies cannot be reverified here. Historical flat receipts use the conservative action-only compatibility check and prove no staged binary coverage. This score proves no independent release qualification, calibration, or live fact and tool path.",
+      "Progress on supplied cases only. File-stage receipts bind the saved source, typed matching reply, transcript, later request bodies, and selected probability floor. Raw provider replies cannot be reverified here. Earlier staged receipts use saved headers. Historical flat receipts use the conservative action-only check and prove no staged matching coverage. This score proves no independent release qualification, calibration, or live fact and tool path.",
   };
 }

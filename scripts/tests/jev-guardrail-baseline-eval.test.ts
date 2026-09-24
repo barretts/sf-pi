@@ -17,7 +17,14 @@ import type {
   JevAction,
   JevFacts,
 } from "../../extensions/sf-guardrail/lib/types.ts";
-import type { createJevProcessTransport } from "../../extensions/sf-guardrail/lib/jev-client.ts";
+import type {
+  createJevFileMatchProcessTransport,
+  createJevProcessTransport,
+} from "../../extensions/sf-guardrail/lib/jev-client.ts";
+import {
+  buildJevFilePolicyRequest,
+  prepareJevFileProcess,
+} from "../../extensions/sf-guardrail/lib/jev-file-process.ts";
 
 const subprocessSpies = vi.hoisted(() => {
   const reject = () => {
@@ -56,8 +63,12 @@ let replyOrdinal = 0;
 beforeEach(() => {
   vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", "https://decisions.example.test/v1/decisions");
   vi.stubEnv("SF_GUARDRAIL_JEV_API_KEY", "synthetic-offline-baseline-key");
+  vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected network call."));
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 beforeAll(async () => {
   // Fresh module instances bind the real browser store to the evaluator's temp
   // profile before importing either actual runtime adapter.
@@ -80,8 +91,13 @@ function rawPrediction(
   choice: JevAction = "allow",
 ) {
   const binary = Object.keys(request.questions).every((id) => id.startsWith("r_"));
-  const selected = binary ? "no_match" : choice;
-  const choices = binary ? ["match", "no_match"] : ["allow", "confirm", "block"];
+  const fileMatch = Object.keys(request.questions).every((id) => id.startsWith("f_"));
+  const selected = binary || fileMatch ? "no_match" : choice;
+  const choices = fileMatch
+    ? ["match", "no_match", "unknown"]
+    : binary
+      ? ["match", "no_match"]
+      : ["allow", "confirm", "block"];
   return {
     model: client.JEV_RESOLVED_MODEL,
     provider: client.JEV_PROVIDER,
@@ -114,6 +130,20 @@ function offlineTransport(
         const request = JSON.parse(String(init?.body));
         onRequest?.(request);
         return new Response(JSON.stringify(rawPrediction(request, choice)));
+      },
+    });
+}
+
+function offlineFileTransport(
+  onRequest?: (request: { questions: Record<string, unknown>; state: unknown }) => void,
+): typeof createJevFileMatchProcessTransport {
+  return (options) =>
+    client.createJevFileMatchProcessTransport({
+      ...options,
+      fetch: async (_url, init) => {
+        const request = JSON.parse(String(init?.body));
+        onRequest?.(request);
+        return new Response(JSON.stringify(rawPrediction(request)));
       },
     });
 }
@@ -254,16 +284,22 @@ describe("current deterministic baseline development evaluation", () => {
   it("captures a separate request copy only during preparation without changing dummy answer IDs or invoking transport", async () => {
     const createTransport = vi.fn(offlineTransport());
     const fetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected fetch."));
-    let encoded = "";
+    const encoded: string[] = [];
     let questionIds: string[] = [];
-    const onRequestPrepared = vi.fn((copy, caseId) => {
+    const onRequestPrepared = vi.fn((copy, caseId, stage) => {
       expect(caseId).toBe("request-copy-preparation");
       expect(typeof caseId).toBe("string");
-      encoded = JSON.stringify(copy);
-      questionIds = Object.keys(copy.questions);
-      expect(questionIds).toContain("risk");
-      expect(questionIds).toContain("file_policy");
-      for (const id of questionIds) delete copy.questions[id];
+      encoded.push(JSON.stringify(copy));
+      const ids = Object.keys(copy.questions);
+      if (stage === "all_heads") {
+        questionIds = ids;
+        expect(ids).toContain("risk");
+        expect(ids).toContain("file_policy");
+      } else {
+        expect(stage).toBe("file_match");
+        expect(ids).toHaveLength(8);
+      }
+      for (const id of ids) delete copy.questions[id];
       copy.state.facts.files[0].exists = "unknown";
       copy.model = "mutated-copy";
     });
@@ -277,13 +313,13 @@ describe("current deterministic baseline development evaluation", () => {
         ],
         { prepareOnly: true, createTransport, onRequestPrepared },
       );
-      expect(onRequestPrepared).toHaveBeenCalledOnce();
+      expect(onRequestPrepared).toHaveBeenCalledTimes(2);
       expect(prepared).toMatchObject({
         stage: "prepared",
         candidateAction: null,
         requestInvoked: false,
-        requestHash: createHash("sha256").update(encoded).digest("hex"),
-        requestBytes: Buffer.byteLength(encoded),
+        requestHash: createHash("sha256").update(encoded[0]).digest("hex"),
+        requestBytes: Buffer.byteLength(encoded[0]),
       });
       expect(Object.keys(prepared.answers ?? {}).sort()).toEqual(questionIds.sort());
       expect(prepared.questionIds?.slice().sort()).toEqual(questionIds.sort());
@@ -292,11 +328,11 @@ describe("current deterministic baseline development evaluation", () => {
 
       const [live] = await evaluator.runCases(
         [probe("live-copy-hook-gating", "read", { path: "guide.md" }, "allow")],
-        { createTransport, onRequestPrepared },
+        { createTransport, createFileTransport: offlineFileTransport(), onRequestPrepared },
       );
       expect(live.stage).toBe("decided");
       expect(createTransport).toHaveBeenCalledOnce();
-      expect(onRequestPrepared).toHaveBeenCalledOnce();
+      expect(onRequestPrepared).toHaveBeenCalledTimes(2);
       expect(fetch).not.toHaveBeenCalled();
     } finally {
       fetch.mockRestore();
@@ -313,6 +349,11 @@ describe("current deterministic baseline development evaluation", () => {
     const factory = vi.spyOn(client, "createJevProcessTransport").mockImplementation(() => {
       throw new Error("Unexpected real transport factory.");
     });
+    const fileFactory = vi
+      .spyOn(client, "createJevFileMatchProcessTransport")
+      .mockImplementation(() => {
+        throw new Error("Unexpected real file transport factory.");
+      });
     const fetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected fetch."));
     const preparedStages: string[] = [];
     try {
@@ -326,7 +367,13 @@ describe("current deterministic baseline development evaluation", () => {
           onRequestPrepared: (_request, _id, stage) => preparedStages.push(stage),
         },
       );
-      expect(preparedStages).toEqual(["all_heads", "non_command", "syntax", "command_policy"]);
+      expect(preparedStages).toEqual([
+        "file_match",
+        "all_heads",
+        "non_command",
+        "syntax",
+        "command_policy",
+      ]);
       expect(rows.every((row) => row.stage === "prepared" && row.candidateAction === null)).toBe(
         true,
       );
@@ -350,7 +397,8 @@ describe("current deterministic baseline development evaluation", () => {
           "confidence",
         ])
           expect(row).not.toHaveProperty(field);
-        expect(JSON.stringify(row)).not.toContain("preparation-only-local-");
+        expect(row.syntheticFilePreparation?.syntheticPreparation).toBe(true);
+        expect(row.process).toBeUndefined();
       }
       expect(summarizeBaselineDev(rows)).toMatchObject({
         decided: 0,
@@ -361,10 +409,12 @@ describe("current deterministic baseline development evaluation", () => {
       });
       expect(open).not.toHaveBeenCalled();
       expect(factory).not.toHaveBeenCalled();
+      expect(fileFactory).not.toHaveBeenCalled();
       expect(fetch).not.toHaveBeenCalled();
     } finally {
       open.mockImplementation(previousOpen);
       factory.mockRestore();
+      fileFactory.mockRestore();
       fetch.mockRestore();
     }
   });
@@ -420,7 +470,9 @@ describe("current deterministic baseline development evaluation", () => {
 
   it("keeps actual strict stage bodies, reply IDs and origins separate for Bash and all-head calls", async () => {
     const captures: Array<{ body: string; reply: string }> = [];
-    const createTransport: typeof createJevProcessTransport = (options) =>
+    const bindings: Array<Parameters<typeof createJevProcessTransport>[0]> = [];
+    const createTransport: typeof createJevProcessTransport = (options) => (
+      bindings.push(options),
       client.createJevProcessTransport({
         ...options,
         fetch: async (_url, init) => {
@@ -429,13 +481,26 @@ describe("current deterministic baseline development evaluation", () => {
           captures.push({ body, reply });
           return new Response(reply);
         },
-      });
+      })
+    );
+    const createFileTransport: typeof createJevFileMatchProcessTransport = (options) => (
+      bindings.push(options),
+      client.createJevFileMatchProcessTransport({
+        ...options,
+        fetch: async (_url, init) => {
+          const body = String(init?.body);
+          const reply = JSON.stringify(rawPrediction(JSON.parse(body)));
+          captures.push({ body, reply });
+          return new Response(reply);
+        },
+      })
+    );
     const [read, command] = await evaluator.runCases(
       [
         probe("actual-read-stages", "read", { path: "guide.md" }, "allow"),
         probe("actual-command-stages", "bash", { command: "git status" }, "allow"),
       ],
-      { createTransport },
+      { createTransport, createFileTransport },
     );
     expect(read.stage).toBe("decided");
     expect(command.stage).toBe("decided");
@@ -443,14 +508,23 @@ describe("current deterministic baseline development evaluation", () => {
     expect(command.process?.kind).toBe("command_stages");
     if (read.process?.kind !== "all_heads" || command.process?.kind !== "command_stages")
       throw new Error("Missing actual stage evidence.");
-    const stages = [read.process.stage!, ...command.process.result.stages];
+    const stages = [
+      read.process.fileStage!.match!,
+      read.process.stage!,
+      ...command.process.result.stages,
+    ];
     expect(stages.map((stage) => stage.stage)).toEqual([
+      "file_match",
       "all_heads",
       "non_command",
       "syntax",
       "command_policy",
     ]);
     expect(captures).toHaveLength(stages.length);
+    expect(bindings).toHaveLength(3);
+    expect(bindings[0].deadline).toBe(bindings[1].deadline);
+    expect(bindings[0].signal).toBe(bindings[1].signal);
+    expect(bindings[0].binding).toEqual(bindings[1].binding);
     expect(new Set(stages.map((stage) => stage.evidence.requestId)).size).toBe(stages.length);
     for (const [index, stage] of stages.entries()) {
       expect(stage.evidence).toMatchObject({
@@ -462,20 +536,20 @@ describe("current deterministic baseline development evaluation", () => {
         requestId: JSON.parse(captures[index].reply).id,
       });
     }
-    expect(read.requestId).toBe(stages[0].evidence.requestId);
+    expect(read.requestId).toBe(stages[1].evidence.requestId);
     expect(read.riskOrigin).toMatchObject({ stage: "all_heads", requestId: read.requestId });
     expect(command.requestId).toBeUndefined();
     expect(command.riskOrigin).toMatchObject({
       stage: "non_command",
-      requestId: stages[1].evidence.requestId,
+      requestId: stages[2].evidence.requestId,
     });
     expect(command.process.result.origins.command_policy).toMatchObject({
       stage: "command_policy",
-      requestId: stages[3].evidence.requestId,
+      requestId: stages[4].evidence.requestId,
     });
     expect(
       command.process.result.syntaxTranscript.every(
-        (row) => row.origin.requestId === stages[2].evidence.requestId,
+        (row) => row.origin.requestId === stages[3].evidence.requestId,
       ),
     ).toBe(true);
     expect(command.requestPreparations?.map((row) => row.stage)).toEqual([
@@ -484,11 +558,128 @@ describe("current deterministic baseline development evaluation", () => {
       "command_policy",
     ]);
     expect(command.answers).toEqual(command.process.result.answers);
-    expect(read.costReportedStageCount).toBe(1);
+    const filePlan = prepareJevFileProcess(read.fileSourceRequest!, false);
+    const rebuilt = buildJevFilePolicyRequest(
+      filePlan,
+      read.process.fileStage!.match!,
+      read.transportHash!,
+    );
+    expect(filePlan.match?.json).toBe(captures[0].body);
+    expect(JSON.stringify(rebuilt.request)).toBe(captures[1].body);
+    expect(read.process.fileStage?.transcript).toBe(rebuilt.transcript);
+    expect(read.requestPreparations?.map((item) => item.stage)).toEqual([
+      "file_match",
+      "all_heads",
+    ]);
+    expect(read.questionIds?.every((id) => !id.startsWith("f_"))).toBe(true);
+    expect(read.costReportedStageCount).toBe(2);
     expect(command.costReportedStageCount).toBe(3);
-    expect(summarizeBaselineDev([read, command])).toMatchObject({
-      costReportedCalls: 4,
-      reportedCost: 0.00004,
+    const summary = summarizeBaselineDev([read, command]);
+    expect(summary).toMatchObject({
+      costReportedCalls: 5,
+      replacementProgress: { answerEvidence: { complete: 2, invalid: 0 } },
+    });
+    expect(summary.reportedCost).toBeCloseTo(0.00005, 10);
+  });
+
+  it("keeps synthetic matching independent of the gold label", async () => {
+    const testCase = {
+      ...probe("gold-independent-file-preparation", "read", { path: "notes.txt" }, "allow"),
+      files: ["notes.txt"],
+    };
+    const [first] = await evaluator.runCases([testCase], { prepareOnly: true });
+    const [second] = await evaluator.runCases(
+      [{ ...testCase, gold: { action: "block", reason: "Different label for this test." } }],
+      { prepareOnly: true },
+    );
+    expect(first.fileSourceRequest).toEqual(second.fileSourceRequest);
+    expect(first.requestPreparations?.[0].request).toEqual(second.requestPreparations?.[0].request);
+    expect(first.syntheticFilePreparation?.fileStage.match?.answers).toEqual(
+      second.syntheticFilePreparation?.fileStage.match?.answers,
+    );
+    expect(
+      Object.values(first.syntheticFilePreparation!.fileStage.match!.answers).every(
+        (answer) => answer?.choice === "unknown" && answer.probabilities.unknown === 1,
+      ),
+    ).toBe(true);
+    expect(summarizeBaselineDev([first, second])).toMatchObject({
+      decided: 0,
+      qualification: false,
+      requestInvocations: 0,
+      replacementProgress: { goldExact: { matched: 0 }, addedRisks: { matched: 0 } },
+    });
+  });
+
+  it("blocks an invalid file reply before an action factory can run", async () => {
+    const createTransport = vi.fn(offlineTransport());
+    const createFileTransport: typeof createJevFileMatchProcessTransport = (options) =>
+      client.createJevFileMatchProcessTransport({
+        ...options,
+        fetch: async (_url, init) => {
+          const reply = rawPrediction(JSON.parse(String(init?.body)));
+          delete reply.answers[Object.keys(reply.answers)[0]];
+          return new Response(JSON.stringify(reply));
+        },
+      });
+    const [row] = await evaluator.runCases(
+      [probe("invalid-file-match-reply", "read", { path: "notes.txt" }, "allow")],
+      { createTransport, createFileTransport },
+    );
+    expect(row).toMatchObject({
+      stage: "failed",
+      candidateAction: "block",
+      failure: "invalid_response",
+    });
+    expect(createTransport).not.toHaveBeenCalled();
+    expect(row.requestPreparations?.map((item) => item.stage)).toEqual(["file_match"]);
+    expect(row.process?.kind).toBe("file_stages");
+    expect(row.process?.fileStage?.failureEvidence).toMatchObject({
+      stage: "file_match",
+      requestSent: true,
+      responseComplete: true,
+    });
+    expect(row.answers).toBeUndefined();
+    expect(row.riskOrigin).toBeUndefined();
+    expect(summarizeBaselineDev([row])).toMatchObject({
+      decided: 0,
+      failures: 1,
+      extraCatches: 0,
+      replacementProgress: { answerEvidence: { complete: 0 }, addedRisks: { matched: 0 } },
+    });
+  });
+
+  it("retains a strict file reply when its method fails after validation", async () => {
+    const createTransport = vi.fn(offlineTransport());
+    const createFileTransport: typeof createJevFileMatchProcessTransport = (options) => {
+      const transport = offlineFileTransport()(options);
+      return {
+        ...transport,
+        async requestFileMatch(request) {
+          await transport.requestFileMatch(request);
+          throw new Error("Synthetic failure after file validation.");
+        },
+      };
+    };
+    const [row] = await evaluator.runCases(
+      [probe("observed-file-match-reply", "read", { path: "notes.txt" }, "allow")],
+      { createTransport, createFileTransport },
+    );
+    expect(row).toMatchObject({ stage: "failed", candidateAction: "block" });
+    expect(createTransport).not.toHaveBeenCalled();
+    expect(row.process?.kind).toBe("file_stages");
+    expect(row.process?.fileStage).toMatchObject({
+      completed: false,
+      matchTimingOrigin: "strict_validation",
+      match: { stage: "file_match" },
+    });
+    expect(row.costReportedStageCount).toBe(1);
+    expect(row.answers).toBeUndefined();
+    expect(row.riskOrigin).toBeUndefined();
+    expect(summarizeBaselineDev([row])).toMatchObject({
+      decided: 0,
+      failures: 1,
+      extraCatches: 0,
+      replacementProgress: { answerEvidence: { complete: 0 }, addedRisks: { matched: 0 } },
     });
   });
 
@@ -507,7 +698,7 @@ describe("current deterministic baseline development evaluation", () => {
       });
     const [row] = await evaluator.runCases(
       [probe("invalid-syntax-response", "bash", { command: "git status" }, "allow")],
-      { createTransport },
+      { createTransport, createFileTransport: offlineFileTransport() },
     );
     expect(row).toMatchObject({
       stage: "failed",
@@ -547,7 +738,7 @@ describe("current deterministic baseline development evaluation", () => {
     };
     const [row] = await evaluator.runCases(
       [probe("observed-read-response", "read", { path: "guide.md" }, "allow")],
-      { createTransport },
+      { createTransport, createFileTransport: offlineFileTransport() },
     );
     expect(row).toMatchObject({
       stage: "failed",
@@ -565,7 +756,7 @@ describe("current deterministic baseline development evaluation", () => {
     });
     expect(row.answers).toEqual(row.process.stage?.answers);
     expect(row.answers?.risk?.choice).toBe("allow");
-    expect(row.costReportedStageCount).toBe(1);
+    expect(row.costReportedStageCount).toBe(2);
     expect(summarizeBaselineDev([row])).toMatchObject({ decided: 0, failures: 1, extraCatches: 0 });
   });
 
@@ -1012,7 +1203,7 @@ describe("current deterministic baseline development evaluation", () => {
       ...base.orgAwareGate.rules,
     ].map((row) => row.id);
     expect(shipped.every((id) => covered.has(id))).toBe(true);
-    expect(fixture.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(fixture.sha256).toBe("81d8199c9194b25bde40e6c6aff9192eb9ae9a7e57d4a1420ff14e825abe6b4a");
     expect(fixture.inputSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(fixture.kind).toBe("development");
     expect(fixture.declaration.purpose).toBeTruthy();

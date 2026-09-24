@@ -19,7 +19,10 @@ import {
   JEV_PROTOCOL_HASH,
 } from "../lib/jev-risk.ts";
 import type { JevFacts, JevToolMetadata } from "../lib/types.ts";
-import { controlledAllHeadTransport } from "./jev-controlled-transport.ts";
+import {
+  controlledAllHeadTransport,
+  controlledFileMatchTransport,
+} from "./jev-controlled-transport.ts";
 
 const sdk = vi.hoisted(() => ({ connect: vi.fn() }));
 vi.mock("../../../lib/common/sf-conn/index.ts", () => ({ connectSalesforce: sdk.connect }));
@@ -241,6 +244,7 @@ describe("controlled all-allow results with original path obligations", () => {
     const decision = await evaluateJevSafety(input(fields), {
       endpoint: "https://decisions.example.test/v1/decisions",
       createTransport,
+      createFileTransport: controlledFileMatchTransport(),
       resolveFacts: async () => ({ facts: facts as JevFacts }),
     });
     const transport = createTransport.mock.results[0].value;
@@ -265,6 +269,7 @@ describe("controlled all-allow results with original path obligations", () => {
         {
           endpoint: "https://decisions.example.test/v1/decisions",
           createTransport,
+          createFileTransport: controlledFileMatchTransport(),
           resolveFacts: async ({ metadata: operation }) => {
             delete operation.metadata.path;
             delete operation.metadata.file_path;
@@ -295,6 +300,7 @@ describe("controlled all-allow results with original path obligations", () => {
     const decision = await evaluateJevSafety(input(), {
       endpoint: "https://decisions.example.test/v1/decisions",
       createTransport,
+      createFileTransport: controlledFileMatchTransport(),
       resolveFacts: async ({ metadata: operation }) => {
         operation.toolName = "sf_browser_press";
         operation.complete = false;
@@ -324,6 +330,7 @@ describe("controlled all-allow results with original path obligations", () => {
       {
         endpoint: "https://decisions.example.test/v1/decisions",
         createTransport,
+        createFileTransport: controlledFileMatchTransport(),
         resolveFacts: async ({ metadata: operation }) => {
           operation.complete = true;
           return { facts: {} };
@@ -363,6 +370,7 @@ describe("controlled all-allow results with original path obligations", () => {
         const decision = await evaluateJevSafety(source, {
           endpoint: "https://decisions.example.test/v1/decisions",
           createTransport,
+          createFileTransport: controlledFileMatchTransport(),
           resolveFacts: async (options) => {
             expect((options as typeof options & { artifactPlan: unknown }).artifactPlan).toBe(
               source.artifactPlan,
@@ -405,6 +413,7 @@ describe("controlled all-allow results with original path obligations", () => {
       const decision = await evaluateJevSafety(source, {
         endpoint: "https://decisions.example.test/v1/decisions",
         createTransport,
+        createFileTransport: controlledFileMatchTransport(),
         resolveFacts: async (options) => {
           expect((options as typeof options & { artifactPlan: unknown }).artifactPlan).toBe(
             source.artifactPlan,
@@ -440,6 +449,7 @@ describe("controlled all-allow results with original path obligations", () => {
       const decision = await evaluateJevSafety(source, {
         endpoint: "https://decisions.example.test/v1/decisions",
         createTransport,
+        createFileTransport: controlledFileMatchTransport(),
         resolveFacts: async () => ({
           facts: {
             files: (original.metadata.paths as string[]).map((value) => file(value, false)),
@@ -467,6 +477,7 @@ describe("controlled all-allow results with original path obligations", () => {
         {
           endpoint: "https://decisions.example.test/v1/decisions",
           createTransport,
+          createFileTransport: controlledFileMatchTransport(),
         },
       );
       const transport = createTransport.mock.results[0].value;

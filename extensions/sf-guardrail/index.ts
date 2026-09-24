@@ -93,7 +93,7 @@ import {
 } from "./lib/approval-ledger.ts";
 import { renderApprovalDetail } from "./lib/approval-detail.ts";
 import { evaluateSafety } from "./lib/safety-kernel.ts";
-import { loadGuardrailSnapshot } from "./lib/config.ts";
+import { loadGuardrailSnapshot, userConfigPath } from "./lib/config.ts";
 import { confirmDecision, isOperatorAutoApproveEnabled } from "./lib/hitl.ts";
 import { readGuardrailPiSettings, setGuardrailEngine } from "./lib/guardrail-settings.ts";
 import {
@@ -245,6 +245,68 @@ export default function sfGuardrail(pi: ExtensionAPI) {
         return tool ? { description: tool.description, parameters: tool.parameters } : undefined;
       };
 
+      const capturedDescriptor = engine === "jev" ? getDescriptor() : undefined;
+      const capturedPoint = operatingPoint;
+      let capturedTransportHash = "invalid";
+      if (engine === "jev" && capturedPoint) {
+        try {
+          capturedTransportHash = jevDecisionTransportBindingHash(undefined, capturedPoint);
+        } catch {
+          /* The adapter records the specific endpoint validation failure. */
+        }
+      }
+      const capturedContext =
+        engine === "jev" && capturedPoint
+          ? {
+              snapshotHash: jevHash(snapshot),
+              policySourcePath: userConfigPath(),
+              inputHash: jevHash(event.input ?? {}),
+              descriptorHash: jevHash(JSON.parse(JSON.stringify(capturedDescriptor ?? null))),
+              pointHash: jevOperatingPointHash(capturedPoint),
+              transportHash: capturedTransportHash,
+            }
+          : undefined;
+      // This probe tests only the captured context. Jev makes every policy decision.
+      const recheckContext = (): boolean => {
+        if (!capturedContext) return true;
+        if (capturedContext.transportHash === "invalid") return false;
+        if (
+          ctx.signal?.aborted ||
+          event.toolName !== capturedToolName ||
+          event.toolCallId !== capturedToolCallId ||
+          ctx.cwd !== capturedCwd ||
+          ctx.sessionManager.getSessionId() !== capturedSession
+        )
+          return false;
+        if (
+          capturedLeaf &&
+          !ctx.sessionManager.getBranch().some((entry) => entry.id === capturedLeaf)
+        )
+          return false;
+        if (
+          artifactPlan &&
+          (event.toolName !== artifactPlan.binding.toolName ||
+            event.toolCallId !== artifactPlan.binding.toolCallId ||
+            process.cwd() !== artifactPlan.plan.writerCwd)
+        )
+          return false;
+        try {
+          const current = loadGuardrailSnapshot();
+          const point = resolveJevOperatingPoint();
+          return (
+            current.engine === "jev" &&
+            userConfigPath() === capturedContext.policySourcePath &&
+            jevHash(current) === capturedContext.snapshotHash &&
+            jevOperatingPointHash(point) === capturedContext.pointHash &&
+            jevDecisionTransportBindingHash(undefined, point) === capturedContext.transportHash &&
+            jevHash(event.input ?? {}) === capturedContext.inputHash &&
+            jevHash(JSON.parse(JSON.stringify(getDescriptor() ?? null))) ===
+              capturedContext.descriptorHash
+          );
+        } catch {
+          return false;
+        }
+      };
       let decision: ClassifiedDecision | undefined;
       try {
         decision = await evaluateSafety({
@@ -259,7 +321,8 @@ export default function sfGuardrail(pi: ExtensionAPI) {
           ...(engine === "jev"
             ? {
                 signal: ctx.signal,
-                descriptor: getDescriptor(),
+                descriptor: capturedDescriptor,
+                recheckContext,
                 deadline: classificationDeadline,
                 operatingPoint,
               }
@@ -291,6 +354,7 @@ export default function sfGuardrail(pi: ExtensionAPI) {
 
       const basicStateChanged = (): boolean => {
         if (engine !== "jev") return false;
+        if (!recheckContext()) return true;
         if (event.toolName !== capturedToolName || event.toolCallId !== capturedToolCallId)
           return true;
         if (

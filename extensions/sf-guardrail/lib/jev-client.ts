@@ -17,6 +17,14 @@ import type {
   JevNonCommandRequest,
   JevNonCommandStageResult,
   JevDecisionTransport,
+  JevFileMatchChoice,
+  JevFileMatchChoiceAnswer,
+  JevFileMatchFailureEvidence,
+  JevFileMatchProcessTransportBinding,
+  JevFileMatchRequest,
+  JevFileMatchStageResult,
+  JevFileMatchTransport,
+  JevFileMatchTransportBinding,
   JevSyntaxChoice,
   JevSyntaxChoiceAnswer,
   JevSyntaxRequest,
@@ -86,10 +94,34 @@ export class JevStageClientError extends JevClientError {
   constructor(
     code: JevClientFailureCode,
     evidence: JevStageFailureEvidence,
-    observedResult?: StageResult,
+    observedResult?: DecisionStageResult,
   ) {
     super(code);
     this.name = "JevStageClientError";
+    this.evidence = evidence;
+    if (observedResult) {
+      Object.defineProperty(this, "observedResult", {
+        value: observedResult,
+        enumerable: true,
+        writable: false,
+        configurable: false,
+      });
+    }
+  }
+}
+
+/** Keep the private matching receipt separate from normal action errors. */
+export class JevFileMatchClientError extends JevClientError {
+  readonly evidence: JevFileMatchFailureEvidence;
+  readonly observedResult?: JevFileMatchStageResult;
+
+  constructor(
+    code: JevClientFailureCode,
+    evidence: JevFileMatchFailureEvidence,
+    observedResult?: JevFileMatchStageResult,
+  ) {
+    super(code);
+    this.name = "JevFileMatchClientError";
     this.evidence = evidence;
     if (observedResult) {
       Object.defineProperty(this, "observedResult", {
@@ -519,14 +551,69 @@ export async function requestJev(
 export const JEV_STAGE_REQUEST_BYTES = 32_768;
 export const JEV_SYNTAX_QUESTION_LIMIT = 64;
 const SYNTAX_CHOICES: JevSyntaxChoice[] = ["match", "no_match"];
-type Stage = "non_command" | "syntax" | "command_policy" | "all_heads";
+const FILE_MATCH_CHOICES: JevFileMatchChoice[] = ["match", "no_match", "unknown"];
+/** Frozen private matching contract. It declares no policy action or release. */
+export const JEV_FILE_MATCH_PROTOCOL = Object.freeze({
+  version: 1,
+  stage: "file_match",
+  answerChoices: Object.freeze(["match", "no_match", "unknown"]),
+  questionIds: Object.freeze(["f_a", "f_b", "f_c", "f_d", "f_e", "f_f", "f_g", "f_h"]),
+  questionLimit: 8,
+  expectedQuestionCount: "2 * state.facts.files.length * state.policy.files.length",
+  questionOrder: "record-major,row-major,patterns,allowedPatterns",
+  ordinalOrigin: 0,
+  listOrder: Object.freeze(["patterns", "allowedPatterns"]),
+  requestKeys: Object.freeze(["model", "provider", "state", "questions"]),
+  instructionKeys: Object.freeze([
+    "question",
+    "recordOrdinal",
+    "rowOrdinal",
+    "listName",
+    "record",
+    "row",
+    "boundary",
+    "matchingGrammar",
+    "scope",
+    "empty",
+  ]),
+  fullOriginalState: true,
+  fullOperandCopies: true,
+  maxRequestBytes: JEV_STAGE_REQUEST_BYTES,
+  maxResponseBytes: MAX_RESPONSE_BYTES,
+  totalTimeoutMs: JEV_COMMAND_PROCESS_TIMEOUT_MS,
+  deadline: "one-caller-absolute-includes-preparation-reads-validation-synchronous-cleanup",
+  redirect: "error",
+  responseRedirected: false,
+  retries: 0,
+  fallbacks: false,
+  exactResponseQuestionOrder: true,
+  selectedChoice: "raw-argmax-with-ties-admitted",
+  rawProbabilitiesAndConfidence: true,
+  probabilityValidation: JEV_RESPONSE_VALIDATION_CONTRACT,
+  transportIdentity: JEV_TRANSPORT_BINDING_CONTRACT,
+  bindingFields: Object.freeze(["protocolHash", "diagnosticHash"]),
+  policyAction: false,
+} as const);
+/** Bind the same strict matching stage to the caller's decision process. */
+export const JEV_FILE_MATCH_PROCESS_PROTOCOL = Object.freeze({
+  ...JEV_FILE_MATCH_PROTOCOL,
+  bindingFields: Object.freeze(["protocolHash", "operatingPointHash"]),
+  transportBinding: "ordinary-decision-process-binding",
+  operatingPoint: "caller-validated-point-bound-by-protocol-and-operating-point-hashes",
+} as const);
+type Stage = "non_command" | "syntax" | "command_policy" | "all_heads" | "file_match";
 type StageRequest =
-  JevNonCommandRequest | JevSyntaxRequest | JevCommandPolicyRequest | JevAllHeadRequest;
-type StageResult =
+  | JevNonCommandRequest
+  | JevSyntaxRequest
+  | JevCommandPolicyRequest
+  | JevAllHeadRequest
+  | JevFileMatchRequest;
+type DecisionStageResult =
   | JevNonCommandStageResult
   | JevSyntaxStageResult
   | JevCommandPolicyStageResult
   | JevAllHeadStageResult;
+type StageResult = DecisionStageResult | JevFileMatchStageResult;
 
 function exactKeys(value: Record<string, unknown>, keys: string[]): boolean {
   const actual = Object.keys(value);
@@ -589,6 +676,53 @@ function syntaxQuestionId(index: number): string {
   return `r_${suffix}`;
 }
 
+function validFileMatchRequest(request: JevFileMatchRequest, ids: string[]): boolean {
+  const state = request.state;
+  if (
+    !record(state) ||
+    !record(state.facts) ||
+    !record(state.policy) ||
+    !Array.isArray(state.facts.files) ||
+    !Array.isArray(state.policy.files)
+  )
+    return false;
+  const records = state.facts.files;
+  const rows = state.policy.files;
+  const count = 2 * records.length * rows.length;
+  if (
+    count < 1 ||
+    count > JEV_FILE_MATCH_PROTOCOL.questionLimit ||
+    ids.length !== count ||
+    ids.some((id, index) => id !== JEV_FILE_MATCH_PROTOCOL.questionIds[index])
+  )
+    return false;
+  let index = 0;
+  for (const [recordOrdinal, file] of records.entries()) {
+    if (!record(file)) return false;
+    for (const [rowOrdinal, row] of rows.entries()) {
+      if (!record(row)) return false;
+      for (const listName of JEV_FILE_MATCH_PROTOCOL.listOrder) {
+        const question = request.questions[ids[index++]];
+        const instructions = question?.instructions;
+        if (
+          !record(instructions) ||
+          !exactKeys(instructions, [...JEV_FILE_MATCH_PROTOCOL.instructionKeys]) ||
+          instructions.recordOrdinal !== recordOrdinal ||
+          instructions.rowOrdinal !== rowOrdinal ||
+          instructions.listName !== listName ||
+          JSON.stringify(instructions.record) !== JSON.stringify(file) ||
+          JSON.stringify(instructions.row) !== JSON.stringify(row) ||
+          !["question", "boundary", "matchingGrammar", "scope", "empty"].every(
+            (name) => typeof instructions[name] === "string" && instructions[name].length > 0,
+          )
+        )
+          return false;
+      }
+    }
+  }
+  return true;
+}
+
 function stageRequest(stage: Stage, request: StageRequest): { ids: string[]; body: string } {
   request = stageJson(request) as StageRequest;
   if (
@@ -607,22 +741,25 @@ function stageRequest(stage: Stage, request: StageRequest): { ids: string[]; bod
   }
   const ids = Object.keys(request.questions);
   const validIds =
-    stage === "all_heads"
-      ? ids.includes("risk") &&
-        ids.length >= 1 &&
-        ids.length <= QUESTIONS.length &&
-        ids.every((id) => QUESTIONS.includes(id as JevQuestionId))
-      : stage === "non_command"
+    stage === "file_match"
+      ? validFileMatchRequest(request as JevFileMatchRequest, ids)
+      : stage === "all_heads"
         ? ids.includes("risk") &&
-          ids.length <= QUESTIONS.length - 1 &&
-          ids.every((id) => id !== "command_policy" && QUESTIONS.includes(id as JevQuestionId))
-        : stage === "command_policy"
-          ? ids.length === 1 && ids[0] === "command_policy"
-          : ids.length >= 1 &&
-            ids.length <= JEV_SYNTAX_QUESTION_LIMIT &&
-            ids.every((id, index) => id === syntaxQuestionId(index));
+          ids.length >= 1 &&
+          ids.length <= QUESTIONS.length &&
+          ids.every((id) => QUESTIONS.includes(id as JevQuestionId))
+        : stage === "non_command"
+          ? ids.includes("risk") &&
+            ids.length <= QUESTIONS.length - 1 &&
+            ids.every((id) => id !== "command_policy" && QUESTIONS.includes(id as JevQuestionId))
+          : stage === "command_policy"
+            ? ids.length === 1 && ids[0] === "command_policy"
+            : ids.length >= 1 &&
+              ids.length <= JEV_SYNTAX_QUESTION_LIMIT &&
+              ids.every((id, index) => id === syntaxQuestionId(index));
   if (!validIds) throw new JevClientError("invalid_request");
-  const choices = stage === "syntax" ? SYNTAX_CHOICES : ACTIONS;
+  const choices =
+    stage === "syntax" ? SYNTAX_CHOICES : stage === "file_match" ? FILE_MATCH_CHOICES : ACTIONS;
   for (const id of ids) {
     const question: unknown = request.questions[id];
     if (
@@ -675,6 +812,36 @@ function syntaxAnswer(answer: unknown): JevSyntaxChoiceAnswer {
   };
 }
 
+function fileMatchAnswer(answer: unknown): JevFileMatchChoiceAnswer {
+  if (
+    !record(answer) ||
+    !exactKeys(answer, ["type", "choice", "probabilities", "confidence"]) ||
+    answer.type !== "choice" ||
+    !FILE_MATCH_CHOICES.includes(answer.choice as JevFileMatchChoice) ||
+    !record(answer.probabilities) ||
+    !exactKeys(answer.probabilities, FILE_MATCH_CHOICES) ||
+    !FILE_MATCH_CHOICES.every((choice) => probability(answer.probabilities[choice])) ||
+    !probability(answer.confidence)
+  )
+    throw new JevClientError("invalid_response");
+  const probabilities = answer.probabilities as Record<JevFileMatchChoice, number>;
+  const choice = answer.choice as JevFileMatchChoice;
+  if (
+    !normalizedProbabilities(FILE_MATCH_CHOICES.map((option) => probabilities[option])) ||
+    probabilities[choice] < Math.max(...FILE_MATCH_CHOICES.map((option) => probabilities[option]))
+  )
+    throw new JevClientError("invalid_response");
+  return {
+    choice,
+    probabilities: {
+      match: probabilities.match,
+      no_match: probabilities.no_match,
+      unknown: probabilities.unknown,
+    },
+    confidence: answer.confidence,
+  };
+}
+
 function stagePrediction(stage: Stage, value: unknown, key: string, ids: string[]) {
   if (!record(value)) throw new JevClientError("invalid_response");
   if (value.model !== JEV_RESOLVED_MODEL || value.provider !== JEV_PROVIDER)
@@ -686,6 +853,7 @@ function stagePrediction(stage: Stage, value: unknown, key: string, ids: string[
     value.id.includes(key) ||
     !record(value.answers) ||
     !exactKeys(value.answers, ids) ||
+    (stage === "file_match" && Object.keys(value.answers).some((id, index) => id !== ids[index])) ||
     !record(value.usage) ||
     !tokenCount(value.usage.input_tokens) ||
     !tokenCount(value.usage.output_tokens) ||
@@ -699,7 +867,11 @@ function stagePrediction(stage: Stage, value: unknown, key: string, ids: string[
   const answers = Object.fromEntries(
     ids.map((id) => [
       id,
-      stage === "syntax" ? syntaxAnswer(value.answers[id]) : stageChoiceAnswer(value.answers[id]),
+      stage === "syntax"
+        ? syntaxAnswer(value.answers[id])
+        : stage === "file_match"
+          ? fileMatchAnswer(value.answers[id])
+          : stageChoiceAnswer(value.answers[id]),
     ]),
   );
   return {
@@ -745,35 +917,42 @@ function cancelStageBody(value: { cancel(): Promise<unknown> } | null | undefine
  * The active experimental adapter uses this process transport.
  * This transport does not select a policy action or combine probabilities.
  */
-export function createJevProcessTransport(options: {
+type StageTransportOptions = {
   deadline: number;
   signal?: AbortSignal;
   fetch?: typeof fetch;
   endpoint?: string;
-  binding?: { protocolHash: string; operatingPointHash: string };
-}): JevDecisionTransport {
+  binding?: { protocolHash: string; operatingPointHash: string } | JevFileMatchTransportBinding;
+};
+function createJevStageTransport(
+  options: StageTransportOptions,
+  mode: "decision" | "file_match" | "file_match_process",
+) {
   const created = performance.now();
   let deadline: number;
   let callerSignal: AbortSignal | undefined;
   let configuredEndpoint: string | undefined;
-  let processBinding: { protocolHash: string; operatingPointHash: string } | undefined;
+  let validatedBinding: Record<string, string> | undefined;
   let fetchCall: typeof globalThis.fetch;
   try {
     const configuredBinding = options.binding;
+    if (mode !== "decision" && configuredBinding === undefined)
+      throw new JevClientError("invalid_request");
     if (configuredBinding !== undefined) {
       const snapshot = stageJson(configuredBinding);
+      const bindingField = mode === "file_match" ? "diagnosticHash" : "operatingPointHash";
       if (
         !record(snapshot) ||
-        !exactKeys(snapshot, ["protocolHash", "operatingPointHash"]) ||
+        !exactKeys(snapshot, ["protocolHash", bindingField]) ||
         typeof snapshot.protocolHash !== "string" ||
         !/^[a-f0-9]{64}$/.test(snapshot.protocolHash) ||
-        typeof snapshot.operatingPointHash !== "string" ||
-        !/^[a-f0-9]{64}$/.test(snapshot.operatingPointHash)
+        typeof snapshot[bindingField] !== "string" ||
+        !/^[a-f0-9]{64}$/.test(snapshot[bindingField])
       )
         throw new JevClientError("invalid_request");
-      processBinding = {
+      validatedBinding = {
         protocolHash: snapshot.protocolHash,
-        operatingPointHash: snapshot.operatingPointHash,
+        [bindingField]: snapshot[bindingField],
       };
     }
     deadline = options.deadline;
@@ -794,11 +973,18 @@ export function createJevProcessTransport(options: {
   if (deadline <= created) throw new JevClientError("timeout");
   const endpoint =
     configuredEndpoint === undefined ? resolveJevEndpoint() : validateEndpoint(configuredEndpoint);
-  const transportHash = jevHash({
-    contract: JEV_TRANSPORT_BINDING_CONTRACT,
-    endpoint,
-    ...(processBinding ? { processBinding } : {}),
-  });
+  const transportHash =
+    mode === "file_match"
+      ? jevHash({
+          contract: JEV_FILE_MATCH_PROTOCOL,
+          endpoint,
+          diagnosticBinding: validatedBinding,
+        })
+      : jevHash({
+          contract: JEV_TRANSPORT_BINDING_CONTRACT,
+          endpoint,
+          ...(validatedBinding ? { processBinding: validatedBinding } : {}),
+        });
   if (performance.now() >= deadline) throw new JevClientError("timeout");
   const controller = new AbortController();
   let failure: JevClientError["code"] | undefined;
@@ -867,6 +1053,8 @@ export function createJevProcessTransport(options: {
           guard();
         }
         guard();
+        if (stage === "file_match" && response.redirected !== false)
+          throw new JevClientError("invalid_response");
         if (!response.ok) throw new JevClientError("http_error");
         if (!response.body) throw new JevClientError("invalid_response");
         const declaredLength = response.headers.get("content-length");
@@ -930,32 +1118,38 @@ export function createJevProcessTransport(options: {
       const code = failure ?? (error instanceof JevClientError ? error.code : "transport_error");
       fail(code);
       const content = Buffer.concat(chunks, length);
-      throw new JevStageClientError(
-        code,
-        {
-          stage,
-          requestedQuestionIds: prepared?.ids ?? [],
-          ...(prepared
+      const evidence = {
+        requestedQuestionIds: prepared?.ids ?? [],
+        ...(prepared
+          ? {
+              requestHash: stageHash(prepared.body),
+              requestBytes: Buffer.byteLength(prepared.body),
+            }
+          : {}),
+        transportHash,
+        latencyMs: Math.max(0, performance.now() - started),
+        requestSent,
+        failure: code,
+        ...(responseComplete
+          ? { responseComplete: true, responseHash: stageHash(content), responseBytes: length }
+          : length > 0
             ? {
-                requestHash: stageHash(prepared.body),
-                requestBytes: Buffer.byteLength(prepared.body),
+                responseComplete: false,
+                responsePrefixHash: stageHash(content),
+                responsePrefixBytes: length,
               }
             : {}),
-          transportHash,
-          latencyMs: Math.max(0, performance.now() - started),
-          requestSent,
-          failure: code,
-          ...(responseComplete
-            ? { responseComplete: true, responseHash: stageHash(content), responseBytes: length }
-            : length > 0
-              ? {
-                  responseComplete: false,
-                  responsePrefixHash: stageHash(content),
-                  responsePrefixBytes: length,
-                }
-              : {}),
-        },
-        observedResult,
+      };
+      if (stage === "file_match")
+        throw new JevFileMatchClientError(
+          code,
+          { stage, ...evidence },
+          observedResult as JevFileMatchStageResult | undefined,
+        );
+      throw new JevStageClientError(
+        code,
+        { stage, ...evidence },
+        observedResult as DecisionStageResult | undefined,
       );
     } finally {
       busy = false;
@@ -969,12 +1163,62 @@ export function createJevProcessTransport(options: {
   }
   return {
     getObservedResult: () => lastObservedResult,
-    requestAllHeads: (request) => send("all_heads", request) as Promise<JevAllHeadStageResult>,
-    requestNonCommand: (request) =>
-      send("non_command", request) as Promise<JevNonCommandStageResult>,
-    requestSyntax: (request) => send("syntax", request) as Promise<JevSyntaxStageResult>,
-    requestCommandPolicy: (request) =>
-      send("command_policy", request) as Promise<JevCommandPolicyStageResult>,
+    send,
     close,
+  };
+}
+
+export function createJevProcessTransport(options: {
+  deadline: number;
+  signal?: AbortSignal;
+  fetch?: typeof fetch;
+  endpoint?: string;
+  binding?: { protocolHash: string; operatingPointHash: string };
+}): JevDecisionTransport {
+  const transport = createJevStageTransport(options, "decision");
+  return {
+    getObservedResult: () => transport.getObservedResult() as DecisionStageResult | undefined,
+    requestAllHeads: (request) =>
+      transport.send("all_heads", request) as Promise<JevAllHeadStageResult>,
+    requestNonCommand: (request) =>
+      transport.send("non_command", request) as Promise<JevNonCommandStageResult>,
+    requestSyntax: (request) => transport.send("syntax", request) as Promise<JevSyntaxStageResult>,
+    requestCommandPolicy: (request) =>
+      transport.send("command_policy", request) as Promise<JevCommandPolicyStageResult>,
+    close: transport.close,
+  };
+}
+
+/** Use only the private matching contract. Keep its diagnostic binding separate. */
+export function createJevFileMatchTransport(options: {
+  deadline: number;
+  signal?: AbortSignal;
+  fetch?: typeof fetch;
+  endpoint?: string;
+  binding: JevFileMatchTransportBinding;
+}): JevFileMatchTransport {
+  const transport = createJevStageTransport(options, "file_match");
+  return {
+    requestFileMatch: (request) =>
+      transport.send("file_match", request) as Promise<JevFileMatchStageResult>,
+    getObservedResult: () => transport.getObservedResult() as JevFileMatchStageResult | undefined,
+    close: transport.close,
+  };
+}
+
+/** Use the caller's actual process binding. This stage selects no policy action. */
+export function createJevFileMatchProcessTransport(options: {
+  deadline: number;
+  signal?: AbortSignal;
+  fetch?: typeof fetch;
+  endpoint?: string;
+  binding: JevFileMatchProcessTransportBinding;
+}): JevFileMatchTransport {
+  const transport = createJevStageTransport(options, "file_match_process");
+  return {
+    requestFileMatch: (request) =>
+      transport.send("file_match", request) as Promise<JevFileMatchStageResult>,
+    getObservedResult: () => transport.getObservedResult() as JevFileMatchStageResult | undefined,
+    close: transport.close,
   };
 }

@@ -1,12 +1,12 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /**
- * One opt-in live request through the real Pi extension loader and tool_call hook.
+ * One opt-in live classification through the real Pi extension loader and tool_call hook.
  * The registered read tool only increments a counter; it reads no file contents.
  *
  * Set SF_GUARDRAIL_JEV_ENDPOINT and SF_GUARDRAIL_JEV_API_KEY or
  * SF_GUARDRAIL_JEV_API_KEY_FILE. Add --live to send a request.
- * No arguments or --prepare-only exercise SDK setup without connection settings,
- * key reads, or a Jev request.
+ * No arguments or --prepare-only use strict synthetic stage replies through the SDK hook.
+ * This mode reads no real key, sends no provider request, and executes no tool.
  */
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
@@ -22,7 +22,12 @@ import {
   ModelRuntime,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import { JEV_MODEL, resolveJevEndpoint } from "../extensions/sf-guardrail/lib/jev-client.ts";
+import {
+  JEV_MODEL,
+  JEV_RESOLVED_MODEL,
+  JEV_PROVIDER,
+  resolveJevEndpoint,
+} from "../extensions/sf-guardrail/lib/jev-client.ts";
 import { validateJevStageResult } from "../extensions/sf-guardrail/lib/jev-command-process.ts";
 import {
   resolveJevOperatingPoint,
@@ -34,6 +39,9 @@ import {
   type DecisionEntryData,
   type JevEvidence,
   type JevAllHeadRequest,
+  type GuardrailConfig,
+  type JevToolMetadata,
+  type JevFacts,
   type JevOperatingPoint,
   type JevQuestionId,
   type JevRequest,
@@ -55,6 +63,15 @@ const GUARDRAIL_PATH = resolve(
 );
 // Load stateful source modules only after runHookSmoke installs its private profile.
 let sourceRisk: typeof import("../extensions/sf-guardrail/lib/jev-risk.ts") | undefined;
+let sourceFile: typeof import("../extensions/sf-guardrail/lib/jev-file-process.ts") | undefined;
+type FilePlan = import("../extensions/sf-guardrail/lib/jev-file-process.ts").JevFileProcessPlan;
+type PostedStage = {
+  stage: "file_match" | "all_heads";
+  requestHash: string;
+  requestBytes: number;
+  questionIds: string[];
+  synthetic: boolean;
+};
 
 export interface HookSmokeReport {
   success: boolean;
@@ -78,6 +95,21 @@ export interface HookSmokeReport {
   audit: { ruleId: string; feature: string; outcome: string; jev: JevEvidence } | null;
   executionCount: number;
   requests: number;
+  syntheticRequests: number;
+  selectedFormat: FilePlan["format"] | null;
+  requestPreparations: PostedStage[];
+  stageReceipts: Array<{
+    stage: "file_match" | "all_heads";
+    requestHash: string;
+    responseHash: string;
+    requestId: string;
+    cost: number | null;
+  }>;
+  syntheticPreparation: {
+    stages: PostedStage[];
+    modelCredit: false;
+    permissionCredit: false;
+  } | null;
   requestBytes: number;
   questionIds: JevQuestionId[];
   wirePrivacySuccess: boolean;
@@ -99,6 +131,16 @@ export async function runHookSmoke(
   let hookActive = false;
   let endpoint: string | undefined;
   let postedRequest: { request: JevAllHeadRequest; hash: string; bytes: number } | undefined;
+  let filePlan: FilePlan | undefined;
+  let routeConfig: GuardrailConfig | undefined;
+  const connectionKeys = [
+    "SF_GUARDRAIL_JEV_ENDPOINT",
+    "SF_GUARDRAIL_JEV_API_KEY",
+    "SF_GUARDRAIL_JEV_API_KEY_FILE",
+  ];
+  const originalConnection = Object.fromEntries(
+    connectionKeys.map((key) => [key, process.env[key]]),
+  );
   const report: HookSmokeReport = {
     success: false,
     preparedOnly: prepareOnly,
@@ -120,6 +162,11 @@ export async function runHookSmoke(
     audit: null,
     executionCount: 0,
     requests: 0,
+    syntheticRequests: 0,
+    selectedFormat: null,
+    requestPreparations: [],
+    stageReceipts: [],
+    syntheticPreparation: null,
     requestBytes: 0,
     questionIds: [],
     wirePrivacySuccess: false,
@@ -137,31 +184,98 @@ export async function runHookSmoke(
     await writeFile(inertExtensionPath, inertReadExtension(), { mode: 0o600 });
     process.env.PI_CODING_AGENT_DIR = agentDir;
     sourceRisk = await import("../extensions/sf-guardrail/lib/jev-risk.ts");
+    sourceFile = await import("../extensions/sf-guardrail/lib/jev-file-process.ts");
+    const sourceConfig = await import("../extensions/sf-guardrail/lib/config.ts");
+    routeConfig = sourceConfig.loadGuardrailSnapshot().config;
+    if (prepareOnly) {
+      process.env.SF_GUARDRAIL_JEV_ENDPOINT = "https://decisions.example.test/v1/decisions";
+      process.env.SF_GUARDRAIL_JEV_API_KEY = "synthetic-hook-preparation-key";
+      delete process.env.SF_GUARDRAIL_JEV_API_KEY_FILE;
+    }
 
     // Inspect the bounded body only. Never inspect or retain authorization headers.
     globalThis.fetch = async (input, init) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      if (
-        !hookActive ||
-        endpoint === undefined ||
-        url !== endpoint ||
-        init?.method !== "POST" ||
-        report.requests !== 0
-      ) {
+      if (!hookActive || endpoint === undefined || url !== endpoint || init?.method !== "POST") {
         report.failure ??= "unexpected-smoke-network-call";
         throw new Error("unexpected-smoke-network-call");
       }
-      report.requests += 1;
-      if (typeof init.body !== "string" || Buffer.byteLength(init.body) > 32 * 1024) {
+      if (typeof init.body !== "string" || Buffer.byteLength(init.body) > 32768)
         throw new Error("invalid-smoke-wire-body");
+      const request = JSON.parse(init.body) as JevRequest;
+      if (!filePlan) {
+        if (!sourceFile || !sourceRisk || !routeConfig) throw new Error("smoke-source-missing");
+        const state = request.state as { operation: JevToolMetadata; facts: JevFacts };
+        const original = sourceRisk.buildJevRequest(state.operation, state.facts, routeConfig);
+        filePlan = sourceFile.prepareJevFileProcess(original, false);
+        const first =
+          filePlan.format === "file_match_then_policy" ? filePlan.match : filePlan.original;
+        if (first.json !== init.body) throw new Error("smoke-source-route-mismatch");
+        report.selectedFormat = filePlan.format;
       }
-      report.requestBytes = Buffer.byteLength(init.body);
-      report.requestHash = createHash("sha256").update(init.body).digest("hex");
-      report.wirePrivacySuccess = wirePrivacyPasses(init.body, readmePath, cwd, resolvedReadmePath);
-      if (!report.wirePrivacySuccess) throw new Error("smoke-wire-privacy-failure");
-      const request = JSON.parse(init.body) as JevAllHeadRequest;
-      report.questionIds = Object.keys(request.questions) as JevQuestionId[];
-      postedRequest = { request, hash: report.requestHash, bytes: report.requestBytes };
+      const ordered =
+        filePlan.format === "file_match_then_policy"
+          ? [
+              Object.keys(filePlan.match.request.questions),
+              Object.keys(filePlan.original.request.questions),
+            ]
+          : [Object.keys(filePlan.original.request.questions)];
+      const index = report.requestPreparations.length;
+      const ids = Object.keys(request.questions);
+      if (index >= ordered.length || !isDeepStrictEqual(ids, ordered[index])) {
+        report.failure ??= "unexpected-smoke-stage";
+        throw new Error("unexpected-smoke-stage");
+      }
+      const stage = ids[0]?.startsWith("f_") ? "file_match" : "all_heads";
+      const requestBytes = Buffer.byteLength(init.body);
+      const requestHash = createHash("sha256").update(init.body).digest("hex");
+      report.requestPreparations.push({
+        stage,
+        requestHash,
+        requestBytes,
+        questionIds: ids,
+        synthetic: prepareOnly,
+      });
+      if (prepareOnly) report.syntheticRequests += 1;
+      else report.requests += 1;
+      const privacy = wirePrivacyPasses(init.body, readmePath, cwd, resolvedReadmePath);
+      report.wirePrivacySuccess = index === 0 ? privacy : report.wirePrivacySuccess && privacy;
+      if (!privacy) throw new Error("smoke-wire-privacy-failure");
+      if (stage === "all_heads") {
+        postedRequest = {
+          request: request as JevAllHeadRequest,
+          hash: requestHash,
+          bytes: requestBytes,
+        };
+        if (!prepareOnly) {
+          report.requestBytes = requestBytes;
+          report.requestHash = requestHash;
+          report.questionIds = ids as JevQuestionId[];
+        }
+      }
+      if (prepareOnly)
+        return new Response(
+          JSON.stringify({
+            model: JEV_RESOLVED_MODEL,
+            provider: JEV_PROVIDER,
+            id: `synthetic-hook-preparation-${index + 1}`,
+            answers: Object.fromEntries(
+              ids.map((id) => [
+                id,
+                {
+                  type: "choice",
+                  choice: stage === "file_match" ? "no_match" : "allow",
+                  probabilities:
+                    stage === "file_match"
+                      ? { match: 0, no_match: 1, unknown: 0 }
+                      : { allow: 1, confirm: 0, block: 0 },
+                  confidence: 0.37,
+                },
+              ]),
+            ),
+            usage: { input_tokens: 0, output_tokens: 0 },
+          }),
+        );
       return originalFetch(input, init);
     };
 
@@ -246,11 +360,6 @@ export async function runHookSmoke(
       report.failure ??= "sdk-hook-or-tool-missing";
       return report;
     }
-    if (prepareOnly) {
-      report.success = report.requests === 0 && !report.failure;
-      return report;
-    }
-
     endpoint = resolveJevEndpoint();
     const declaredPoint = resolveJevOperatingPoint();
     const toolCallId = "jev-live-hook-smoke-read";
@@ -273,6 +382,50 @@ export async function runHookSmoke(
       return report;
     }
     const evidence = audit.jev;
+    const validDecision =
+      !result?.block &&
+      audit.outcome === "allow_auto" &&
+      postedRequest !== undefined &&
+      filePlan !== undefined &&
+      hookSmokeDecisionPasses(evidence, postedRequest, endpoint, declaredPoint, filePlan);
+    const expectedPosts =
+      filePlan?.format === "file_match_then_policy" ? 2 : filePlan?.format === "legacy" ? 1 : 0;
+    const routeComplete = expectedPosts > 0 && report.requestPreparations.length === expectedPosts;
+    if (prepareOnly) {
+      report.syntheticPreparation = {
+        stages: structuredClone(report.requestPreparations),
+        modelCredit: false,
+        permissionCredit: false,
+      };
+      report.success =
+        validDecision &&
+        routeComplete &&
+        report.wirePrivacySuccess &&
+        report.requests === 0 &&
+        !report.failure;
+      if (!report.success) report.failure ??= evidence.failure ?? "smoke-preparation-failed";
+      return report;
+    }
+    if (evidence.process?.fileStage?.match) {
+      const receipt = evidence.process.fileStage.match.evidence;
+      report.stageReceipts.push({
+        stage: "file_match",
+        requestHash: receipt.requestHash,
+        responseHash: receipt.responseHash,
+        requestId: receipt.requestId,
+        cost: receipt.usage.cost ?? null,
+      });
+    }
+    if (evidence.process?.kind === "all_heads" && evidence.process.stage) {
+      const receipt = evidence.process.stage.evidence;
+      report.stageReceipts.push({
+        stage: "all_heads",
+        requestHash: receipt.requestHash,
+        responseHash: receipt.responseHash,
+        requestId: receipt.requestId,
+        cost: receipt.usage.cost ?? null,
+      });
+    }
     Object.assign(report, {
       model: evidence.model,
       provider: evidence.provider ?? null,
@@ -293,12 +446,12 @@ export async function runHookSmoke(
         jev: evidence,
       },
     });
-    const validDecision =
-      !result?.block &&
-      audit.outcome === "allow_auto" &&
-      postedRequest !== undefined &&
-      hookSmokeDecisionPasses(evidence, postedRequest, endpoint, declaredPoint);
-    if (validDecision && report.wirePrivacySuccess && report.requests === 1) {
+    if (
+      validDecision &&
+      routeComplete &&
+      report.wirePrivacySuccess &&
+      report.requests === expectedPosts
+    ) {
       const tool = runner.getToolDefinition("read");
       if (!tool) throw new Error("smoke-read-tool-missing");
       await tool.execute(toolCallId, input, controller.signal, undefined, runner.createContext());
@@ -310,7 +463,8 @@ export async function runHookSmoke(
     report.success =
       validDecision &&
       report.wirePrivacySuccess &&
-      report.requests === 1 &&
+      routeComplete &&
+      report.requests === expectedPosts &&
       report.executionCount === 1 &&
       !report.failure;
     if (!report.success)
@@ -327,6 +481,10 @@ export async function runHookSmoke(
       runner?.invalidate("Jev smoke finished.");
     } finally {
       globalThis.fetch = originalFetch;
+      for (const key of connectionKeys) {
+        if (originalConnection[key] === undefined) delete process.env[key];
+        else process.env[key] = originalConnection[key];
+      }
       if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
       else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
       await rm(temporaryRoot, { recursive: true, force: true });
@@ -334,12 +492,13 @@ export async function runHookSmoke(
   }
 }
 
-/** Validate one actual receipt, then use the source action gate for its exact point. */
+/** Validate each actual stage and its premises, then use the source gates for the fixed point. */
 export function hookSmokeDecisionPasses(
   evidence: JevEvidence,
   posted: { request: JevAllHeadRequest; hash: string; bytes: number },
   endpoint: string,
   declaredPoint: JevOperatingPoint,
+  filePlan?: FilePlan,
 ): boolean {
   try {
     if (!sourceRisk) return false;
@@ -372,6 +531,57 @@ export function hookSmokeDecisionPasses(
         requestHash: posted.hash,
         requestBytes: posted.bytes,
       })
+    )
+      return false;
+    const fileStage = process.fileStage;
+    if (
+      !sourceFile ||
+      !filePlan ||
+      !fileStage ||
+      !fileStage.completed ||
+      fileStage.cleanupFailed ||
+      fileStage.failureEvidence !== undefined ||
+      fileStage.failure !== undefined ||
+      fileStage.format !== filePlan.format ||
+      !isDeepStrictEqual(fileStage.selection, filePlan.selection) ||
+      fileStage.selectedProbabilityFloor !== point.syntaxProbability
+    )
+      return false;
+    if (filePlan.format === "file_match_then_policy") {
+      if (
+        !fileStage.match ||
+        !fileStage.transcript ||
+        fileStage.matchTimingOrigin !== "transport_cleanup" ||
+        !isDeepStrictEqual(fileStage.attempt, {
+          requestedQuestionIds: filePlan.selection.questionIds,
+          requestHash: filePlan.match.hash,
+          requestBytes: filePlan.match.bytes,
+        })
+      )
+        return false;
+      sourceFile.validateJevFileMatchResult(fileStage.match, filePlan, transportHash);
+      if (
+        fileStage.match.evidence.latencyMs > evidence.latencyMs ||
+        fileStage.match.evidence.requestId === process.stage.evidence.requestId ||
+        sourceFile.encodeJevFileTranscript(filePlan, fileStage.match, transportHash) !==
+          fileStage.transcript ||
+        sourceFile.restoreJevFileSourceRequest(
+          filePlan,
+          posted.request,
+          fileStage.match,
+          transportHash,
+        ) !== filePlan.original.json
+      )
+        return false;
+      const floorMet = Object.values(fileStage.match.answers).every(
+        (answer) => answer.probabilities[answer.choice] >= point.syntaxProbability,
+      );
+      if (floorMet !== fileStage.selectedProbabilityFloorMet || !floorMet) return false;
+    } else if (
+      filePlan.original.json !== json ||
+      fileStage.match !== undefined ||
+      fileStage.transcript !== undefined ||
+      fileStage.selectedProbabilityFloorMet !== true
     )
       return false;
     const stage = process.stage;
@@ -444,6 +654,7 @@ function wirePrivacyPasses(
       }>;
     };
     policy?: { files?: unknown[] };
+    fileMatch?: string;
     observations?: {
       contextComplete?: boolean;
       rowLimit?: { runnerCap?: number; effectiveMaximum?: number; bucket?: string };
@@ -503,7 +714,11 @@ function wirePrivacyPasses(
     request.provider.only?.length === 1 &&
     request.provider.only[0] === "typesafe" &&
     state.version === 6 &&
-    Object.keys(state).sort().join(",") === "facts,observations,operation,policy,version" &&
+    [
+      "facts,observations,operation,policy,version",
+      "facts,fileMatch,observations,operation,policy,version",
+    ].includes(Object.keys(state).sort().join(",")) &&
+    (state.fileMatch === undefined || typeof state.fileMatch === "string") &&
     operation?.toolName === "read" &&
     operation.complete === true &&
     Object.keys(operation).every((key) =>
@@ -540,17 +755,25 @@ function wirePrivacyPasses(
     state.observations?.contextComplete === true &&
     Object.keys(state.observations).every((key) => ["contextComplete", "rowLimit"].includes(key)) &&
     rowLimitValid &&
-    questionIds.includes("risk") &&
-    questionIds.slice().sort().join(",") === "disclosure,file_policy,risk" &&
-    questionIds.length <= QUESTION_IDS.length &&
-    questionIds.every((id) => QUESTION_IDS.includes(id as JevQuestionId)) &&
-    questionIds.every((id) => {
-      const question = request.questions[id as JevQuestionId];
-      return (
-        question?.type === "choice" &&
-        Object.keys(question.criteria).sort().join(",") === "allow,block,confirm"
-      );
-    })
+    (questionIds[0]?.startsWith("f_")
+      ? state.fileMatch === undefined &&
+        questionIds.length >= 1 &&
+        questionIds.length <= 8 &&
+        questionIds.every(
+          (id, index) =>
+            id === `f_${String.fromCharCode(97 + index)}` &&
+            request.questions[id]?.type === "choice" &&
+            Object.keys(request.questions[id].criteria).sort().join(",") ===
+              "match,no_match,unknown",
+        )
+      : questionIds.slice().sort().join(",") === "disclosure,file_policy,risk" &&
+        questionIds.length <= QUESTION_IDS.length &&
+        questionIds.every((id) => QUESTION_IDS.includes(id as JevQuestionId)) &&
+        questionIds.every(
+          (id) =>
+            request.questions[id]?.type === "choice" &&
+            Object.keys(request.questions[id].criteria).sort().join(",") === "allow,block,confirm",
+        ))
   );
 }
 

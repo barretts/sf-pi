@@ -10,7 +10,10 @@ import {
   jevPolicyContext,
 } from "../lib/jev-risk.ts";
 import type { JevAction, JevFacts, PolicyRule } from "../lib/types.ts";
-import { controlledAllHeadTransport } from "./jev-controlled-transport.ts";
+import {
+  controlledAllHeadTransport,
+  controlledFileMatchTransport,
+} from "./jev-controlled-transport.ts";
 
 const observations = [
   ["read", "read", "file_content"],
@@ -264,6 +267,7 @@ describe("Jev file projection", () => {
       {
         endpoint: "https://decisions.example.test/v1/decisions",
         createTransport,
+        createFileTransport: controlledFileMatchTransport(),
         resolveFacts: async () => ({
           facts: { files: [{ path: ".env", exists: true, kind: "directory" }] },
         }),

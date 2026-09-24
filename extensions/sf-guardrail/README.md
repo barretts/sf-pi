@@ -99,7 +99,8 @@ provider identity, a request `id`, exactly one `answers` entry per requested
 question, and `usage.input_tokens` and `usage.output_tokens`. Reported
 `usage.cost` is optional. Each answer must have `type: "choice"`, a valid
 `choice`, exactly the requested probability keys, and `confidence`. Action
-keys are `allow`, `confirm` and `block`. Syntax keys are `match` and `no_match`.
+keys are `allow`, `confirm` and `block`. Command syntax keys are `match` and
+`no_match`. File matching keys are `match`, `no_match` and `unknown`.
 This connection implements the pinned Jev Decisions contract. It does not select
 arbitrary chat models.
 
@@ -136,15 +137,58 @@ unresolved restriction remains a model confirm/block criterion. Private command
 literal spelling can be withheld while its exact equality remains available
 through the token projection; omitted spelling alone does not create a match.
 
-A Bash request uses three calls. The first call asks all applicable action
+The original Bash action route uses three calls. The first call asks all applicable action
 questions except command policy. The second asks Jev to compare every active
 command row with the command tokens. These syntax answers choose `match` or
 `no_match`. The third asks command policy and includes the actual syntax
 answers. An empty active row list needs only the first and third calls. The
 host does not match a row or select a policy winner. An early block does not
-skip a later requested call. Every other tool uses one strict call for all
-applicable action questions. This includes command policy for a tool with
-shell metadata.
+skip a later requested call. The complete original route for every other tool
+uses one strict call for all applicable action questions. This includes command policy for a tool with
+shell metadata. The experimental file adapter can add the matching call
+described below before either original action route.
+
+The experimental `file_match_then_policy` adapter preserves every original
+`facts.files` record and `policy.files` row. The matching call permits 1 to 8
+heads in exact source order. For each record, it visits every row, then
+`patterns` and `allowedPatterns`. It includes disabled and Off rows. Each
+head carries the complete original record and row. Jev chooses only `match`,
+`no_match`, or `unknown` for that named list and record.
+
+The later actual `file_policy` head uses those typed choices as matching
+premises. Jev applies eligibility, the same-row exemption, existence
+requirements, protection strength, first-tie order, Off-winner behavior,
+access, and the final action. Unknown stays unknown. The host copies and
+validates the complete data and receipts. It does not match paths, filter
+rows, select a winner, or add another policy vote. Other action questions
+keep their original instructions and independent restrictions.
+
+The adapter selects its complete format before any transport factory. It
+checks every required matching head. It checks each later complete request
+with the maximum reserved transcript.
+If a new count, byte, or JSON tree bound fails, it keeps the exact complete
+original Jev route. The original route must also meet its request limits.
+This selection uses only structure and size. A failed reply blocks the
+process. It cannot select the original route after a model call.
+
+Each actual request has a maximum depth of 32, a maximum of 16,384 JSON
+nodes, and a maximum body of 32,768 UTF-8 bytes. Freeze and validate each
+request body separately. Duplicate copies in the local plan do not count
+against the JSON tree limit for a request. Keep all original records and rows; do not trim
+or batch them to fit.
+
+The compact file transcript has 16 top-level fields and six fields per
+answer. It retains the actual receipt, IDs, hashes, model/provider, usage,
+optional cost, bytes, timing, three raw probabilities, and confidence.
+Numbers use canonical numeric strings. Signed zero remains `-0`. The strict
+inverse restores the typed receipt and exact original request bytes. It
+preserves parsed numeric values and signed zero. Raw JSON number spelling
+is outside that inverse.
+
+The file adapter remains experimental. Full validation is pending. Earlier
+head-only file diagnostics do not establish this adapter's coverage. Its
+current full development score, independent acceptance, and safety
+qualification remain unproved.
 
 The Bash syntax call maps each integer token ID to one distinct alphabetic
 label, such as `t_a`. Token order, quoted boundaries, prefix namespaces and
@@ -226,9 +270,11 @@ execution and session startup make no live Jev requests.
 
 - `conservative` is the default. Each action must select `allow` with raw
   `P(allow) >= 0.99`. Each syntax answer must have raw probability of at least
-  `0.99` for its selected choice.
+  `0.99` for its selected choice. The same floor applies to every file
+  matching choice, including `unknown`.
 - `argmax` is experimental. Both probability limits are zero. Every action
-  must still select `allow`. The syntax choices still come from Jev.
+  must still select `allow`. Command syntax and file matching choices still
+  come from Jev. An `unknown` file choice remains an unknown premise.
 
 Both settings require complete original context for automatic execution.
 Unknown names and custom probability limits fail. The setting is captured
@@ -270,7 +316,8 @@ evidence does not establish model qualification.
   unknown, external, and opaque calls remain allow-once.
 - Jev automatically allows only complete context with **every requested
   action answer** choosing `allow` and meeting the captured probability limit.
-  Syntax answers must meet that setting's syntax limit. Any action choosing `block`
+  Command syntax and file matching answers, including `unknown`, must meet
+  that setting's selected-choice limit. Any action choosing `block`
   is an unapprovable hard block. Any `confirm`, allow probability below the
   threshold, or incomplete context requires explicit human confirmation.
 - Complete file context requires an observed `facts.files` row for every
@@ -280,6 +327,11 @@ evidence does not establish model qualification.
   receives a separate copy of derived metadata. Changes to that copy cannot
   remove the original paths, access rows, questions, or incomplete state.
   The prepared artifact plan keeps its original registered object identity.
+  Checks repeat between stages and before automatic release. They bind the
+  original input, policy, descriptor, operating point, context, and hosted
+  facts. A later human allow repeats the bounded current-context checks.
+  Path facts do not bind inode, modification time, or file contents.
+  The checks do not prevent filesystem replacement races.
 - Jev session approval covers the exact original call. Its local fingerprint
   includes the full canonical input, tool, working directory, verified target,
   engine, policy/protocol hash, model identity, and local transport hash. The
@@ -302,9 +354,9 @@ evidence does not establish model qualification.
   per-question choices/probabilities/confidence, latency, cost, request-id, and
   failure facts without raw payloads. Top-level probabilities and confidence
   are the actual `risk` answer, even when another question decides the final
-  gate. Bash audit retains separate actual stage replies, origins and syntax
-  answers. Collected answers have no shared provider request ID or combined
-  probability. Already validated replies remain evidence after a later failure.
+  gate. Audit retains separate actual stage replies, origins, command syntax
+  answers, and the file matching transcript when that format is selected.
+  Collected answers have no shared provider request ID or combined probability. Already validated replies remain evidence after a later failure.
 - In deterministic mode, Power Tool Mode is off by default, can be limited to selected native families,
   and requires a separate production/unknown-org opt-in.
 - In deterministic mode, strictly validated temporary-directory cleanup can be auto-allowed; other

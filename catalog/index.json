@@ -657,7 +657,7 @@
     "entry": "extensions/sf-guardrail/index.ts",
     "hasReadme": true,
     "hasTests": true,
-    "srcLoc": 13667
+    "srcLoc": 14944
   },
   {
     "id": "sf-herdr",

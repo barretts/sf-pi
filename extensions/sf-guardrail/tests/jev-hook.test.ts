@@ -93,22 +93,29 @@ function reply(
     JSON.stringify({
       model: JEV_RESOLVED_MODEL,
       provider: JEV_PROVIDER,
-      id: "gen-dec-synthetic-hook-test",
+      id: `gen-dec-synthetic-hook-test-${fetch.mock.calls.length}`,
       answers: Object.fromEntries(
         questions.map((id) => {
           const override = overrides[id];
           return [
             id,
-            id.startsWith("r_")
+            id.startsWith("f_")
               ? {
                   type: "choice",
                   choice: "no_match",
-                  probabilities: { match: 0, no_match: 1 },
-                  confidence: 0.734567,
+                  probabilities: { match: 0, no_match: 1, unknown: 0 },
+                  confidence: 0.37,
                 }
-              : override
-                ? answer(override.choice, override.allow)
-                : answer(choice, allow),
+              : id.startsWith("r_")
+                ? {
+                    type: "choice",
+                    choice: "no_match",
+                    probabilities: { match: 0, no_match: 1 },
+                    confidence: 0.734567,
+                  }
+                : override
+                  ? answer(override.choice, override.allow)
+                  : answer(choice, allow),
           ];
         }),
       ),
@@ -289,7 +296,24 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     expect(runner.getToolDefinition("read")).toBeDefined();
     expect(await invoke()).toBeUndefined();
     expect(counter).toBe(1);
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(Object.keys(JSON.parse(fetch.mock.calls[0][1].body as string).questions)).toEqual([
+      "f_a",
+      "f_b",
+      "f_c",
+      "f_d",
+      "f_e",
+      "f_f",
+      "f_g",
+      "f_h",
+    ]);
+    expect(Object.keys(JSON.parse(fetch.mock.calls[1][1].body as string).questions)).toContain(
+      "risk",
+    );
+    expect(audit()[0].jev.process.fileStage.match.evidence.requestId).toBe(
+      "gen-dec-synthetic-hook-test-1",
+    );
+    expect(audit()[0].jev.process.fileStage.match.evidence.usage.cost).toBe(0.00002);
     expect(select).not.toHaveBeenCalled();
     expect(audit()[0]).toMatchObject({
       outcome: "allow_auto",
@@ -297,7 +321,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
       jev: {
         model: JEV_RESOLVED_MODEL,
         provider: JEV_PROVIDER,
-        requestId: "gen-dec-synthetic-hook-test",
+        requestId: "gen-dec-synthetic-hook-test-2",
         probabilities: { allow: 1, confirm: 0, block: 0 },
         confidence: 0.95,
         cost: 0.00002,
@@ -432,6 +456,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
     vi.spyOn(sourcePerformance, "now").mockImplementation(() => performance.now());
     interactive();
+    fetch.mockImplementationOnce(async () => reply()); // Separate synthetic matching receipt.
     fetch.mockImplementationOnce(async () => reply("confirm"));
     select.mockImplementationOnce(async () => {
       vi.advanceTimersByTime(20_000);
@@ -439,15 +464,16 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     });
     expect(await invoke()).toBeUndefined();
     expect(counter).toBe(1);
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(audit()[0].outcome).toBe("allow_once");
-    expect(resolveJevFacts).toHaveBeenCalledTimes(3);
+    expect(resolveJevFacts).toHaveBeenCalledTimes(6);
   });
 
   it("blocks when the later approval recheck consumes its separate 1500 ms bound", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
     vi.spyOn(sourcePerformance, "now").mockImplementation(() => performance.now());
     interactive();
+    fetch.mockImplementationOnce(async () => reply()); // Separate synthetic matching receipt.
     fetch.mockImplementationOnce(async () => reply("confirm"));
     const original = vi.mocked(resolveJevFacts).getMockImplementation();
     select.mockImplementationOnce(async () => {
@@ -461,7 +487,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     });
     expect(await invoke()).toMatchObject({ block: true });
     expect(counter).toBe(0);
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(audit()[0]).toMatchObject({
       outcome: "hard_block",
       jev: { failure: "changed-context" },
@@ -484,20 +510,19 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
     vi.spyOn(sourcePerformance, "now").mockImplementation(() => performance.now());
     const original = vi.mocked(resolveJevFacts).getMockImplementation();
-    vi.mocked(resolveJevFacts)
-      .mockImplementationOnce(async (options) => {
-        const resolved = await original(options);
-        vi.advanceTimersByTime(6000);
-        return resolved;
-      })
-      .mockImplementationOnce(async (options) => {
-        const resolved = await original(options);
-        vi.advanceTimersByTime(4000);
-        return resolved;
-      });
+    let resolutions = 0;
+    vi.mocked(resolveJevFacts).mockImplementation(async (options) => {
+      const resolved = await original(options);
+      resolutions++;
+      if (resolutions === 1) vi.advanceTimersByTime(6000);
+      // The adapter completes its four observations, then the hook checks automatic release.
+      if (resolutions === 5) vi.advanceTimersByTime(4000);
+      return resolved;
+    });
     expect(await invoke()).toMatchObject({ block: true });
     expect(counter).toBe(0);
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(resolutions).toBe(5);
     expect(audit()[0]).toMatchObject({
       outcome: "hard_block",
       jev: { failure: "changed-context" },
@@ -523,7 +548,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
       expect(audit()[0]).toMatchObject({
         toolName: "read",
         outcome: "hard_block",
-        jev: { failure: "changed-context" },
+        jev: { failure: "identity_mismatch" },
       });
     },
   );
@@ -544,10 +569,11 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
 
   it("blocks a model hard block before inert execution without offering approval", async () => {
     interactive();
+    fetch.mockImplementationOnce(async () => reply()); // Separate synthetic matching receipt.
     fetch.mockImplementationOnce(async () => reply("block"));
     expect(await invoke()).toMatchObject({ block: true });
     expect(counter).toBe(0);
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(select).not.toHaveBeenCalled();
     expect(audit()[0]).toMatchObject({
       outcome: "hard_block",
@@ -557,13 +583,14 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
 
   it("enforces a model policy-question block despite a high-probability overall allow", async () => {
     interactive();
+    fetch.mockImplementationOnce(async () => reply()); // Separate synthetic matching receipt.
     fetch.mockImplementationOnce(async () =>
       reply("allow", 1, { file_policy: { choice: "block", allow: 0 } }),
     );
     expect(await invoke()).toMatchObject({ block: true });
     expect(counter).toBe(0);
-    expect(fetch).toHaveBeenCalledOnce();
-    expect(Object.keys(JSON.parse(fetch.mock.calls[0][1].body as string).questions)).toContain(
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(Object.keys(JSON.parse(fetch.mock.calls[1][1].body as string).questions)).toContain(
       "file_policy",
     );
     expect(select).not.toHaveBeenCalled();
@@ -578,12 +605,13 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
 
   it("requires explicit approval for an uncertain policy question despite a high-probability overall allow", async () => {
     interactive();
+    fetch.mockImplementationOnce(async () => reply()); // Separate synthetic matching receipt.
     fetch.mockImplementationOnce(async () =>
       reply("allow", 1, { file_policy: { choice: "allow", allow: 0.98 } }),
     );
     expect(await invoke()).toMatchObject({ block: true });
     expect(counter).toBe(0);
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(select).toHaveBeenCalledOnce();
     expect(audit()[0]).toMatchObject({
       outcome: "block",
@@ -596,13 +624,14 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
 
   it("blocks an approval UI exception and records a hard block when the audit remains available", async () => {
     interactive();
+    fetch.mockImplementationOnce(async () => reply()); // Separate synthetic matching receipt.
     fetch.mockImplementationOnce(async () => reply("confirm"));
     select.mockRejectedValueOnce(new Error(`Synthetic UI failure: ${BODY}`));
     const result = await invoke();
     expect(result).toMatchObject({ block: true });
     expect(result.reason).not.toContain(BODY);
     expect(counter).toBe(0);
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(select).toHaveBeenCalledOnce();
     expect(audit()[0]).toMatchObject({ outcome: "hard_block", feature: "jevGate" });
     expect(JSON.stringify(audit())).not.toContain(BODY);
@@ -619,12 +648,13 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
       },
       "tui",
     );
+    fetch.mockImplementationOnce(async () => reply()); // Separate synthetic matching receipt.
     fetch.mockImplementationOnce(async () => reply("block"));
     const result = await invoke();
     expect(result).toMatchObject({ block: true });
     expect(result.reason).not.toContain(BODY);
     expect(counter).toBe(0);
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(select).not.toHaveBeenCalled();
     expect(audit().some((decision) => decision.outcome === "hard_block")).toBe(true);
   });
@@ -634,7 +664,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     const result = await invoke();
     expect(result).toMatchObject({ block: true });
     expect(counter).toBe(0);
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(audit()).toHaveLength(0);
   });
 
@@ -662,7 +692,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     expect(await invoke("write", { ...input })).toMatchObject({ block: true });
     expect(counter).toBe(0);
     expect(select).toHaveBeenCalledTimes(2);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
     expect(audit()[0]).toMatchObject({ outcome: "block" });
   });
 
@@ -690,7 +720,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     expect(await invoke("write", { ...input })).toMatchObject({ block: true });
     expect(counter).toBe(0);
     expect(select).toHaveBeenCalledTimes(2);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
     expect(audit()[0]).toMatchObject({ outcome: "block" });
   });
 
@@ -713,6 +743,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
 
   it("routes a valid uncertain allow prediction to confirmation before execution", async () => {
     interactive();
+    fetch.mockImplementationOnce(async () => reply()); // Separate synthetic matching receipt.
     fetch.mockImplementationOnce(async () => reply("allow", 0.98));
     expect(await invoke()).toMatchObject({ block: true });
     expect(counter).toBe(0);
@@ -724,6 +755,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     settings({ powerTool: { mode: "all" } });
     vi.stubEnv("SF_GUARDRAIL_ALLOW_HEADLESS", "1");
     vi.stubEnv("SF_GUARDRAIL_OPERATOR_AUTO_APPROVE", OPERATOR_AUTO_APPROVE_VALUE);
+    fetch.mockImplementationOnce(async () => reply()); // Separate synthetic matching receipt.
     fetch.mockImplementationOnce(async () => reply("confirm"));
     expect(await invoke("write", { path: "source.ts", content: BODY })).toMatchObject({
       block: true,
@@ -784,7 +816,14 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     expect(await invoke("write", { ...input })).toMatchObject({ block: true });
     expect(counter).toBe(2);
     expect(select).toHaveBeenCalledTimes(2);
-    expect(fetch.mock.calls.map((call) => call[0])).toEqual([ENDPOINT, ENDPOINT, OTHER_ENDPOINT]);
+    expect(fetch.mock.calls.map((call) => call[0])).toEqual([
+      ENDPOINT,
+      ENDPOINT,
+      ENDPOINT,
+      ENDPOINT,
+      OTHER_ENDPOINT,
+      OTHER_ENDPOINT,
+    ]);
     const decisions = audit();
     expect(decisions[0].outcome).toBe("block");
     expect(decisions[1].outcome).toBe("allow_session");
@@ -883,9 +922,14 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
       expect(fetch.mock.calls[0][0]).toBe(ENDPOINT);
       expect(await pending).toMatchObject({ block: true });
       expect(counter).toBe(0);
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(audit()[0].jev.process.fileStage.match.evidence.requestId).toBe(
+        "gen-dec-synthetic-hook-test-1",
+      );
+      expect(audit()[0].jev.riskAnswer).toBeUndefined();
       expect(audit()[0]).toMatchObject({
         outcome: "hard_block",
-        jev: { failure: "changed-context" },
+        jev: { failure: "identity_mismatch" },
       });
     },
   );
@@ -905,6 +949,7 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
     interactive();
     syntheticSandbox = change === "org";
     if (change === "branch") session.appendCustomEntry("synthetic-branch-anchor", {});
+    fetch.mockImplementationOnce(async () => reply()); // Separate synthetic matching receipt.
     fetch.mockImplementationOnce(async () => reply("confirm"));
     const input = { path: "source.ts", content: BODY };
     let approve: (choice: string) => void;
@@ -939,5 +984,126 @@ describe("Jev actual SDK pre-execution hook with inert registered tools", () => 
       outcome: "hard_block",
       jev: { failure: "changed-context" },
     });
+  });
+});
+
+describe("private staged file context controls", () => {
+  const switchToDeterministic = () =>
+    writeFileSync(
+      join(agentDir, "settings.json"),
+      JSON.stringify({ sfPi: { guardrail: { engine: "deterministic" } } }),
+    );
+  const matchingReply = () => {
+    const body = JSON.parse(fetch.mock.calls.at(-1)![1]!.body as string);
+    return new Response(
+      JSON.stringify({
+        model: JEV_RESOLVED_MODEL,
+        provider: JEV_PROVIDER,
+        id: "synthetic-file-prefix-hook",
+        answers: Object.fromEntries(
+          Object.keys(body.questions).map((id) => [
+            id,
+            {
+              type: "choice",
+              choice: "no_match",
+              probabilities: { match: 0, no_match: 1, unknown: 0 },
+              confidence: 0.81,
+            },
+          ]),
+        ),
+        usage: { input_tokens: 45, output_tokens: 22 },
+      }),
+    );
+  };
+  it("keeps the audited endpoint failure when no endpoint is captured", async () => {
+    vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", "");
+    expect(await invoke()).toMatchObject({ block: true });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(counter).toBe(0);
+    expect(audit()[0]).toMatchObject({
+      outcome: "hard_block",
+      jev: { failure: "missing_endpoint" },
+    });
+  });
+  it("stops the next dispatch when equal policy contents move to another private profile", async () => {
+    const other = join(directory, "second-private-agent");
+    mkdirSync(other);
+    writeFileSync(
+      join(other, "settings.json"),
+      JSON.stringify({ sfPi: { guardrail: { engine: "jev" } } }),
+    );
+    fetch.mockImplementationOnce(async () => {
+      const response = matchingReply();
+      vi.stubEnv("PI_CODING_AGENT_DIR", other);
+      return response;
+    });
+    expect(await invoke()).toMatchObject({ block: true });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(counter).toBe(0);
+    expect(audit()[0]).toMatchObject({
+      outcome: "hard_block",
+      jev: { failure: "identity_mismatch" },
+    });
+  });
+  it("stops human release when equal policy contents move to another private profile", async () => {
+    const other = join(directory, "human-wait-private-agent");
+    mkdirSync(other);
+    writeFileSync(
+      join(other, "settings.json"),
+      JSON.stringify({ sfPi: { guardrail: { engine: "jev" } } }),
+    );
+    interactive();
+    fetch.mockImplementation(async () => {
+      const body = JSON.parse(fetch.mock.calls.at(-1)![1]!.body as string);
+      return Object.keys(body.questions)[0].startsWith("f_") ? matchingReply() : reply("confirm");
+    });
+    select.mockImplementationOnce(async () => {
+      vi.stubEnv("PI_CODING_AGENT_DIR", other);
+      return "Allow once";
+    });
+    expect(await invoke()).toMatchObject({ block: true });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(counter).toBe(0);
+    expect(audit()[0]).toMatchObject({
+      outcome: "hard_block",
+      jev: { failure: "changed-context" },
+    });
+  });
+  it("stops the first dispatch when settings change during initial facts", async () => {
+    const original = vi.mocked(resolveJevFacts).getMockImplementation()!;
+    vi.mocked(resolveJevFacts).mockImplementationOnce(async (options) => {
+      const result = await original(options);
+      switchToDeterministic();
+      return result;
+    });
+    expect(await invoke()).toMatchObject({ block: true });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(counter).toBe(0);
+    expect(audit()[0]).toMatchObject({
+      outcome: "hard_block",
+      jev: { failure: "identity_mismatch" },
+    });
+  });
+  it("stops the policy dispatch after a match reply changes the settings source", async () => {
+    fetch.mockImplementationOnce(async () => {
+      const response = matchingReply();
+      switchToDeterministic();
+      return response;
+    });
+    expect(await invoke()).toMatchObject({ block: true });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(counter).toBe(0);
+    expect(audit()[0]).toMatchObject({
+      outcome: "hard_block",
+      jev: {
+        process: {
+          kind: "file_stages",
+          fileStage: {
+            match: { stage: "file_match", evidence: { requestId: "synthetic-file-prefix-hook" } },
+          },
+        },
+      },
+    });
+    expect(audit()[0].jev?.riskOrigin).toBeUndefined();
   });
 });

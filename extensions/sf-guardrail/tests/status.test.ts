@@ -9,7 +9,10 @@ import { evaluateJevSafety } from "../lib/jev-risk.ts";
 import { JEV_RESOLVED_MODEL } from "../lib/jev-client.ts";
 import type { Data360ExecutionChainEntryData } from "../lib/approval-ledger.ts";
 import type { DecisionEntryData } from "../lib/types.ts";
-import { controlledAllHeadTransport } from "./jev-controlled-transport.ts";
+import {
+  controlledAllHeadTransport,
+  controlledFileMatchTransport,
+} from "./jev-controlled-transport.ts";
 
 const chain: Data360ExecutionChainEntryData = {
   timestamp: Date.UTC(2026, 6, 6, 20, 0, 0),
@@ -70,6 +73,7 @@ describe("sf-guardrail status rendering", () => {
       },
       {
         createTransport,
+        createFileTransport: controlledFileMatchTransport(),
         resolveFacts: async () => ({ facts: { files: [{ path: ".env", exists: true }] } }),
       },
     );

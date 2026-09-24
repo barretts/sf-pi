@@ -36,6 +36,7 @@ export interface SafetyKernelInput {
   signal?: AbortSignal;
   deadline?: number;
   operatingPoint?: JevOperatingPoint;
+  recheckContext?: () => boolean | Promise<boolean>;
 }
 export type GuardrailDecision = ClassifiedDecision;
 
@@ -48,6 +49,7 @@ export async function evaluateSafety(
       signal: input.signal,
       deadline: input.deadline,
       operatingPoint: input.operatingPoint,
+      recheckContext: input.recheckContext,
     });
   }
   const subject = normalizeSafetySubject(input.toolName, input.input, {

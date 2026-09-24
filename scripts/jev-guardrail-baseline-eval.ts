@@ -33,11 +33,17 @@ import type {
   JevDecisionProcessEvidence,
   JevDecisionTransport,
   JevFacts,
+  JevFileMatchRequest,
+  JevFileMatchStageResult,
+  JevFileMatchTransport,
+  JevFileMatchProcessTransportBinding,
+  JevFilePolicyStageEvidence,
   JevNonCommandRequest,
   JevNonCommandStageResult,
   JevOperatingPointData,
   JevQuestionId,
   JevResolvedFacts,
+  JevRequest,
   JevSyntaxRequest,
   JevSyntaxStageResult,
   JevToolDescriptor,
@@ -52,13 +58,18 @@ const INDEPENDENT_FIXTURE = join(ROOT, "scripts/fixtures/jev-guardrail-independe
 const REPLACEMENT_FIXTURE = join(ROOT, "scripts/fixtures/jev-guardrail-replacement-holdout.json");
 const ACTION_RANK: Record<JevAction, number> = { allow: 0, confirm: 1, block: 2 };
 type BaselineDevRequest =
-  JevAllHeadRequest | JevNonCommandRequest | JevSyntaxRequest | JevCommandPolicyRequest;
-type BaselineDevStage = "all_heads" | "non_command" | "syntax" | "command_policy";
+  | JevAllHeadRequest
+  | JevNonCommandRequest
+  | JevSyntaxRequest
+  | JevCommandPolicyRequest
+  | JevFileMatchRequest;
+type BaselineDevStage = "all_heads" | "non_command" | "syntax" | "command_policy" | "file_match";
 type BaselineDevStageResult =
   | JevAllHeadStageResult
   | JevNonCommandStageResult
   | JevSyntaxStageResult
-  | JevCommandPolicyStageResult;
+  | JevCommandPolicyStageResult
+  | JevFileMatchStageResult;
 const DEFAULT_ORG_ENVIRONMENT: NonNullable<JevFacts["org"]> = {
   type: "scratch",
   verified: true,
@@ -130,7 +141,18 @@ export interface BaselineDevResult {
     questionIds: string[];
     requestHash: string;
     requestBytes: number;
+    /** Exact hosted body. This contains no original command or file body. */
+    request?: BaselineDevRequest;
+    processBinding?: JevFileMatchProcessTransportBinding;
+    deadline?: number;
   }>;
+  /** Exact hosted source before the file stage. This supplies no matching judgment. */
+  fileSourceRequest?: JevRequest;
+  /** Keep local preparation receipts outside actual model evidence. */
+  syntheticFilePreparation?: {
+    syntheticPreparation: true;
+    fileStage: JevFilePolicyStageEvidence;
+  };
   /** Local synthetic replies exercise preparation only. They cannot supply a model score. */
   syntheticPreparation?: boolean;
   process?: JevDecisionProcessEvidence;
@@ -370,6 +392,7 @@ export async function createBaselineDevEvaluator() {
     options: {
       prepareOnly?: boolean;
       createTransport?: typeof client.createJevProcessTransport;
+      createFileTransport?: typeof client.createJevFileMatchProcessTransport;
       onRequestPrepared?: (
         request: BaselineDevRequest,
         caseId: string,
@@ -484,7 +507,11 @@ export async function createBaselineDevEvaluator() {
 
       const candidateStarted = performance.now();
       result.candidateAttempted = true;
-      const capturePreparation = (stage: BaselineDevStage, request: BaselineDevRequest) => {
+      const capturePreparation = (
+        stage: BaselineDevStage,
+        request: BaselineDevRequest,
+        transportOptions: Parameters<typeof client.createJevProcessTransport>[0],
+      ) => {
         const encoded = JSON.stringify(request);
         const questionIds = Object.keys(request.questions);
         const preparation = {
@@ -492,6 +519,11 @@ export async function createBaselineDevEvaluator() {
           questionIds,
           requestHash: sha256(encoded),
           requestBytes: Buffer.byteLength(encoded),
+          request: JSON.parse(encoded) as BaselineDevRequest,
+          ...(transportOptions.binding
+            ? { processBinding: structuredClone(transportOptions.binding) }
+            : {}),
+          deadline: transportOptions.deadline,
         };
         (result.requestPreparations ??= []).push(preparation);
         if (result.requestHash === undefined) {
@@ -499,7 +531,7 @@ export async function createBaselineDevEvaluator() {
           result.requestHash = preparation.requestHash;
           result.requestBytes = preparation.requestBytes;
         }
-        if (stage !== "syntax") {
+        if (stage !== "syntax" && stage !== "file_match") {
           result.questionIds = [
             ...new Set([...(result.questionIds ?? []), ...questionIds]),
           ] as JevQuestionId[];
@@ -577,7 +609,7 @@ export async function createBaselineDevEvaluator() {
           request: BaselineDevRequest,
           method: () => Promise<T>,
         ): Promise<T> => {
-          capturePreparation(stage, request);
+          capturePreparation(stage, request, transportOptions);
           return method();
         };
         const wrapped: JevDecisionTransport = {
@@ -593,6 +625,84 @@ export async function createBaselineDevEvaluator() {
           close: () => transport.close(),
         };
         return wrapped;
+      };
+      const createFileTransport: typeof client.createJevFileMatchProcessTransport = (
+        transportOptions,
+      ) => {
+        let transport: JevFileMatchTransport;
+        if (options.prepareOnly) {
+          const transportHash = identity.jevHash({
+            contract: client.JEV_TRANSPORT_BINDING_CONTRACT,
+            endpoint: transportOptions.endpoint,
+            processBinding: transportOptions.binding,
+          });
+          let observed: JevFileMatchStageResult | undefined;
+          transport = {
+            async requestFileMatch(request) {
+              const started = performance.now();
+              const encoded = JSON.stringify(request);
+              const questionIds = Object.keys(request.questions);
+              const answers = Object.fromEntries(
+                questionIds.map((id) => [
+                  id,
+                  {
+                    choice: "unknown",
+                    probabilities: { match: 0, no_match: 0, unknown: 1 },
+                    confidence: 1,
+                  },
+                ]),
+              ) as JevFileMatchStageResult["answers"];
+              const synthetic = JSON.stringify({
+                syntheticPreparation: true,
+                stage: "file_match",
+                answers,
+              });
+              observed = {
+                stage: "file_match",
+                answers,
+                evidence: {
+                  requestedQuestionIds:
+                    questionIds as JevFileMatchStageResult["evidence"]["requestedQuestionIds"],
+                  requestHash: sha256(encoded),
+                  responseHash: sha256(synthetic),
+                  transportHash,
+                  requestBytes: Buffer.byteLength(encoded),
+                  responseBytes: Buffer.byteLength(synthetic),
+                  model: client.JEV_RESOLVED_MODEL,
+                  provider: client.JEV_PROVIDER,
+                  requestId: "preparation-only-local-file_match",
+                  usage: { input_tokens: 0, output_tokens: 0 },
+                  latencyMs: performance.now() - started,
+                },
+              };
+              return observed;
+            },
+            getObservedResult: () => observed,
+            close() {},
+          };
+        } else {
+          transport = (options.createFileTransport ?? client.createJevFileMatchProcessTransport)(
+            transportOptions,
+          );
+        }
+        return {
+          requestFileMatch: (request) => {
+            capturePreparation("file_match", request, transportOptions);
+            return transport.requestFileMatch(request);
+          },
+          getObservedResult: () => transport.getObservedResult(),
+          close: () => transport.close(),
+        };
+      };
+      let fileSourceRequest: JevRequest | undefined;
+      const captureFileSource = (
+        metadata: Parameters<typeof adapter.buildJevRequest>[0],
+        facts: JevFacts,
+      ) => {
+        if (fileSourceRequest === undefined)
+          fileSourceRequest = adapter.buildJevRequest(metadata, facts, config, {
+            ...(typeof row.input.command === "string" ? { command: row.input.command } : {}),
+          });
       };
       const candidate = await adapter.evaluateJevSafety(
         { ...input, engine: "jev" },
@@ -611,6 +721,7 @@ export async function createBaselineDevEvaluator() {
               const resolved = await factsModule.resolveJevFacts(context);
               result.complete = adapter.jevContextComplete(context.metadata, resolved.facts);
               result.omissionCount = context.metadata.omissions.length;
+              captureFileSource(context.metadata, resolved.facts);
               return resolved;
             }
             const facts: JevFacts = {};
@@ -659,6 +770,7 @@ export async function createBaselineDevEvaluator() {
             }
             result.complete = adapter.jevContextComplete(context.metadata, facts);
             result.omissionCount = context.metadata.omissions.length;
+            captureFileSource(context.metadata, facts);
             return {
               facts,
               ...(facts.org?.verified ? { orgIdentity: "generic-development-org" } : {}),
@@ -668,6 +780,7 @@ export async function createBaselineDevEvaluator() {
             };
           },
           createTransport,
+          createFileTransport,
         },
       );
       result.candidateLatencyMs = performance.now() - candidateStarted;
@@ -691,10 +804,17 @@ export async function createBaselineDevEvaluator() {
         const answers =
           evidence.process?.kind === "command_stages"
             ? evidence.process.result.answers
-            : (evidence.process?.stage?.answers ?? evidence.answers);
+            : ((evidence.process?.kind === "all_heads"
+                ? evidence.process.stage?.answers
+                : undefined) ?? evidence.answers);
         if (answers) result.answers = structuredClone(answers);
         if (options.prepareOnly) {
           result.syntheticPreparation = true;
+          if (evidence.process?.fileStage)
+            result.syntheticFilePreparation = {
+              syntheticPreparation: true,
+              fileStage: structuredClone(evidence.process.fileStage),
+            };
         } else {
           if (evidence.process) result.process = structuredClone(evidence.process);
           if (evidence.riskAnswer) result.modelChoice = evidence.riskAnswer.choice;
@@ -707,12 +827,14 @@ export async function createBaselineDevEvaluator() {
           // A Bash result has several actual replies. Keep each ID in its stage origin.
           if (evidence.process?.kind === "all_heads" && evidence.requestId)
             result.requestId = evidence.requestId;
-          const stages =
-            evidence.process?.kind === "command_stages"
+          const stages = [
+            ...(evidence.process?.fileStage?.match ? [evidence.process.fileStage.match] : []),
+            ...(evidence.process?.kind === "command_stages"
               ? evidence.process.result.stages
-              : evidence.process?.stage
+              : evidence.process?.kind === "all_heads" && evidence.process.stage
                 ? [evidence.process.stage]
-                : [];
+                : []),
+          ];
           const costs = stages.flatMap((stage) =>
             stage.evidence.usage.cost === undefined ? [] : [stage.evidence.usage.cost],
           );
@@ -721,6 +843,8 @@ export async function createBaselineDevEvaluator() {
             result.costReportedStageCount = costs.length;
           }
         }
+        if (evidence.process?.fileStage && fileSourceRequest)
+          result.fileSourceRequest = structuredClone(fileSourceRequest);
       }
       await recordResult(result, cwd);
     }
@@ -840,7 +964,7 @@ export function summarizeBaselineDev(results: BaselineDevResult[]) {
     requestFailures: requestFailures.length,
     requestFailureIds: requestFailures.map((row) => row.id),
     requestInvocationScope:
-      "An actual named transport stage method was invoked. This does not prove network transmission or a provider response. Preparation uses local synthetic replies and does not invoke the supplied transport factory.",
+      "An actual named transport stage method was invoked. This does not prove network transmission or a provider response. Preparation uses local synthetic replies. It does not invoke either supplied transport factory.",
     baselineFailures: baselineFailures.length,
     baselineCoverageLoss: coverageLoss.length,
     coverageLossIds: coverageLoss.map((row) => row.id),
@@ -990,6 +1114,7 @@ async function main() {
           "extensions/sf-guardrail/lib/jev-risk.ts",
           "extensions/sf-guardrail/lib/jev-client.ts",
           "extensions/sf-guardrail/lib/jev-command-process.ts",
+          "extensions/sf-guardrail/lib/jev-file-process.ts",
           "extensions/sf-guardrail/lib/jev-operating-point.ts",
           "extensions/sf-guardrail/lib/jev-identity.ts",
           "extensions/sf-guardrail/lib/types.ts",
@@ -1028,9 +1153,9 @@ async function main() {
       "Latency covers candidate classification with mocked org facts, excluding the normal fresh SDK org resolution, release recheck, and human UI.",
       "Failed attempts remain in the denominator and cannot count as model catches or passing calls.",
       "Org preparation rejections retain null actions and zero latencies. Neither adapter nor transport method is invoked. These rows are excluded from adapter latency percentiles.",
-      "Preparation uses explicit local synthetic replies. It records no provider ID, cost or model score and does not invoke the supplied or default real transport factory.",
+      "Preparation marks local synthetic receipts. They supply no model score or provider judgment. Preparation does not invoke a supplied or default production transport factory.",
       "The adapter reads the declared operating point and defaults to conservative when absent. Each result records the actual point and its hash.",
-      "The staged result retains actual binary answers and origins for action consistency checks. Summary checks cannot independently replay raw wire bytes.",
+      "Real runs keep typed file matching answers and binary command answers separate from action answers. The score can rebuild saved request bodies and check typed receipts. It cannot replay raw provider replies.",
       "Costs reported after timeouts may be incomplete because the provider returns no usage for failed attempts.",
     ],
     results: [] as BaselineDevResult[],

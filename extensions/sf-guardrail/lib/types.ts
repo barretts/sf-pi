@@ -206,8 +206,36 @@ export interface JevCommandProcessEvidence {
   representsOneProviderReply: false;
 }
 
+export interface JevFilePolicyStageEvidence {
+  format: "legacy" | "file_match_then_policy";
+  selection: {
+    reason: string;
+    originalRequestHash: string;
+    stateHash: string;
+    manifestHash: string;
+    questionIds: string[];
+    matchRequestHash?: string;
+    matchRequestBytes?: number;
+    downstreamMaxBytes: number[];
+  };
+  completed: boolean;
+  cleanupFailed: boolean;
+  match?: JevFileMatchStageResult;
+  matchTimingOrigin?: JevStageTimingOrigin;
+  attempt?: { requestedQuestionIds: string[]; requestHash: string; requestBytes: number };
+  failure?: { stage: "preflight" | "file_match" | "recheck" | "transcript"; code: string };
+  failureEvidence?: JevFileMatchFailureEvidence;
+  transcript?: string;
+  selectedProbabilityFloor: number;
+  selectedProbabilityFloorMet: boolean;
+}
+
 export type JevDecisionProcessEvidence =
-  | { kind: "command_stages"; result: JevCommandProcessEvidence }
+  | {
+      kind: "command_stages";
+      result: JevCommandProcessEvidence;
+      fileStage?: JevFilePolicyStageEvidence;
+    }
   | {
       kind: "all_heads";
       completed: boolean;
@@ -216,7 +244,9 @@ export type JevDecisionProcessEvidence =
       attempt?: { requestedQuestionIds: string[]; requestHash: string; requestBytes: number };
       failureEvidence?: JevStageFailureEvidence;
       cleanupFailed: boolean;
-    };
+      fileStage?: JevFilePolicyStageEvidence;
+    }
+  | { kind: "file_stages"; completed: false; fileStage: JevFilePolicyStageEvidence };
 
 export interface JevPrediction extends JevChoiceAnswer {
   answers?: Partial<Record<JevQuestionId, JevChoiceAnswer>>;
@@ -272,6 +302,31 @@ export interface JevStageFailureEvidence {
   responsePrefixBytes?: number;
 }
 
+/** This private diagnostic reports matching only. It supplies no policy action. */
+export interface JevFileMatchFailureEvidence extends Omit<JevStageFailureEvidence, "stage"> {
+  stage: "file_match";
+}
+
+export type JevFileMatchChoice = "match" | "no_match" | "unknown";
+export type JevFileMatchQuestionId = "f_a" | "f_b" | "f_c" | "f_d" | "f_e" | "f_f" | "f_g" | "f_h";
+
+export interface JevFileMatchChoiceQuestion {
+  type: "choice";
+  instructions: {
+    question: string;
+    recordOrdinal: number;
+    rowOrdinal: number;
+    listName: "patterns" | "allowedPatterns";
+    record: Record<string, unknown>;
+    row: Record<string, unknown>;
+    boundary: string;
+    matchingGrammar: string;
+    scope: string;
+    empty: string;
+  };
+  criteria: Record<JevFileMatchChoice, unknown>;
+}
+
 /** These forms support a process. They do not select or release a policy action. */
 export type JevNonCommandQuestionId = Exclude<JevQuestionId, "command_policy">;
 export type JevSyntaxQuestionId = `r_${string}`;
@@ -299,6 +354,16 @@ export interface JevAllHeadRequest extends JevStageRequestBase {
   questions: { risk: JevChoiceQuestion } & Partial<
     Record<Exclude<JevQuestionId, "risk">, JevChoiceQuestion>
   >;
+}
+
+export interface JevFileMatchRequest extends JevStageRequestBase {
+  questions: Partial<Record<JevFileMatchQuestionId, JevFileMatchChoiceQuestion>>;
+}
+
+export interface JevFileMatchChoiceAnswer {
+  choice: JevFileMatchChoice;
+  probabilities: Record<JevFileMatchChoice, number>;
+  confidence: number;
 }
 
 /** Send every row in one request. The client admits 1..64 alphabetic opaque IDs in source order. */
@@ -357,6 +422,28 @@ export interface JevCommandPolicyStageResult {
   stage: "command_policy";
   answers: { command_policy: JevChoiceAnswer };
   evidence: JevStageEvidence<"command_policy">;
+}
+
+export interface JevFileMatchStageResult {
+  stage: "file_match";
+  answers: Partial<Record<JevFileMatchQuestionId, JevFileMatchChoiceAnswer>>;
+  evidence: JevStageEvidence<JevFileMatchQuestionId>;
+}
+
+export interface JevFileMatchTransportBinding {
+  protocolHash: string;
+  diagnosticHash: string;
+}
+
+export interface JevFileMatchProcessTransportBinding {
+  protocolHash: string;
+  operatingPointHash: string;
+}
+
+export interface JevFileMatchTransport {
+  requestFileMatch(request: JevFileMatchRequest): Promise<JevFileMatchStageResult>;
+  getObservedResult(): JevFileMatchStageResult | undefined;
+  close(): void;
 }
 
 export interface JevProcessTransport {
