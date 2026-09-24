@@ -196,6 +196,68 @@ describe("supplied path kind facts", () => {
   );
 });
 
+describe("unsupported modern deploy flags", () => {
+  it.each(["--check-only", "--checkonly"])(
+    "keeps %s incomplete without deriving preview or policy permission",
+    async (flag) => {
+      const command = `sf project deploy start ${flag} -o PRIVATE_TARGET_SENTINEL`;
+      const request = vi.fn(async (wire: ReturnType<typeof buildJevRequest>) => {
+        expect(Object.keys(wire.questions)).toEqual([
+          "risk",
+          "command_policy",
+          "org_policy",
+          "disclosure",
+        ]);
+        expect(wire.state).toMatchObject({
+          version: 6,
+          operation: {
+            metadata: {
+              shell: {
+                commands: [
+                  {
+                    subcommands: ["project", "deploy", "start"],
+                    flags: [{ name: "unknown" }],
+                  },
+                ],
+              },
+            },
+            complete: false,
+            omissions: expect.arrayContaining(["shell_effects_opaque"]),
+          },
+          observations: { contextComplete: false },
+        });
+        expect((wire.state as { observations: Record<string, unknown> }).observations).toEqual({
+          contextComplete: false,
+        });
+        expect(JSON.stringify(wire)).not.toContain("PRIVATE_TARGET_SENTINEL");
+        const value = prediction();
+        value.answers = {
+          risk: prediction(),
+          command_policy: prediction(),
+          org_policy: prediction(),
+          disclosure: prediction(),
+        };
+        return value;
+      });
+      const decision = await evaluateJevSafety(
+        { ...call(), toolName: "bash", input: { command } },
+        {
+          request,
+          resolveFacts: async () => ({
+            facts: { org: { type: "sandbox", verified: true, explicit: true } },
+            orgIdentity: "synthetic-org",
+          }),
+        },
+      );
+      expect(request).toHaveBeenCalledOnce();
+      expect(decision.action).toBe("confirm");
+      expect(decision.jev?.failure).toBeUndefined();
+      expect(decision.approvalScope?.allowSession).toBe(false);
+      expect(JSON.stringify(decision)).not.toContain("PRIVATE_TARGET_SENTINEL");
+    },
+  );
+});
+
 describe("Jev risk adapter", () => {
   it("sends only metadata and effective policy, while retaining hosted provenance", async () => {
     const request = vi.fn(async () => prediction());
@@ -360,9 +422,7 @@ describe("Jev risk adapter", () => {
         ]),
       });
       expect(request.questions.disclosure?.instructions).toMatchObject({
-        rules: expect.arrayContaining([
-          expect.stringContaining("directory path do not observe the selected files"),
-        ]),
+        rules: expect.arrayContaining([expect.stringContaining("selected descendants unobserved")]),
       });
     },
   );
@@ -984,7 +1044,6 @@ describe("Jev risk adapter", () => {
   // These hashes record the prior native question bytes.
   it.each([
     ["sf_apex", "7101702f8502bcb31b19bb50e52a6b67f99b0b29e72205b97d378c4dc3e9d6fe"],
-    ["sf_soql", "70ad9ea61cdd06a7cf6deb65c177de3f0549fa867708b290e1c6437bf7b3708c"],
     ["agentscript_lifecycle", "c5f7084da7a2906893801b49438bc5b4ffca28c66484d6238a6e6274647d3cfc"],
     ["data360_prepare", "12a2ab8081d05421bcd509c8aabf3abda204395b8bb4f412448f5af550782ae7"],
     ["slack_canvas", "ab48204c6ad9de54233d9fc78e76d642487d2d101e1527f48bd5c2b85844e0d9"],
@@ -1000,7 +1059,6 @@ describe("Jev risk adapter", () => {
     );
   });
   it.each([
-    ["sf_soql", "disclosure", "2fcee0f715ae1ddddddc69913969b27250495101cc9d8ed229e5930d01cb026c"],
     [
       "data360_prepare",
       "disclosure",
@@ -1021,6 +1079,32 @@ describe("Jev risk adapter", () => {
       createHash("sha256").update(JSON.stringify(request.questions[question])).digest("hex"),
     ).toBe(expectedHash);
   });
+  it.each([
+    [
+      "risk",
+      "1834a24ec129ac6d0d32215cff78476ac4a695f5944e4785f2f8be36cbcc32e3",
+      "70ad9ea61cdd06a7cf6deb65c177de3f0549fa867708b290e1c6437bf7b3708c",
+    ],
+    [
+      "disclosure",
+      "e978472b669c29a895a8475a231df3eeb37d19a5d4b82e827850641369416d6c",
+      "2fcee0f715ae1ddddddc69913969b27250495101cc9d8ed229e5930d01cb026c",
+    ],
+  ] as const)(
+    "binds the SOQL %s question and rejects its prior contract",
+    (question, current, prior) => {
+      const request = buildJevRequest(
+        { toolName: "sf_soql", metadata: {}, omissions: [], complete: true },
+        {},
+        readBundledConfig(),
+      );
+      const hash = createHash("sha256")
+        .update(JSON.stringify(request.questions[question]))
+        .digest("hex");
+      expect(hash).toBe(current);
+      expect(hash).not.toBe(prior);
+    },
+  );
   it("uses the unknown domain for a tool name that is an object prototype key", () => {
     const request = buildJevRequest(
       { toolName: "constructor", metadata: {}, omissions: [], complete: false },
@@ -1053,11 +1137,16 @@ describe("Jev risk adapter", () => {
         orgIdentity: "synthetic-org",
       }),
     });
-    const priorProtocol = "647d951506b4f5b3b2a9aff5dcaf411a63d0f8be7131750841077ba1013a6224";
-    expect(JEV_PROTOCOL_HASH).toBe(
+    const priorProtocols = [
+      // Prior source contracts: protocols 9, 10, 11, and reviewed protocol 12.
+      "647d951506b4f5b3b2a9aff5dcaf411a63d0f8be7131750841077ba1013a6224",
       "9e07e666c0e1d14511135f8151cb7418dc8e93a878ec92d549258d393c48604a",
+      "5754b79d085657e5cd68f37bf2fb2fe366fe936631982d9da3d572a1f8b66508",
+      "b0410478d964dbf2ffe1156212e9bdd5a46bc9d666dd284c55af5959ec429254",
+    ];
+    expect(JEV_PROTOCOL_HASH).toBe(
+      "c22e7cf3b6bd63f5a50817e086df07ac389b967cf4f528beccf76e39bbee4432",
     );
-    expect(JEV_PROTOCOL_HASH).not.toBe(priorProtocol);
     expect(decision.jev?.protocolHash).toBe(JEV_PROTOCOL_HASH);
     expect(decision.approvalScope?.allowSession).toBe(true);
     const identity = {
@@ -1073,7 +1162,10 @@ describe("Jev risk adapter", () => {
       model: JEV_RESOLVED_MODEL,
     };
     expect(decision.fingerprint).toBe(jevHash({ ...identity, protocolHash: JEV_PROTOCOL_HASH }));
-    expect(decision.fingerprint).not.toBe(jevHash({ ...identity, protocolHash: priorProtocol }));
+    for (const priorProtocol of priorProtocols) {
+      expect(JEV_PROTOCOL_HASH).not.toBe(priorProtocol);
+      expect(decision.fingerprint).not.toBe(jevHash({ ...identity, protocolHash: priorProtocol }));
+    }
   });
   it("keeps browser authority separate while not asking irrelevant disclosure questions", () => {
     const request = buildJevRequest(

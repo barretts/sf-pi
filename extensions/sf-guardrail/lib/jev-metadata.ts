@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Metadata-only boundary. This extracts effects; it never evaluates risk or approval. */
 import type { JevToolDescriptor, JevToolMetadata } from "./types.ts";
+import { observeJevSoqlQueryShape } from "./jev-soql-shape.ts";
 
 const INVALID = "Invalid Jev tool metadata.";
 const MAX_METADATA_BYTES = 32 * 1024;
@@ -513,9 +514,18 @@ function buildMetadata(
           invalid();
         const browserReason =
           ["sf_browser_click", "sf_browser_press"].includes(toolName) && key === "reason";
+        const queryShape =
+          toolName === "sf_soql" && input.action === "query.run" && key === "query"
+            ? observeJevSoqlQueryShape(value as string)
+            : undefined;
+        if (queryShape) {
+          output.queryShape = queryShape;
+          // Query structure does not observe the runner's generated artifact destinations.
+          omit("generated_artifact_paths_unobserved", true);
+        }
         omit(
           ordinaryFileBody ? "file_body_withheld" : "payload_withheld",
-          !ordinaryFileBody && !browserReason,
+          !ordinaryFileBody && !browserReason && !queryShape,
         );
       } else if (!nested && key === "params" && DATA360_TOOLS.has(toolName)) {
         if (!record(value)) invalid();
@@ -1053,8 +1063,6 @@ function knownOperation(executable: string, words: Word[], start: number): strin
 const BOOLEAN_FLAGS = new Set([
   "--json",
   "--dry-run",
-  "--check-only",
-  "--checkonly",
   "--force",
   "--force-with-lease",
   "--hard",
@@ -1293,8 +1301,11 @@ function optionKind(executable: string, operation: string, flag: string): string
     if (
       BOOLEAN_FLAGS.has(flag) &&
       (includes("--json --help --version --verbose --quiet") ||
-        (operation.startsWith("project deploy ") &&
-          includes("--dry-run --check-only --checkonly --use-most-recent")) ||
+        (operation === "project deploy start" && flag === "--dry-run") ||
+        (["project deploy quick", "project deploy report", "project deploy resume"].includes(
+          operation,
+        ) &&
+          flag === "--use-most-recent") ||
         ((operation.startsWith("org delete") ||
           operation.startsWith("package ") ||
           operation.startsWith("plugins ")) &&

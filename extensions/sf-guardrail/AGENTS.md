@@ -96,8 +96,24 @@ One-file-per-concern split:
   lookup. This lookup follows symlinks. An absent kind or lookup failure
   means unknown. Do not infer kind from a suffix or inspect descendants.
   Query flag metadata must match the installed CLI. Native `query.run`
-  ignores `limit`; use only supplied `max_rows` for its cap observation.
+  ignores `limit`. Use supplied `max_rows`, then the Protocol 12 verified
+  query LIMIT, for its cap observation.
   Keep query text local and retain the completeness gate.
+- Protocol 11 binds command-specific deploy flag observations. Observe
+  `--dry-run` only on `project deploy start`. Observe `--use-most-recent`
+  only on `project deploy quick`, `report`, or `resume`. Modern deploy
+  `--check-only` and `--checkonly` are unknown and incomplete. Keep later
+  operands local. These flags do not prove preview intent or a policy result.
+  Keep unsupported legacy deploy operations unknown. Do not infer support
+  from a flag name on another operation.
+- Protocol 12 observes only a narrow original native `sf_soql` `query.run`
+  query. Bound it to 512 bytes and an 80-character ASCII source. Admit only
+  case-insensitive `SELECT Id FROM source LIMIT 1..2000`, with ASCII space,
+  tab, CR, or LF. Require the current local syntax SDK to accept it. Keep
+  raw query and source spelling local. Sensitivity stays unknown. Generated
+  artifact paths stay unobserved, so completeness stays false. This observer
+  does not bind artifact paths or custom file policy. It cannot increase
+  automatic safe coverage. Keep all independent unknowns and policy decisions.
 - Send operation metadata and the minimum effective policy relevant to the
   questions. Known CLI structure, trusted file-path facts, and bounded numeric
   observations describe effects without deciding policy locally. Mechanically

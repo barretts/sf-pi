@@ -1131,22 +1131,26 @@ describe("ambiguous roles remain private", () => {
 });
 
 describe("verified Salesforce CLI structural forms", () => {
-  it("preserves the exact legacy checkonly boolean spelling recognized by the baseline", () => {
-    const result = buildJevMetadata("bash", {
-      command: "sf project deploy start --checkonly -o EvalProduction",
-    });
-    expect(result.metadata.shell).toMatchObject({
-      commands: [
-        {
-          executable: "sf",
-          subcommands: ["project", "deploy", "start"],
-          flags: [{ name: "--checkonly" }, { name: "-o", value: "explicit" }],
-        },
-      ],
-    });
-    expect(result.complete).toBe(true);
-    expect(JSON.stringify(result)).not.toContain("EvalProduction");
-  });
+  it.each(["--check-only", "--checkonly"])(
+    "keeps unsupported modern deploy flag %s unknown",
+    (flag) => {
+      const result = buildJevMetadata("bash", {
+        command: `sf project deploy start ${flag} -o EvalProduction`,
+      });
+      expect(result.metadata.shell).toMatchObject({
+        commands: [
+          {
+            executable: "sf",
+            subcommands: ["project", "deploy", "start"],
+            flags: [{ name: "unknown" }],
+          },
+        ],
+      });
+      expect(result.complete).toBe(false);
+      expect(result.omissions).toContain("shell_effects_opaque");
+      expect(JSON.stringify(result)).not.toContain("EvalProduction");
+    },
+  );
 
   it.each([
     "sf api request rest /services/data/v60.0/limits -o EvalProduction",

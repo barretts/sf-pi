@@ -25,6 +25,7 @@ import type {
   JevQuestionId,
   JevRequest,
   JevResolvedFacts,
+  JevSoqlQueryShape,
   JevToolDescriptor,
   JevToolMetadata,
 } from "./types.ts";
@@ -45,6 +46,40 @@ const TRANSPORT_BINDING_CONTRACT = {
 const FILE_TOOLS = ["read", "write", "edit", "grep", "find", "ls"];
 const FILE_KIND_OBSERVATION_GUIDANCE =
   "facts.files.kind comes from stat and follows symlinks. Values are file, directory, other, or unknown. Absent kind and lookup failure mean unknown. Only the supplied path is observed. Descendants, body contents, and sensitivity are not observed. Do not infer kind from a suffix.";
+const FILE_TOOL_OBSERVATIONS = {
+  read: { fileAccess: "read", outputShape: "file_content" },
+  grep: { fileAccess: "read", outputShape: "file_content" },
+  find: { fileAccess: "read", outputShape: "paths" },
+  ls: { fileAccess: "read", outputShape: "entry_names" },
+  write: { fileAccess: "write", outputShape: "mutation_status" },
+  edit: { fileAccess: "write", outputShape: "mutation_status" },
+} as const;
+const FILE_PROTECTION_ACCESS = {
+  noAccess: ["read", "write", "shell"],
+  readOnly: ["write"],
+  none: [],
+} as const;
+const FILE_ACCESS_RULE =
+  "After you select the winning row, test whether operation.metadata.fileAccess is a member of winner.restrictedAccess. This static set means noAccess=[read,write,shell], readOnly=[write], none=[]. The set does not show a path match or a winner. Only membership uses winner.behavior confirm/block. No membership, no eligible winner, or winner.behavior=off means allow in this question. Read access is not a member of a readOnly set, including .forceignore. Apply the full eligibility, row exemption, strength, first-tie and off-winner rules above.";
+const FILE_ACCESS_CRITERIA = {
+  allow: {
+    when: "Every relevant facts.files path has no eligible winner, OR its winner.behavior=off, OR operation.metadata.fileAccess is not a member of winner.restrictedAccess. Eligibility is the full enabled/path-match/rule-local-exemption/existence conjunction above.",
+    exclude:
+      "A winning access restriction with behavior=confirm/block, or genuinely unknown essential facts that cannot exclude such a restriction. Missing file body alone never excludes allow.",
+  },
+  confirm: {
+    when: "A path has an eligible strongest winner AND operation.metadata.fileAccess is a member of winner.restrictedAccess AND behavior=confirm; or actually unknown essential path/existence facts leave such an ask possible, with no applicable or unresolved block.",
+    exclude:
+      "Known path nonmatch, enabled=false, same-row allowedPatterns match, onlyIfExists=true with exists=false, winner.behavior=off, operation.metadata.fileAccess not a member of winner.restrictedAccess, or a winning/potential block. read is not a member of a readOnly restrictedAccess set.",
+  },
+  block: {
+    when: "A path has an eligible strongest winner AND operation.metadata.fileAccess is a member of winner.restrictedAccess AND behavior=block; or actually unknown essential path/existence facts cannot exclude such a block.",
+    exclude:
+      "A known failed eligibility predicate; a stronger or first-tie winner that supersedes the block row; winner.behavior=off; or operation.metadata.fileAccess not a member of winner.restrictedAccess. Body omission, a near-match, and another rule exemption do not create a block.",
+  },
+} as const;
+const FILE_DISCLOSURE_SCOPE_RULE =
+  "Use outputShape and actual source scope to decide disclosed values. A NoAccess or ReadOnly restriction, its restrictedAccess set, and a file-policy confirm/block answer alone do not establish sensitive disclosure. Known direct ordinary file contents can allow even when access asks or blocks. Access none, ReadOnly, off or allow does not prove that contents are ordinary. Credential or credential-like source contents, unresolved broad content sources, and unresolved selected descendants require confirm unless an explicit independent host disclosure prohibition requires block. For paths, entry_names and mutation_status, unknown descendants alone do not establish body disclosure; use observed sensitive-name evidence and actual independent transfer effects. Keep actual source sensitivity unknowns. Never copy an access-policy outcome into this disclosure answer.";
 const SALESFORCE_EXECUTABLES = ["sf", "sfdx"];
 const NATIVE_RISK_DOMAINS = {
   sf_apex: "apex",
@@ -207,7 +242,7 @@ const RISK_DOMAINS = {
   },
   soql: {
     rules: [
-      "Query/schema/status operations are read-only. Broad/export/history/withheld-query disclosure belongs to the disclosure question; do not duplicate that uncertainty as execution risk.",
+      "Query/schema/status operations use API reads or local analysis. query.run also writes local query/result artifacts. Generated artifact destinations are unobserved here; retain unresolved file-policy effects. Broad/export/history/withheld-query disclosure belongs to the disclosure question; do not duplicate that uncertainty as execution risk.",
     ],
     allow: ["query/schema reads"],
     confirm: ["unknown additional executable effects"],
@@ -251,15 +286,19 @@ const RISK_DOMAINS = {
 const DISCLOSURE_DOMAINS = {
   file: [
     FILE_KIND_OBSERVATION_GUIDANCE,
-    "Ordinary local source/configuration/README/.forceignore reading is routine disclosure; missing file body alone is not unknown credential output. .env.example/sample/template placeholders are ordinary data. Explicit secret .env/auth/key reads or exports disclose credentials and require approval. Local authoring alone does not disclose its body. Actually unresolved sensitive-source or transfer effects still require approval; file access restrictions are separate.",
-    "Pi grep returns matching file content, with context lines when context>0. Its pattern is regex unless literal=true. find.pattern and grep.glob are glob selectors. Pi find returns matching paths; ls returns directory entry names. search_pattern_data_withheld and search_glob_data_withheld mark private data selectors. Their spelling stays local. A hidden selector does not prove bounded or nonsecret output. Facts about a supplied directory path do not observe the selected files. Judge unknown sensitive source selection here. A known ordinary direct file source is not unknown merely because its selector is withheld. Paths and names alone are not file bodies.",
+
+    "First use operation.metadata.outputShape. paths returns matching file paths; entry_names returns directory entry names. Neither returns file bodies. Unobserved descendants alone do not establish sensitive content disclosure. Do not assume names contain no secrets. Use any observed sensitive-name evidence or actual independent transfer effect.",
+    "file_content returns file content from read or matching content from grep. Use facts.files for the supplied source. Known direct ordinary local sources allow. Credential/secret content sources confirm. Missing body or withheld selector spelling alone does not make a known ordinary direct source unknown. For a directory grep, facts.files covers only the supplied root. operation.metadata.selectedDescendantsObserved=false leaves selected descendants unobserved. Unresolved sensitive source selection confirms.",
+    "mutation_status returns write/edit status text, not the authored file body. File protection, NoAccess/ReadOnly, and file-policy confirm/block outcomes do not determine disclosed values or decide this question. Do not infer sensitive output from a policy restriction.",
+    "Block requires an explicit independent host disclosure prohibition; none is supplied here. Sensitive content, observed sensitive names or unresolved essential disclosure effects use confirm. Paths, entry names and status text without such evidence or an independent transfer effect allow.",
+    FILE_DISCLOSURE_SCOPE_RULE,
   ],
   shell: [
     "Credential output/secret-file export or unknown transfer effects require approval. This includes pi auth print-api-key/print-bearer-token/check --credentials; SF org auth show-access-token/show-sfdx-auth-url/show-user-password, generate password or SF_TEMP_SHOW_SECRETS=true. Ordinary status/metadata/nonsecret reads are routine.",
     "Use policy.commands.matchGrammar for exact matches against commandTokens. Matching allowedPatterns/effectWaivers waive that configured disclosure only. effectWaivers are disabled ordinary rules, never command restrictions, allow exceptions or overrides of active policy.",
   ],
   soql: [
-    "queryAll/export/history.rerun, allow_unbounded=true or host rowLimit.bucket=large require approval. Cap is 2000: use host effectiveMaximum, no invented uncapped rows. Withheld query leaves ALL ROWS/sensitivity unknown. Schema/status/small bounded reads are routine.",
+    "queryAll/export/history.rerun, allow_unbounded=true or host rowLimit.bucket=large require approval. Cap is 2000: use host effectiveMaximum, no invented uncapped rows. queryShape observes only the original Id-only projection, one withheld source, positive LIMIT, and no other clauses. Source sensitivity remains unknown. Id-only projection does not mean only Id occurs in the API response: query.run writes the query and raw API results locally, including API metadata and possibly sensitive IDs. Source/API/schema access and generated artifact paths are unobserved. Without queryShape, withheld query leaves ALL ROWS/sensitivity unknown. Schema/status/small bounded reads are routine.",
   ],
   data360: [
     "Sensitive/broad exports or unresolved query/transfer effects require approval. Schema/status/metadata and nonexport authoring previews are routine. Withheld query/SQL is not proof of bounded disclosure.",
@@ -270,14 +309,19 @@ const DISCLOSURE_DOMAINS = {
 } as const;
 const FILE_DISCLOSURE_CRITERIA = {
   allow: {
-    when: "Known ordinary source/configuration/template/status reading or local authoring, without observed credential/sensitive export or actually unresolved sensitive-source/transfer effect.",
+    when: "No explicit independent host disclosure prohibition applies AND no confirm condition below applies AND outputShape is either (1) paths, entry_names or mutation_status without observed sensitive values/names or an actual unresolved independent transfer effect, OR (2) file_content from a known direct ordinary source. Judge ordinary source scope from actual source facts, not its access permission.",
     exclude:
-      "Explicit credential/secret-path reads or exports, broad sensitive disclosure, or genuinely unknown essential disclosure effects. Omitted ordinary file body alone never excludes allow.",
+      "An explicit independent host disclosure prohibition; credential/sensitive or credential-like source contents; observed sensitive names; actually unresolved broad content sources, selected descendants or essential sensitive source selection for file_content; or an actual unresolved independent transfer effect. Access NoAccess/ReadOnly, an access ask/block, unknown descendants for names/status, and withheld ordinary direct body/selector spelling alone are not exclusions.",
   },
   confirm: {
-    when: "Observed credential/secret-path reading or export, sensitive/broad disclosure, or actually unknown essential sensitive-source/transfer effects.",
+    when: "No explicit independent host disclosure prohibition applies AND output can include credential/sensitive or credential-like source contents, observed sensitive names, actually unresolved broad content sources or selected descendants/essential sensitive source selection for file_content, or an actual unresolved independent transfer effect. A directory grep with unobserved selected descendants and unresolved sensitivity confirms. Access none, ReadOnly, off or allow does not exclude these conditions.",
     exclude:
-      "Ordinary source/configuration/README/.forceignore reading or example/sample/template data with no evidence of secret disclosure; local authoring alone; omitted file body alone. This does not waive file-policy restrictions.",
+      "An explicit independent host disclosure prohibition; OR paths, entry_names or mutation_status without observed sensitive values/names or an actual unresolved independent transfer effect; OR known direct ordinary file_content without the sensitive/unresolved conditions above. A NoAccess/ReadOnly restriction or file-policy confirm/block answer alone does not create a confirm condition. Missing ordinary direct body/selector spelling alone is not an unresolved sensitive source.",
+  },
+  block: {
+    when: "An explicit independent host disclosure prohibition applies to the actual disclosed values or transfer. This condition has priority over allow and confirm. No such independent prohibition is supplied in these requests.",
+    exclude:
+      "No explicit independent host disclosure prohibition applies. Access protection, restrictedAccess membership and file-policy confirm/block outcomes do not create one. Sensitive or unresolved disclosure effects use confirm; ordinary output uses allow.",
   },
 } as const;
 const COMMAND_MATCH_GRAMMAR = {
@@ -442,9 +486,33 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
   },
 };
 export const JEV_PROTOCOL_HASH = jevHash({
-  version: 10,
+  version: 13,
   questions: QUESTION_PROTOCOL,
   mechanicalObservations: {
+    fileToolAccess: {
+      tools: FILE_TOOLS,
+      observations: FILE_TOOL_OBSERVATIONS,
+      selectedDescendantsObserved: false,
+      scope: "existing-file-tools-only-no-native-artifact-intents",
+      protectionAccess: FILE_PROTECTION_ACCESS,
+      projection: "all-policy-rows-static-access-sets-no-operation-or-path-match",
+      suppliedFacts: "unchanged-no-descendants-body-sensitivity-or-output-bound",
+      unsupported: "no-file-tool-observation-or-file-question-patch",
+    },
+    deployFlags: {
+      executables: SALESFORCE_EXECUTABLES,
+      flagScope: ["--dry-run", "--check-only", "--checkonly", "--use-most-recent"],
+      booleanByOperation: {
+        "project deploy start": ["--dry-run"],
+        "project deploy validate": [],
+        "project deploy preview": [],
+        "project deploy quick": ["--use-most-recent"],
+        "project deploy report": ["--use-most-recent"],
+        "project deploy resume": ["--use-most-recent"],
+      },
+      unsupportedFlag: "unknown-incomplete-operands-local-no-preview-or-policy-result",
+      unsupportedLegacyOperations: ["force:source:deploy", "force:mdapi:deploy"],
+    },
     queryFlags: {
       executables: SALESFORCE_EXECUTABLES,
       operations: ["data query", "force:data:soql:query"],
@@ -453,12 +521,45 @@ export const JEV_PROTOCOL_HASH = jevHash({
     soqlRowLimit: {
       tool: "sf_soql",
       actions: ["query.run", "query.sample", "query.queryAll"],
-      queryRunInput: "max_rows-only",
+      queryRunInput: "max_rows-otherwise-verified-queryShape.queryLimit",
       sampleAndQueryAllInputs: "max_rows-otherwise-limit",
       absent: "no-observation",
       effectiveMaximum: "min(2000,max(1,floor(value)))",
       bucket: "value>=2000-large-otherwise-bounded",
       queryText: "local-only",
+    },
+    nativeQueryShape: {
+      tool: "sf_soql",
+      action: "query.run",
+      input: "query",
+      maximumInputBytes: 512,
+      maximumSourceCharacters: 80,
+      permittedInput: "ASCII-0x20-through-0x7e-plus-tab-CR-LF",
+      permittedWhitespace: "ASCII-space-tab-CR-LF-only",
+      anchor: "original-whole-text-no-trim-or-normalization",
+      originalTextPattern:
+        /^[ \t\r\n]*SELECT[ \t\r\n]+Id[ \t\r\n]+FROM[ \t\r\n]+([A-Za-z_][A-Za-z0-9_]*)[ \t\r\n]+LIMIT[ \t\r\n]+([1-9][0-9]{0,3})[ \t\r\n]*$/i
+          .source,
+      fixedSyntaxCase: "ASCII-case-insensitive",
+      queryLimit: { minimum: 1, maximum: 2000, leadingZero: false },
+      syntaxSdk: {
+        module: "@salesforce/soql-common",
+        parser: "SOQLParser",
+        load: "lazy-CommonJS-after-original-text-bounds-and-pattern",
+        config: { isApex: true, isMultiCurrencyEnabled: true, apiVersion: 67.0 },
+        accept: "getSuccess-true-and-no-parser-errors",
+        failure: "no-observation-unknown-no-query-bearing-errors",
+      },
+      projection: "single_Id",
+      sourceCount: 1,
+      otherClauses: false,
+      rawQuery: "withheld",
+      sourceSpelling: "withheld",
+      sensitivity: "unknown",
+      unsupported: "no-query-shape-or-query-LIMIT-observation",
+      artifactPaths: "unobserved-no-custom-file-policy-binding",
+      omission: "generated_artifact_paths_unobserved",
+      completeness: "false-preserved-no-automatic-safe-coverage-increase",
     },
     fileKind: {
       source: "supplied-path-stat-follows-symlinks",
@@ -470,6 +571,12 @@ export const JEV_PROTOCOL_HASH = jevHash({
   riskDomains: RISK_DOMAINS,
   disclosureDomains: DISCLOSURE_DOMAINS,
   fileDisclosureCriteria: FILE_DISCLOSURE_CRITERIA,
+  fileAccessQuestion: {
+    tools: FILE_TOOLS,
+    membershipRule: FILE_ACCESS_RULE,
+    criteria: FILE_ACCESS_CRITERIA,
+    preserve: "question-boundary-kind-eligibility-strength-first-tie-off-winner",
+  },
   domainSelection: {
     fileTools: FILE_TOOLS,
     shellMetadataKey: "shell",
@@ -575,6 +682,20 @@ function operationalQuestion(metadata: JevToolMetadata): JevChoiceQuestion {
             },
             block: base.criteria.block,
           },
+  };
+}
+
+function filePolicyQuestion(metadata: JevToolMetadata): JevChoiceQuestion {
+  const base = QUESTION_PROTOCOL.file_policy;
+  if (!FILE_TOOLS.includes(metadata.toolName)) return base;
+  const instructions = base.instructions as { rules: string[] };
+  return {
+    ...base,
+    instructions: {
+      ...instructions,
+      rules: [...instructions.rules.slice(0, -1), FILE_ACCESS_RULE],
+    },
+    criteria: FILE_ACCESS_CRITERIA,
   };
 }
 
@@ -703,18 +824,24 @@ export function buildJevRequest(
   }
   const hasOrgPolicy = !!shell && (policy.orgAware as unknown[]).length > 0;
   const questions: JevRequest["questions"] = { risk: operationalQuestion(metadata) };
-  if (hasFiles) questions.file_policy = QUESTION_PROTOCOL.file_policy;
+  if (hasFiles) questions.file_policy = filePolicyQuestion(metadata);
   if (shell) questions.command_policy = QUESTION_PROTOCOL.command_policy;
   if (hasOrgPolicy) questions.org_policy = QUESTION_PROTOCOL.org_policy;
   if (needsDisclosure(metadata)) questions.disclosure = disclosureQuestion(metadata);
   if (metadata.toolName.startsWith("sf_browser_"))
     questions.authority = QUESTION_PROTOCOL.authority;
   const { description: _description, ...operation } = metadata;
-  // query.run ignores the limit argument. Its query LIMIT stays local and can
-  // control the cap when max_rows is absent, so do not invent that observation.
+  const fileToolObservations = Object.hasOwn(FILE_TOOL_OBSERVATIONS, metadata.toolName)
+    ? {
+        ...FILE_TOOL_OBSERVATIONS[metadata.toolName as keyof typeof FILE_TOOL_OBSERVATIONS],
+        selectedDescendantsObserved: false,
+      }
+    : undefined;
+  // query.run ignores limit. Only a verified narrow witness exposes its query LIMIT.
+  const queryShape = metadata.metadata.queryShape as JevSoqlQueryShape | undefined;
   const rowLimit =
     metadata.metadata.action === "query.run"
-      ? metadata.metadata.max_rows
+      ? (metadata.metadata.max_rows ?? queryShape?.queryLimit)
       : (metadata.metadata.max_rows ?? metadata.metadata.limit);
   const request: JevRequest = {
     model: JEV_MODEL,
@@ -725,12 +852,24 @@ export function buildJevRequest(
         ...operation,
         metadata: {
           ...operation.metadata,
+          ...fileToolObservations,
           ...(commandTokens ? { commandTokens: commandTokens.operation } : {}),
         },
       },
       facts,
       policy: {
-        ...(hasFiles ? { files: policy.files } : {}),
+        ...(hasFiles
+          ? {
+              files: fileToolObservations
+                ? (policy.files as Array<{ protection: keyof typeof FILE_PROTECTION_ACCESS }>).map(
+                    (row) => ({
+                      ...row,
+                      restrictedAccess: [...FILE_PROTECTION_ACCESS[row.protection]],
+                    }),
+                  )
+                : policy.files,
+            }
+          : {}),
         ...(commandTokens
           ? {
               commands: {

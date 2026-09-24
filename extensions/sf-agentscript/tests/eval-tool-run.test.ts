@@ -246,6 +246,7 @@ describe("registered agentscript_eval run", () => {
         target_org: "test-org",
         agent_api_name: "Release",
         agent_file: agentFile,
+        traces_mode: "off",
       },
       undefined,
       undefined,
@@ -257,6 +258,7 @@ describe("registered agentscript_eval run", () => {
       kind: "generated_baseline",
       spec_digest: expect.any(String),
     });
+    expect(mocks.runEval.mock.calls[0]?.[0].tracesMode).toBe("off");
     expect(mocks.recordRunInIndex).toHaveBeenCalledWith(cwd, "run-public");
     expect(mocks.recordReleaseEvidence).toHaveBeenCalledWith(cwd, "run-public");
     expect(response.details).toMatchObject({ ok: true, evidence_verdict: "passed" });

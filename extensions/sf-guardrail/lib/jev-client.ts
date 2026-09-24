@@ -1,13 +1,26 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /** Send one bounded request. Keep errors free of remote text and keys. */
+import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import type {
   JevAction,
+  JevClientFailureCode,
+  JevStageFailureEvidence,
   JevChoiceAnswer,
   JevPrediction,
   JevQuestionId,
   JevRequest,
+  JevCommandPolicyRequest,
+  JevCommandPolicyStageResult,
+  JevNonCommandRequest,
+  JevNonCommandStageResult,
+  JevProcessTransport,
+  JevSyntaxChoice,
+  JevSyntaxChoiceAnswer,
+  JevSyntaxRequest,
+  JevSyntaxStageResult,
 } from "./types.ts";
+import { jevHash } from "./jev-identity.ts";
 
 export const JEV_MODEL = "typesafe/jev-1.13";
 export const JEV_RESOLVED_MODEL = "typesafe/jev-1.13-20260917";
@@ -20,6 +33,17 @@ export const JEV_RESPONSE_VALIDATION_CONTRACT = Object.freeze({
   centLatticeTolerance: 1e-12,
   roundingIntervals: "clipped-closed-nearest-cent",
   preserveWireProbabilities: true,
+} as const);
+
+/** Match the current local approval binding. Keep the endpoint text local. */
+export const JEV_TRANSPORT_BINDING_CONTRACT = Object.freeze({
+  version: 1,
+  endpoint: "explicit-normalized-https-without-credentials-query-or-fragment",
+  defaultEndpoint: false,
+  requestedModel: JEV_MODEL,
+  resolvedModel: JEV_RESOLVED_MODEL,
+  provider: JEV_PROVIDER,
+  routing: Object.freeze({ only: Object.freeze(["typesafe"]), allow_fallbacks: false }),
 } as const);
 
 const MAX_KEY_BYTES = 4_096;
@@ -37,24 +61,23 @@ const QUESTIONS: JevQuestionId[] = [
 ];
 
 export class JevClientError extends Error {
-  readonly code:
-    | "missing_endpoint"
-    | "invalid_endpoint"
-    | "missing_credentials"
-    | "invalid_credentials"
-    | "invalid_request"
-    | "cancelled"
-    | "timeout"
-    | "transport_error"
-    | "http_error"
-    | "response_too_large"
-    | "invalid_response"
-    | "identity_mismatch";
+  readonly code: JevClientFailureCode;
 
   constructor(code: JevClientError["code"]) {
     super(`Jev request failed: ${code}.`);
     this.name = "JevClientError";
     this.code = code;
+  }
+}
+
+/** Retain bounded hashes and failure facts. Keep remote text out of errors. */
+export class JevStageClientError extends JevClientError {
+  readonly evidence: JevStageFailureEvidence;
+
+  constructor(code: JevClientFailureCode, evidence: JevStageFailureEvidence) {
+    super(code);
+    this.name = "JevStageClientError";
+    this.evidence = evidence;
   }
 }
 
@@ -171,7 +194,10 @@ function tokenCount(value: unknown): value is number {
 }
 
 function normalizedChoiceProbabilities(probabilities: Record<JevAction, number>): boolean {
-  const values = ACTIONS.map((action) => probabilities[action]);
+  return normalizedProbabilities(ACTIONS.map((action) => probabilities[action]));
+}
+
+function normalizedProbabilities(values: number[]): boolean {
   const sum = values.reduce((total, value) => total + value, 0);
   if (Math.abs(sum - 1) <= JEV_RESPONSE_VALIDATION_CONTRACT.exactSumTolerance) return true;
 
@@ -467,4 +493,404 @@ export async function requestJev(
     if (reader) void reader.cancel().catch(() => {});
     else if (responseBody) void responseBody.cancel().catch(() => {});
   }
+}
+
+export const JEV_STAGE_REQUEST_BYTES = 32_768;
+export const JEV_SYNTAX_QUESTION_LIMIT = 64;
+const SYNTAX_CHOICES: JevSyntaxChoice[] = ["match", "no_match"];
+type Stage = "non_command" | "syntax" | "command_policy";
+type StageRequest = JevNonCommandRequest | JevSyntaxRequest | JevCommandPolicyRequest;
+type StageResult = JevNonCommandStageResult | JevSyntaxStageResult | JevCommandPolicyStageResult;
+
+function exactKeys(value: Record<string, unknown>, keys: string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+
+/** Check descriptors first. Do not invoke user serializers or accessors. */
+function stageJson(value: unknown): unknown {
+  let nodes = 0;
+  const active = new Set<object>();
+  function visit(item: unknown, depth: number): unknown {
+    if (++nodes > 16_384 || depth > 32) throw new JevClientError("invalid_request");
+    if (item === null || typeof item === "string" || typeof item === "boolean") return item;
+    if (typeof item === "number" && Number.isFinite(item)) return item;
+    if (typeof item !== "object" || !item || active.has(item))
+      throw new JevClientError("invalid_request");
+    const array = Array.isArray(item);
+    if (
+      !array &&
+      Object.getPrototypeOf(item) !== Object.prototype &&
+      Object.getPrototypeOf(item) !== null
+    ) {
+      throw new JevClientError("invalid_request");
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(item);
+    const length = array ? descriptors.length?.value : undefined;
+    if (
+      array &&
+      (!Number.isSafeInteger(length) ||
+        length < 0 ||
+        Object.keys(descriptors).length !== length + 1)
+    )
+      throw new JevClientError("invalid_request");
+    if (array) {
+      for (let index = 0; index < length; index += 1) {
+        if (!Object.hasOwn(descriptors, String(index))) throw new JevClientError("invalid_request");
+      }
+    }
+    const result: unknown[] | Record<string, unknown> = array ? [] : Object.create(null);
+    active.add(item);
+    for (const name of Reflect.ownKeys(descriptors)) {
+      if (array && name === "length") continue;
+      if (typeof name !== "string") throw new JevClientError("invalid_request");
+      const descriptor = descriptors[name];
+      if (!descriptor.enumerable || !("value" in descriptor))
+        throw new JevClientError("invalid_request");
+      result[name] = visit(descriptor.value, depth + 1);
+    }
+    active.delete(item);
+    return result;
+  }
+  return visit(value, 0);
+}
+
+function syntaxQuestionId(index: number): string {
+  let suffix = "";
+  for (let value = index + 1; value > 0; value = Math.floor((value - 1) / 26)) {
+    suffix = String.fromCharCode(97 + ((value - 1) % 26)) + suffix;
+  }
+  return `r_${suffix}`;
+}
+
+function stageRequest(stage: Stage, request: StageRequest): { ids: string[]; body: string } {
+  request = stageJson(request) as StageRequest;
+  if (
+    !record(request) ||
+    !exactKeys(request, ["model", "provider", "state", "questions"]) ||
+    request.model !== JEV_MODEL ||
+    !record(request.provider) ||
+    !exactKeys(request.provider, ["only", "allow_fallbacks"]) ||
+    !Array.isArray(request.provider.only) ||
+    request.provider.only.length !== 1 ||
+    request.provider.only[0] !== "typesafe" ||
+    request.provider.allow_fallbacks !== false ||
+    !record(request.questions)
+  ) {
+    throw new JevClientError("invalid_request");
+  }
+  const ids = Object.keys(request.questions);
+  const validIds =
+    stage === "non_command"
+      ? ids.includes("risk") &&
+        ids.length <= QUESTIONS.length - 1 &&
+        ids.every((id) => id !== "command_policy" && QUESTIONS.includes(id as JevQuestionId))
+      : stage === "command_policy"
+        ? ids.length === 1 && ids[0] === "command_policy"
+        : ids.length >= 1 &&
+          ids.length <= JEV_SYNTAX_QUESTION_LIMIT &&
+          ids.every((id, index) => id === syntaxQuestionId(index));
+  if (!validIds) throw new JevClientError("invalid_request");
+  const choices = stage === "syntax" ? SYNTAX_CHOICES : ACTIONS;
+  for (const id of ids) {
+    const question: unknown = request.questions[id];
+    if (
+      !record(question) ||
+      !exactKeys(question, ["type", "instructions", "criteria"]) ||
+      question.type !== "choice" ||
+      !record(question.criteria) ||
+      !exactKeys(question.criteria, choices)
+    ) {
+      throw new JevClientError("invalid_request");
+    }
+  }
+  const body = JSON.stringify(request);
+  if (Buffer.byteLength(body) > JEV_STAGE_REQUEST_BYTES)
+    throw new JevClientError("invalid_request");
+  return { ids, body };
+}
+
+function stageChoiceAnswer(answer: unknown): JevChoiceAnswer {
+  if (!record(answer) || !exactKeys(answer, ["type", "choice", "probabilities", "confidence"]))
+    throw new JevClientError("invalid_response");
+  return choiceAnswer(answer);
+}
+
+function syntaxAnswer(answer: unknown): JevSyntaxChoiceAnswer {
+  if (
+    !record(answer) ||
+    !exactKeys(answer, ["type", "choice", "probabilities", "confidence"]) ||
+    answer.type !== "choice" ||
+    !SYNTAX_CHOICES.includes(answer.choice as JevSyntaxChoice) ||
+    !record(answer.probabilities) ||
+    !exactKeys(answer.probabilities, SYNTAX_CHOICES) ||
+    !SYNTAX_CHOICES.every((choice) => probability(answer.probabilities[choice])) ||
+    !probability(answer.confidence)
+  ) {
+    throw new JevClientError("invalid_response");
+  }
+  const probabilities = answer.probabilities as Record<JevSyntaxChoice, number>;
+  const choice = answer.choice as JevSyntaxChoice;
+  if (
+    !normalizedProbabilities(SYNTAX_CHOICES.map((option) => probabilities[option])) ||
+    probabilities[choice] < Math.max(...SYNTAX_CHOICES.map((option) => probabilities[option]))
+  ) {
+    throw new JevClientError("invalid_response");
+  }
+  return {
+    choice,
+    probabilities: { match: probabilities.match, no_match: probabilities.no_match },
+    confidence: answer.confidence,
+  };
+}
+
+function stagePrediction(stage: Stage, value: unknown, key: string, ids: string[]) {
+  if (!record(value)) throw new JevClientError("invalid_response");
+  if (value.model !== JEV_RESOLVED_MODEL || value.provider !== JEV_PROVIDER)
+    throw new JevClientError("identity_mismatch");
+  if (
+    typeof value.id !== "string" ||
+    value.id.length > 256 ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value.id) ||
+    value.id.includes(key) ||
+    !record(value.answers) ||
+    !exactKeys(value.answers, ids) ||
+    !record(value.usage) ||
+    !tokenCount(value.usage.input_tokens) ||
+    !tokenCount(value.usage.output_tokens) ||
+    (value.usage.cost !== undefined &&
+      (typeof value.usage.cost !== "number" ||
+        !Number.isFinite(value.usage.cost) ||
+        value.usage.cost < 0))
+  ) {
+    throw new JevClientError("invalid_response");
+  }
+  const answers = Object.fromEntries(
+    ids.map((id) => [
+      id,
+      stage === "syntax" ? syntaxAnswer(value.answers[id]) : stageChoiceAnswer(value.answers[id]),
+    ]),
+  );
+  return {
+    answers,
+    requestId: value.id,
+    usage: {
+      input_tokens: value.usage.input_tokens,
+      output_tokens: value.usage.output_tokens,
+      ...(value.usage.cost !== undefined ? { cost: value.usage.cost as number } : {}),
+    },
+  };
+}
+
+function stageHash(value: string | Uint8Array): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function cancelStageBody(value: { cancel(): Promise<unknown> } | null | undefined): void {
+  if (!value) return;
+  try {
+    void Promise.resolve(value.cancel()).catch(() => {});
+  } catch {
+    // Cleanup must not replace the bounded result or sanitized failure.
+  }
+}
+
+/** Use one absolute performance.now() deadline for all stages, including waits.
+ * The caller passes its existing deadline. The factory permits at most 1,500 ms.
+ * This transport does not select a policy action or combine probabilities.
+ */
+export function createJevProcessTransport(options: {
+  deadline: number;
+  signal?: AbortSignal;
+  fetch?: typeof fetch;
+  endpoint?: string;
+}): JevProcessTransport {
+  const created = performance.now();
+  let deadline: number;
+  let callerSignal: AbortSignal | undefined;
+  let configuredEndpoint: string | undefined;
+  let fetchCall: typeof globalThis.fetch;
+  try {
+    deadline = options.deadline;
+    callerSignal = options.signal;
+    configuredEndpoint = options.endpoint;
+    fetchCall = options.fetch ?? globalThis.fetch;
+  } catch {
+    throw new JevClientError("invalid_request");
+  }
+  if (
+    (callerSignal !== undefined && !(callerSignal instanceof AbortSignal)) ||
+    typeof fetchCall !== "function"
+  )
+    throw new JevClientError("invalid_request");
+  if (callerSignal?.aborted) throw new JevClientError("cancelled");
+  if (!Number.isFinite(deadline) || deadline > created + JEV_TIMEOUT_MS)
+    throw new JevClientError("invalid_request");
+  if (deadline <= created) throw new JevClientError("timeout");
+  const endpoint =
+    configuredEndpoint === undefined ? resolveJevEndpoint() : validateEndpoint(configuredEndpoint);
+  const transportHash = jevHash({ contract: JEV_TRANSPORT_BINDING_CONTRACT, endpoint });
+  if (performance.now() >= deadline) throw new JevClientError("timeout");
+  const controller = new AbortController();
+  let failure: JevClientError["code"] | undefined;
+  let key: string | undefined;
+  let busy = false;
+  const fail = (code: JevClientError["code"]) => {
+    failure ??= code;
+    controller.abort();
+  };
+  const callerAbort = () => fail("cancelled");
+  callerSignal?.addEventListener("abort", callerAbort, { once: true });
+  const timer = setTimeout(() => fail("timeout"), Math.max(0, deadline - performance.now()));
+  function guard(): void {
+    if (failure) throw new JevClientError(failure);
+    if (callerSignal?.aborted) fail("cancelled");
+    else if (performance.now() >= deadline) fail("timeout");
+    if (failure) throw new JevClientError(failure);
+  }
+  function close(): void {
+    clearTimeout(timer);
+    callerSignal?.removeEventListener("abort", callerAbort);
+    fail("cancelled");
+  }
+  async function send(stage: Stage, request: StageRequest): Promise<StageResult> {
+    const started = performance.now();
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let responseBody: ReadableStream<Uint8Array> | null;
+    let abortListener: (() => void) | undefined;
+    let prepared: { ids: string[]; body: string } | undefined;
+    let requestSent = false;
+    let responseComplete = false;
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    try {
+      guard();
+      if (busy) throw new JevClientError("invalid_request");
+      busy = true;
+      // Validate all JSON and bytes before the one credential read.
+      prepared = stageRequest(stage, request);
+      const { ids, body } = prepared;
+      guard();
+      key ??= credential().key;
+      if (body.includes(key) || body.includes(JSON.stringify(key).slice(1, -1)))
+        throw new JevClientError("invalid_request");
+      guard();
+      const capturedKey = key;
+      const aborted = new Promise<never>((_resolve, reject) => {
+        abortListener = () => reject(new JevClientError(failure ?? "cancelled"));
+        controller.signal.addEventListener("abort", abortListener, { once: true });
+      });
+      const operation = async (): Promise<StageResult> => {
+        requestSent = true;
+        const response = await fetchCall(endpoint, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${capturedKey}`, "Content-Type": "application/json" },
+          body,
+          signal: controller.signal,
+          redirect: "error",
+        });
+        responseBody = response.body;
+        if (controller.signal.aborted) {
+          cancelStageBody(responseBody);
+          guard();
+        }
+        guard();
+        if (!response.ok) throw new JevClientError("http_error");
+        if (!response.body) throw new JevClientError("invalid_response");
+        const declaredLength = response.headers.get("content-length");
+        if (declaredLength !== null && Number(declaredLength) > MAX_RESPONSE_BYTES)
+          throw new JevClientError("response_too_large");
+        reader = response.body.getReader();
+        while (true) {
+          const chunk = await reader.read();
+          if (!chunk || typeof chunk.done !== "boolean")
+            throw new JevClientError("invalid_response");
+          if (chunk.done) responseComplete = true;
+          guard();
+          if (chunk.done) break;
+          if (!(chunk.value instanceof Uint8Array)) throw new JevClientError("invalid_response");
+          const retained = chunk.value.subarray(0, MAX_RESPONSE_BYTES - length);
+          if (retained.byteLength > 0) chunks.push(Buffer.from(retained));
+          length += retained.byteLength;
+          if (retained.byteLength !== chunk.value.byteLength)
+            throw new JevClientError("response_too_large");
+        }
+        const content = Buffer.concat(chunks, length);
+        let parsed: unknown;
+        try {
+          const text = new TextDecoder("utf-8", { fatal: true }).decode(content);
+          parsed = JSON.parse(text);
+          rejectDuplicateKeys(text);
+        } catch {
+          throw new JevClientError("invalid_response");
+        }
+        const actual = stagePrediction(stage, parsed, capturedKey, ids);
+        guard();
+        const result = {
+          stage,
+          answers: actual.answers,
+          evidence: {
+            requestedQuestionIds: ids,
+            requestHash: stageHash(body),
+            responseHash: stageHash(content),
+            transportHash,
+            requestBytes: Buffer.byteLength(body),
+            responseBytes: length,
+            model: JEV_RESOLVED_MODEL,
+            provider: JEV_PROVIDER,
+            requestId: actual.requestId,
+            usage: actual.usage,
+            latencyMs: performance.now() - started,
+          },
+        } as StageResult;
+        guard();
+        result.evidence.latencyMs = performance.now() - started;
+        return result;
+      };
+      return await Promise.race([operation(), aborted]);
+    } catch (error) {
+      const code = failure ?? (error instanceof JevClientError ? error.code : "transport_error");
+      fail(code);
+      const content = Buffer.concat(chunks, length);
+      throw new JevStageClientError(code, {
+        stage,
+        requestedQuestionIds: prepared?.ids ?? [],
+        ...(prepared
+          ? {
+              requestHash: stageHash(prepared.body),
+              requestBytes: Buffer.byteLength(prepared.body),
+            }
+          : {}),
+        transportHash,
+        latencyMs: Math.max(0, performance.now() - started),
+        requestSent,
+        failure: code,
+        ...(responseComplete
+          ? { responseComplete: true, responseHash: stageHash(content), responseBytes: length }
+          : length > 0
+            ? {
+                responseComplete: false,
+                responsePrefixHash: stageHash(content),
+                responsePrefixBytes: length,
+              }
+            : {}),
+      });
+    } finally {
+      busy = false;
+      if (abortListener) controller.signal.removeEventListener("abort", abortListener);
+      cancelStageBody(reader ?? responseBody);
+      if (failure) {
+        clearTimeout(timer);
+        callerSignal?.removeEventListener("abort", callerAbort);
+      }
+    }
+  }
+  return {
+    requestNonCommand: (request) =>
+      send("non_command", request) as Promise<JevNonCommandStageResult>,
+    requestSyntax: (request) => send("syntax", request) as Promise<JevSyntaxStageResult>,
+    requestCommandPolicy: (request) =>
+      send("command_policy", request) as Promise<JevCommandPolicyStageResult>,
+    close,
+  };
 }

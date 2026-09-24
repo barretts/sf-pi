@@ -28,6 +28,16 @@ export interface JevToolDescriptor {
   parameters?: unknown;
 }
 
+/** Query text structure only; source access, response contents, and artifact paths are unobserved. */
+export interface JevSoqlQueryShape {
+  projection: "single_Id";
+  sourceCount: 1;
+  queryLimit: number;
+  otherClauses: false;
+  sourceSpelling: "withheld";
+  sensitivity: "unknown";
+}
+
 /** Values here have crossed the metadata-only privacy boundary. */
 export interface JevToolMetadata {
   toolName: string;
@@ -101,6 +111,118 @@ export interface JevRequest {
   questions: { risk: JevChoiceQuestion } & Partial<
     Record<Exclude<JevQuestionId, "risk">, JevChoiceQuestion>
   >;
+}
+
+export type JevClientFailureCode =
+  | "missing_endpoint"
+  | "invalid_endpoint"
+  | "missing_credentials"
+  | "invalid_credentials"
+  | "invalid_request"
+  | "cancelled"
+  | "timeout"
+  | "transport_error"
+  | "http_error"
+  | "response_too_large"
+  | "invalid_response"
+  | "identity_mismatch";
+
+/** Partial reply hashes cover only the bound prefix, not a complete reply. */
+export interface JevStageFailureEvidence {
+  stage: "non_command" | "syntax" | "command_policy";
+  requestedQuestionIds: string[];
+  requestHash?: string;
+  requestBytes?: number;
+  transportHash: string;
+  latencyMs: number;
+  requestSent: boolean;
+  failure: JevClientFailureCode;
+  responseComplete?: boolean;
+  responseHash?: string;
+  responseBytes?: number;
+  responsePrefixHash?: string;
+  responsePrefixBytes?: number;
+}
+
+/** These forms support a process. They do not select or release a policy action. */
+export type JevNonCommandQuestionId = Exclude<JevQuestionId, "command_policy">;
+export type JevSyntaxQuestionId = `r_${string}`;
+export type JevSyntaxChoice = "match" | "no_match";
+
+export interface JevSyntaxChoiceQuestion {
+  type: "choice";
+  instructions: unknown;
+  criteria: Record<JevSyntaxChoice, unknown>;
+}
+
+export interface JevStageRequestBase {
+  model: string;
+  provider: { only: ["typesafe"]; allow_fallbacks: false };
+  state: unknown;
+}
+
+export interface JevNonCommandRequest extends JevStageRequestBase {
+  questions: { risk: JevChoiceQuestion } & Partial<
+    Record<Exclude<JevNonCommandQuestionId, "risk">, JevChoiceQuestion>
+  >;
+}
+
+/** Send every row in one request. The client admits 1..64 alphabetic opaque IDs in source order. */
+export interface JevSyntaxRequest extends JevStageRequestBase {
+  questions: Record<JevSyntaxQuestionId, JevSyntaxChoiceQuestion>;
+}
+
+export interface JevCommandPolicyRequest extends JevStageRequestBase {
+  questions: { command_policy: JevChoiceQuestion };
+}
+
+export interface JevSyntaxChoiceAnswer {
+  choice: JevSyntaxChoice;
+  probabilities: Record<JevSyntaxChoice, number>;
+  confidence: number;
+}
+
+/** Hash the actual request and raw reply. Do not store endpoint or key text. */
+export interface JevStageEvidence<QuestionId extends string> {
+  requestedQuestionIds: QuestionId[];
+  requestHash: string;
+  responseHash: string;
+  transportHash: string;
+  requestBytes: number;
+  responseBytes: number;
+  model: string;
+  provider: string;
+  requestId: string;
+  usage: { input_tokens: number; output_tokens: number; cost?: number };
+  latencyMs: number;
+}
+
+export interface JevNonCommandStageResult {
+  stage: "non_command";
+  answers: { risk: JevChoiceAnswer } & Partial<
+    Record<Exclude<JevNonCommandQuestionId, "risk">, JevChoiceAnswer>
+  >;
+  evidence: JevStageEvidence<JevNonCommandQuestionId>;
+}
+
+export interface JevSyntaxStageResult {
+  stage: "syntax";
+  answers: Record<JevSyntaxQuestionId, JevSyntaxChoiceAnswer>;
+  evidence: JevStageEvidence<JevSyntaxQuestionId>;
+}
+
+export interface JevCommandPolicyStageResult {
+  stage: "command_policy";
+  answers: { command_policy: JevChoiceAnswer };
+  evidence: JevStageEvidence<"command_policy">;
+}
+
+export interface JevProcessTransport {
+  requestNonCommand(request: JevNonCommandRequest): Promise<JevNonCommandStageResult>;
+  requestSyntax(request: JevSyntaxRequest): Promise<JevSyntaxStageResult>;
+  requestCommandPolicy(request: JevCommandPolicyRequest): Promise<JevCommandPolicyStageResult>;
+  /** Cancel pending work and remove the process timer and caller listener. */
+  close(): void;
 }
 
 export interface PolicyPattern {

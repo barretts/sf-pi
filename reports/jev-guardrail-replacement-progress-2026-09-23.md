@@ -1,11 +1,11 @@
 # Jev guardrail replacement progress — 2026-09-23
 
 The goal remains active. The candidate is not qualified for normal use. The
-deterministic engine remains the default. The target is at least 98% agreement
-with old baseline behavior, with separate checks for more edge cases and useful
-automatic approval of safe calls.
+deterministic engine remains the default. The selected new target measures at least 98% policy
+coverage against the old guardrail and useful automatic approval on valid safe
+inputs. The old exact-agreement gates remain visible as historical gates.
 
-The current product source uses protocol version 10, wire state version 6, and
+The current product source uses protocol version 13, wire state version 6, and
 the pinned model `typesafe/jev-1.13-20260917`. It requires complete global
 operation context. Every requested answer must choose `allow` with
 `P(allow) >= 0.99` before automatic execution. A model `block` prevents
@@ -27,7 +27,7 @@ and clamp rules. It also updates protocol and grant binding. These source fixes
 do not adopt the failed v30 or v32 prompt candidates. Main full CI and full
 lint completed with exit code 0. The fresh protocol 10 screen v34 below
 failed its fixed acceptance gate. The v35 candidate passed a small command
-screen with the limits below. The current protocol hash is
+screen with the limits below. The historical protocol 10 hash is
 `9e07e666c0e1d14511135f8151cb7418dc8e93a878ec92d549258d393c48604a`.
 The mechanical patch hash is
 `4856aa992da9022ab20a9328544bcd78445096dd7c70cb668eb9b1a0b2ee2b42`.
@@ -690,10 +690,10 @@ lint passed. Protocol 10 now has the fresh diagnostic and SDK results above.
 These source fixes are separate from the failed v30 and v32 prompt candidates.
 Keep all attempted calls in the denominator and preserve the fixed old cohort.
 
-The protocol 11 source fix was ready only in isolation. The protocol 12
-source fix is isolated and reviewed. It has not been applied to the current
-product. Source remains protocol 10 while the frozen screens finish, with
-the unchanged full CI result of 5,117 tests passed and 39 skipped.
+The protocol 11 source fix was ready only in isolation. Protocol 12 query
+and deploy observations and protocol 13 file projection are now applied.
+The new combined source checks are recorded below. The protocol 10 result
+of 5,117 passed tests and 39 skipped tests stays historical.
 
 The isolated protocol 12 full CI check failed. Its first run had 51 failed
 tests. Removing a forced Pi state path removed 50 settings and path failures.
@@ -702,8 +702,8 @@ skipped tests. The remaining Agent Script release test also timed out when
 run alone. Its source can call trace authentication outside the test mocks.
 In the separate combined source tree, that test now explicitly turns traces
 off and checks that the evaluation receives that value. Both tests in that
-module passed. Full CI for the combined changes remains pending. The
-isolated full lint check passed. The first failed results remain retained.
+module passed. The new full CI check for the combined changes passed. The
+isolated full lint check also passed. The first failed results remain retained.
 
 The isolated stage client and command process passed 291 focused tests.
 They retain actual answer origins, share one total deadline, and have an
@@ -711,10 +711,46 @@ explicit two-request branch for zero active command rows. They are not
 connected to the current product decision path. Their source checks do not
 prove model coverage or automatic use.
 
-The council is reviewing an exact artifact path plan for native query
-execution. A supported Id query stays in the valid-input score. Its current
+The council completed its source review of an exact artifact path plan for
+native query execution. The plan is under test in a separate worktree. A supported Id query stays in the valid-input score. Its current
 unobserved output paths are an implementation gap. Planning paths alone
 does not prove low data sensitivity or atomic binding to physical files.
 
 The next decision depends on observed safety, policy recognition, safe-call
 coverage, failures, latency, and cost under the frozen score rules.
+
+## Checked source update: protocol 13
+
+The fork now contains the reviewed source changes for the file access and
+scoped disclosure projection. The host supplies each file tool's access class
+and output shape. Jev still selects every policy result. The projection keeps
+all file rows, exemptions, precedence, off behavior, and source unknowns.
+
+The source also has the narrow Id query shape observation and current deploy
+flag observations. The query parser accepts only a bounded whole query of the
+form `SELECT Id FROM Object LIMIT n`. It does not infer data sensitivity. The
+native query still has an unresolved artifact destination in this source.
+
+The separate command process and strict stage client are included as tested
+source. The current tool hook still uses the single request path. This source
+update changes no automatic approval cutoff or engine preference.
+
+The combined tree passed `validate:ci` and full `lint`. The main suite had
+5,435 passed tests and 65 skipped tests across 612 passed files and one skipped
+file. The Manager check had 20 passed tests. The run used a private test
+profile with no Pi directory override and no Decisions provider configuration.
+The source hashes were unchanged during both checks. Root then checked that
+all 17 changed source files in the fork match that tested tree exactly.
+
+The release evaluation unit test now supplies `traces_mode: "off"` and checks
+that it reaches the evaluation call. This keeps its execution inside the
+existing test mocks. It changes no production evaluation code.
+
+Protocol identity: `c22e7cf3b6bd63f5a50817e086df07ac389b967cf4f528beccf76e39bbee4432`.
+Combined source patch SHA-256:
+`19f0f77b23899540a3d9d22ad064ef6d20c810aaf2e51188a52d5a2908a9ee47`.
+
+The live v39 small disclosure pass stays separate from the source checks.
+Neither result proves the full replacement target or an independent TEST pass.
+The default engine remains deterministic. The new native artifact plan is
+still under test in a separate worktree.

@@ -48,6 +48,26 @@ matches the installed CLI. A native `query.run` cap observation uses supplied
 `max_rows`, because that runner ignores `limit`. Query text stays local.
 These observations do not establish a policy result or automatic allow.
 
+Protocol 11 binds the observed modern deploy flag matrix. `--dry-run` is
+observed only on `project deploy start`. `--use-most-recent` is observed only
+on `project deploy quick`, `report`, or `resume`. Modern deploy `--check-only`
+and `--checkonly` are unknown and incomplete. Later operands stay local.
+Unsupported legacy deploy operations stay unknown. Flag observations do not
+establish preview intent, policy permission, or automatic allow.
+
+Protocol 12 observes a narrow original native `sf_soql` `query.run` query.
+The bound is 512 bytes and an 80-character ASCII source token. Only
+`SELECT Id FROM source LIMIT 1..2000` can produce a shape observation.
+Fixed syntax is case-insensitive. Only ASCII space, tab, CR, and LF separate
+tokens. The current local syntax SDK must accept the original whole text.
+Raw query and source spelling stay local. Sensitivity stays unknown.
+Generated artifact paths stay unobserved, so completeness stays false.
+The observer does not prove source access, API response contents, artifact
+path binding, or custom file policy coverage. It cannot increase automatic
+safe coverage. Supplied `max_rows` takes precedence over a verified query
+LIMIT. The selected cap is floored and clamped to 1..2000. Input `limit`
+stays ignored. Unsupported shapes supply no query LIMIT observation.
+
 **Command Token Projection**:
 Version 2's mechanical integer IDs for original, wrapper-expanded, and flattened command tokens, typed prefix classes, and Pi argument sequences. Effective ordered policy rows are active-only and carry explicit behavior and token IDs or one of seven special-pattern forms. Shared `policy.commands.matchGrammar` supplies token/namespace/special definitions to each independent question. Off allow/deny rows are omitted after validation/bounding and allocate no token classes; off ordinary rows become **Effect Waivers**. Jev compares these facts and chooses rules. `publicSyntax` maps only known CLI executables, subcommands, and flag keys already exposed in semantic metadata to IDs. Private operands have no explicit legend; the projection includes no raw command, private-word dictionary, stable hash, matched rules, or local outcome. Equality and known policy anchors can reveal membership; they provide neither cryptographic secrecy nor a deterministic model-matching guarantee.
 _Avoid_: encrypted command, anonymization guarantee, host policy matcher, precomputed verdict
