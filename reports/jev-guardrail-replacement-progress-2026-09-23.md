@@ -5,11 +5,20 @@ deterministic engine remains the default. The selected new target measures at le
 coverage against the old guardrail and useful automatic approval on valid safe
 inputs. The old exact-agreement gates remain visible as historical gates.
 
-The current product source uses protocol version 15, original wire state version
-6, syntax state version 42, and the pinned model `typesafe/jev-1.13-20260917`.
-Bash uses actual non-command, syntax and command-policy calls. An empty active
+The current public product source uses protocol version 15, original wire state
+version 6, command representation version 45, and the pinned model
+`typesafe/jev-1.13-20260917`. Before transport, it selects the complete syntax
+state 44 body if that body fits the byte cap. Otherwise it selects the complete
+syntax state 43 body. This size check decides no match or policy action. Bash
+uses actual non-command, syntax and command-policy calls. An empty active
 command list omits the syntax call. Other tools use one strict call for all
 requested action questions. The adapter keeps each actual reply and origin.
+
+The latest full 175-case model run used source `1b1ce7e`. It measured 131/133
+baseline policy coverage, 94/96 owned policy recognition and 23/28 automatic
+approvals on valid safe inputs. Later source changes have no new full score.
+The separate 30-target path-match test below passed all targets in three runs.
+That private test supplies no final policy or permission proof.
 
 The default `conservative` point requires complete original context, every action
 to choose `allow` with raw `P(allow) >= 0.99`, and each syntax answer to meet a
@@ -89,7 +98,8 @@ supported by reviewed source with a separate score. Four unsupported old safe
 inputs stay visible in the historical comparison. They do not enter the
 denominator for safe use on valid inputs. The frozen scorer, gates, and
 labels remain unchanged. The protocol 15 live run below supplies the first fresh
-full model result for the current adapter.
+full model result at source `1b1ce7e`. Its scores do not apply to later source
+changes without a fresh full run.
 
 The new score module reuses the current product gate. It checks the expected
 answer set, consistency between the raw action and model answers, loss of
