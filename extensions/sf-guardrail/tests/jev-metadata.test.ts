@@ -62,6 +62,160 @@ describe("Jev metadata-only boundary", () => {
   });
 
   it.each([
+    ["grep", { pattern: SECRET }, 100, "matches"],
+    ["find", { pattern: SECRET }, 1000, "results"],
+    ["ls", {}, 500, "entries"],
+  ] as Array<[string, Record<string, unknown>, number, string]>)(
+    "uses the public %s runner defaults for absent and empty paths",
+    (name, input, limit, limitUnit) => {
+      for (const fields of [input, { ...input, path: "" }]) {
+        const result = buildJevMetadata(name, fields, descriptor);
+        expect(result.metadata).toMatchObject({ path: ".", paths: ["."], limit, limitUnit });
+        expect(result.complete).toBe(true);
+        if (name === "grep") {
+          expect(result.metadata).toMatchObject({
+            ignoreCase: false,
+            literal: false,
+            context: 0,
+            globFilterApplied: false,
+          });
+        }
+        expect(JSON.stringify(result)).not.toContain(SECRET);
+      }
+    },
+  );
+
+  it("reads the three public installed SDK schemas without executing their runners", async () => {
+    const { createGrepToolDefinition, createFindToolDefinition, createLsToolDefinition } =
+      await import("@earendil-works/pi-coding-agent");
+    const tools = [
+      createGrepToolDefinition("/synthetic/project"),
+      createFindToolDefinition("/synthetic/project"),
+      createLsToolDefinition("/synthetic/project"),
+    ];
+    const expectedFields = {
+      grep: ["pattern", "path", "glob", "ignoreCase", "literal", "context", "limit"],
+      find: ["pattern", "path", "limit"],
+      ls: ["path", "limit"],
+    };
+    for (const tool of tools) {
+      const input = tool.name === "ls" ? {} : { pattern: SECRET };
+      const result = buildJevMetadata(tool.name, input, {
+        description: tool.description,
+        parameters: tool.parameters,
+      });
+      expect(result.metadata.parameterShape).toEqual(
+        expectedFields[tool.name].map((name: string) => ({
+          name,
+          type: ["ignoreCase", "literal"].includes(name)
+            ? "boolean"
+            : ["context", "limit"].includes(name)
+              ? "number"
+              : "string",
+          required: name === "pattern",
+        })),
+      );
+      expect(result.metadata.paths).toEqual(["."]);
+      expect(result.complete).toBe(true);
+      expect(JSON.stringify(result)).not.toContain(SECRET);
+    }
+  });
+
+  it.each([
+    ["grep", { pattern: `^${SECRET}.*$`, glob: `**/${SECRET}*.ts` }],
+    ["grep", { pattern: `$(${SECRET})`, literal: true, glob: `**/${SECRET}*` }],
+    ["find", { pattern: `**/${SECRET}*.ts` }],
+  ] as Array<[string, Record<string, unknown>]>)(
+    "keeps %s search selectors private data without unknown executable effects",
+    (name, fields) => {
+      const input = { ...fields, path: "src" };
+      const before = JSON.stringify(input);
+      const result = buildJevMetadata(name, input, descriptor);
+      expect(result.metadata.paths).toEqual(["src"]);
+      expect(result.omissions).toContain("search_pattern_data_withheld");
+      if (name === "grep") {
+        expect(result.omissions).toContain("search_glob_data_withheld");
+        expect(result.metadata.globFilterApplied).toBe(true);
+      }
+      expect(result.omissions).not.toContain("unfamiliar_tool_effects");
+      expect(result.omissions).not.toContain("unknown_fields_withheld");
+      expect(result.omissions).not.toContain("payload_withheld");
+      expect(result.complete).toBe(true);
+      expect(JSON.stringify(result)).not.toContain(SECRET);
+      expect(JSON.stringify(input)).toBe(before);
+    },
+  );
+
+  it.each([
+    [-3.5, -2.5, 1, 0],
+    [0, 0, 1, 0],
+    [1.25, 2.5, 1.25, 2.5],
+    [Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE],
+  ])(
+    "keeps grep's actual limit and context calculation for %s/%s",
+    (limit, context, effectiveLimit, effectiveContext) => {
+      const result = buildJevMetadata("grep", {
+        pattern: SECRET,
+        path: "README.md",
+        ignoreCase: true,
+        literal: true,
+        limit,
+        context,
+      });
+      expect(result.metadata).toMatchObject({
+        limit: effectiveLimit,
+        limitUnit: "matches",
+        context: effectiveContext,
+        ignoreCase: true,
+        literal: true,
+      });
+      expect(result.complete).toBe(true);
+    },
+  );
+
+  it.each([
+    ["find", 0],
+    ["find", -2.5],
+    ["find", 3.25],
+    ["ls", 0],
+    ["ls", -2.5],
+    ["ls", 3.25],
+  ] as Array<[string, number]>)("preserves the finite %s supplied limit %s", (name, limit) => {
+    const result = buildJevMetadata(name, name === "ls" ? { limit } : { pattern: SECRET, limit });
+    expect(result.metadata.limit).toBe(limit);
+    expect(result.complete).toBe(true);
+  });
+
+  it("accepts empty search patterns and records grep's actual glob flag branch", () => {
+    expect(buildJevMetadata("find", { pattern: "" }).complete).toBe(true);
+    const result = buildJevMetadata("grep", { pattern: "", glob: "" });
+    expect(result.complete).toBe(true);
+    expect(result.metadata.globFilterApplied).toBe(false);
+    expect(result.omissions).toEqual(
+      expect.arrayContaining(["search_pattern_data_withheld", "search_glob_data_withheld"]),
+    );
+  });
+
+  it.each(["grep", "find", "ls"])(
+    "withholds unknown %s fields and their private values",
+    (name) => {
+      const result = buildJevMetadata(name, {
+        ...(name === "ls" ? {} : { pattern: SECRET }),
+        path: "src",
+        query: SECRET,
+        command: SECRET,
+        content: SECRET,
+        file_path: SECRET,
+        [SECRET]: SECRET,
+      });
+      expect(result.metadata.paths).toEqual(["src"]);
+      expect(result.omissions).toContain("unknown_fields_withheld");
+      expect(result.complete).toBe(false);
+      expect(JSON.stringify(result)).not.toContain(SECRET);
+    },
+  );
+
+  it.each([
     ["sf_apex", { action: "anon.run", body: SECRET, allow_mutation: true }],
     ["sf_soql", { action: "query.run", query: `SELECT ${SECRET} FROM Example__c`, max_rows: 10 }],
     [
@@ -279,6 +433,23 @@ describe("Jev metadata-only boundary", () => {
   it.each([
     ["read", { path: 123 }],
     ["read", {}],
+    ["read", { path: "" }],
+    ["write", { content: SECRET }],
+    ["edit", { oldText: SECRET, newText: SECRET }],
+    ["grep", {}],
+    ["find", {}],
+    ["grep", { pattern: 123 }],
+    ["find", { pattern: null }],
+    ["grep", { pattern: SECRET, glob: 123 }],
+    ["grep", { pattern: SECRET, ignoreCase: "true" }],
+    ["grep", { pattern: SECRET, literal: 0 }],
+    ["grep", { pattern: SECRET, context: "two" }],
+    ["grep", { pattern: SECRET, limit: null }],
+    ["find", { pattern: SECRET, limit: "ten" }],
+    ["ls", { limit: Infinity }],
+    ["grep", { pattern: SECRET, path: null }],
+    ["find", { pattern: SECRET, path: false }],
+    ["ls", { path: 123 }],
     ["write", { path: "file.txt" }],
     ["edit", { path: "file.txt" }],
     ["write", { path: "file.txt", content: { text: SECRET } }],

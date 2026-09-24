@@ -32,6 +32,14 @@ _Avoid_: sequential model chain, deterministic policy vote, combined confidence
 The bounded tool identity, operation, flags, paths or destinations, execution intent, and locally resolved facts sent to Jev with the minimum effective policy relevant to the questions. Known CLI structure, trusted file-path variants, and bounded numeric observations describe effects without a local policy verdict. File bodies, scripts/Apex, query text, Canvas content, credentials, transcripts, fetched contents, raw arguments, and full browser pages/forms stay local. Withheld or unresolved effects are explicit uncertainty; hidden custom-pattern literals cannot be presumed nonmatches. Command literal equality is retained by the **Command Token Projection**, without spelling disclosure or a local policy vote.
 _Avoid_: raw payload, full context, content inspection, implicit nonmatch
 
+Protocol 9 adds the Pi file tools `grep`, `find`, and `ls` to operation
+metadata. Their path adds file policy. An absent or empty path uses the
+working directory, as the installed runner does. Search patterns and glob
+text stay local. These data selectors are not executable code. Numeric
+metadata describes runner arguments; it does not prove an output bound.
+Directory facts do not establish the sensitivity of selected descendants.
+Jev must judge file policy and disclosure from the available facts.
+
 **Command Token Projection**:
 Version 2's mechanical integer IDs for original, wrapper-expanded, and flattened command tokens, typed prefix classes, and Pi argument sequences. Effective ordered policy rows are active-only and carry explicit behavior and token IDs or one of seven special-pattern forms. Shared `policy.commands.matchGrammar` supplies token/namespace/special definitions to each independent question. Off allow/deny rows are omitted after validation/bounding and allocate no token classes; off ordinary rows become **Effect Waivers**. Jev compares these facts and chooses rules. `publicSyntax` maps only known CLI executables, subcommands, and flag keys already exposed in semantic metadata to IDs. Private operands have no explicit legend; the projection includes no raw command, private-word dictionary, stable hash, matched rules, or local outcome. Equality and known policy anchors can reveal membership; they provide neither cryptographic secrecy nor a deterministic model-matching guarantee.
 _Avoid_: encrypted command, anonymization guarantee, host policy matcher, precomputed verdict

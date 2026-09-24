@@ -7,7 +7,8 @@ const MAX_METADATA_BYTES = 32 * 1024;
 const ACTION = /^[a-zA-Z][a-zA-Z0-9_.:-]{0,127}$/;
 const IDENTIFIER = /^[@a-zA-Z0-9_][@a-zA-Z0-9_.:-]{0,255}$/;
 const HTTP_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
-const FILE_TOOLS = new Set(["read", "write", "edit"]);
+const FILE_TOOLS = new Set(["read", "write", "edit", "grep", "find", "ls"]);
+const OPTIONAL_PATH_FILE_TOOLS = new Set(["grep", "find", "ls"]);
 const DATA360_TOOLS = new Set([
   "data360_discover",
   "data360_connect",
@@ -89,6 +90,8 @@ const BOOL_FIELDS = new Set([
   "include_members",
   "org_wide",
   "include_plan",
+  "ignoreCase",
+  "literal",
 ]);
 const NUMBER_FIELDS = new Set([
   "limit",
@@ -101,6 +104,7 @@ const NUMBER_FIELDS = new Set([
   "threshold_percent",
   "timeout",
   "timeout_ms",
+  "context",
 ]);
 const PATH_FIELDS = new Set([
   "path",
@@ -144,6 +148,9 @@ const TOOL_FIELDS: Record<string, Set<string>> = {
   read: new Set("path file_path offset limit".split(" ")),
   write: new Set("path file_path content".split(" ")),
   edit: new Set("path file_path oldText newText old_text new_text edits".split(" ")),
+  grep: new Set("pattern path glob ignoreCase literal context limit".split(" ")),
+  find: new Set("pattern path limit".split(" ")),
+  ls: new Set("path limit".split(" ")),
   bash: new Set("command timeout".split(" ")),
   herdr_pane: new Set("action pane command timeout timeout_ms limit".split(" ")),
   sf_apex: new Set(
@@ -436,7 +443,9 @@ function buildMetadata(
         if (typeof value !== "number" || !Number.isFinite(value)) invalid();
         output[key] = value;
       } else if (PATH_FIELDS.has(key)) {
-        const path = pathValue(value);
+        const path = pathValue(
+          OPTIONAL_PATH_FILE_TOOLS.has(toolName) && value === "" ? "." : value,
+        );
         const apiRoute = DATA360_TOOLS.has(toolName) && key === "path";
         if (apiRoute) {
           output[key] = path.split(/[?#]/, 1)[0];
@@ -482,6 +491,13 @@ function buildMetadata(
           value,
           /^(?:(?:Control|Ctrl|Meta|Command|Cmd|Alt|Shift)\+)*(?:Enter|NumpadEnter|Escape|Tab|Space|Backspace|Delete|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Home|End|PageUp|PageDown|[a-z0-9])$/i,
         );
+      } else if (
+        (toolName === "grep" && ["pattern", "glob"].includes(key)) ||
+        (toolName === "find" && key === "pattern")
+      ) {
+        if (typeof value !== "string") invalid();
+        // Search selectors are data. Their spelling cannot add executable effects.
+        omit(key === "glob" ? "search_glob_data_withheld" : "search_pattern_data_withheld");
       } else if (PAYLOAD_FIELDS.has(key)) {
         const ordinaryFileBody =
           FILE_TOOLS.has(toolName) &&
@@ -517,9 +533,36 @@ function buildMetadata(
     return output;
   };
   Object.assign(result.metadata, fields(input));
+  if (OPTIONAL_PATH_FILE_TOOLS.has(toolName)) {
+    if (!consumed.has("path")) {
+      put("path", ".");
+      paths.push(".");
+    }
+    // Keep each public runner's calculation and unit. Do not invent a shared clamp.
+    const limit = result.metadata.limit as number | undefined;
+    put(
+      "limit",
+      toolName === "grep"
+        ? Math.max(1, limit ?? 100)
+        : (limit ?? (toolName === "find" ? 1000 : 500)),
+    );
+    put("limitUnit", toolName === "grep" ? "matches" : toolName === "find" ? "results" : "entries");
+    if (toolName === "grep") {
+      put("ignoreCase", result.metadata.ignoreCase ?? false);
+      put("literal", result.metadata.literal ?? false);
+      const context = result.metadata.context as number | undefined;
+      put("context", context && context > 0 ? context : 0);
+      put("globFilterApplied", Boolean(input.glob));
+    }
+  }
   if (paths.length) put("paths", [...new Set(paths)]);
-  if (FILE_TOOLS.has(toolName) && !["path", "file_path"].some((key) => consumed.has(key)))
+  if (
+    FILE_TOOLS.has(toolName) &&
+    !OPTIONAL_PATH_FILE_TOOLS.has(toolName) &&
+    !["path", "file_path"].some((key) => consumed.has(key))
+  )
     invalid();
+  if (["grep", "find"].includes(toolName) && !consumed.has("pattern")) invalid();
   if (toolName === "write" && !consumed.has("content")) invalid();
   if (
     toolName === "edit" &&

@@ -196,6 +196,104 @@ describe("Jev risk adapter", () => {
     });
     expect(JSON.stringify(request)).not.toContain("UNTRUSTED_");
   });
+  it.each(["grep", "find", "ls"])(
+    "adds file policy and disclosure for the public %s metadata",
+    (toolName) => {
+      const input = toolName === "ls" ? {} : { pattern: "PRIVATE_SELECTOR_SENTINEL" };
+      const metadata = buildJevMetadata(toolName, input);
+      const request = buildJevRequest(
+        metadata,
+        { files: [{ path: ".", exists: true }] },
+        readBundledConfig(),
+      );
+      expect(Object.keys(request.questions)).toEqual(["risk", "file_policy", "disclosure"]);
+      expect(request.state).toMatchObject({
+        version: 6,
+        operation: { metadata: { path: ".", paths: ["."] }, complete: true },
+        facts: { files: [{ path: ".", exists: true }] },
+        observations: { contextComplete: true },
+        policy: { files: expect.any(Array) },
+      });
+      expect(JSON.stringify(request)).not.toContain("PRIVATE_SELECTOR_SENTINEL");
+      expect(request.questions.risk.instructions).toMatchObject({
+        rules: expect.arrayContaining([
+          expect.stringContaining("Withheld data selectors do not add executable effects"),
+        ]),
+      });
+      expect(request.questions.disclosure?.instructions).toMatchObject({
+        rules: expect.arrayContaining([
+          expect.stringContaining("directory path do not observe the selected files"),
+        ]),
+      });
+    },
+  );
+  it("uses the model's file-policy block for grep and retains all answer evidence", async () => {
+    const input = {
+      pattern: "PRIVATE_SELECTOR_SENTINEL",
+      glob: "PRIVATE_GLOB_SENTINEL",
+      path: ".env",
+    };
+    const resolveFacts = vi.fn(async (options) => {
+      expect(options.metadata.metadata.paths).toEqual([".env"]);
+      return { facts: { files: [{ path: ".env", exists: true }] } };
+    });
+    const request = vi.fn(async (wire) => {
+      expect(Object.keys(wire.questions)).toEqual(["risk", "file_policy", "disclosure"]);
+      expect(wire.state).toMatchObject({
+        facts: { files: [{ path: ".env", exists: true }] },
+        observations: { contextComplete: true },
+      });
+      const value = prediction();
+      value.answers = {
+        risk: prediction(),
+        file_policy: prediction("block", 0),
+        disclosure: prediction("confirm", 0),
+      };
+      return value;
+    });
+    const decision = await evaluateJevSafety(
+      { ...call(), toolName: "grep", input },
+      { request, resolveFacts },
+    );
+    expect(resolveFacts).toHaveBeenCalledOnce();
+    expect(request).toHaveBeenCalledOnce();
+    expect(decision.action).toBe("block");
+    expect(decision.jev?.failure).toBeUndefined();
+    expect(decision.jev?.answers).toMatchObject({
+      risk: { choice: "allow" },
+      file_policy: { choice: "block" },
+      disclosure: { choice: "confirm" },
+    });
+    expect(decision.jev?.probabilities.allow).toBe(1);
+    expect(JSON.stringify(request.mock.calls)).not.toContain("PRIVATE_SELECTOR_SENTINEL");
+    expect(JSON.stringify(request.mock.calls)).not.toContain("PRIVATE_GLOB_SENTINEL");
+  });
+  it("allows complete grep context when every model question allows the private data selector", async () => {
+    const request = vi.fn(async () => {
+      const value = prediction();
+      value.answers = {
+        risk: prediction(),
+        file_policy: prediction(),
+        disclosure: prediction(),
+      };
+      return value;
+    });
+    const decision = await evaluateJevSafety(
+      {
+        ...call(),
+        toolName: "grep",
+        input: { path: "README.md", pattern: "PRIVATE_SELECTOR_SENTINEL", literal: true },
+      },
+      {
+        request,
+        resolveFacts: async () => ({ facts: { files: [{ path: "README.md", exists: true }] } }),
+      },
+    );
+    expect(request).toHaveBeenCalledOnce();
+    expect(decision.action).toBe("allow");
+    expect(decision.jev?.failure).toBeUndefined();
+    expect(JSON.stringify(request.mock.calls)).not.toContain("PRIVATE_SELECTOR_SENTINEL");
+  });
   it("matches the actual rawconfig onlyIfExists truthiness and leaves sanitized defaults intact", () => {
     const config = readBundledConfig();
     delete config.policies.rules[0].onlyIfExists;

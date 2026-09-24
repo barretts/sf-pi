@@ -144,18 +144,18 @@ const SESSION_UNBOUND_SF_OPERATIONS = [
 const RISK_DOMAINS = {
   file: {
     rules: [
-      "Local read/write/edit authoring is routine; withheld file bodies are not execution. Protected paths and credential disclosure belong to their policy/disclosure questions.",
+      "Local read/grep/find/ls and source write/edit are routine. File bodies, grep regex/literal patterns and glob filters, and find glob patterns are data. Withheld data selectors do not add executable effects. File protection and sensitive selection belong to file policy and disclosure.",
     ],
     criteria: {
       allow: {
-        when: "Known local read/grep/find/ls or source write/edit authoring has no additional executable effect. Withheld file bodies are data; file protection and disclosure are separate questions.",
+        when: "Known local read/grep/find/ls or source write/edit authoring has no additional executable effect. File bodies and search selectors are data; file protection and disclosure are separate questions.",
         exclude:
-          "Actually unknown or additional approval-required executable effects; a protected path or missing body alone is not such an effect.",
+          "Actually unknown or additional approval-required executable effects; a protected path, missing body, or withheld data selector alone is not such an effect.",
       },
       confirm: {
         when: "Additional executable/operational effects actually require approval or essential effect facts are unknown.",
         exclude:
-          "Ordinary local reading/authoring alone, a file-policy restriction, credential sensitivity judged by disclosure, or omitted file body alone.",
+          "Ordinary local reading/authoring alone, a file-policy restriction, credential sensitivity judged by disclosure, or omitted file body/data selector alone.",
       },
     },
   },
@@ -248,6 +248,7 @@ const RISK_DOMAINS = {
 const DISCLOSURE_DOMAINS = {
   file: [
     "Ordinary local source/configuration/README/.forceignore reading is routine disclosure; missing file body alone is not unknown credential output. .env.example/sample/template placeholders are ordinary data. Explicit secret .env/auth/key reads or exports disclose credentials and require approval. Local authoring alone does not disclose its body. Actually unresolved sensitive-source or transfer effects still require approval; file access restrictions are separate.",
+    "Pi grep returns matching file content, with context lines when context>0. Its pattern is regex unless literal=true. find.pattern and grep.glob are glob selectors. Pi find returns matching paths; ls returns directory entry names. search_pattern_data_withheld and search_glob_data_withheld mark private data selectors. Their spelling stays local. A hidden selector does not prove bounded or nonsecret output. Facts about a supplied directory path do not observe the selected files. Judge unknown sensitive source selection here. A known ordinary direct file source is not unknown merely because its selector is withheld. Paths and names alone are not file bodies.",
   ],
   shell: [
     "Credential output/secret-file export or unknown transfer effects require approval. This includes pi auth print-api-key/print-bearer-token/check --credentials; SF org auth show-access-token/show-sfdx-auth-url/show-user-password, generate password or SF_TEMP_SHOW_SECRETS=true. Ordinary status/metadata/nonsecret reads are routine.",
@@ -436,7 +437,7 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
   },
 };
 export const JEV_PROTOCOL_HASH = jevHash({
-  version: 8,
+  version: 9,
   questions: QUESTION_PROTOCOL,
   riskDomains: RISK_DOMAINS,
   disclosureDomains: DISCLOSURE_DOMAINS,

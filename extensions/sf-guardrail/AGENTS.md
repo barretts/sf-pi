@@ -85,6 +85,13 @@ One-file-per-concern split:
   native calls the deterministic registry ignores. Jev is the sole risk engine
   and interprets all policy; do not add a deterministic floor, hidden fallback,
   or second risk vote.
+- File metadata covers `read`, `write`, `edit`, `grep`, `find`, and `ls`.
+  Match the installed Pi schemas and runner defaults. Only `grep`, `find`,
+  and `ls` use the working directory for an absent or empty path. Keep
+  search patterns and glob text local. Their omission does not establish
+  unknown executable code. Preserve unknown selected-file sensitivity.
+  Directory facts do not describe every selected descendant. Numeric runner
+  arguments do not prove a complete output bound or a policy result.
 - Send operation metadata and the minimum effective policy relevant to the
   questions. Known CLI structure, trusted file-path facts, and bounded numeric
   observations describe effects without deciding policy locally. Mechanically
