@@ -1513,3 +1513,84 @@ full score belongs to `1b1ce7e`. The 98% goal remains active. The remaining
 work includes the CLI exception, the small-query policy or source decision,
 and fresh coverage runs. The sealed TEST remains closed. This diagnostic
 establishes no safety qualification or normal-profile activation.
+
+A separate live test now has a result for the match questions. It kept eight
+fixed input states and 30 fixed record, row and list targets. For each target,
+Jev judged the configured `patterns` or `allowedPatterns` list against the
+supplied file record. The expected labels stayed outside every model request.
+They contained 19 `match`, 11 `no_match` and no `unknown` answers.
+
+The test used a private transport with three distinct choices: `match`,
+`no_match` and `unknown`. It could send no permission decision. Its binding
+used `protocolHash` and `diagnosticHash`; it had no production operating point.
+Every question carried its full record and row. All original input state,
+path variants, row flags and unknown facts stayed in the request. The largest
+complete request was 21,102 bytes, below the 32,768-byte cap.
+
+Before the live run, source review found a missing match detail in the first
+packet. A new freeze added only the exact full-path and trailing `**` rule
+from public source. It added 153 bytes per question. The old packet stayed
+unchanged. The new packet kept the same eight states, 30 targets, order and
+external labels. Its manifest hash is
+`6e3f6994712755584990783f1bafdaba7b446d516127722534f3d6e6278355e1`.
+
+The local client checks passed 524 tests in five files. These included 85
+tests for the private match client and the existing decision-process checks.
+Typecheck, scoped lint and format passed. Four cold controls passed: eight
+normal observations, eight duplicate-key replies rejected, wrong source
+rejected before client load, and one deadline failure with seven calls not
+issued. The normal control retained ten synthetic answers for each of the
+three choices. Those controls used no real key or provider and had no model
+accuracy credit.
+
+The live run had a fixed cap of 24 POSTs: three runs of all eight inputs. Each
+case had one 10-second deadline. The route reserved each dispatch before the
+native fetch. It captured the literal request and the bounded reply bytes read
+by the actual client. No request was retried.
+
+| Result                      | Run 1 | Run 2 | Run 3 |
+| --------------------------- | ----- | ----- | ----- |
+| Strict replies              | 8/8   | 8/8   | 8/8   |
+| Correct known-path answers  | 30/30 | 30/30 | 30/30 |
+| Failed or late observations | 0     | 0     | 0     |
+
+All 24 replies had distinct provider request IDs. The final checks found zero
+pending capture operations or late evidence writes. A separate audit checked
+all 53 retained run files, the literal request and reply hashes, exact answer
+coverage, model and provider, raw choice values, probabilities, confidence,
+usage and the 30 source and route files. All bindings agreed. The raw reply
+bytes are the authority for exact number spelling. Structured JSON summaries
+can turn signed zero into zero and do not prove an exact Number round trip.
+
+The replies reported 82,560 input tokens and 3,435 output tokens. Their cost
+fields summed to `0.003467520`. No currency or account bill was bound. The
+largest elapsed case time was about 536 ms. This is a match-test time, not a
+complete guardrail workflow time or a proved production p95.
+
+The fixed live route hash is
+`07ab422ae8d16b6ff5056ea816eed7566bd10f37bb045515b7c22cb1c1305731`.
+The live plan hash is
+`59f63eafbcfd40b19bc13ce0a56b243c7a619f36ad369561a211b6942c9a4ba6`.
+The complete result hash is
+`19252a866f80d1eed8d945ba85adc36229827b47604261e49bce5feb3721a18c`.
+The separate raw and source audit hash is
+`3f60348ac5df264d4512d7a08c9e12cc3a9d19416fa2511c57b6160fe9d4e1fa`.
+
+This result supports separate match questions for these eight contexts and 30
+known-path targets. The three repeated runs are not 90 independent targets.
+The result does not prove model truth on unknown paths or a correct final
+policy decision. It gives no permission, full 175-case, safe-use or safety
+qualification credit. The private client has not been added to public runtime.
+
+The next private candidate must supply these typed answers to a later Jev
+policy call. Jev must still decide eligibility, same-row exemption, strongest
+protection, row order, off behavior, access and action. The host must select
+none of those policy outcomes. Complete requests and the maximum answer
+record must fit before the first transport call. Current supported large
+inputs must remain supported. The earlier additive size failure still applies
+until a complete format and its strict inverse are proved.
+
+The latest full model score still belongs to `1b1ce7e`. The small Id query
+keeps unknown sensitivity and stays in the 28 valid-safe inputs. Its policy
+or trusted source decision is pending. The sealed TEST stays closed. The 98%
+goal remains active, and normal profiles stay unchanged.
