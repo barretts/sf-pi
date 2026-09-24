@@ -113,7 +113,7 @@ export const JEV_COMMAND_ACTION_CRITERIA = freeze({
   block:
     "No allowedPatterns row selects match. Any autoDenyPatterns row selects match. Otherwise, the first patterns row that selects match declares block.",
 });
-export const JEV_COMMAND_PROCESS_PROTOCOL = freeze({
+export const JEV_COMMAND_PROCESS_HISTORICAL_PROTOCOL = freeze({
   operatingPoint: "validated-closed-conservative-or-argmax-bound-by-runtime-adapter",
   deadline:
     "One absolute performance.now() deadline includes preparation, all stages, waits, response reads, validation, and synchronous cleanup work. Cancellation starts without awaiting asynchronous cleanup completion. The experimental hook shares one total 10,000 ms classification and automatic-release limit. No per-stage reset. A later explicit human approval uses a separate bounded context recheck, without repeating the model process.",
@@ -152,6 +152,24 @@ export const JEV_COMMAND_PROCESS_PROTOCOL = freeze({
     "Complete original context and every actual action head selects allow. The validated conservative point requires raw P(allow)>=.99 and every actual binary raw P(selected choice)>=.99. The explicit experimental argmax point has both floors at zero. Any actual action block is hard. No joint calibration or safety qualification claim.",
   failure:
     "Any error blocks. Preserve all completed stage evidence and actual blocks. No retry or fallback.",
+});
+
+export const JEV_COMMAND_SYNTAX_COMPARISONS = freeze({
+  remote_script_to_shell:
+    "Select match if at least one consecutive pair in commandTokens.original has first.head equal to a selector.downloaders label and next.head equal to a selector.shells label. Any separator counts. These two ID tests are sufficient. Otherwise select no_match.",
+  base64_decode_to_shell:
+    "Select match if at least one consecutive pair in commandTokens.original has first.head=selector.head, next.head equal to a selector.shells label, and a label in that same first.args equal to a selector.decodeArgs label. Any separator counts. These three ID tests are sufficient. Otherwise select no_match.",
+});
+
+export const JEV_COMMAND_PROCESS_PROTOCOL = freeze({
+  ...JEV_COMMAND_PROCESS_HISTORICAL_PROTOCOL,
+  syntaxStateVersion: 43,
+  historicalSyntaxStateVersion: 42,
+  syntaxComparisons: JEV_COMMAND_SYNTAX_COMPARISONS,
+  syntaxComparisonProjection:
+    "Only remote_script_to_shell and base64_decode_to_shell receive their generic comparison text. Preserve the complete syntax 42 state, rules, criteria, labels, displays, selectors and order. Add no match or action.",
+  syntaxInverse:
+    "Validate the complete prepared source record. Remove only the declared comparison text and restore exact historical syntax 42 bytes, then exact numeric syntax 37 and long syntax 31 bytes. A changed, extra or missing field is invalid.",
 });
 
 function jsonCopy<T>(value: T): T {
@@ -475,6 +493,19 @@ function syntax42Request(numeric: JevSyntaxRequest): JevSyntaxRequest {
   return request;
 }
 
+function syntax43Request(numeric: JevSyntaxRequest): JevSyntaxRequest {
+  const request = syntax42Request(numeric);
+  (request.state as Record<string, unknown>).version = 43;
+  for (const question of Object.values(request.questions)) {
+    const instructions = question.instructions as Record<string, unknown>;
+    const kind = String((instructions.selector as Record<string, unknown>).kind);
+    if (Object.hasOwn(JEV_COMMAND_SYNTAX_COMPARISONS, kind))
+      instructions.comparison =
+        JEV_COMMAND_SYNTAX_COMPARISONS[kind as keyof typeof JEV_COMMAND_SYNTAX_COMPARISONS];
+  }
+  return request;
+}
+
 /** This projection changes no original operation, facts, policy, or non-command question. */
 export function prepareJevCommandProcess(request: JevRequest) {
   const original = jsonCopy(request);
@@ -551,7 +582,7 @@ export function prepareJevCommandProcess(request: JevRequest) {
   }
   const syntax = manifest.length
     ? body(
-        syntax42Request(
+        syntax43Request(
           body(numericSyntaxRequest(original, context.tokens, commands.matchGrammar, manifest))
             .request,
         ),
@@ -614,12 +645,36 @@ export function restoreJevNonCommandRequest(
   if (json !== prepared.original.json) fail();
   return json;
 }
-/** Restore exact numeric short syntax 37 bytes. This inverse makes no model match. */
-export function restoreJevSyntax37(prepared: ReturnType<typeof prepareJevCommandProcess>): string {
+/** Restore exact historical syntax 42 bytes. This inverse makes no model match. */
+export function restoreJevSyntax42(prepared: ReturnType<typeof prepareJevCommandProcess>): string {
   const rebuilt = prepareJevCommandProcess(prepared.original.request);
   if (!isDeepStrictEqual(prepared, rebuilt)) fail();
   if (!prepared.syntax) fail();
   const request = jsonCopy(prepared.syntax.request);
+  (request.state as Record<string, unknown>).version = 42;
+  for (const question of Object.values(request.questions)) {
+    const instructions = question.instructions as Record<string, unknown>;
+    delete instructions.comparison;
+  }
+  const source = prepared.original.request.state as {
+    operation: { metadata: { commandTokens: unknown } };
+    policy: { commands: { matchGrammar: unknown } };
+  };
+  const expected = syntax42Request(
+    numericSyntaxRequest(
+      prepared.original.request,
+      source.operation.metadata.commandTokens,
+      source.policy.commands.matchGrammar,
+      prepared.manifest,
+    ),
+  );
+  const json = JSON.stringify(request);
+  if (json !== JSON.stringify(expected)) fail();
+  return json;
+}
+
+export function restoreJevSyntax37(prepared: ReturnType<typeof prepareJevCommandProcess>): string {
+  const request = JSON.parse(restoreJevSyntax42(prepared)) as JevSyntaxRequest;
   const state = request.state as Record<string, unknown>;
   state.version = 37;
   delete state.tokenIdEncoding;

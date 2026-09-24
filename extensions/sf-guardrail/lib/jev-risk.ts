@@ -230,6 +230,7 @@ const RISK_DOMAINS = {
     rules: [
       FILE_KIND_OBSERVATION_GUIDANCE,
       "Local read/grep/find/ls and source write/edit are routine. File bodies, grep regex/literal patterns and glob filters, and find glob patterns are data. Withheld data selectors do not add executable effects. File protection and sensitive selection belong to file policy and disclosure.",
+      "Local write/edit authors a file without running its body. Creation with exists=false is still authoring. A secret-like filename, a CLI-state path, missing prior contents or withheld authored data alone adds no execution, credential-output or transfer effect. File policy judges every independent access restriction; disclosure judges actual returned values. Keep genuinely unknown or additional executable effects separate.",
     ],
     criteria: {
       allow: {
@@ -342,6 +343,7 @@ const DISCLOSURE_DOMAINS = {
   ],
   shell: [
     "Credential output/secret-file export or unknown transfer effects require approval. This includes pi auth print-api-key/print-bearer-token/check --credentials; SF org auth show-access-token/show-sfdx-auth-url/show-user-password, generate password or SF_TEMP_SHOW_SECRETS=true. Ordinary status/metadata/nonsecret reads are routine.",
+    "For a known Pi auth check command, first inspect its observed flags. Without --credentials, check returns status text and does not print API keys or bearer tokens. With --credentials, or with a credential print action, credential disclosure requires approval. A status disclosure decision does not assert read-only execution: OAuth refresh and every independent operational effect remain in risk. Opaque execution and unresolved independent transfers remain unresolved.",
     "Use policy.commands.matchGrammar for exact matches against commandTokens. Matching allowedPatterns/effectWaivers waive that configured disclosure only. effectWaivers are disabled ordinary rules, never command restrictions, allow exceptions or overrides of active policy.",
   ],
   soql: [
@@ -414,6 +416,7 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
         FILE_KIND_OBSERVATION_GUIDANCE,
         "Match facts.files variants: JS regex as written/unanchored (invalid skips); glob *=non-slash, **=any, **/=zero+ segments, ?=one non-slash. Slash globs use absolute/relative paths, otherwise basename. ~/ uses homeRelativePath.",
         "For each facts.files path, a policy.files row is eligible only if enabled=true AND a patterns entry matches that path variant AND no allowedPatterns entry of THAT SAME ROW matches AND (onlyIfExists=false OR exists=true). exists=false excludes onlyIfExists=true. Unknown essential path/existence facts cannot prove exclusion; a known nonmatch is not unknown. File contents never affect this question.",
+        "For each enabled row, test that row's allowedPatterns against the same supplied path variants before selecting protection. A slash glob compares the full relativePath or absolutePath; trailing ** includes all remaining characters and path segments, including zero characters. A same-row allowedPatterns match excludes only that row for that path. A known exemption or exists=false with onlyIfExists=true remains an exclusion even if another predicate is unknown. Continue every other row and every other path; independent restrictions and unknowns remain.",
         "Among eligible rows for that path select strongest protection noAccess>readOnly>none, first row on equal protection. Include enabled behavior=off rows in this selection: an off winner suppresses weaker rows for that path. An exemption or off row never waives another path or a stronger unrelated winner.",
         "Then test the winning access: noAccess restricts read/write/edit/bash/grep/find/ls; readOnly restricts ONLY write/edit, never read/grep/find/ls/bash; none restricts nothing. Only a restricted access uses winner.behavior confirm/block. A known read under readOnly is allow in this question, including .forceignore.",
       ],
@@ -476,7 +479,7 @@ const QUESTION_PROTOCOL: Record<JevQuestionId, JevChoiceQuestion> = {
       rules: [
         "An exact allowedPatterns match under policy.commands.matchGrammar waives org policy. effectWaivers never do. Otherwise inspect operation.metadata.shell.commands in order and policy.orgAware rows in order; skip enabled=false. For a command select the FIRST row whose ast.cmd, ast.subCmd, every ast.flagIn predicate, and whenOrgType ALL match. behavior=off stops later rows for that command; continue other commands. Return the first active command outcome.",
         "ast.cmd is exact executable equality. ast.subCmd is a positional prefix; a listed alternative must match at its exact position, never a related verb. Every listed ast.flagIn flag must be present and its observed value must be in that list; inline equivalents count. Known cmd/subCmd/flag mismatch excludes that row even in production. Opaque/placeholder values are not invented literal matches or mismatches.",
-        "ONLY a row with id=sf-deploy-prod has the rule-local --check-only/--checkonly/--dry-run exclusion. Other rows get no rehearsal exemption. A subCmd alternative start/resume/quick does not include preview or validate. This is exact policy syntax, not a claim that a legacy spelling is supported by the installed CLI.",
+        "Before selecting an org row, test its rule-local exclusion. ONLY id=sf-deploy-prod is excluded when that command has an observed exact --check-only, --checkonly or --dry-run flag. Exclude that row before using its production predicate or behavior, then continue later rows for the same command and every other command. Other rows get no rehearsal exemption. Independent custom restrictions still apply. A subCmd alternative start/resume/quick does not include preview or validate. This exact policy syntax does not establish support for a legacy CLI spelling.",
         "Compare verified facts.org.type to whenOrgType. Verified nonproduction does not match production. Missing/unverified org cannot exclude a production predicate, including custom non-SF rules; mutation is not required. Unknown only matters for an actually unresolved required predicate. It cannot undo a known AST mismatch or known rule-local exclusion.",
       ],
     },

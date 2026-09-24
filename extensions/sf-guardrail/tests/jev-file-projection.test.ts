@@ -218,12 +218,14 @@ describe("Jev file projection", () => {
       readBundledConfig(),
     );
     const fileRules = (request.questions.file_policy?.instructions as { rules: string[] }).rules;
-    expect(fileRules).toHaveLength(5);
+    expect(fileRules).toHaveLength(6);
     expect(fileRules[2]).toContain("enabled=true AND");
     expect(fileRules[2]).toContain("THAT SAME ROW");
-    expect(fileRules[3]).toContain("noAccess>readOnly>none, first row on equal protection");
-    expect(fileRules[3]).toContain("off winner suppresses weaker rows");
-    expect(fileRules[4]).toContain("member of winner.restrictedAccess");
+    expect(fileRules[3]).toContain("allowedPatterns against the same supplied path variants");
+    expect(fileRules[3]).toContain("Continue every other row and every other path");
+    expect(fileRules[4]).toContain("noAccess>readOnly>none, first row on equal protection");
+    expect(fileRules[4]).toContain("off winner suppresses weaker rows");
+    expect(fileRules[5]).toContain("member of winner.restrictedAccess");
     expect(request.questions.file_policy?.criteria.block).toMatchObject({
       exclude: expect.stringContaining("stronger or first-tie winner"),
     });
@@ -240,7 +242,7 @@ describe("Jev file projection", () => {
     });
     expect(request.state).toMatchObject({ observations: { contextComplete: false } });
     for (const [id, expectedHash] of [
-      ["file_policy", "24b5273ce8cce5ab9b97fbc38cff25c51bc65f0ae4be700679f0eaa0bc525642"],
+      ["file_policy", "fe82c320fa888370ecae30871876f49c40da0f6a060cb8592f1fe4bc11ddb6fb"],
       ["disclosure", "151555ab2749419ca2c956cab7835daf0e1ea48562a6c15805f050c50bf530b1"],
     ] as const)
       expect(createHash("sha256").update(JSON.stringify(request.questions[id])).digest("hex")).toBe(

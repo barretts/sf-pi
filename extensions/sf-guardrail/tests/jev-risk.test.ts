@@ -41,6 +41,155 @@ import type {
 const ENDPOINT = "https://decisions.example.test/v1/decisions";
 const OTHER_ENDPOINT = "https://other-decisions.example.test/v1/decisions";
 
+describe("Jev interpretation criteria", () => {
+  const fileRequest = (path: string, exists: boolean | "unknown", extra = false) => {
+    const config = readBundledConfig();
+    if (extra)
+      config.policies.rules.push({
+        id: "independent-path-block",
+        enabled: true,
+        protection: "noAccess",
+        behavior: "block",
+        patterns: [{ pattern: path }],
+        onlyIfExists: false,
+      });
+    return buildJevRequest(
+      buildJevMetadata("write", { path, content: "Private authored data." }),
+      {
+        files: [
+          {
+            path,
+            absolutePath: `/private-work/${path}`,
+            relativePath: path,
+            basename: path.split("/").at(-1),
+            exists,
+            kind: exists === false ? "unknown" : "file",
+          },
+        ],
+      },
+      config,
+    );
+  };
+  it("keeps creation, existing-file and unknown existence facts without assigning a host outcome", () => {
+    for (const exists of [false, true, "unknown"] as const) {
+      const request = fileRequest(".env", exists);
+      const facts = (request.state as any).facts;
+      expect(facts.files[0].exists).toBe(exists);
+      expect(
+        (request.state as any).policy.files.find((row: any) => row.id === "secret-files")
+          .onlyIfExists,
+      ).toBe(true);
+      expect(JSON.stringify(request.questions.risk.instructions)).toContain(
+        "Creation with exists=false is still authoring.",
+      );
+      expect(JSON.stringify(request.questions.risk.instructions)).toContain(
+        "genuinely unknown or additional executable effects",
+      );
+      expect(JSON.stringify(request)).not.toContain("Private authored data.");
+      expect(JSON.stringify(request)).not.toMatch(
+        /"(?:winner|riskAction|fileMatch|knownOrdinarySensitivity)":/,
+      );
+    }
+  });
+  it("retains a same-row CLI-state exemption and an independent block in source order", () => {
+    const request = fileRequest(".sfdx/agents/sample/session.json", true, true);
+    const rows = (request.state as any).policy.files;
+    expect(rows.find((row: any) => row.id === "sf-cli-state").allowedPatterns).toEqual([
+      { pattern: ".sfdx/agents/**" },
+    ]);
+    expect(rows.at(-1).id).toBe("independent-path-block");
+    expect(rows.at(-1).behavior).toBe("block");
+    expect(rows.at(-1).restrictedAccess).toEqual(["read", "write", "shell"]);
+    expect(JSON.stringify(request.questions.file_policy.instructions)).toContain(
+      "Continue every other row and every other path",
+    );
+    expect(JSON.stringify(request.questions.file_policy.instructions)).toContain(
+      "that row's allowedPatterns",
+    );
+  });
+  it("keeps Pi credential flags and print actions separate from the status disclosure instruction", () => {
+    for (const command of [
+      "pi auth check",
+      "pi auth check --credentials",
+      "pi auth print-api-key",
+    ]) {
+      const request = buildJevRequest(
+        buildJevMetadata("bash", { command }),
+        {},
+        readBundledConfig(),
+        { command },
+      );
+      expect(JSON.stringify(request.questions.disclosure.instructions)).toContain(
+        "does not assert read-only execution",
+      );
+      expect(JSON.stringify(request.questions.disclosure.instructions)).toContain(
+        "With --credentials",
+      );
+      const shell = JSON.stringify((request.state as any).operation.metadata.shell);
+      expect(shell.includes('"--credentials"')).toBe(command.includes("--credentials"));
+      expect((request.state as any).policy.commands.matchGrammar.pi_credential_output).toContain(
+        "row.credentials",
+      );
+      expect(JSON.stringify(request)).not.toMatch(
+        /"(?:isStatusDisclosure|credentialOutputMatch|winner)":/,
+      );
+    }
+  });
+  it("retains later custom org restrictions and makes the default exclusion local", () => {
+    const config = readBundledConfig();
+    config.orgAwareGate.rules.push({
+      id: "independent-custom-deploy",
+      enabled: true,
+      behavior: "block",
+      action: "block",
+      match: { tool: "bash", ast: { cmd: "sf", subCmd: ["project", "deploy", "start"] } },
+      whenOrgType: ["production"],
+    });
+    const command = "sf project deploy start --dry-run --target-org SampleProd";
+    const request = buildJevRequest(
+      buildJevMetadata("bash", { command }),
+      {
+        org: { type: "production", verified: true, explicit: true },
+      },
+      config,
+      { command },
+    );
+    const rows = (request.state as any).policy.orgAware;
+    expect(rows.find((row: any) => row.id === "sf-deploy-prod")).toBeDefined();
+    expect(rows.at(-1).id).toBe("independent-custom-deploy");
+    expect(rows.at(-1).behavior).toBe("block");
+    expect(JSON.stringify(request.questions.org_policy.instructions)).toContain(
+      "then continue later rows for the same command",
+    );
+    expect(JSON.stringify(request.questions.org_policy.instructions)).toContain(
+      "Other rows get no rehearsal exemption",
+    );
+    expect((request.state as any).facts.org).toEqual({
+      type: "production",
+      verified: true,
+      explicit: true,
+    });
+    expect(JSON.stringify(request)).not.toContain("SampleProd");
+  });
+  it("preserves the unresolved SOQL source sensitivity rule", () => {
+    const request = buildJevRequest(
+      buildJevMetadata("sf_soql", { action: "query.run", query: "SELECT Id FROM Sample LIMIT 10" }),
+      {},
+      readBundledConfig(),
+    );
+    expect(JSON.stringify(request.questions.disclosure.instructions)).toContain(
+      "Source sensitivity remains unknown.",
+    );
+    expect(JSON.stringify(request.questions.disclosure.instructions)).toContain(
+      "Source/API/schema access remains unobserved.",
+    );
+    expect(JSON.stringify(request.questions.disclosure.instructions)).toContain(
+      "possibly sensitive IDs",
+    );
+    expect(JSON.stringify(request)).not.toContain("SELECT Id FROM Sample");
+  });
+});
+
 beforeEach(() => {
   vi.stubEnv("SF_GUARDRAIL_JEV_ENDPOINT", ENDPOINT);
   vi.stubEnv("SF_GUARDRAIL_JEV_OPERATING_POINT", undefined);
@@ -2055,7 +2204,7 @@ describe("Jev risk adapter", () => {
       "3472d1d1a8fa1c8debd46b54ca200667b803016e4daa06721c7bc46f970fc39c",
     ];
     expect(JEV_PROTOCOL_HASH).toBe(
-      "07998c56dcc8dc5f865d1abdb29528e1ee9d2495aeab5caa1c6d6f8913a2bafd",
+      "53b22b9b3279451a147e9147a0e60469f6a897ddc07174c0c09f4f166b7a3588",
     );
     const protocolHash = jevRuntimeProtocolHash();
     expect(decision.jev?.protocolHash).toBe(protocolHash);

@@ -89,6 +89,12 @@ _Avoid_: model-supplied plan, reusable approval token, atomic filesystem proof
 Version 2's mechanical integer IDs for original, wrapper-expanded, and flattened command tokens, typed prefix classes, and Pi argument sequences. Effective ordered policy rows are active-only and carry explicit behavior and token IDs or one of seven special-pattern forms. Shared `policy.commands.matchGrammar` supplies token/namespace/special definitions to each independent question. Off allow/deny rows are omitted after validation/bounding and allocate no token classes; off ordinary rows become **Effect Waivers**. Jev compares these facts and chooses rules. `publicSyntax` maps only known CLI executables, subcommands, and flag keys already exposed in semantic metadata to IDs. Private operands have no explicit legend; the projection includes no raw command, private-word dictionary, stable hash, matched rules, or local outcome. Equality and known policy anchors can reveal membership; they provide neither cryptographic secrecy nor a deterministic model-matching guarantee.
 _Avoid_: encrypted command, anonymization guarantee, host policy matcher, precomputed verdict
 
+Syntax 43 adds generic comparison text for the remote-script and base64-decode
+selectors. It keeps the original token rows, selector fields and shared grammar.
+All separators between supplied adjacent original rows count. Jev chooses the
+match. Exact inverses restore syntax 42, numeric syntax 37 and long syntax 31.
+The host does not supply a match, winner or action.
+
 **Effect Waiver**:
 An effectively off ordinary command row projected separately under `policy.commands.effectWaivers`. Jev may exactly match it when judging that configured operational or disclosure effect. It is not an allow exception and cannot suppress active command, org, or file restrictions. File rules retain an enabled off winner's precedence over weaker file rules; an org rule's matching off outcome still stops later rules for that command.
 _Avoid_: command-policy override, global exemption, inactive deny as allow

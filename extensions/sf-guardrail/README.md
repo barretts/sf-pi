@@ -154,6 +154,19 @@ selector names stay in a separate ordered list. A null name is not a wildcard.
 Vocabulary membership does not prove that a command token was observed.
 The local manifest still binds the original rows and integer token projection.
 
+Syntax 43 adds a direct comparison instruction for remote-script and
+base64-decode adjacency. It retains every original command and selector.
+Any separator between adjacent original rows counts. The host supplies no
+match or action. Exact local inverses restore historical syntax 42, numeric
+syntax 37 and long syntax 31. A changed or extra field invalidates restoration.
+
+The criteria distinguish local file authoring from body execution and Pi
+status output from credential output. File exemptions apply to their own row
+before protection strength is selected. The default deployment exclusion
+applies only to `sf-deploy-prod`; independent custom restrictions remain.
+These criteria changes do not establish qualification. The latest measured
+results and failed targets are in the replacement progress report.
+
 Hosted browser facts omit only the changing `ageMs` value. They keep the actual
 freshness status and target fields. Local checks keep the snapshot identity,
 age and expiry. These checks do not extend a snapshot's lifetime.

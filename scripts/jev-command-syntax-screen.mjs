@@ -11,6 +11,7 @@ import { buildJevMetadata } from "../extensions/sf-guardrail/lib/jev-metadata.ts
 import { buildJevRequest } from "../extensions/sf-guardrail/lib/jev-risk.ts";
 import {
   prepareJevCommandProcess,
+  restoreJevSyntax42,
   restoreJevSyntax37,
 } from "../extensions/sf-guardrail/lib/jev-command-process.ts";
 import {
@@ -52,7 +53,7 @@ export const CONTRACT = Object.freeze({
   sourceLabelBinding:
     "Retain exact original, expanded, flat, Pi argument arrays and every old class and selector. Extra plain whole classes must be unreferenced by all token arrays and selectors. Public syntax labels can change under current metadata; they do not change exact ID comparisons. Record this prospective source change without changing old labels.",
   source:
-    "Freeze this script, tests, source packet, and all guardrail source plus shared identity. Do not read old replies, keys, settings, or TEST during preparation.",
+    "Freeze this script, tests, source packet, and all guardrail source plus shared identity. Use the exact restored historical syntax 42 body. This screen does not test the current syntax body. Do not read old replies, keys, settings, or TEST during preparation.",
 });
 export function tokenLabel(value) {
   if (!Number.isSafeInteger(value) || value < 0 || value >= 4096) fail("invalid-token-label");
@@ -230,7 +231,7 @@ export async function prepare() {
     const posted = project(original);
     inverse(posted, original);
     const json = JSON.stringify(posted);
-    if (json !== process.syntax.json) fail("source-syntax-body-changed");
+    if (json !== restoreJevSyntax42(process)) fail("source-syntax-body-changed");
     cases.push({
       caseId: c.caseId,
       json,

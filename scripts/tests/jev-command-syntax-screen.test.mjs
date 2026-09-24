@@ -39,7 +39,7 @@ const synthetic = (c) => ({
 });
 let prepared;
 const originalOf = (c) => JSON.parse(c.originalJson);
-test("prepare retains all source rows without wire labels or key access", async () => {
+test("prepare retains all historical syntax 42 rows without wire labels or key access", async () => {
   const prior = process.env.SF_GUARDRAIL_JEV_API_KEY;
   process.env.SF_GUARDRAIL_JEV_API_KEY = "invalid\nkey";
   try {
@@ -52,6 +52,7 @@ test("prepare retains all source rows without wire labels or key access", async 
     assert(prepared.maxRequestBytes <= 32768);
     for (const c of prepared.plan.cases) {
       const b = JSON.parse(c.json);
+      assert.equal(b.state.version, 42);
       assert.deepEqual(Object.keys(b.questions), c.questionIds);
       for (const key of [
         "expected",
@@ -59,6 +60,7 @@ test("prepare retains all source rows without wire labels or key access", async 
         "sourceWinner",
         "syntaxLabel",
         "matchedRules",
+        "comparison",
       ])
         assert(!c.json.includes('"' + key + '"'));
       const old = originalOf(c);
