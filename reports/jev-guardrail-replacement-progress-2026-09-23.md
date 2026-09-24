@@ -159,6 +159,7 @@ representations while preserving the current automatic approval gate.
 | v37 | Fresh original; short syntax             | 20/20 valid                      | —                        | —                                  | —               | $0.004292064                  |
 | v38 | Fresh full; grouped short command stages | 104/104 valid; 52 processes      | 0 at `0.99` in each arm  | —                                  | —               | $0.030554580                  |
 | v39 | Combined reference; scoped disclosure    | 32/32 valid                      | 0/9 at `0.99` per arm    | 9/9 in each arm                    | 3/3 in each arm | $0.004500216                  |
+| v40 | Inline selector rules; actual namespaces | 26/26 valid; syntax 1,611/1,617  | —                        | —                                  | —               | $0.011592210                  |
 | SDK | Current hook, client, and SDK            | 1/1 valid                        | 0 successful reads       | 1/1                                | —               | $0.000123942                  |
 
 Each v17 and v18 arm contains 26 calls. Each v19 arm also contains 26 calls.
@@ -863,7 +864,7 @@ A live screen requires explicit `--live` with the exact preparation hash and
 configured endpoint and credential. It makes at most 26 calls, with no retry.
 It claims a new private receipt before credential access. The fixed test requires
 all 1,617 fresh syntax answers to match the source labels. It proves no full
-policy score or automatic-use score. No paid v40 call has started at this update.
+policy score or automatic-use score. The subsequent live result is below.
 
 The new public harness also passed full `validate:ci` and `lint` in a private
 profile without provider configuration. The main suite had 5,502 passed tests
@@ -873,6 +874,35 @@ commands. The first preflight found a stale generated package script inventory;
 root regenerated that inventory and retained the failed preflight receipt.
 The final full CI log SHA-256 is
 `3732b65d696cc384ea41eab1a113fcb548087de815b19025fa992631b15da075`.
+
+## Live syntax result: v40 failed its fixed gate
+
+All 26 fresh provider replies passed strict validation. Root decoded every raw
+reply again and checked its current source plan, actual transport hashes, model,
+provider, question IDs, usage, HTTP status, bytes, and unique response ID. Source
+hashes stayed unchanged. The result was 1,611/1,617 correct syntax answers:
+14/15 required matches and 1,597/1,602 required non-matches. The frozen gate
+requires every answer to be correct. It failed. This screen changes no product
+syntax, cutoff, or policy decision.
+
+The missed match was the `find_exec_rm` selector with a withheld public name.
+Five token selectors returned false matches. Those cases test absent IDs and
+non-consecutive IDs. The new inline rules did not repair those distinctions.
+The vocabulary contains both policy IDs and command IDs; a later hypothesis
+can make that distinction explicit without a host match or a host policy vote.
+These are DEV observations. They prove no automatic-use rate or full policy rate.
+
+The largest posted body was 27,830 bytes. Whole-case latency used the nearest-rank
+method: P50 was 588.208417 ms, P95 was 758.366916 ms, and the maximum was
+853.789584 ms. Every case finished within the prospective 10,000 ms bound.
+Reported valid-response cost was $0.011592210. The active goal now has 1,252
+calls and $0.326848746 in known valid-response cost. The cumulative known cost
+is $0.667607094. Unreported or failed-request billing remains unknown.
+
+Preparation hash:
+`d667fff504d1d04bac9c9a2f023ca54f3e87c840fd14786f768df33b3bfbeff9`.
+Private receipt SHA-256:
+`c510c8d84e26275a894c64bcb5bfb89a2d8bcaaa73ef8ed07802a049f6debfa0`.
 
 The full current 175-case model result and independent TEST remain unproved.
 The default engine remains deterministic. The goal remains active.
