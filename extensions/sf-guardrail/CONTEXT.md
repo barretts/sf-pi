@@ -89,11 +89,14 @@ _Avoid_: model-supplied plan, reusable approval token, atomic filesystem proof
 Version 2's mechanical integer IDs for original, wrapper-expanded, and flattened command tokens, typed prefix classes, and Pi argument sequences. Effective ordered policy rows are active-only and carry explicit behavior and token IDs or one of seven special-pattern forms. Shared `policy.commands.matchGrammar` supplies token/namespace/special definitions to each independent question. Off allow/deny rows are omitted after validation/bounding and allocate no token classes; off ordinary rows become **Effect Waivers**. Jev compares these facts and chooses rules. `publicSyntax` maps only known CLI executables, subcommands, and flag keys already exposed in semantic metadata to IDs. Private operands have no explicit legend; the projection includes no raw command, private-word dictionary, stable hash, matched rules, or local outcome. Equality and known policy anchors can reveal membership; they provide neither cryptographic secrecy nor a deterministic model-matching guarantee.
 _Avoid_: encrypted command, anonymization guarantee, host policy matcher, precomputed verdict
 
-Syntax 43 adds generic comparison text for the remote-script and base64-decode
-selectors. It keeps the original token rows, selector fields and shared grammar.
-All separators between supplied adjacent original rows count. Jev chooses the
-match. Exact inverses restore syntax 42, numeric syntax 37 and long syntax 31.
-The host does not supply a match, winner or action.
+Process 45 selects syntax 44 or exact syntax 43 before transport. Syntax 44
+copies every adjacent original pair with its indices, heads, and complete left
+arguments. It retains all original rows, selectors, and shared grammar. All
+separators between adjacent original rows count. If the complete syntax 44
+body exceeds 32,768 UTF-8 bytes, the process uses exact syntax 43 with the same
+limit. The choice uses only serialized size. It adds no match, winner, action,
+retry, or wire field. Exact inverses restore syntax 43, syntax 42, numeric
+syntax 37, and long syntax 31.
 
 **Effect Waiver**:
 An effectively off ordinary command row projected separately under `policy.commands.effectWaivers`. Jev may exactly match it when judging that configured operational or disclosure effect. It is not an allow exception and cannot suppress active command, org, or file restrictions. File rules retain an enabled off winner's precedence over weaker file rules; an org rule's matching off outcome still stops later rules for that command.
@@ -102,6 +105,15 @@ _Avoid_: command-policy override, global exemption, inactive deny as allow
 **Jev Automatic Allow**:
 Complete original context with every actual action head choosing `allow`. The default experimental point, `conservative`, requires raw `P(allow) >= 0.99` for every action and raw `P(selected choice) >= 0.99` for every syntax answer. The explicit `argmax` point sets both floors to zero. `SF_GUARDRAIL_JEV_OPERATING_POINT` accepts only these two names. An actual `block` stays a **Hard Block**. A `confirm`, failed floor, or incomplete context requires human confirmation. Freeze the point before facts and calls, and bind it to protocol, fingerprint, transport, audit, and context. Neither point has joint calibration or safety qualification. One total 10,000 ms limit covers facts through automatic release and synchronous cleanup. A later explicit human approval uses a new bounded 1,500 ms context check; it does not repeat or renew the model process.
 _Avoid_: guaranteed safe, confidence-based approval, local C11 qualification
+
+File completeness requires every original declared path and artifact access
+path to have an observed `facts.files` row with equal `path`. An alias cannot
+replace that observation. `exists=false` is valid, and kind is optional.
+Required path strings are copied before the fact resolver runs. The resolver
+receives separate derived metadata. It cannot change the original operation
+or its questions through that copy. The original prepared artifact plan keeps
+its registered object identity. These checks prove coverage of supplied facts;
+they do not prove that a supplied resolver reports the truth or select policy.
 
 **Jev Answer Evidence**:
 The individual model-authored choices, probability distributions, and confidence values preserved in audit. Top-level probabilities and confidence are the actual `risk` answer, even when a different question determines the enforced outcome. Separate stage receipts bind each actual head to its own request and reply hashes, model, provider, ID, usage, and time. Keep the full binary transcript and observed validated answers after failure. Collected Bash heads are not one provider reply. They are not a combined probability of safety.

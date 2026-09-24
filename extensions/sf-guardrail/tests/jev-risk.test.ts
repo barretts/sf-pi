@@ -1313,7 +1313,10 @@ describe("Jev risk adapter", () => {
       descriptor,
       createTransport: testTransport(async () => prediction("confirm", 0)),
       resolveFacts: async () => ({
-        facts: { org: { type: "sandbox" as const, verified: true, explicit: true } },
+        facts: {
+          org: { type: "sandbox" as const, verified: true, explicit: true },
+          files: [{ path: "src/example.ts", exists: false }],
+        },
         orgIdentity: "synthetic-org",
       }),
     };
@@ -1582,7 +1585,10 @@ describe("Jev risk adapter", () => {
   it("changed omitted bodies, policy, model context, cwd, and descriptors change grant keys", async () => {
     const request = async () => prediction("confirm", 0);
     const resolveFacts = async () => ({
-      facts: { org: { type: "sandbox" as const, verified: true, explicit: true } },
+      facts: {
+        org: { type: "sandbox" as const, verified: true, explicit: true },
+        files: [{ path: "src/example.ts", exists: false }],
+      },
       orgIdentity: "synthetic-org",
     });
     const first = await evaluateJevSafety(call("one"), {
@@ -2168,6 +2174,55 @@ describe("Jev risk adapter", () => {
     );
     expect(JSON.stringify(request.questions.risk.instructions)).toContain("Unfamiliar/opaque");
   });
+  it("keeps the supported 31914-byte file request on the exact source43 all-head route", async () => {
+    const path = "p".repeat(4000);
+    const input = {
+      toolName: "write",
+      input: { path, content: "Local data." },
+      cwd: "/work",
+      config: readBundledConfig(),
+    };
+    const resolved = {
+      facts: {
+        files: [
+          {
+            path,
+            relativePath: path,
+            absolutePath: `/work/${path}`,
+            basename: path,
+            exists: false as const,
+            kind: "unknown" as const,
+          },
+        ],
+      },
+    };
+    const expected = buildJevRequest(
+      buildJevMetadata(input.toolName, input.input),
+      resolved.facts,
+      input.config,
+    );
+    expect(Buffer.byteLength(JSON.stringify(expected))).toBe(31914);
+    expect(expected.state).not.toHaveProperty("fileComparisonView");
+    const requestCall = vi.fn<TestPredictionRequest>(async (wire) => {
+      expect(JSON.stringify(wire)).toBe(JSON.stringify(expected));
+      return prediction("allow", 1);
+    });
+    const createTransport = testTransport(requestCall);
+    const decision = await evaluateJevSafety(input, {
+      createTransport,
+      resolveFacts: async () => resolved,
+    });
+    expect(createTransport).toHaveBeenCalledTimes(1);
+    expect(requestCall).toHaveBeenCalledTimes(1);
+    expect(createTransport.mock.results[0].value.requestAllHeads).toBeDefined();
+    expect(decision.jev?.process?.kind).toBe("all_heads");
+    if (decision.jev?.process?.kind !== "all_heads")
+      throw new Error("missing actual all-head evidence");
+    expect(decision.jev.process.stage?.evidence.requestBytes).toBe(31914);
+    expect(decision.jev.process.stage?.evidence.requestHash).toBe(
+      createHash("sha256").update(JSON.stringify(expected)).digest("hex"),
+    );
+  });
   it("applies the full request bound after it adds public names", () => {
     const config = readBundledConfig();
     config.commandGate.patterns = Array.from({ length: 100 }, (_, index) => ({
@@ -2188,7 +2243,10 @@ describe("Jev risk adapter", () => {
       descriptor,
       createTransport: testTransport(async () => prediction("confirm", 0)),
       resolveFacts: async () => ({
-        facts: { org: { type: "sandbox" as const, verified: true, explicit: true } },
+        facts: {
+          org: { type: "sandbox" as const, verified: true, explicit: true },
+          files: [{ path: "src/example.ts", exists: false }],
+        },
         orgIdentity: "synthetic-org",
       }),
     });
@@ -2202,9 +2260,10 @@ describe("Jev risk adapter", () => {
       "7a54152c190028086d5013380ffde8ceba53ef286239cd8b46bba56185f902db",
       "0e04eae25722caf0d86aca285ffbef575738c0e3015472e9a8b44f3f6a8e8962",
       "3472d1d1a8fa1c8debd46b54ca200667b803016e4daa06721c7bc46f970fc39c",
+      "53b22b9b3279451a147e9147a0e60469f6a897ddc07174c0c09f4f166b7a3588",
     ];
     expect(JEV_PROTOCOL_HASH).toBe(
-      "53b22b9b3279451a147e9147a0e60469f6a897ddc07174c0c09f4f166b7a3588",
+      "318078ec771e8674dc3bccb170a931047a07a5fd61a2b7d7cbf8c3739a3306f2",
     );
     const protocolHash = jevRuntimeProtocolHash();
     expect(decision.jev?.protocolHash).toBe(protocolHash);

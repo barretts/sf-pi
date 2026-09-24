@@ -161,7 +161,7 @@ export const JEV_COMMAND_SYNTAX_COMPARISONS = freeze({
     "Select match if at least one consecutive pair in commandTokens.original has first.head=selector.head, next.head equal to a selector.shells label, and a label in that same first.args equal to a selector.decodeArgs label. Any separator counts. These three ID tests are sufficient. Otherwise select no_match.",
 });
 
-export const JEV_COMMAND_PROCESS_PROTOCOL = freeze({
+export const JEV_COMMAND_PROCESS_PREVIOUS_PROTOCOL = freeze({
   ...JEV_COMMAND_PROCESS_HISTORICAL_PROTOCOL,
   syntaxStateVersion: 43,
   historicalSyntaxStateVersion: 42,
@@ -170,6 +170,43 @@ export const JEV_COMMAND_PROCESS_PROTOCOL = freeze({
     "Only remote_script_to_shell and base64_decode_to_shell receive their generic comparison text. Preserve the complete syntax 42 state, rules, criteria, labels, displays, selectors and order. Add no match or action.",
   syntaxInverse:
     "Validate the complete prepared source record. Remove only the declared comparison text and restore exact historical syntax 42 bytes, then exact numeric syntax 37 and long syntax 31 bytes. A changed, extra or missing field is invalid.",
+});
+
+export const JEV_COMMAND_ADJACENCY_VIEW_INSTRUCTION =
+  "adjacentOriginalPairs is a mechanical copy of every consecutive pair in commandTokens.original, in order. leftIndex and rightIndex name its original positions. leftHead and leftArgs come from that pair's left row; rightHead comes from its right row. This view adds no command observation, selector match or action. Any separator counts.";
+export const JEV_COMMAND_BASE64_PAIR_COMPARISON =
+  "Select match if at least one adjacentOriginalPairs entry has leftHead=selector.head, rightHead equal to a selector.shells label, and a label in that same entry's leftArgs equal to a selector.decodeArgs label. Test every entry. These three ID tests are sufficient. Otherwise select no_match.";
+export const JEV_COMMAND_PROCESS_VIEW_PROTOCOL = freeze({
+  ...JEV_COMMAND_PROCESS_PREVIOUS_PROTOCOL,
+  syntaxStateVersion: 44,
+  previousSyntaxStateVersion: 43,
+  syntaxComparisons: {
+    ...JEV_COMMAND_SYNTAX_COMPARISONS,
+    base64_decode_to_shell: JEV_COMMAND_BASE64_PAIR_COMPARISON,
+  },
+  adjacencyViewInstruction: JEV_COMMAND_ADJACENCY_VIEW_INSTRUCTION,
+  adjacencyViewProjection:
+    "Copy every adjacent original pair in order, with its original indices, leftHead, rightHead and complete leftArgs. Do not inspect a selector, filter a pair, or compute a match. Preserve every original row, token namespace, grammar field and active policy row.",
+  syntaxInverse:
+    "Validate the complete prepared source record. Remove only adjacentOriginalPairs and its instruction, restore the previous base64 comparison and exact syntax 43 bytes, then exact syntax 42, numeric syntax 37 and long syntax 31 bytes. A changed, extra or missing field is invalid.",
+});
+
+export const JEV_COMMAND_SYNTAX_ENCODING_CHOICE = freeze({
+  version: 1,
+  formats: [44, 43],
+  maximumBytes: JEV_COMMAND_PROCESS_LIMITS.maxRequestBytes,
+  measurement: "Buffer.byteLength(JSON.stringify(the complete syntax request), UTF-8)",
+  choice:
+    "Before transport, select the complete syntax 44 request if its measured bytes are at most 32768. Otherwise select the exact syntax 43 request and apply the same bound. Add no wire wrapper, marker or padding. State version and exact request bytes identify the format. Preserve every original observation, selector and ordered row. No trimming, batching, local match, action vote, retry or response-based switch.",
+});
+export const JEV_COMMAND_PROCESS_PROTOCOL = freeze({
+  ...JEV_COMMAND_PROCESS_VIEW_PROTOCOL,
+  syntaxRepresentationVersion: 45,
+  syntaxStateVersions: JEV_COMMAND_SYNTAX_ENCODING_CHOICE.formats,
+  syntaxEncodingChoice: JEV_COMMAND_SYNTAX_ENCODING_CHOICE,
+  source43SyntaxComparisons: JEV_COMMAND_SYNTAX_COMPARISONS,
+  syntaxInverse:
+    "Rebuild and validate the complete prepared source record and its size-selected format. For syntax 44, remove only adjacentOriginalPairs and its instruction and restore the previous base64 comparison. For selected syntax 43, preserve its exact bytes unchanged. Then restore exact syntax 42, numeric syntax 37 and long syntax 31 bytes. A changed, extra or missing field is invalid.",
 });
 
 function jsonCopy<T>(value: T): T {
@@ -506,6 +543,29 @@ function syntax43Request(numeric: JevSyntaxRequest): JevSyntaxRequest {
   return request;
 }
 
+function syntax44Request(numeric: JevSyntaxRequest): JevSyntaxRequest {
+  const request = syntax43Request(numeric);
+  const state = request.state as Record<string, unknown>;
+  state.version = 44;
+  const tokens = state.commandTokens as Record<string, unknown>;
+  const original = tokens.original as Array<{ head: string; args: string[] }>;
+  state.adjacentOriginalPairs = original.slice(0, -1).map((left, leftIndex) => ({
+    leftIndex,
+    rightIndex: leftIndex + 1,
+    leftHead: left.head,
+    rightHead: original[leftIndex + 1].head,
+    leftArgs: [...left.args],
+  }));
+  (state.syntaxInstruction as Record<string, unknown>).adjacencyView =
+    JEV_COMMAND_ADJACENCY_VIEW_INSTRUCTION;
+  for (const question of Object.values(request.questions)) {
+    const instructions = question.instructions as Record<string, unknown>;
+    if ((instructions.selector as Record<string, unknown>).kind === "base64_decode_to_shell")
+      instructions.comparison = JEV_COMMAND_BASE64_PAIR_COMPARISON;
+  }
+  return request;
+}
+
 /** This projection changes no original operation, facts, policy, or non-command question. */
 export function prepareJevCommandProcess(request: JevRequest) {
   const original = jsonCopy(request);
@@ -580,14 +640,18 @@ export function prepareJevCommandProcess(request: JevRequest) {
       });
     }
   }
-  const syntax = manifest.length
-    ? body(
-        syntax43Request(
-          body(numericSyntaxRequest(original, context.tokens, commands.matchGrammar, manifest))
-            .request,
-        ),
-      )
-    : undefined;
+  let syntax: ReturnType<typeof body<JevSyntaxRequest>> | undefined;
+  if (manifest.length) {
+    const numeric = body(
+      numericSyntaxRequest(original, context.tokens, commands.matchGrammar, manifest),
+    ).request;
+    const withPairs = syntax44Request(numeric);
+    syntax = body(
+      Buffer.byteLength(JSON.stringify(withPairs)) <= JEV_COMMAND_PROCESS_LIMITS.maxRequestBytes
+        ? withPairs
+        : syntax43Request(numeric),
+    );
+  }
   // Bound the final body before transport creation. Finite JSON numbers use at most 24 bytes.
   const reserve = manifest.length * 4 * 24 + 512;
   const skeleton = groupedBody(
@@ -645,12 +709,43 @@ export function restoreJevNonCommandRequest(
   if (json !== prepared.original.json) fail();
   return json;
 }
-/** Restore exact historical syntax 42 bytes. This inverse makes no model match. */
-export function restoreJevSyntax42(prepared: ReturnType<typeof prepareJevCommandProcess>): string {
+/** Restore exact previous syntax 43 bytes. This inverse makes no model match. */
+export function restoreJevSyntax43(prepared: ReturnType<typeof prepareJevCommandProcess>): string {
   const rebuilt = prepareJevCommandProcess(prepared.original.request);
   if (!isDeepStrictEqual(prepared, rebuilt)) fail();
   if (!prepared.syntax) fail();
   const request = jsonCopy(prepared.syntax.request);
+  const state = request.state as Record<string, unknown>;
+  if (state.version === 44) {
+    state.version = 43;
+    delete state.adjacentOriginalPairs;
+    delete (state.syntaxInstruction as Record<string, unknown>).adjacencyView;
+    for (const question of Object.values(request.questions)) {
+      const instructions = question.instructions as Record<string, unknown>;
+      if ((instructions.selector as Record<string, unknown>).kind === "base64_decode_to_shell")
+        instructions.comparison = JEV_COMMAND_SYNTAX_COMPARISONS.base64_decode_to_shell;
+    }
+  }
+  const source = prepared.original.request.state as {
+    operation: { metadata: { commandTokens: unknown } };
+    policy: { commands: { matchGrammar: unknown } };
+  };
+  const expected = syntax43Request(
+    numericSyntaxRequest(
+      prepared.original.request,
+      source.operation.metadata.commandTokens,
+      source.policy.commands.matchGrammar,
+      prepared.manifest,
+    ),
+  );
+  const json = JSON.stringify(request);
+  if (json !== JSON.stringify(expected)) fail();
+  return json;
+}
+
+/** Restore exact historical syntax 42 bytes. This inverse makes no model match. */
+export function restoreJevSyntax42(prepared: ReturnType<typeof prepareJevCommandProcess>): string {
+  const request = JSON.parse(restoreJevSyntax43(prepared)) as JevSyntaxRequest;
   (request.state as Record<string, unknown>).version = 42;
   for (const question of Object.values(request.questions)) {
     const instructions = question.instructions as Record<string, unknown>;

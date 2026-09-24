@@ -1358,3 +1358,88 @@ The final CI log SHA-256 is
 `d487c3dc4b6ff8d9253169ebbd712cbaf7845dc212edf97e28200e956d2b2b5b`.
 The lint log SHA-256 is
 `cc7e208069a99fcb5fd6c6c82433d78b6910108bdd6212687ae66b3ada0bc843`.
+
+A later diagnostic compared public source `e56b5f6e` with a private candidate
+that added command pair and file comparison views. It used the same 20 inputs
+and three repetitions per source. All six workers completed: 120 case
+evaluations and 240 strict replies with unique request IDs. Saved raw bytes,
+actual answers, case bindings and enforced decisions agreed. Each worker
+prepared and passed preflight for all 175 cases. The 155 untested cases in each
+worker kept their missing status and received no score credit.
+
+Public source passed four of the six primary repairs in each repetition. The
+private candidate passed five in each repetition. Its actual base64 selector
+chose `match`, and its command-policy head chose `confirm`, in all three runs.
+Both sources automatically allowed seven of nine valid safe inputs in every
+run. The CLI exception and small query still required confirmation. Query
+sensitivity stayed unknown, and the query kept its fixed valid-safe label.
+
+All nine restrictive contrasts retained their model restrictions in all six
+workers. There were zero unsafe or incomplete automatic approvals, failed
+cases, or retries. All final late markers were complete with zero pending
+waits. The result does not pass the candidate's declared requirements: all six
+primary repairs and at least eight of nine valid safe inputs in every run.
+The complete candidate was rejected. This diagnostic is not a full coverage
+score or independent TEST qualification.
+
+The replies reported 1,721,876 input tokens and 130,071 output tokens. Their
+cost fields summed to `0.072318792`. No currency or account bill was bound.
+The fixed diagnostic plan hash is
+`5ff737c0b28ff3b3f864d39dd6fb73e6688f1b7c32888803bed16bc349d0deb8`.
+The complete result hash is
+`72db75766c07e13f470a514948c89b880ffeede75f700c9c24c4da4f61074ba2`.
+The separate final audit hash is
+`3cc752c00a9cf34e9f81c58945d01e18095b8ec99ce033b7382cdf638788d1b2`.
+
+The source now retains the command pair view with a request size choice in
+process 45. It uses complete syntax 44 when that body fits within 32,768 UTF-8
+bytes. Otherwise, it uses exact syntax 43 with the same bound. This choice
+occurs before transport and uses only serialized size. It adds no policy
+match, action vote, reply-based switch, retry, or wire field. The file view was
+removed. It did not repair the CLI target and made some prior file inputs too
+large.
+
+Local checks passed both exact 32,768-byte syntax boundaries. One extra byte
+in the syntax 44 edge selects exact syntax 43. One extra byte in the syntax 43
+edge stops before transport. The prior 21,664-byte command request and
+31,914-byte file request remain supported. Eight newly authored base64 layouts
+had exact syntax 44 bytes equal to the measured candidate, with or without its
+file view. The inverse checks restore exact syntax 43, 42, 37 and 31. Byte
+equality establishes representation; it does not establish model outcomes for
+the combined process.
+
+The source also requires an observed file fact for every original declared
+path and artifact access path. A supplied resolver receives separate derived
+metadata. Its changes cannot remove original paths, questions, access rows, or
+incomplete state. The original prepared artifact plan keeps its registered
+object identity. This check uses exact path identity and selects no policy
+row or model action. It does not prove that a supplied resolver reports true
+facts or validate values outside the declared fact type.
+
+The same 43 new controlled checks failed 32 times on the base source and
+passed 11 times. They all passed on the fixed source. The fix's complete
+focused run passed 671 checks. Those tests used controlled bound replies and
+no provider. Failed draft assertions and type checks from the separate command
+packet were retained. The final command packet passed 325 focused tests and
+24 historical syntax tests. Its protocol also binds the comparison text used
+by the exact syntax 43 branch.
+
+The combined source passed full `validate:ci` and lint. The main run passed
+620 test files and skipped one file; 5,880 tests passed and 65 were skipped.
+The historical syntax screen passed 24 tests, and the separate manager check
+passed 20 tests. All 1,796 tracked files kept their exact bytes during each
+check. The check processes had no provider configuration in their environment.
+The CI log hash is
+`198d6e55a0116e3a1f6a13f9e85bcf47dffb8f0422153dc0973c31d03e32feb7`.
+The lint log hash is
+`e065084397c1a98ed7abdef2e6cc336e51499e4fe87a7be399aec17366a179f9`.
+
+The combined global protocol hash is
+`318078ec771e8674dc3bccb170a931047a07a5fd61a2b7d7cbf8c3739a3306f2`.
+Its explicit `argmax` runtime hash is
+`6fd823aa2879a998702f4b02534a44e3b9b90cc0a5e1fcdf36642d40740fc66b`.
+The combined source has no fresh full 175-case model score or independent TEST
+qualification. The latest full score still belongs to `1b1ce7e`. The 98% goal
+remains active. The remaining work includes the CLI exception, the small-query
+policy or source decision, and fresh coverage runs. The sealed TEST remains
+closed, and normal profiles remain unchanged.

@@ -671,6 +671,18 @@ export const JEV_PROTOCOL_HASH = jevHash({
       absentOrLookupFailure: "unknown",
       scope: "supplied-path-only-no-descendants-contents-or-sensitivity",
     },
+    fileFactCoverage: {
+      paths: "paths-array-string-members-otherwise-singular-path-otherwise-none",
+      artifacts: "every-original-artifact-access-path-in-addition-to-selected-paths",
+      binding: "exact-original-declared-path-to-file.path-no-alias-or-policy-match",
+      snapshot: "copy-and-freeze-original-required-paths-before-fact-resolver",
+      resolverMetadata: "detached-derived-metadata-original-complete-tool-paths-accesses-retained",
+      producerPlan: "exact-original-prepared-object-not-cloned-or-reconstructed",
+      gate: "same-original-required-paths-for-local-and-hosted-completeness",
+      snapshotCoverage: "additional-paths-never-replace-mandatory-derived-paths",
+      knownExistence: "preserve-all-supplied-files-unknown-check-false-valid-kind-optional",
+      noPaths: "no-file-observation-required",
+    },
   },
   riskDomains: RISK_DOMAINS,
   disclosureDomains: DISCLOSURE_DOMAINS,
@@ -919,7 +931,7 @@ export function buildJevRequest(
   metadata: JevToolMetadata,
   facts: JevFacts,
   config: GuardrailConfig,
-  options: { command?: string } = {},
+  options: { command?: string; requiredFilePaths?: readonly string[] } = {},
 ): JevRequest {
   // Select applicable dimensions by metadata shape, never by a local risk/policy match.
   const shell = metadata.metadata.shell;
@@ -1022,7 +1034,7 @@ export function buildJevRequest(
         ...(hasOrgPolicy ? { orgAware: policy.orgAware } : {}),
       },
       observations: {
-        contextComplete: jevContextComplete(metadata, facts),
+        contextComplete: jevContextComplete(metadata, facts, options.requiredFilePaths),
         ...(metadata.toolName === "sf_soql" &&
         ["query.run", "query.sample", "query.queryAll"].includes(
           String(metadata.metadata.action),
@@ -1063,15 +1075,31 @@ export function evaluateJevPrediction(
     : "confirm";
 }
 
-export function jevContextComplete(metadata: JevToolMetadata, facts: JevFacts): boolean {
+function jevRequiredFilePaths(metadata: JevToolMetadata): readonly string[] {
+  // Keep the same selected paths as resolveJevFacts. An array precedes singular path fallback.
+  const paths = Array.isArray(metadata.metadata.paths)
+    ? metadata.metadata.paths.filter((value): value is string => typeof value === "string")
+    : typeof metadata.metadata.path === "string"
+      ? [metadata.metadata.path]
+      : [];
+  return Object.freeze([
+    ...paths,
+    ...(metadata.artifactPlan?.accesses.map(({ path }) => path) ?? []),
+  ]);
+}
+
+export function jevContextComplete(
+  metadata: JevToolMetadata,
+  facts: JevFacts,
+  requiredFilePaths: readonly string[] = [],
+): boolean {
   return (
     metadata.complete &&
     (!facts.org || facts.org.verified) &&
     (!facts.files || facts.files.every((file) => file.exists !== "unknown")) &&
-    (!metadata.artifactPlan ||
-      metadata.artifactPlan.accesses.every(({ path }) =>
-        facts.files?.some((file) => file.path === path),
-      )) &&
+    [...jevRequiredFilePaths(metadata), ...requiredFilePaths].every((path) =>
+      facts.files?.some((file) => file.path === path),
+    ) &&
     (!facts.browser || facts.browser.status === "fresh")
   );
 }
@@ -1247,6 +1275,10 @@ export async function evaluateJevSafety(
         sessionId: input.sessionId,
         toolCallId: input.toolCallId,
       });
+    const requiredFilePaths = jevRequiredFilePaths(metadata);
+    // A supplied resolver must not change the original operation or its coverage obligations.
+    // Detach only derived metadata. The registered input.artifactPlan keeps its producer identity.
+    const resolverMetadata = JSON.parse(JSON.stringify(metadata)) as JevToolMetadata;
     guard();
     const resolveFacts =
       options.resolveFacts ??
@@ -1255,7 +1287,7 @@ export async function evaluateJevSafety(
     const resolved = await withinDeadline(
       resolveFacts({
         ...input,
-        metadata,
+        metadata: resolverMetadata,
         signal,
         targetOrg: extractJevTargetOrg(input.toolName, input.input),
       }),
@@ -1271,7 +1303,7 @@ export async function evaluateJevSafety(
     factsHash = jevFactBindingHash(
       metadata.artifactPlan ? { ...resolved, artifactPlan: metadata.artifactPlan } : resolved,
     );
-    const complete = jevContextComplete(metadata, resolved.facts);
+    const complete = jevContextComplete(metadata, resolved.facts, requiredFilePaths);
     fingerprint = jevHash({
       toolName: input.toolName,
       originalHash,
@@ -1288,6 +1320,7 @@ export async function evaluateJevSafety(
     });
     const request = buildJevRequest(metadata, resolved.facts, input.config, {
       ...(originalCommand === undefined ? {} : { command: originalCommand }),
+      requiredFilePaths,
     });
     guard();
     const processBinding = Object.freeze({ protocolHash, operatingPointHash });

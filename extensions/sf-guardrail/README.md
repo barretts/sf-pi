@@ -154,11 +154,15 @@ selector names stay in a separate ordered list. A null name is not a wildcard.
 Vocabulary membership does not prove that a command token was observed.
 The local manifest still binds the original rows and integer token projection.
 
-Syntax 43 adds a direct comparison instruction for remote-script and
-base64-decode adjacency. It retains every original command and selector.
-Any separator between adjacent original rows counts. The host supplies no
-match or action. Exact local inverses restore historical syntax 42, numeric
-syntax 37 and long syntax 31. A changed or extra field invalidates restoration.
+Process 45 selects the command syntax format before transport. Syntax 44
+copies every adjacent pair of original commands, with their indices, heads,
+and complete left arguments. It keeps all original rows and selectors.
+Any separator between adjacent original rows counts. If the complete syntax
+44 body exceeds 32,768 UTF-8 bytes, the process uses exact syntax 43 with the
+same limit. This choice uses only request size. It adds no match, action,
+retry, or extra wire field. Exact local inverses restore syntax 43, historical
+syntax 42, numeric syntax 37, and long syntax 31. A changed or extra field
+invalidates restoration.
 
 The criteria distinguish local file authoring from body execution and Pi
 status output from credential output. File exemptions apply to their own row
@@ -269,6 +273,13 @@ evidence does not establish model qualification.
   Syntax answers must meet that setting's syntax limit. Any action choosing `block`
   is an unapprovable hard block. Any `confirm`, allow probability below the
   threshold, or incomplete context requires explicit human confirmation.
+- Complete file context requires an observed `facts.files` row for every
+  declared path and original artifact access path. The row's `path` must equal
+  the declared path. Missing, empty, or partial facts cannot prove coverage.
+  `exists=false` is valid, and file kind is optional. A supplied fact resolver
+  receives a separate copy of derived metadata. Changes to that copy cannot
+  remove the original paths, access rows, questions, or incomplete state.
+  The prepared artifact plan keeps its original registered object identity.
 - Jev session approval covers the exact original call. Its local fingerprint
   includes the full canonical input, tool, working directory, verified target,
   engine, policy/protocol hash, model identity, and local transport hash. The
