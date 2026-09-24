@@ -160,6 +160,8 @@ representations while preserving the current automatic approval gate.
 | v38 | Fresh full; grouped short command stages | 104/104 valid; 52 processes      | 0 at `0.99` in each arm  | —                                  | —               | $0.030554580                  |
 | v39 | Combined reference; scoped disclosure    | 32/32 valid                      | 0/9 at `0.99` per arm    | 9/9 in each arm                    | 3/3 in each arm | $0.004500216                  |
 | v40 | Inline selector rules; actual namespaces | 26/26 valid; syntax 1,611/1,617  | —                        | —                                  | —               | $0.011592210                  |
+| v41 | Alphabetic token labels                  | 26/26 valid; syntax 1,615/1,617  | —                        | —                                  | —               | $0.012402474                  |
+| v42 | Separate selector display names          | 26/26 valid; syntax 1,617/1,617  | —                        | —                                  | —               | $0.012021198                  |
 | SDK | Current hook, client, and SDK            | 1/1 valid                        | 0 successful reads       | 1/1                                | —               | $0.000123942                  |
 
 Each v17 and v18 arm contains 26 calls. Each v19 arm also contains 26 calls.
@@ -906,3 +908,68 @@ Private receipt SHA-256:
 
 The full current 175-case model result and independent TEST remain unproved.
 The default engine remains deterministic. The goal remains active.
+
+V41 replaced numeric token IDs with alphabetic labels. One exact inverse
+restores every token, class relation, selector, and ordered position. All nine
+local tests passed. All 26 fresh replies passed strict validation. Root decoded
+the raw replies again and checked their actual origins. The result was
+1,615/1,617 correct: all 15 required matches and 1,600/1,602 required non-matches.
+The fixed gate failed. Two token selectors returned false matches for IDs that
+occurred only in the vocabulary. Each had a null display name. A null name may
+have caused those errors; this is an inference from DEV evidence.
+
+V41 used at most 29,121 request bytes. Whole-case P50 was 606.094667 ms, P95
+was 726.077209 ms, and the maximum was 779.130041 ms. Its reported valid-response
+cost was $0.012402474. Preparation hash:
+`ec1f4710356ad5cccd97f51049a74ef19675830df1f4334faed6b3bff23641ed`.
+Private receipt SHA-256:
+`c3c680640bed1541c7570716dd629783ffd7ca9759d446ebec984b4724d1ef40`.
+The failed gate and original receipts remain intact.
+
+V42 kept the alphabetic labels. It moved all selector display names into a
+separate array in question order. Selectors retained every literal label and
+every other field. The complete shared grammar remained. The host computed
+no selector match or policy decision. All nine local tests passed. A separate
+source proof restored the exact original JSON bytes and hash for all 26 cases.
+It also rejected a dropped or changed display-name entry.
+
+All 26 fresh V42 replies passed strict validation. Root decoded every raw reply
+again and checked its source plan, HTTP status, model, provider, actual transport
+hashes, question IDs, raw bytes, usage, and unique response ID. All 93 source
+hashes stayed unchanged. The result was 1,617/1,617 correct: all 15 required
+matches and all 1,602 required non-matches. The fixed syntax gate passed.
+This proves this small DEV syntax screen. It proves no full policy score,
+safe-use score, independent TEST result, or normal-use qualification.
+
+V42 used at most 28,325 request bytes and 6,823 response bytes. Whole-case P50
+was 659.091083 ms, P95 was 907.500250 ms, and the maximum was 1,048.119958 ms.
+All cases finished within the fixed 10,000 ms bound. Reported valid-response
+cost was $0.012021198. The active goal now has 1,304 calls and $0.351272418
+in known valid-response cost. The cumulative known cost is $0.692030766.
+Failed, invalid, or unreported request billing remains unknown.
+
+V42 preparation hash:
+`2ec249c442a18cb56a75fba53e41b80d5ffb3b85f413762354dcb2a8195c6871`.
+Private receipt SHA-256:
+`220c0b40e8a55591da838300d4a89659327eea8f579af4a96009310e00ec3e56`.
+The product has not yet adopted this format. Its current protocol 14, one-call
+hook, probability cutoff, and deterministic default remain unchanged.
+
+The new private preparation path prepares all 175 old cases against current
+source. It uses the actual source fact resolver, synthetic private files, and
+an explicit authored org mock. It makes no provider request, org call, or tool
+execution. All 28 supported safe cases have complete context, including the
+small native Id query. The four unsupported old safe controls remain in the
+175-case comparison. Each of the four native query plans retains all ten
+declared ancestor directory paths and five output paths. Only the small Id
+query has complete query context; the other three retain their independent
+gaps. Artifact facts do not establish known data sensitivity.
+
+The preparation creates 393 stages and 6,763 Bash syntax rows. The independent
+deterministic comparator still returns 42 allows, 122 confirmations, and 11
+blocks. All eight preparation proof tests passed with no skips. The 67 source
+hashes stayed unchanged. Its source-only evidence SHA-256 is
+`437b72c8f21052b3f107ba1e441898ff490de3a5ebf0d86277557d38d6c996d1`.
+The stored plans remain valid only in that worker. There is no live mode or raw
+verifier in this preparation. A new source and decoder plan must be fixed
+before a full live run. The 98% replacement target remains unproved.
